@@ -1,0 +1,11 @@
+/*
+NOTE:
+This is an empty placeholder file to ensure the Prisma Language Server functions 
+correctly, serving as a temporary workaround.
+
+See the link below for details:
+https://github.com/prisma/prisma/discussions/24413#discussioncomment-9670600
+
+This issue persists as of Prisma v7.3.0, which was the latest 
+version at the time of writing.
+*/

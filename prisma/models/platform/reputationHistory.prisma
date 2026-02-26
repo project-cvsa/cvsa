@@ -1,0 +1,13 @@
+model ReputationHistory {
+    id         Int      @id @default(autoincrement())
+    user       User     @relation(fields: [userId], references: [id])
+    userId     Int      @map("user_id")
+    actionType String   @map("action_type")
+    points     Int
+    sourceType Int   @map("source_type")
+    sourceId   Int   @map("source_id")
+    createdAt  DateTime @default(now()) @map("created_at")
+
+    @@map("reputation_history")
+    @@schema("platform")
+}

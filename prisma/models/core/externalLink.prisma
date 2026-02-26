@@ -1,0 +1,44 @@
+model ExternalLink {
+    id         Int       @id @default(autoincrement())
+    label      String?
+    url        String
+    platform   Platform?
+    platformId String?   @map("platform_id")
+    song       Song      @relation(fields: [songId], references: [id])
+    songId     Int       @map("song_id")
+    createdAt  DateTime  @default(now()) @map("created_at")
+    updatedAt  DateTime  @updatedAt @map("updated_at")
+    deletedAt  DateTime? @map("deleted_at")
+
+    @@map("external_link")
+    @@schema("core")
+}
+
+enum Platform {
+    YOUTUBE
+    NICONICO
+    BILIBILI
+    VOCALOID_WIKI
+    VOCALOID_LYRICS_WIKI
+    SOUNDCLOUD
+    NETEASE_MUSIC
+    QQ_MUSIC
+    FIVE_SING // 5sing.kugou.com
+    KUGOU
+    SPOTIFY
+    APPLE_MUSIC
+    YOUTUBE_MUSIC
+    WIKIPEDIA
+    BAIDU_BAIKE
+    PIXIV
+    WEIBO
+    TWITTER
+    VOCADB
+    MOEGIRLPEDIA
+    MUSICBRAINZ
+    VCPEDIA
+    XIAOHONGSHU // aka RedNote
+
+    @@map("third_party_platform")
+    @@schema("core")
+}

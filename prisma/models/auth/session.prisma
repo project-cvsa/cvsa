@@ -1,0 +1,13 @@
+model Session {
+    id             String   @id
+    user           User     @relation(fields: [userId], references: [id])
+    userId         Int   @map("user_id")
+    ipAddress      String?  @map("ip_address")
+    userAgent      String?  @map("user_agent")
+    secretHash     String   @map("secret_hash")
+    createdAt      DateTime @default(now()) @map("created_at")
+    lastVerifiedAt DateTime @map("last_verified_at")
+
+    @@map("session")
+    @@schema("auth")
+}

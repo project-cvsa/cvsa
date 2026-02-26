@@ -1,0 +1,18 @@
+model Voicebank {
+    id                    Int              @id @default(autoincrement())
+    singer                Singer           @relation(fields: [singerId], references: [id])
+    description           String?
+    /// [LocalizedField]
+    localizedDescriptions Json?            @map("localized_descriptions")
+    singerId              Int              @map("singer_id")
+    language              String
+    svsEngineVersion      SvsEngineVersion @relation(fields: [svsEngineVersionId], references: [id])
+    svsEngineVersionId    Int              @map("svs_engine_version_id")
+    singerOfSongs         SingerOfSong[]
+    createdAt             DateTime         @default(now()) @map("created_at")
+    updatedAt             DateTime         @updatedAt @map("updated_at")
+    deletedAt             DateTime?        @map("deleted_at")
+
+    @@map("voicebank")
+    @@schema("core")
+}

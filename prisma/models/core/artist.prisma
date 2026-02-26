@@ -1,0 +1,19 @@
+model Artist {
+    id                    Int          @id @default(autoincrement())
+    name                  String?
+    /// [LocalizedField]
+    localizedNames        Json?        @map("localized_names")
+    aliases               String[]
+    description           String?
+    /// [LocalizedField]
+    localizedDescriptions Json?        @map("localized_descriptions")
+    artistSongRoles       ArtistRole[]
+    createdAt             DateTime     @default(now()) @map("created_at")
+    updatedAt             DateTime     @updatedAt @map("updated_at")
+    user                  User?        @relation(fields: [userId], references: [id])
+    userId                Int?         @unique @map("user_id")
+    deletedAt             DateTime?    @map("deleted_at")
+
+    @@map("artist")
+    @@schema("core")
+}

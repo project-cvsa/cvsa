@@ -1,0 +1,22 @@
+model User {
+    id                  Int                 @id @default(autoincrement())
+    username            String              @unique
+    displayName         String              @map("display_name")
+    email               String              @unique
+    password            String
+    changesMade         History[]
+    role                Role?               @relation(fields: [roleId], references: [id])
+    roleId              Int?                @map("role_id")
+    sessions            Session[]
+    artist              Artist?
+    reputation          Int                 @default(0)
+    reputationHistories ReputationHistory[]
+    posts               Post[]
+    files               File[]
+    createdAt           DateTime            @default(now()) @map("created_at")
+    updatedAt           DateTime            @updatedAt @map("updated_at")
+    deletedAt           DateTime?           @map("deleted_at")
+
+    @@map("user")
+    @@schema("auth")
+}

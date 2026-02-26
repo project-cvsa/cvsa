@@ -1,0 +1,60 @@
+generator client {
+    provider = "prisma-client"
+    output   = "./generated"
+}
+
+generator json {
+    provider = "prisma-json-types-generator"
+}
+
+datasource db {
+    provider = "postgresql"
+    schemas  = ["core", "meta", "platform", "auth"]
+}
+
+/* 
+# CVSA (Chinese Vocal Synthesis Archive) Database Schema
+
+## Overview
+The CVSA is a structured encyclopedia and data platform dedicated to the Chinese Vocal Synthesis (SVS/VC) community.
+It aims to bridge the gap between traditional wikis (like MediaWiki) and structured databases by providing:
+- Automation: Fully automated song discovery, metadata extraction, and statistical tracking.
+- Structured Data: Moving beyond flat text to rich, relational data for songs, artists, engines, and albums.
+- Collaboration: A platform for contributors to provide descriptive content, translations, and corrections.
+
+## Schemas
+The database is partitioned into several PostgreSQL schemas.
+
+### A. [core] - The Encyclopedia
+This is the heart of the project. It stores universal SVS data that remains objective across platforms.
+- Entities: Songs, Singers (virtual characters), Artists (producers/illustrators), 
+SVS Engines (Vocaloid, Synthesizer V), Voicebanks, Albums, and Tags.
+- Localization: Uses `LocalizedField` (JSON) to support multi-language metadata 
+(Simplified Chinese, Traditional Chinese, Japanese, English, etc.).
+- Versioning: Supports tracking of specific SVS engine versions and voicebank iterations.
+
+### B. [platform] - The Service Layer
+Contains data specific to the CVSA website as a functional service.
+- Features: User-uploaded files, personal notes, etc.
+- Scope: Data here is specific to this implementation and not necessarily shared with other archives.
+
+### C. [auth] - Identity & Access
+Handles user accounts, session persistence, and secure authentication.
+- RBAC: Connects users to roles defined in the `meta` schema.
+
+### D. [meta] - Governance & Auditing
+Manages the "data about data."
+- Audit Logs: The `History` table tracks every mutation (Create/Update/Delete) 
+in the `core` schema for accountability and rollbacks.
+- Permissions: Granular action-based permissions assigned to roles.
+
+## 3. Technical Constraints & Design Patterns
+- Soft Deletion: Most core entities implement a `deletedAt` timestamp for soft-deletion support.
+- Modular Relations: Many-to-Many relations are extracted into separate files 
+within the `/relations` directory to keep entity definitions clean and prevent Prisma file bloat.
+
+## 4. Current Status & TODO
+- Indexing: Performance indexes and unique constraints beyond primary keys are still under design.
+- Constraints: Complex business logic constraints (e.g., preventing circular tag parents) are handled at the application layer.
+
+*/

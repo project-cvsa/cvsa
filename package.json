@@ -1,0 +1,28 @@
+{
+    "name": "@project-cvsa/backend",
+    "module": "index.ts",
+    "type": "module",
+    "version": "0.0.1",
+    "private": true,
+    "scripts": {
+        "format": "bunx --bun biome format --write",
+        "lint": "bunx --bun biome lint",
+        "dev": "bun --watch src/index.ts"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.4.4",
+        "@types/bun": "latest",
+        "prisma": "^7.4.1",
+        "prisma-json-types-generator": "^4.1.1"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "@prisma/adapter-pg": "^7.4.1",
+        "@prisma/client": "^7.4.1",
+        "@types/pg": "^8.16.0",
+        "chalk": "^5.6.2",
+        "elysia": "^1.4.26"
+    }
+}

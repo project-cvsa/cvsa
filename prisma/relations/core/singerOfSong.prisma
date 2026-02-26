@@ -1,0 +1,22 @@
+// Sometimes, we only know the SVS engine used in the song (e.g. VOCALOID, Synthesizer V, UTAU, etc.).
+// In other cases, we know exactly which voicebank was used in the song. (e.g. Luo Tianyi VOCALOID 5 Chinese).
+// That's why we need to have both SvsEngine and SvsEngineVersion.
+model SingerOfSong {
+    id                 Int               @id @default(autoincrement())
+    song               Song              @relation(fields: [songId], references: [id])
+    songId             Int               @map("song_id")
+    singer             Singer            @relation(fields: [singerId], references: [id])
+    singerId           Int               @map("singer_id")
+    voicebank          Voicebank?        @relation(fields: [voicebankId], references: [id])
+    voicebankId        Int?              @map("voicebank_id")
+    svsEngine          SvsEngine?        @relation(fields: [svsEngineId], references: [id])
+    svsEngineId        Int?           @map("svs_engine_id")
+    svsEngineVersion   SvsEngineVersion? @relation(fields: [svsEngineVersionId], references: [id])
+    svsEngineVersionId Int?              @map("svs_engine_version_id")
+    createdAt          DateTime          @default(now()) @map("created_at")
+    updatedAt          DateTime          @updatedAt @map("updated_at")
+    deletedAt          DateTime?         @map("deleted_at")
+
+    @@map("singer_of_song")
+    @@schema("core")
+}

@@ -1,0 +1,47 @@
+model Song {
+    id                    Int            @id @default(autoincrement())
+    type                  SongType?
+    originalVersion       Song?          @relation(name: "originalSong", fields: [originalSongId], references: [id])
+    originalSongId        Int?           @map("original_song_id")
+    derivations           Song[]         @relation(name: "originalSong")
+    name                  String?
+    duration              Int?
+    lyrics                Lyrics[]
+    songTags              SongTag[]
+    /// [LocalizedField]
+    localizedNames        Json?          @map("localized_names")
+    description           String?
+    /// [LocalizedField]
+    localizedDescriptions Json?          @map("localized_descriptions")
+    songInAlbums          SongInAlbum[]
+    bilibiliAid           BigInt?        @map("bilibili_aid")
+    bilibiliBvid          String?        @map("bilibili_bvid")
+    vocadbId              Int?           @map("vocadb_id")
+    vcpediaId             Int?           @map("vcpedia_id")
+    moegirlId             Int?           @map("moegirl_id")
+    externalLinks         ExternalLink[]
+    coverUrl              String?        @map("cover_url")
+    artists               ArtistRole[]
+    singerOfSongs         SingerOfSong[]
+    publishedAt           DateTime?      @map("published_at")
+    createdAt             DateTime       @default(now()) @map("created_at")
+    updatedAt             DateTime       @updatedAt @map("updated_at")
+    deletedAt             DateTime?      @map("deleted_at")
+    songInSeries          SongInSeries[]
+
+    @@map("song")
+    @@schema("core")
+}
+
+enum SongType {
+    ORIGINAL
+    COVER
+    REMIX
+    REMASTER
+    MASHUP
+    INSTRUMENTAL
+    OTHERS
+
+    @@map("song_type")
+    @@schema("core")
+}

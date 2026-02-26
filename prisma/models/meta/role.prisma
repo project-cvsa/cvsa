@@ -1,0 +1,14 @@
+model Role {
+    id             Int              @id @default(autoincrement())
+    name           String           @unique
+    /// [LocalizedField]
+    localizedNames Json?            @map("localized_names")
+    permissions    RolePermission[]
+    users          User[]
+    createdAt      DateTime         @default(now()) @map("created_at")
+    updatedAt      DateTime         @updatedAt @map("updated_at")
+    deletedAt      DateTime?        @map("deleted_at")
+
+    @@map("role")
+    @@schema("meta")
+}

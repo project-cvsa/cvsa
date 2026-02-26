@@ -1,0 +1,16 @@
+model Tag {
+    id             Int       @id @default(autoincrement())
+    name           String
+    /// [LocalizedField]
+    localizedNames Json?     @map("localized_names")
+    songTags       SongTag[]
+    parent         Tag?      @relation(name: "tagTree", fields: [parentId], references: [id])
+    parentId       Int?      @map("parent_id")
+    children       Tag[]     @relation(name: "tagTree")
+    createdAt      DateTime  @default(now()) @map("created_at")
+    updatedAt      DateTime  @updatedAt @map("updated_at")
+    deletedAt      DateTime? @map("deleted_at")
+
+    @@map("tag")
+    @@schema("core")
+}

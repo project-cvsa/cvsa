@@ -1,0 +1,13 @@
+model SongTag {
+    id        Int       @id @default(autoincrement())
+    song      Song      @relation(fields: [songId], references: [id])
+    songId    Int       @map("song_id")
+    tag       Tag       @relation(fields: [tagId], references: [id])
+    tagId     Int       @map("tag_id")
+    createdAt DateTime  @default(now()) @map("created_at")
+    updatedAt DateTime  @updatedAt @map("updated_at")
+    deletedAt DateTime? @map("deleted_at")
+
+    @@map("song_tag")
+    @@schema("core")
+}

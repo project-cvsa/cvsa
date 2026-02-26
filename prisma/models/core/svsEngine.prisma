@@ -1,0 +1,16 @@
+model SvsEngine {
+    id                    Int                @id @default(autoincrement())
+    name                  String
+    description           String?
+    /// [LocalizedField]
+    localizedDescriptions Json?              @map("localized_descriptions")
+    svsEngineVersions     SvsEngineVersion[]
+    singerSvsEngines      SingerSvsEngine[]
+    performances          SingerOfSong[]
+    createdAt             DateTime           @default(now()) @map("created_at")
+    updatedAt             DateTime           @updatedAt @map("updated_at")
+    deletedAt             DateTime?          @map("deleted_at")
+
+    @@map("svs_engine")
+    @@schema("core")
+}

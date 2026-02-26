@@ -1,0 +1,13 @@
+model SingerSvsEngine {
+    id          Int       @id @default(autoincrement())
+    singer      Singer    @relation(fields: [singerId], references: [id])
+    singerId    Int       @map("singer_id")
+    svsEngine   SvsEngine @relation(fields: [svsEngineId], references: [id])
+    svsEngineId Int    @map("svs_engine_id")
+    createdAt   DateTime  @default(now()) @map("created_at")
+    updatedAt   DateTime  @updatedAt @map("updated_at")
+    deletedAt   DateTime? @map("deleted_at")
+
+    @@map("singer_svs_engine")
+    @@schema("core")
+}

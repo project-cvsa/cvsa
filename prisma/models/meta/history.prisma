@@ -1,0 +1,25 @@
+model History {
+    id        Int        @id @default(autoincrement())
+    user      User       @relation(fields: [userId], references: [id])
+    userId    Int        @map("user_id")
+    table     String
+    objectId  Int     @map("object_id")
+    type      ChangeType
+    comment   String?
+    old       Json?
+    new       Json?
+    createdAt DateTime   @default(now()) @map("created_at")
+
+    @@map("history")
+    @@schema("meta")
+}
+
+enum ChangeType {
+    CREATE
+    UPDATE
+    DELETE
+    RESTORE
+
+    @@map("change_type")
+    @@schema("meta")
+}

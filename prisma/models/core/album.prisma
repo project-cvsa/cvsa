@@ -1,0 +1,17 @@
+model Album {
+    id                    Int           @id @default(autoincrement())
+    name                  String?
+    /// [LocalizedField]
+    localizedNames        Json?         @map("localized_names")
+    description           String?
+    /// [LocalizedField]
+    localizedDescriptions Json?         @map("localized_descriptions")
+    songInAlbums          SongInAlbum[]
+    coverUrl              String?       @map("cover_url")
+    createdAt             DateTime      @default(now()) @map("created_at")
+    updatedAt             DateTime      @updatedAt @map("updated_at")
+    deletedAt             DateTime?     @map("deleted_at")
+
+    @@map("album")
+    @@schema("core")
+}

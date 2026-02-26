@@ -1,0 +1,10 @@
+model RolePermission {
+    id           Int        @id @default(autoincrement())
+    role         Role       @relation(fields: [roleId], references: [id])
+    roleId       Int        @map("role_id")
+    permission   Permission @relation(fields: [permissionId], references: [id])
+    permissionId Int        @map("permission_id")
+
+    @@map("role_permission")
+    @@schema("meta")
+}

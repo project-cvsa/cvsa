@@ -1,0 +1,20 @@
+model Singer {
+    id                      Int                      @id @default(autoincrement())
+    name                    String?
+    avatarUrl               String?                  @map("avatar_url")
+    /// [LocalizedField]
+    localizedNames          Json?                    @map("localized_names")
+    description             String?
+    /// [LocalizedField]
+    localizedDescriptions   Json?                    @map("localized_descriptions")
+    singerSvsEngineVersions SingerSvsEngineVersion[]
+    singerSvsEngines        SingerSvsEngine[]
+    voicebanks              Voicebank[]
+    singerOfSongs           SingerOfSong[]
+    createdAt               DateTime                 @default(now()) @map("created_at")
+    updatedAt               DateTime                 @updatedAt @map("updated_at")
+    deletedAt               DateTime?                @map("deleted_at")
+
+    @@map("singer")
+    @@schema("core")
+}
