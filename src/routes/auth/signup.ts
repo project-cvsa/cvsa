@@ -1,4 +1,4 @@
-import { userRepository, sessionRepository } from "@repositories/index";
+import { authService } from "@services/index";
 import { AppError } from "@lib/error";
 import { Elysia } from "elysia";
 import z from "zod";
@@ -45,13 +45,7 @@ export const signupHandler = new Elysia()
             try {
                 const userAgent = headers["user-agent"];
                 const requestBody = SignupRequestSchema.parse(body);
-                const user = await userRepository.create(requestBody);
-                const session = await sessionRepository.create({
-                    userId: user.id,
-                    ipAddress: ip,
-                    userAgent,
-                });
-                const token = `${session.id}.${session.secret}`;
+                const { user, token } = await authService.register(requestBody, ip, userAgent);
                 return status(200, {
                     message: "注册成功",
                     data: {

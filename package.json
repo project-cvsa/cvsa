@@ -8,6 +8,7 @@
         "format": "bunx --bun biome format --write",
         "lint": "bunx --bun biome lint",
         "dev": "bun --hot src/index.ts",
+        "test": "bun test",
         "db-gen": "bunx --bun prisma generate",
         "migrate": "bunx --bun prisma migrate dev --create-only",
         "migrate:dev": "bunx --bun prisma migrate dev"

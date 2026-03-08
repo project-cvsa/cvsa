@@ -2,7 +2,7 @@ import { AppError } from "@lib/error";
 import { Elysia } from "elysia";
 import z from "zod";
 import { ErrorResponseSchema } from "@lib/schema";
-import { userRepository, sessionRepository } from "@repositories/index";
+import { authService } from "@services/index";
 
 const authSchema = z
     .string()
@@ -11,21 +11,7 @@ const authSchema = z
     .startsWith("Bearer ", { error: "未登录" })
     .transform((val) => val.split(" ")[1])
     // 2. 细化校验：确保剩下的 61 位符合 hex.hex 格式
-    .refine((token) => token && /^[0-9a-fA-F]{30}\.[0-9a-fA-F]{30}$/.test(token), { error: "未登录" })
-    // 3. 转换为 id 和 secret
-    .transform((token) => {
-        if (!token) {
-            return {
-                id: "",
-                secret: "",
-            };
-        }
-        const [id, secret] = token.split(".");
-        return {
-            id,
-            secret,
-        };
-    });
+    .refine((token) => token && /^[0-9a-fA-F]{30}\.[0-9a-fA-F]{30}$/.test(token), { error: "未登录" });
 
 const GetCurrentUser200Schema = z.object({
     id: z.string(),
@@ -36,31 +22,24 @@ const GetCurrentUser200Schema = z.object({
 
 export const getCurrentUserHandler = new Elysia().get(
     "/me",
-    async ({ headers, status }) => {
-        try {
-            const sha256Hasher = new Bun.CryptoHasher("sha256");
-            const auth = headers.authorization;
-            const { id, secret } = authSchema.parse(auth);
-            if (!id || !secret) {
-                return status(401, { code: "UNAUTHORIZED", message: "未登录" });
-            }
-            sha256Hasher.update(secret);
-            const secretHash = sha256Hasher.digest("hex");
-            const session = await sessionRepository.findByIdAndSecretHash(id, secretHash);
-            if (!session) {
-                return status(401, { code: "UNAUTHORIZED", message: "未登录" });
-            }
-            const user = await userRepository.findById(session.userId);
-            if (!user) {
-                return status(401, { code: "UNAUTHORIZED", message: "未登录" });
-            }
-            return status(200, {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                email: user.email,
-            });
-        } catch (e) {
+        async ({ headers, status }) => {
+            try {
+                const auth = headers.authorization;
+                const token = authSchema.parse(auth);
+                if (!token) {
+                    return status(401, { code: "UNAUTHORIZED", message: "未登录" });
+                }
+                const user = await authService.verifyToken(token);
+                if (!user) {
+                    return status(401, { code: "UNAUTHORIZED", message: "未登录" });
+                }
+                return status(200, {
+                    id: user.id,
+                    username: user.username,
+                    displayName: user.displayName,
+                    email: user.email,
+                });
+            } catch (e) {
             if (e instanceof AppError) {
                 return status(500, { code: e.code, message: e.message });
             } else if (e instanceof z.ZodError) {
