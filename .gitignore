@@ -19,6 +19,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env
 .env.development.local
 .env.test.local
+.env.test
 .env.production.local
 .env.local
 

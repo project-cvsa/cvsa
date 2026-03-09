@@ -1,8 +1,8 @@
 model Post {
-    id        Int       @id @default(autoincrement())
+    id        String    @id
     text      String?
     user      User      @relation(fields: [userId], references: [id])
-    userId    Int       @map("user_id")
+    userId    String    @map("user_id")
     createdAt DateTime  @default(now()) @map("created_at")
     updatedAt DateTime  @updatedAt @map("updated_at")
     deletedAt DateTime? @map("deleted_at")

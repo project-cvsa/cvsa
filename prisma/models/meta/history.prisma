@@ -1,9 +1,9 @@
 model History {
     id        Int        @id @default(autoincrement())
     user      User       @relation(fields: [userId], references: [id])
-    userId    Int        @map("user_id")
+    userId    String     @map("user_id")
     table     String
-    objectId  Int     @map("object_id")
+    objectId  Int        @map("object_id")
     type      ChangeType
     comment   String?
     old       Json?

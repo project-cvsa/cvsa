@@ -1,8 +1,8 @@
 model User {
-    id                  Int                 @id @default(autoincrement())
+    id                  String              @id
     username            String              @unique
-    displayName         String              @map("display_name")
-    email               String              @unique
+    displayName         String?             @map("display_name")
+    email               String?             @unique
     password            String
     changesMade         History[]
     role                Role?               @relation(fields: [roleId], references: [id])

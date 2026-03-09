@@ -22,22 +22,22 @@ CREATE TYPE "meta"."change_type" AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'RESTORE
 -- CreateTable
 CREATE TABLE "auth"."session" (
     "id" TEXT NOT NULL,
-    "user_id" INTEGER NOT NULL,
+    "user_id" TEXT NOT NULL,
     "ip_address" TEXT,
     "user_agent" TEXT,
     "secret_hash" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "last_verified_at" TIMESTAMP(3) NOT NULL,
+    "last_verified_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "auth"."user" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "username" TEXT NOT NULL,
-    "display_name" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
+    "display_name" TEXT,
+    "email" TEXT,
     "password" TEXT NOT NULL,
     "role_id" INTEGER,
     "reputation" INTEGER NOT NULL DEFAULT 0,
@@ -73,7 +73,7 @@ CREATE TABLE "core"."artist" (
     "localized_descriptions" JSONB,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
-    "user_id" INTEGER,
+    "user_id" TEXT,
     "deleted_at" TIMESTAMP(3),
 
     CONSTRAINT "artist_pkey" PRIMARY KEY ("id")
@@ -244,7 +244,7 @@ CREATE TABLE "core"."voicebank" (
 -- CreateTable
 CREATE TABLE "meta"."history" (
     "id" SERIAL NOT NULL,
-    "user_id" INTEGER NOT NULL,
+    "user_id" TEXT NOT NULL,
     "table" TEXT NOT NULL,
     "object_id" INTEGER NOT NULL,
     "type" "meta"."change_type" NOT NULL,
@@ -281,10 +281,10 @@ CREATE TABLE "meta"."role" (
 
 -- CreateTable
 CREATE TABLE "platform"."file" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "original_name" TEXT,
     "path" TEXT,
-    "user_id" INTEGER NOT NULL,
+    "user_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "file_pkey" PRIMARY KEY ("id")
@@ -292,9 +292,9 @@ CREATE TABLE "platform"."file" (
 
 -- CreateTable
 CREATE TABLE "platform"."post" (
-    "id" SERIAL NOT NULL,
+    "id" TEXT NOT NULL,
     "text" TEXT,
-    "user_id" INTEGER NOT NULL,
+    "user_id" TEXT NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "deleted_at" TIMESTAMP(3),
@@ -305,7 +305,7 @@ CREATE TABLE "platform"."post" (
 -- CreateTable
 CREATE TABLE "platform"."reputation_history" (
     "id" SERIAL NOT NULL,
-    "user_id" INTEGER NOT NULL,
+    "user_id" TEXT NOT NULL,
     "action_type" TEXT NOT NULL,
     "points" INTEGER NOT NULL,
     "source_type" INTEGER NOT NULL,

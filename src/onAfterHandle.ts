@@ -18,7 +18,7 @@ export const onAfterHandler = new Elysia().onAfterHandle(
 		if (responseValue instanceof ElysiaFile || responseValue instanceof Response) {
 			return;
 		}
-		const realResponse = responseValue as Record<string, any>;
+		const realResponse = responseValue as { code?: number; response?: unknown };
 		if (realResponse.code) {
 			const text = isBrowser
 				? JSON.stringify(realResponse.response, null, 2)
@@ -27,7 +27,7 @@ export const onAfterHandler = new Elysia().onAfterHandle(
 				headers: {
 					"Content-Type": "application/json; charset=utf-8",
 				},
-				status: realResponse.code as any,
+				status: realResponse.code,
 			});
 		}
 		const text = isBrowser

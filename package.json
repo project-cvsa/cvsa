@@ -3,11 +3,23 @@
     "module": "index.ts",
     "type": "module",
     "version": "0.0.1",
-    "private": true,
     "scripts": {
         "format": "bunx --bun biome format --write",
+        "type": "bunx --bun tsc --noEmit",
         "lint": "bunx --bun biome lint",
-        "dev": "bun --watch src/index.ts"
+        "dev": "bun --hot src/index.ts",
+        "start": "bun src/index.ts",
+        "test": "bun test",
+        "test:coverage": "bun test --coverage",
+        "test:unit": "bun test tests/unit",
+        "test:e2e": "bun test tests/e2e",
+        "test:integration": "bun test tests/integration",
+        "db-gen": "bunx --bun prisma generate",
+        "migrate": "bunx --bun prisma migrate dev --create-only",
+        "migrate:dev": "bunx --bun prisma migrate dev",
+        "db-sync": "bunx --bun prisma db push",
+        "test:db:setup": "NODE_ENV=test bunx --bun prisma migrate reset --force",
+        "db:studio": "bunx --bun prisma studio"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.4",
@@ -19,10 +31,17 @@
         "typescript": "^5"
     },
     "dependencies": {
+        "@elysiajs/eden": "^1.0.5",
         "@prisma/adapter-pg": "^7.4.1",
         "@prisma/client": "^7.4.1",
+        "@t3-oss/env-core": "^0.13.10",
         "@types/pg": "^8.16.0",
+        "argon2": "^0.44.0",
         "chalk": "^5.6.2",
-        "elysia": "^1.4.26"
+        "elysia": "^1.4.26",
+        "elysia-ip": "^1.0.10",
+        "elysia-rate-limit": "^4.5.0",
+        "nanoid": "^5.1.6",
+        "zod": "^4.3.6"
     }
 }

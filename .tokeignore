@@ -1,0 +1,5 @@
+prisma/
+bruno/
+*.json
+*.sql
+*.md
