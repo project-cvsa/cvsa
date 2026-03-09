@@ -3,7 +3,6 @@
     "module": "index.ts",
     "type": "module",
     "version": "0.0.1",
-    "private": true,
     "scripts": {
         "format": "bunx --bun biome format --write",
         "type": "bunx --bun tsc --noEmit",
@@ -13,10 +12,14 @@
         "test": "bun test",
         "test:coverage": "bun test --coverage",
         "test:unit": "bun test tests/unit",
+        "test:e2e": "bun test tests/e2e",
+        "test:integration": "bun test tests/integration",
         "db-gen": "bunx --bun prisma generate",
         "migrate": "bunx --bun prisma migrate dev --create-only",
         "migrate:dev": "bunx --bun prisma migrate dev",
-        "test:db:setup": "NODE_ENV=test bunx --bun prisma migrate reset --force"
+        "db-sync": "bunx --bun prisma db push",
+        "test:db:setup": "NODE_ENV=test bunx --bun prisma migrate reset --force",
+        "db:studio": "bunx --bun prisma studio"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.4",
