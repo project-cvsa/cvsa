@@ -4,7 +4,7 @@ import type { ISessionRepository } from "@repositories/interfaces/ISessionReposi
 import { prisma } from "@lib/prisma";
 import { AppError } from "@lib/error";
 import { ConflictError } from "@lib/error/conflict";
-import { Prisma, type User, type PrismaClient } from "@prisma/generated/client";
+import { Prisma, type User, type PrismaClient } from "@project-cvsa/db";
 import { customAlphabet } from "nanoid";
 import crypto from "node:crypto";
 

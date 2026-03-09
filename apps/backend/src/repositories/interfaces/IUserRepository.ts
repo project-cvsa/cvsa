@@ -1,4 +1,4 @@
-import type { User, Prisma } from "@prisma/generated/client";
+import type { User, Prisma } from "@project-cvsa/db";
 
 export interface CreateUserData {
 	id: string;

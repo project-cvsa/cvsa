@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/generated/client";
+import { PrismaClient } from "@project-cvsa/db";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { env } from "@lib/env";
 

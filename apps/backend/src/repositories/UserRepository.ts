@@ -1,7 +1,7 @@
 import { prisma } from "@lib/prisma";
 import type { IUserRepository, CreateUserData } from "./interfaces";
-import type { User } from "@prisma/generated/client";
-import type { Prisma, PrismaClient } from "@prisma/generated/client";
+import type { User } from "@project-cvsa/db";
+import type { Prisma, PrismaClient } from "@project-cvsa/db";
 
 export class UserRepository implements IUserRepository {
 	private prisma: PrismaClient;

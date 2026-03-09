@@ -5,8 +5,8 @@ import type {
 	ISessionRepository,
 	SessionWithSecret,
 } from "@repositories/interfaces";
-import type { User } from "@prisma/generated/client";
-import { Prisma } from "@prisma/generated/client";
+import type { User } from "@project-cvsa/db";
+import { Prisma } from "@project-cvsa/db";
 
 function hashSecret(secret: string): string {
 	const hasher = new Bun.CryptoHasher("sha256");

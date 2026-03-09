@@ -1,112 +1,104 @@
-# CVSA Backend
+# CVSA
 
-The backend service for the **Chinese Vocal Synthesizer Archive (CVSA)** – a unified platform for the Chinese vocal synthesizer community.  
-This service provides a RESTful API for the rest of the CVSA system and third parties to interact with.
+The official monorepo for the **Chinese Vocal Synthesizer Archive (CVSA)** – a unified platform that aggregates and preserves information about the Chinese vocal synthesizer community.
+
+## Overview
+
+CVSA is a community-driven archive that consolidates scattered information about Chinese singing voice synthesis community.
+
+This monorepo contains all core components of the CVSA platform, managed with [Turborepo](https://turbo.build/repo) and [Bun](https://bun.sh).
+
+## Project Structure
+
+```
+cvsa/
+├── apps/
+│   ├── backend/          # Core REST API service (Elysia + Prisma)
+│   └── frontend/         # Astro SSR application with React islands (Not implemented yet)
+├── packages/
+│   ├── config/           # Shared configuration (TypeScript, etc.)
+│   └── db/               # Prisma schema and database client
+├── .github/              # GitHub workflows and issue templates
+└── turbo.json            # Turborepo configuration
+```
 
 ## Tech Stack
 
-| Layer       | Technology                                                                              |
-| ----------- | --------------------------------------------------------------------------------------- |
-| Runtime     | [Bun](https://bun.sh) – fast JavaScript runtime, package manager, and test runner       |
-| Framework   | [Elysia](https://elysiajs.com) – high‑performance, type‑friendly web framework          |
-| Database    | PostgreSQL                                                                              |
-| ORM         | [Prisma](https://www.prisma.io) – type‑safe database client with migrations             |
-| Testing     | Bun test (unit, integration, E2E)                                                       |
+| Layer          | Technology                                            | Purpose                                               |
+| -------------- | ----------------------------------------------------- | ----------------------------------------------------- |
+| **Runtime**    | [Bun](https://bun.sh)                                 | Fast JavaScript runtime, package manager, test runner |
+| **Monorepo**   | [Turborepo](https://turbo.build)                      | Build system and task orchestration                   |
+| **Frontend**   | [Astro](https://astro.build) + React                  | SSR with partial hydration (islands architecture)     |
+| **Backend**    | [Elysia](https://elysiajs.com)                        | High-performance, type-safe API framework             |
+| **Database**   | PostgreSQL + [TimescaleDB](https://www.timescale.com) | Core storage with time-series optimization            |
+| **ORM**        | [Prisma](https://www.prisma.io)                       | Type-safe database client and migrations              |
 
 ## Getting Started
 
 ### Prerequisites
 
 -   [Bun](https://bun.sh) >= 1.3.10
--   PostgreSQL >= 18
+-   [PostgreSQL](https://www.postgresql.org) >= 18
 
-### Installation
+### Initial Setup
 
 1. **Clone the repository**
 
     ```bash
-    git clone https://github.com/project-cvsa/cvsa-backend
-    cd cvsa-backend
+    git clone https://github.com/project-cvsa/cvsa
+    cd cvsa
     ```
 
 2. **Install dependencies**
 
     ```bash
-    bun install
+    bun i
     ```
 
-3. **Set up environment variables**  
-   Copy the example file and edit it with your database credentials:
+3. **Set up environment variables**
+
+    Create `.env` files in each service directory following their `.env.example` templates:
 
     ```bash
-    cp .env.example .env
+    cp apps/frontend/.env.example apps/frontend/.env
+    cp packages/db/.env.example packages/db/.env
     ```
 
-    Required variables:
-
-    ```ini
-    DATABASE_URL="postgresql://user:password@localhost:5432/cvsa"
-    ```
-
-4. **Generate Prisma client and run migrations**
+4. **Initialize the database**
 
     ```bash
-    bun db-gen          # generate Prisma Client
-    bun migrate:dev     # apply migrations to your database
+    cd packages/db
+
+    # Generate Prisma client
+    bun db:gen
+
+    # Run migrations
+    bun db:migrate:dev
     ```
 
-    (For production, use `bun migrate` with custom scripts.)
+### Development
 
-5. **Start the development server**
-
-    ```bash
-    bun dev
-    ```
-
-    The server will start at `http://localhost:16412` (configurable via `PORT`).
-
-## Testing
-
-We use Bun’s built‑in test runner.
-
-Run all tests:
+Start all services in development mode:
 
 ```bash
-bun test
+bun dev
 ```
 
-For a specific suite:
+## Available Scripts
 
-```bash
-bun test:unit
-bun test:integration
-bun test:e2e
-```
+| Command        | Description                            |
+| -------------- | -------------------------------------- |
+| `bun dev`      | Start all services in development mode |
+| `bun build`    | Build all applications                 |
+| `bun lint`     | Run Biome linter across the codebase   |
+| `bun lint:fix` | Fix linting issues automatically       |
+| `bun format`   | Format code with Biome                 |
+| `bun test`     | Run tests across all packages          |
 
-To set up the test database (requires `DATABASE_URL` pointing to a test database):
+### Package-Specific Scripts
 
-```bash
-bun test:db:setup   # runs migrations and resets the test DB
-```
-
-
-## Project Structure
-
-```
-src/
-├── containers.ts          # DI container wiring
-├── index.ts               # App entry point
-├── onAfterHandle.ts       # Global response handler
-├── startMessage.ts        # Startup logging
-├── lib/                   # Shared utilities
-├── repositories/          # Data access layer
-├── services/              # Business logic
-├── routes/                # Elysia route definitions
-└── schemas/               # Zod validation schemas
-tests/                     # Unit, integration, E2E tests
-prisma/                    # Prisma schema and migrations
-```
+See each package's `README.md` for available scripts.
 
 ## License
 
-This project is licensed under the AGPLv3 License – see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **GNU Affero General Public License v3.0** – see the [LICENSE](LICENSE) file for details.

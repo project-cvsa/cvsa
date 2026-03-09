@@ -1,0 +1,6 @@
+{
+    "name": "@project-cvsa/configs",
+    "exports": {
+        "./tsconfig/*": "./tsconfig/*.json"
+    }
+}

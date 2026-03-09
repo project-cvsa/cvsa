@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeEach, afterAll } from "bun:test";
 import { createUserRepository } from "@repositories/UserRepository";
 import { prisma } from "@lib/prisma";
-import { Prisma } from "@prisma/generated/client";
+import { Prisma } from "@project-cvsa/db";
 
 /**
  * UserRepository Integration Test

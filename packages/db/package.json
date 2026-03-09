@@ -1,0 +1,26 @@
+{
+    "name": "@project-cvsa/db",
+    "type": "module",
+    "module": "index.ts",
+    "scripts": {
+        "gen": "bunx --bun prisma generate",
+        "deploy": "",
+        "migrate": "bunx --bun prisma migrate dev --create-only",
+        "migrate:dev": "bunx --bun prisma migrate dev",
+        "push": "bunx --bun prisma db push",
+        "test:setup": "NODE_ENV=test bunx --bun prisma migrate reset --force",
+        "studio": "bunx --bun prisma studio"
+    },
+    "devDependencies": {
+        "prisma": "^7.4.1",
+        "prisma-json-types-generator": "^4.1.1"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "@prisma/adapter-pg": "^7.4.1",
+        "@prisma/client": "^7.4.1",
+        "@types/pg": "^8.16.0"
+    }
+}

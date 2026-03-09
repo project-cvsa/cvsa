@@ -1,4 +1,4 @@
-import type { Session, Prisma } from "@prisma/generated/client";
+import type { Session, Prisma } from "@project-cvsa/db";
 
 export interface CreateSessionData {
 	userId: string;

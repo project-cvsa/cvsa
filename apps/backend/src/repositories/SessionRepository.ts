@@ -1,6 +1,6 @@
 import { prisma } from "@lib/prisma";
 import type { ISessionRepository, CreateSessionData, SessionWithSecret } from "./interfaces";
-import type { Session, Prisma, PrismaClient } from "@prisma/generated/client";
+import type { Session, Prisma, PrismaClient } from "@project-cvsa/db";
 import crypto from "node:crypto";
 
 export class SessionRepository implements ISessionRepository {
