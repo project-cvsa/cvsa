@@ -1,62 +1,45 @@
-import { AppError } from "@lib/error";
 import { Elysia } from "elysia";
+import { GetCurrentUserResponseSchema } from "@schemas/auth";
+import { ErrorResponseSchema } from "@schemas/common";
 import z from "zod";
-import { ErrorResponseSchema } from "@lib/schema";
-import { authServicePlugin } from "./index";
+import { authService } from "@/containers";
+
+const DUMMY_TOKEN = "000000000000000000000000000000.000000000000000000000000000000";
+const DUMMY_BEARER_TOKEN = `Bearer ${DUMMY_TOKEN}`;
 
 const authSchema = z
     .string()
     // Length: Bearer (7) + hex(30) + dot(1) + hex(30) = 68
     .length(68)
     .startsWith("Bearer ")
-    .transform((val) => val.split(" ")[1])
-    .refine((token) => token && /^[0-9a-fA-F]{30}\.[0-9a-fA-F]{30}$/.test(token));
+    .transform((val) => val.slice(7))
+    .refine((token) => /^[0-9a-fA-F]{30}\.[0-9a-fA-F]{30}$/.test(token));
 
-const GetCurrentUser200Schema = z.object({
-    id: z.string(),
-    username: z.string(),
-    displayName: z.string().optional().nullable(),
-    email: z.email().optional().nullable(),
-});
-
-export const getCurrentUserHandler = new Elysia().use(authServicePlugin).get(
+export const getCurrentUserHandler = new Elysia().decorate("authService", authService).get(
     "/me",
     async ({ headers, status, authService }) => {
-        try {
-            const auth = headers.authorization;
-            const token = authSchema.parse(auth);
-            if (!token) {
-                return status(401, { code: "UNAUTHORIZED", message: "Unauthorized" });
-            }
-            const user = await authService.verifyToken(token);
-            if (!user) {
-                return status(401, { code: "UNAUTHORIZED", message: "Unauthorized" });
-            }
-            return status(200, {
-                id: user.id,
-                username: user.username,
-                displayName: user.displayName,
-                email: user.email,
-            });
-        } catch (e) {
-            if (e instanceof AppError) {
-                return status(500, { code: e.code, message: e.message });
-            } else if (e instanceof z.ZodError) {
-                const firstMessage = e.issues[0]?.message || "Invalid request";
-                return status(400, { code: "INVALID_REQUEST", message: firstMessage });
-            } else {
-                return status(500, { code: "SERVER_ERROR", message: "Internal server error" });
-            }
+        const auth = headers.authorization ?? DUMMY_BEARER_TOKEN;
+        const parsedToken = authSchema.safeParse(auth);
+        const token = parsedToken.success ? parsedToken.data : DUMMY_TOKEN;
+        const user = await authService.verifyToken(token);
+
+        if (!parsedToken.success || !user) {
+            return status(401, { code: "UNAUTHORIZED", message: "Unauthorized" });
         }
+        return status(200, {
+            id: user.id,
+            username: user.username,
+            displayName: user.displayName,
+            email: user.email,
+        });
     },
     {
-        body: GetCurrentUser200Schema,
         detail: {
             summary: "Get current user",
             description: "",
         },
         response: {
-            200: GetCurrentUser200Schema,
+            200: GetCurrentUserResponseSchema,
             400: ErrorResponseSchema,
             401: ErrorResponseSchema,
             500: ErrorResponseSchema,

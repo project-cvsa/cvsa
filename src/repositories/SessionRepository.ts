@@ -1,7 +1,6 @@
 import { prisma } from "@lib/prisma";
 import type { ISessionRepository, CreateSessionData, SessionWithSecret } from "./interfaces";
-import type { Session } from "@prisma/generated/client";
-import type { PrismaClient } from "@prisma/generated/client";
+import type { Session, Prisma, PrismaClient } from "@prisma/generated/client";
 import crypto from "node:crypto";
 
 export class SessionRepository implements ISessionRepository {
@@ -11,7 +10,7 @@ export class SessionRepository implements ISessionRepository {
         this.prisma = prismaClient;
     }
 
-    async create(data: CreateSessionData): Promise<SessionWithSecret> {
+    async create(data: CreateSessionData, transaction?: Prisma.TransactionClient): Promise<SessionWithSecret> {
         const sha256Hasher = new Bun.CryptoHasher("sha256");
         // 120 bits entropy
         const id = crypto.randomBytes(15).toString("hex");
@@ -19,7 +18,8 @@ export class SessionRepository implements ISessionRepository {
         sha256Hasher.update(secret);
         const secretHash = sha256Hasher.digest("hex");
 
-        const session = await this.prisma.session.create({
+        const db = transaction ?? this.prisma;
+        const session = await db.session.create({
             data: {
                 id,
                 userId: data.userId,
@@ -33,8 +33,16 @@ export class SessionRepository implements ISessionRepository {
         return Object.assign(session, { secret });
     }
 
-    async findByIdAndSecretHash(id: string, secretHash: string): Promise<Session | null> {
-        return await this.prisma.session.findUnique({
+    async findById(id: string, transaction?: Prisma.TransactionClient): Promise<Session | null> {
+        const db = transaction ?? this.prisma;
+        return await db.session.findUnique({
+            where: { id },
+        });
+    }
+
+    async findByIdAndSecretHash(id: string, secretHash: string, transaction?: Prisma.TransactionClient): Promise<Session | null> {
+        const db = transaction ?? this.prisma;
+        return await db.session.findFirst({
             where: {
                 id,
                 secretHash,
@@ -47,6 +55,3 @@ export class SessionRepository implements ISessionRepository {
 export function createSessionRepository(prismaClient?: PrismaClient): SessionRepository {
     return new SessionRepository(prismaClient);
 }
-
-// Singleton instance (for backward compatibility)
-export const sessionRepository = createSessionRepository();

@@ -1,4 +1,4 @@
-import type { Session } from "@prisma/generated/client";
+import type { Session, Prisma } from "@prisma/generated/client";
 
 export interface CreateSessionData {
     userId: string;
@@ -10,6 +10,7 @@ export interface CreateSessionData {
 export type SessionWithSecret = Session & { secret: string };
 
 export interface ISessionRepository {
-    create(data: CreateSessionData): Promise<SessionWithSecret>;
-    findByIdAndSecretHash(id: string, secretHash: string): Promise<Session | null>;
+    create(data: CreateSessionData, transaction?: Prisma.TransactionClient): Promise<SessionWithSecret>;
+    findById(id: string, transaction?: Prisma.TransactionClient): Promise<Session | null>;
+    findByIdAndSecretHash(id: string, secretHash: string, transaction?: Prisma.TransactionClient): Promise<Session | null>;
 }

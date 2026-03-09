@@ -4,11 +4,14 @@ import { getBindingInfo, logStartup } from "./startMessage";
 import pkg from "../package.json";
 import { authHandler } from "@routes/auth";
 import { AppError } from "@lib/error";
+import { ZodError } from "zod";
 
 const [host, port] = getBindingInfo();
 logStartup(host, port);
 
-const errorHandler: ErrorHandler = ({ code, status, error }) => {
+const errorHandler: ErrorHandler<{
+    readonly AppError: AppError;
+}> = ({ code, status, error }) => {
     if (code === "NOT_FOUND")
         return status(404, {
             message: "The requested resource was not found.",
@@ -32,18 +35,27 @@ const errorHandler: ErrorHandler = ({ code, status, error }) => {
             message: error.message,
         });
     }
+    if (error instanceof ZodError) {
+        return status(422, {
+            code: "VALIDATION_ERROR",
+            message: error.message,
+        });
+    }
     return status(500, {
         code: "SERVER_ERROR",
         message: "Internal server error",
     });
 };
 
-const app = new Elysia({
+export const app = new Elysia({
     serve: {
         hostname: host,
     },
     prefix: "/v2",
 })
+    .error({
+        AppError
+    })
     .onError(errorHandler)
     .use(authHandler)
     .use(onAfterHandler)

@@ -1,3 +1,4 @@
+import { env } from "@lib/env";
 import chalk from "chalk";
 import os from "node:os";
 
@@ -18,6 +19,8 @@ function getLocalIpAddress(): string {
 }
 
 export function logStartup(hostname: string, port: number) {
+	const isTest = env.NODE_ENV === "test";
+	if (isTest) return;
 	const localUrl = `http://localhost:${port}`;
 	const networkIp = hostname === "0.0.0.0" ? getLocalIpAddress() : "";
 	const networkUrl = networkIp ? `http://${networkIp}:${port}` : "";

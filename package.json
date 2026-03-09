@@ -6,15 +6,17 @@
     "private": true,
     "scripts": {
         "format": "bunx --bun biome format --write",
-        "check": "bunx --bun tsc --noEmit",
+        "type": "bunx --bun tsc --noEmit",
         "lint": "bunx --bun biome lint",
         "dev": "bun --hot src/index.ts",
+        "start": "bun src/index.ts",
         "test": "bun test",
         "test:coverage": "bun test --coverage",
         "test:unit": "bun test tests/unit",
         "db-gen": "bunx --bun prisma generate",
         "migrate": "bunx --bun prisma migrate dev --create-only",
-        "migrate:dev": "bunx --bun prisma migrate dev"
+        "migrate:dev": "bunx --bun prisma migrate dev",
+        "test:db:setup": "NODE_ENV=test bunx --bun prisma migrate reset --force"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.4.4",
@@ -26,6 +28,7 @@
         "typescript": "^5"
     },
     "dependencies": {
+        "@elysiajs/eden": "^1.0.5",
         "@prisma/adapter-pg": "^7.4.1",
         "@prisma/client": "^7.4.1",
         "@t3-oss/env-core": "^0.13.10",

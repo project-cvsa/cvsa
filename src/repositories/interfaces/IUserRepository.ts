@@ -1,6 +1,7 @@
-import type { User } from "@prisma/generated/client";
+import type { User, Prisma } from "@prisma/generated/client";
 
 export interface CreateUserData {
+    id: string;
     username: string;
     password: string;
     displayName?: string | null;
@@ -8,8 +9,8 @@ export interface CreateUserData {
 }
 
 export interface IUserRepository {
-    create(data: CreateUserData): Promise<User>;
-    findById(id: string): Promise<User | null>;
-    findByUsername(username: string): Promise<User | null>;
-    findByEmail(email: string): Promise<User | null>;
+    create(data: CreateUserData, transaction?: Prisma.TransactionClient): Promise<User>;
+    findById(id: string, transaction?: Prisma.TransactionClient): Promise<User | null>;
+    findByUsername(username: string, transaction?: Prisma.TransactionClient): Promise<User | null>;
+    findByEmail(email: string, transaction?: Prisma.TransactionClient): Promise<User | null>;
 }
