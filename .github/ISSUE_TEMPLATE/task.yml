@@ -22,16 +22,4 @@ body:
     attributes:
       label: Acceptance Criteria
       description: A checklist to verify the task is complete.
-      value: |
-        - [ ] Successfully register a new user (DB record created, password hashed)
-        - [ ] Login with correct credentials returns a valid token
-        - [ ] Login with incorrect credentials returns 401 Unauthorized
-        - [ ] Registration returns 409 Conflict if the username already exists
-        - [ ] Basic input validation is implemented (username length, email format)
       placeholder: Use - [ ] to list verifiable points.
-
-  - type: input
-    id: branch
-    attributes:
-      label: Suggested Branch Name (Optional)
-      placeholder: feat/auth-basic
