@@ -1,0 +1,4 @@
+{
+	"extends": "@project-cvsa/typescript-config/base.json",
+	"include": ["index.ts"]
+}

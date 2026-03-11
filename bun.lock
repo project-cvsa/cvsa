@@ -30,6 +30,7 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2.4.4",
+        "@project-cvsa/typescript-config": "*",
         "@types/bun": "latest",
       },
       "peerDependencies": {
@@ -40,7 +41,7 @@
       "name": "@project-cvsa/core",
       "dependencies": {
         "@better-auth/prisma-adapter": "^1.5.5",
-        "@project-cvsa/db": "workspace:*",
+        "@project-cvsa/db": "*",
         "@t3-oss/env-core": "^0.13.10",
         "better-auth": "^1.5.5",
         "nanoid": "^5.1.6",
@@ -48,6 +49,7 @@
       },
       "devDependencies": {
         "@prisma/adapter-pg": "^7.4.1",
+        "@project-cvsa/typescript-config": "*",
         "@types/bun": "latest",
       },
       "peerDependencies": {
@@ -62,12 +64,16 @@
         "@types/pg": "^8.16.0",
       },
       "devDependencies": {
+        "@project-cvsa/typescript-config": "*",
         "prisma": "^7.4.1",
         "prisma-json-types-generator": "^4.1.1",
       },
       "peerDependencies": {
         "typescript": "^5",
       },
+    },
+    "packages/typescript-config": {
+      "name": "@project-cvsa/typescript-config",
     },
   },
   "packages": {
@@ -178,6 +184,8 @@
     "@project-cvsa/core": ["@project-cvsa/core@workspace:packages/core"],
 
     "@project-cvsa/db": ["@project-cvsa/db@workspace:packages/db"],
+
+    "@project-cvsa/typescript-config": ["@project-cvsa/typescript-config@workspace:packages/typescript-config"],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.34.48", "", {}, "sha512-kKJTNuK3AQOrgjjotVxMrCn1sUJwM76wMszfq1kdU4uYVJjvEWuFQ6HgvLt4Xz3fSmZlTOxJ/Ie13KnIcWQXFA=="],
 
