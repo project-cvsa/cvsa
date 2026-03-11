@@ -7,6 +7,8 @@ import { RateLimitError, AppError } from "@common/error";
 import { auth } from "@modules/auth/lib";
 import { getRandomId } from "@common/utils";
 
+const DAY = 86400;
+
 export const signupHandler = new Elysia()
 	.use(ip())
 	.use(
@@ -20,7 +22,7 @@ export const signupHandler = new Elysia()
 	)
 	.post(
 		"/user",
-		async ({ body, status, headers }) => {
+		async ({ body, status, headers, cookie: { token: tokenCookie } }) => {
 			const { user, token } = await auth.api.signUpEmail({
 				body: {
 					name: body.displayName || body.username,
@@ -36,6 +38,12 @@ export const signupHandler = new Elysia()
 					cause: "Better Auth responded with no token",
 				});
 			}
+
+			tokenCookie.value = token;
+			tokenCookie.httpOnly = true;
+			tokenCookie.maxAge = 90 * DAY;
+			tokenCookie.secure = true;
+			tokenCookie.sameSite = "lax";
 
 			return status(200, {
 				message: "Successfully registered",
