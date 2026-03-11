@@ -1,8 +1,8 @@
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { prisma } from "@common/prisma";
+import { getRandomId } from "@common/utils";
 import { username } from "better-auth/plugins";
-import { getRandomId } from "@common/utils/randomId";
 import { bearer } from "better-auth/plugins";
 
 const DAY = 24 * 60 * 60;
@@ -45,3 +45,5 @@ export const auth = betterAuth({
 	},
 	plugins: [username(), bearer()],
 });
+
+export { APIError as BetterAuthAPIError };

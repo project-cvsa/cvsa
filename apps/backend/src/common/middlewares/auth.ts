@@ -1,5 +1,5 @@
 import { AppError } from "@common/error";
-import { auth } from "@modules/auth/lib";
+import { auth } from "@project-cvsa/core";
 import { Elysia } from "elysia";
 import type { User } from "@project-cvsa/db";
 
@@ -20,7 +20,9 @@ export const authMiddleware = new Elysia({ name: "authMiddleware" }).derive(
 	{ as: "scoped" },
 	async ({ headers }) => {
 		const session = await auth.api.getSession({
-			headers: headers,
+			headers: Object.entries(headers).filter(
+				(entry): entry is [string, string] => entry[1] !== undefined
+			),
 		});
 
 		if (!session) {

@@ -1,11 +1,16 @@
 import { Elysia } from "elysia";
 import { ip } from "elysia-ip";
 import { rateLimit } from "elysia-rate-limit";
-import { SignupRequestSchema, SignupResponseSchema } from "@modules/auth/schema";
-import { ErrorResponseSchema } from "@common/schemas";
+import {
+	betterAuthToSignupUserInfoDto,
+	SignupRequestSchema,
+	signupRequestToBetterAuth,
+	SignupResponseSchema,
+	toSignUpResponse,
+	ErrorResponseSchema,
+} from "@project-cvsa/core";
 import { RateLimitError, AppError } from "@common/error";
-import { auth } from "@modules/auth/lib";
-import { getRandomId } from "@common/utils";
+import { auth } from "@project-cvsa/core";
 
 const DAY = 86400;
 
@@ -24,15 +29,12 @@ export const signupHandler = new Elysia()
 		"/user",
 		async ({ body, status, headers, cookie: { token: tokenCookie } }) => {
 			const { user, token } = await auth.api.signUpEmail({
-				body: {
-					name: body.displayName || body.username,
-					email:
-						body.email || `delegate-${getRandomId(14).toLowerCase()}@projectcvsa.com`,
-					password: body.password,
-					username: body.username,
-				},
-				headers: headers,
+				body: signupRequestToBetterAuth(body),
+				headers: Object.entries(headers).filter(
+					(entry): entry is [string, string] => entry[1] !== undefined
+				),
 			});
+
 			if (!token) {
 				throw new AppError("Cannot create user", "INTERNAL_SERVER_ERROR", 500, {
 					cause: "Better Auth responded with no token",
@@ -45,16 +47,10 @@ export const signupHandler = new Elysia()
 			tokenCookie.secure = true;
 			tokenCookie.sameSite = "lax";
 
-			return status(200, {
-				message: "Successfully registered",
-				data: {
-					id: user.id,
-					username: user.username || "",
-					displayName: user.name,
-					email: user.email,
-					token,
-				},
-			});
+			const userInfo = betterAuthToSignupUserInfoDto(user, token);
+			const response = toSignUpResponse(userInfo);
+
+			return status(200, response);
 		},
 		{
 			body: SignupRequestSchema,

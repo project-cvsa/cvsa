@@ -1,5 +1,5 @@
 import { AppError } from "@common/error";
-import { APIError } from "better-auth";
+import { BetterAuthAPIError } from "@project-cvsa/core";
 import type { ErrorHandler } from "elysia";
 import { ZodError } from "zod";
 
@@ -35,7 +35,7 @@ export const errorHandler: ErrorHandler<{
 			message: error.message,
 		});
 	}
-	if (error instanceof APIError) {
+	if (error instanceof BetterAuthAPIError) {
 		if (
 			["USERNAME_IS_ALREADY_TAKEN", "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"].includes(
 				error.body?.code || ""
@@ -51,7 +51,6 @@ export const errorHandler: ErrorHandler<{
 			message: error.body?.message,
 		});
 	}
-	console.error(error);
 	return status(500, {
 		code: "SERVER_ERROR",
 		message: "Internal server error",

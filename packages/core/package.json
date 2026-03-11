@@ -1,0 +1,20 @@
+{
+    "name": "@project-cvsa/core",
+    "type": "module",
+    "module": "index.ts",
+    "devDependencies": {
+        "@prisma/adapter-pg": "^7.4.1",
+        "@types/bun": "latest"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "@better-auth/prisma-adapter": "^1.5.5",
+        "@project-cvsa/db": "workspace:*",
+        "@t3-oss/env-core": "^0.13.10",
+        "better-auth": "^1.5.5",
+        "nanoid": "^5.1.6",
+        "zod": "^4.3.6"
+    }
+}
