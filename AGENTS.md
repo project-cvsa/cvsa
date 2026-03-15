@@ -108,3 +108,13 @@ The commit message follows the conventional commits:
 ```
 
 Available types are: `feat`, `fix`, `update`, `docs`, `style`, `refactor`, `perf`, `test`, `ci`, `chore` and `revert`.
+
+## Collaboration
+
+GitHub repository location: [project-cvsa/cvsa](https://github.com/project-cvsa/cvsa).
+
+**Workflow**:
+1. Checkout a new branch from `develop`. Name it as `<type>/<deveploperName>-<issueID>-<name>` (e.g. `fix/jack-132-song-api`)
+2. Write code
+3. Create a PR, the title should follows the same format as commit message. Descrption should contain `## Changes` and `## Related` sections.
+4. If code review passes, the maintainer will squash & merge the PR.
