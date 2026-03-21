@@ -55,13 +55,8 @@
 					"name": "biome"
 				}
 			}
-		},
+		}
 	},
-	"language_servers": [
-		"!eslint",
-		"!typescript-language-server",
-		"..."
-	],
 	"lsp": {
 		"biome": {
 			"settings": {

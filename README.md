@@ -24,14 +24,14 @@ cvsa/
 
 ## Tech Stack
 
-| Layer          | Technology                                            | Purpose                                               |
-| -------------- | ----------------------------------------------------- | ----------------------------------------------------- |
-| **Runtime**    | [Bun](https://bun.sh)                                 | Fast JavaScript runtime, package manager, test runner |
-| **Monorepo**   | [Turborepo](https://turbo.build)                      | Build system and task orchestration                   |
-| **Frontend**   | [Astro](https://astro.build) + React                  | SSR with partial hydration (islands architecture)     |
-| **Backend**    | [Elysia](https://elysiajs.com)                        | High-performance, type-safe API framework             |
-| **Database**   | PostgreSQL + [TimescaleDB](https://www.timescale.com) | Core storage with time-series optimization            |
-| **ORM**        | [Prisma](https://www.prisma.io)                       | Type-safe database client and migrations              |
+| Layer        | Technology                                            | Purpose                                               |
+| ------------ | ----------------------------------------------------- | ----------------------------------------------------- |
+| **Runtime**  | [Bun](https://bun.sh)                                 | Fast JavaScript runtime, package manager, test runner |
+| **Monorepo** | [Turborepo](https://turbo.build)                      | Build system and task orchestration                   |
+| **Frontend** | [Astro](https://astro.build) + React                  | SSR with partial hydration (islands architecture)     |
+| **Backend**  | [Elysia](https://elysiajs.com)                        | High-performance, type-safe API framework             |
+| **Database** | PostgreSQL + [TimescaleDB](https://www.timescale.com) | Core storage with time-series optimization            |
+| **ORM**      | [Prisma](https://www.prisma.io)                       | Type-safe database client and migrations              |
 
 ## Getting Started
 
@@ -88,14 +88,16 @@ bun dev
 
 ## Available Scripts
 
-| Command        | Description                            |
-| -------------- | -------------------------------------- |
-| `bun dev`      | Start all services in development mode |
-| `bun build`    | Build all applications                 |
-| `bun lint`     | Run Biome linter across the codebase   |
-| `bun lint:fix` | Fix linting issues automatically       |
-| `bun format`   | Format code with Biome                 |
-| `bun test`     | Run tests across all packages          |
+| Command                 | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `bun run dev`           | Start all services in development mode           |
+| `bun run build`         | Build all applications                           |
+| `bun run lint`          | Run Biome linter across the codebase             |
+| `bun run lint:fix`      | Fix linting issues automatically                 |
+| `bun run format`        | Format code with Biome                           |
+| `bun run test`          | Run tests across all packages                    |
+| `bun run test:coverage` | Run tests with coverage across all packages      |
+| `bun run typecheck`     | Run TypeScript type checking across all packages |
 
 ### Package-Specific Scripts
 

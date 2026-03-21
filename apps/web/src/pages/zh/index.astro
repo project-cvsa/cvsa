@@ -1,0 +1,69 @@
+---
+import GraphicLogo from "@components/icon/GraphicLogo.astro";
+import TextLogoChinese from "@components/icon/TextLogoChinese.astro";
+import Layout from "@layouts/layout.astro";
+---
+
+<Layout title="正在开发中 | 中V档案馆">
+	<main
+		class="w-screen min-h-screen relative flex items-end
+               bg-white text-[#1a1a1a] dark:bg-[#020203] dark:text-[#e5e5e5]
+               transition-colors duration-300 overflow-hidden"
+	>
+		<div
+			class="absolute inset-0 opacity-10 dark:opacity-13 pointer-events-none"
+			style="background-image: radial-gradient(currentColor 1px, transparent 1px); background-size: 40px 40px;"
+		></div>
+
+		<div class="absoflute w-full top-10 px-5 md:px-20 flex items-center justify-between gap-2">
+			<GraphicLogo />
+
+			<TextLogoChinese />
+		</div>
+
+		<div class="mb-32 sm:mb-25 ml-3 sm:ml-6 md:ml-14 lg:ml-20 z-10">
+			<h1
+				class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl uppercase font-[Archivo] font-800 leading-[0.85] tracking-tighter"
+			>
+				Under<br>Construction
+			</h1>
+
+			<p
+				class="mt-2 lg:mt-8 max-w-md text-sm sm:text-base md:text-lg lg:text-xl opacity-80 leading-relaxed font-400 lg:font-300"
+			>
+				档案馆正在开发中。 <br>
+				「期待着 下个夏天 与你携手<br>
+				将记忆 共同留存 直至永恒」
+			</p>
+
+			<a
+				class="mt-10 group flex items-center gap-4 cursor-pointer"
+				href="https://qm.qq.com/q/7RXTNmvmUM"
+			>
+				<div
+					class="h-[2px] w-12 lg:w-16 bg-current opacity-50 transition-all group-hover:w-20 group-hover:opacity-100"
+				/>
+				<span class="text-base sm:text-base lg:text-lg tracking-widest uppercase font-bold opacity-75 group-hover:opacity-100">
+					加入讨论群
+				</span>
+			</a>
+			<a
+				class="mt-3 group flex items-center gap-4 cursor-pointer"
+				href="https://docs.projectcvsa.com/zh"
+			>
+				<div
+					class="h-[2px] w-30 lg:w-34 bg-current opacity-50 transition-all group-hover:w-40 group-hover:opacity-100"
+				/>
+				<span class="text-base sm:text-base lg:text-lg tracking-widest uppercase font-bold opacity-75 group-hover:opacity-100">
+					阅读文档
+				</span>
+			</a>
+		</div>
+
+		<div
+			class="absolute bottom-10 right-5 md:right-20 text-right opacity-40 text-[10px] sm:text-xs lg:text-sm font-[IBM_Plex_Mono] tracking-tighter"
+		>
+			&copy; 2026 Project CVSA / alpha 0.0.1
+		</div>
+	</main>
+</Layout>
