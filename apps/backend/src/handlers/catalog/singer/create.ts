@@ -22,8 +22,7 @@ export const singerCreateHandler = new Elysia({ name: "singerCreateHandler" })
 			body: CreateSingerRequestSchema,
 			detail: {
 				summary: "Create Singer",
-				description:
-					"Create a new singer entry in the catalog. Requires authentication.",
+				description: "Create a new singer entry in the catalog. Requires authentication.",
 			},
 			response: {
 				201: SingerResponseSchema,

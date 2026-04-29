@@ -2,7 +2,13 @@ import { Elysia } from "elysia";
 import { onAfterHandler } from "./onAfterHandle";
 import { getBindingInfo, logStartup } from "./startMessage";
 import pkg from "../package.json";
-import { authHandler, songHandler, engineHandler, artistHandler, singerHandler } from "@handlers/index";
+import {
+	authHandler,
+	songHandler,
+	engineHandler,
+	artistHandler,
+	singerHandler,
+} from "@handlers/index";
 import { errorHandler } from "./errorHandler";
 import { openapi } from "@elysiajs/openapi";
 import { requestLoggerMiddleware } from "@/middlewares";
