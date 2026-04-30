@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
 import type { MarketIndex } from "@/lib/stock-data";
+import { getChangeColor } from "@/lib/colors";
+import { useColorMode } from "@/components/ColorModeContext";
 
 interface MarketIndexChartProps {
 	data: MarketIndex;
@@ -12,6 +14,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const svgRef = useRef<SVGSVGElement>(null);
 	const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+	const { mode } = useColorMode();
 
 	useEffect(() => {
 		if (!containerRef.current) return;
@@ -119,7 +122,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.tickSizeOuter(0)
 			.tickFormat((d) => {
 				const value = d as number;
-				if (value > 10000) {
+				if (value >= 10000) {
 					return `${(value / 1000).toLocaleString("en-US")}k`;
 				}
 				return Math.round(value).toLocaleString("en-US");
@@ -165,13 +168,13 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 		gradient
 			.append("stop")
 			.attr("offset", "0%")
-			.attr("stop-color", data.change >= 0 ? "#22c55e" : "#ef4444")
+			.attr("stop-color", getChangeColor(mode, data.change))
 			.attr("stop-opacity", 0.3);
 
 		gradient
 			.append("stop")
 			.attr("offset", "100%")
-			.attr("stop-color", data.change >= 0 ? "#22c55e" : "#ef4444")
+			.attr("stop-color", getChangeColor(mode, data.change))
 			.attr("stop-opacity", 0);
 
 		g.append("path").datum(data.history).attr("fill", `url(#${gradientId})`).attr("d", area);
@@ -180,7 +183,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.append("path")
 			.datum(data.history)
 			.attr("fill", "none")
-			.attr("stroke", data.change >= 0 ? "#22c55e" : "#ef4444")
+			.attr("stroke", getChangeColor(mode, data.change))
 			.attr("stroke-width", 2.5)
 			.attr("d", line);
 
@@ -204,7 +207,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 		const crosshairCircle = crosshairGroup
 			.append("circle")
 			.attr("r", 4)
-			.attr("fill", data.change >= 0 ? "#22c55e" : "#ef4444")
+			.attr("fill", getChangeColor(mode, data.change))
 			.attr("stroke", "white")
 			.attr("stroke-width", 2);
 

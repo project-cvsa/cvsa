@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import type { MarketIndex, Stock } from "@/lib/stock-data";
 import { RANGE_LABELS, DEFAULT_RANGE } from "@/lib/stock-constants";
+import { getChangeText } from "@/lib/colors";
+import { useColorMode } from "@/components/ColorModeContext";
 import { MarketIndexChart } from "@/components/MarketIndexChart";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -27,7 +29,8 @@ const RANGES = ["week", "2week", "month", "quarter"] as const;
 export default function StockDetailPage() {
 	const { aid } = useParams<{ aid: string }>();
 	const [data, setData] = useState<DetailData | null>(null);
-	const [loading, setLoading] = useState(true);
+	const [_loading, setLoading] = useState(true);
+	const { mode } = useColorMode();
 	const [error, setError] = useState<string | null>(null);
 	const [range, setRange] = useState<string>(DEFAULT_RANGE);
 
@@ -66,7 +69,7 @@ export default function StockDetailPage() {
 
 	const { stock, eta } = data;
 	const isPositive = stock.changePercent >= 0;
-	const badgeColor = isPositive ? "text-green-500" : "text-red-500";
+	const badgeColor = getChangeText(mode, stock.changePercent);
 
 	const chartData: MarketIndex = {
 		name: stock.name,

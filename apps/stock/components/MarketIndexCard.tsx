@@ -1,6 +1,8 @@
 "use client";
 
 import type { MarketIndex } from "@/lib/stock-data";
+import { getChangeText } from "@/lib/colors";
+import { useColorMode } from "@/components/ColorModeContext";
 import { MarketIndexChart } from "@/components/MarketIndexChart";
 
 interface MarketIndexCardProps {
@@ -9,12 +11,14 @@ interface MarketIndexCardProps {
 }
 
 export function MarketIndexCard({ marketIndex, loading }: MarketIndexCardProps) {
+	const { mode } = useColorMode();
+
 	return (
 		<div className="rounded-2xl bg-[#0a0a0a] overflow-hidden">
 			{loading && !marketIndex && (
-				<div className="px-6 py-5">
-					<div className="h-8 w-24 bg-white/5 rounded animate-pulse" />
-					<div className="h-10 w-48 bg-white/5 rounded mt-2 animate-pulse" />
+				<div className="">
+					<div className="mx-2 h-28 bg-white/5 rounded-lg animate-pulse" />
+					<div className="mx-2 h-74 sm:h-96 bg-white/5 rounded-lg mt-2 animate-pulse" />
 				</div>
 			)}
 
@@ -35,18 +39,14 @@ export function MarketIndexCard({ marketIndex, loading }: MarketIndexCardProps) 
 							</div>
 							<div className="text-right">
 								<div
-									className={`text-lg font-[Inter] tabular-nums font-semibold ${
-										marketIndex.change >= 0 ? "text-green-500" : "text-red-500"
-									}`}
+									className={`text-lg font-[Inter] tabular-nums font-semibold ${getChangeText(mode, marketIndex.change)}`}
 								>
 									{marketIndex.change >= 0 ? "↑" : "↓"}{" "}
 									{marketIndex.change >= 0 ? "+" : ""}
 									{marketIndex.changePercent.toFixed(2)}%
 								</div>
 								<div
-									className={`text-sm font-[Inter] tabular-nums ${
-										marketIndex.change >= 0 ? "text-green-500" : "text-red-500"
-									} opacity-80`}
+									className={`text-sm font-[Inter] tabular-nums ${getChangeText(mode, marketIndex.change)} opacity-80`}
 								>
 									{marketIndex.change >= 0 ? "+" : ""}
 									{marketIndex.change.toFixed(2)}

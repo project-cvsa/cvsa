@@ -49,7 +49,7 @@ export function SearchBox({ isAuthenticated, onDelete, children }: SearchBoxProp
 	const active = query.trim().length > 0;
 
 	return (
-		<div className="flex flex-col gap-6 mt-4">
+		<div className="flex flex-col gap-6 mt-4 px-2">
 			<div className="relative">
 				<Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-zinc-500 pointer-events-none" />
 				<input

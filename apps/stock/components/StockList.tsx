@@ -12,6 +12,8 @@ import {
 import { Copy, Trash2 } from "lucide-react";
 import type { Stock } from "@/lib/stock-data";
 import { copyToClipboard } from "@/lib/copy";
+import { getChangeBg } from "@/lib/colors";
+import { useColorMode } from "@/components/ColorModeContext";
 
 interface StockListProps {
 	stocks: Stock[];
@@ -37,6 +39,7 @@ const StockItem = memo(
 		onDelete: (id: string) => void;
 	}) => {
 		const isPositive = stock.changePercent >= 0;
+	const { mode } = useColorMode();
 
 		return (
 			<ContextMenu>
@@ -74,9 +77,7 @@ const StockItem = memo(
 									{Math.round(stock.price).toLocaleString("en-US")}
 								</div>
 								<div
-									className={`font-[Inter] tabular-nums text-xs w-16 px-1 py-0.5 rounded-[3px] font-bold text-white ${
-										isPositive ? "bg-green-600" : "bg-red-500"
-									}`}
+									className={`font-[Inter] tabular-nums text-xs w-16 px-1 py-0.5 rounded-[3px] font-bold text-white ${getChangeBg(mode, stock.changePercent)}`}
 								>
 									{isPositive ? "+" : ""}
 									{formatPercentage(stock.changePercent)}%

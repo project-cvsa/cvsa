@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import * as d3 from "d3";
+import { getChangeColor } from "@/lib/colors";
+import { useColorMode } from "@/components/ColorModeContext";
 
 interface StockMiniChartProps {
 	data: number[];
@@ -17,6 +19,7 @@ export function StockMiniChart({
 	height = 32,
 }: StockMiniChartProps) {
 	const svgRef = useRef<SVGSVGElement>(null);
+	const { mode } = useColorMode();
 
 	useEffect(() => {
 		if (!svgRef.current || data.length === 0) return;
@@ -59,7 +62,7 @@ export function StockMiniChart({
 			.y1((d) => yScale(d))
 			.curve(d3.curveBasis);
 
-		const strokeColor = change >= 0 ? "#22c55e" : "#ef4444";
+		const strokeColor = getChangeColor(mode, change);
 
 		const gradientId = `mini-${Math.random().toString(36).slice(2, 8)}`;
 		const defs = svg.append("defs");
@@ -95,7 +98,7 @@ export function StockMiniChart({
 			.attr("stroke-width", 1.5)
 			.attr("stroke-linecap", "round")
 			.attr("d", line);
-	}, [data, change, width, height]);
+	}, [data, change, width, height, mode]);
 
 	return (
 		<svg

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import {  Inter } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
+import { ColorModeProvider } from "@/components/ColorModeContext";
 
 const interSans = Inter({
 	variable: "--font-inter-sans",
@@ -21,7 +22,9 @@ export default function RootLayout({
 			lang="en"
 			className={`${interSans.variable} h-full antialiased dark`}
 		>
-			<body className="font-sans  bg-[#0a0a0a] text-white">{children}</body>
+			<body className="font-sans  bg-[#0a0a0a] text-white">
+				<ColorModeProvider>{children}</ColorModeProvider>
+			</body>
 		</html>
 	);
 }

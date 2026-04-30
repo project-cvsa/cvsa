@@ -5,9 +5,11 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
+	DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogIn, LogOut, Menu } from "lucide-react";
+import { LogIn, LogOut, Menu, Palette } from "lucide-react";
+import { useColorMode } from "@/components/ColorModeContext";
 
 interface HeaderMenuProps {
 	isAuthenticated: boolean;
@@ -20,6 +22,8 @@ export function HeaderMenu({
 	onLoginClick,
 	onLogout,
 }: HeaderMenuProps) {
+	const { mode, toggle } = useColorMode();
+
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -31,6 +35,11 @@ export function HeaderMenu({
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
+				<DropdownMenuItem onClick={toggle}>
+					<Palette className="size-4" />
+					切换颜色（{mode === "red-up" ? "红涨绿跌" : "绿涨红跌"}）
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
 				{isAuthenticated ? (
 					<DropdownMenuItem onClick={onLogout}>
 						<LogOut className="size-4" />
