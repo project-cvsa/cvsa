@@ -5,16 +5,26 @@ import * as d3 from "d3";
 import type { MarketIndex } from "@/lib/stock-data";
 import { getChangeColor } from "@/lib/colors";
 import { useColorMode } from "@/components/ColorModeContext";
+import { STEP_HOURS, STEP_PER_WINDOW } from "@/lib/stock-constants";
 
 interface MarketIndexChartProps {
 	data: MarketIndex;
 }
+
+const getTickInterval = (totalPoints: number): number => {
+	if (totalPoints <= 50) return STEP_PER_WINDOW;
+	if (totalPoints <= 100) return STEP_PER_WINDOW * 2;
+	if (totalPoints <= 300) return STEP_PER_WINDOW * 7;
+	if (totalPoints <= 600) return STEP_PER_WINDOW * 14;
+	return STEP_PER_WINDOW * 30;
+};
 
 export function MarketIndexChart({ data }: MarketIndexChartProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const svgRef = useRef<SVGSVGElement>(null);
 	const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 	const { mode } = useColorMode();
+	const color = getChangeColor(mode, data.changePercent);
 
 	useEffect(() => {
 		if (!containerRef.current) return;
@@ -65,14 +75,10 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 		const totalPoints = data.history.length;
 		const baseTime = new Date(data.baseTime);
 
-		const tickInterval = totalPoints <= 50 ? 4
-			: totalPoints <= 100 ? 8
-			: totalPoints <= 300 ? 28
-			: totalPoints <= 600 ? 56
-			: 120;
+		const tickInterval = getTickInterval(totalPoints);
 
 		const dayTicks: number[] = [];
-		const hoursToShift = baseTime.getHours() / 6;
+		const hoursToShift = baseTime.getHours() / STEP_HOURS;
 		const firstMidnight = totalPoints - 1 - hoursToShift;
 		for (let i = firstMidnight; i >= 0; i -= tickInterval) {
 			dayTicks.push(i);
@@ -80,7 +86,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 		dayTicks.reverse();
 
 		function formatDateLabel(index: number, showHour = false): string {
-			const hoursAgo = (totalPoints - 1 - index) * 6;
+			const hoursAgo = (totalPoints - 1 - index) * STEP_HOURS;
 			const d = new Date(baseTime.getTime() - hoursAgo * 3600 * 1000);
 			const month = d.getMonth() + 1;
 			const day = d.getDate();
@@ -168,13 +174,13 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 		gradient
 			.append("stop")
 			.attr("offset", "0%")
-			.attr("stop-color", getChangeColor(mode, data.change))
+			.attr("stop-color", color)
 			.attr("stop-opacity", 0.3);
 
 		gradient
 			.append("stop")
 			.attr("offset", "100%")
-			.attr("stop-color", getChangeColor(mode, data.change))
+			.attr("stop-color", color)
 			.attr("stop-opacity", 0);
 
 		g.append("path").datum(data.history).attr("fill", `url(#${gradientId})`).attr("d", area);
@@ -183,7 +189,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.append("path")
 			.datum(data.history)
 			.attr("fill", "none")
-			.attr("stroke", getChangeColor(mode, data.change))
+			.attr("stroke", color)
 			.attr("stroke-width", 2.5)
 			.attr("d", line);
 
@@ -207,7 +213,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 		const crosshairCircle = crosshairGroup
 			.append("circle")
 			.attr("r", 4)
-			.attr("fill", getChangeColor(mode, data.change))
+			.attr("fill", color)
 			.attr("stroke", "white")
 			.attr("stroke-width", 2);
 
@@ -321,7 +327,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 
 		overlay.on("pointermove", handlePointerMove);
 		overlay.on("pointerleave", handlePointerLeave);
-	}, [data, dimensions]);
+	}, [data, dimensions, color]);
 
 	return (
 		<div ref={containerRef} className="relative w-full h-full">

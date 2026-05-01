@@ -65,9 +65,7 @@ export function SearchBox({ isAuthenticated, onDelete, children }: SearchBoxProp
 				<>
 					{searching && (
 						<div className="rounded-2xl bg-[#0a0a0a] border border-white/5 p-8 text-center">
-							<div className="text-zinc-500 font-mono text-sm">
-								搜索中...
-							</div>
+							<div className="text-zinc-500 font-mono text-sm">搜索中...</div>
 						</div>
 					)}
 					{!searching && results.length > 0 && (
@@ -79,9 +77,7 @@ export function SearchBox({ isAuthenticated, onDelete, children }: SearchBoxProp
 					)}
 					{!searching && results.length === 0 && (
 						<div className="rounded-2xl bg-[#0a0a0a] border border-white/5 p-8 text-center">
-							<div className="text-zinc-500 font-mono text-sm">
-								无结果
-							</div>
+							<div className="text-zinc-500 font-mono text-sm">无结果</div>
 						</div>
 					)}
 				</>

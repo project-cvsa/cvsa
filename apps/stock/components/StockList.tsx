@@ -39,7 +39,7 @@ const StockItem = memo(
 		onDelete: (id: string) => void;
 	}) => {
 		const isPositive = stock.changePercent >= 0;
-	const { mode } = useColorMode();
+		const { mode } = useColorMode();
 
 		return (
 			<ContextMenu>
@@ -49,10 +49,10 @@ const StockItem = memo(
 						className="flex items-center justify-between max-sm:mx-5 sm:px-5 py-4 hover:bg-white/2 transition-colors cursor-default"
 					>
 						<div className="flex-1 min-w-0">
-							<div className="text-white font-semibold block truncate hover:underline w-fit">
+							<div className="text-white font-semibold block truncate hover:underline max-w-fit">
 								{stock.name}
 							</div>
-							<div className="text-muted-foreground text-sm font-mono block truncate w-fit">
+							<div className="text-muted-foreground text-sm font-mono block truncate max-w-fit">
 								{stock.symbol}
 							</div>
 						</div>

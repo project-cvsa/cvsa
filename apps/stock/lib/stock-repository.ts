@@ -1,10 +1,6 @@
 import type { Sql } from "postgres";
 import { withCache } from "./cache";
 
-// ---------------------------------------------------------------------------
-// Row types (internal to the repository layer)
-// ---------------------------------------------------------------------------
-
 export interface EtaRow {
 	aid: number;
 	eta: number;
@@ -26,16 +22,8 @@ export interface NewCacheEntry {
 	views_increment: number;
 }
 
-// ---------------------------------------------------------------------------
-// Queries
-// ---------------------------------------------------------------------------
-
 /** Search matching AIDs by BVID, AID, or song name. */
-export async function searchAids(
-	sql: Sql,
-	query: string,
-	limit = 30,
-): Promise<number[]> {
+export async function searchAids(sql: Sql, query: string, limit = 30): Promise<number[]> {
 	const trimmed = query.trim();
 	if (!trimmed) return [];
 
@@ -79,10 +67,7 @@ export async function searchAids(
 }
 
 /** Fetch ETA rows for specific AIDs. */
-export async function fetchEtaEntriesByAids(
-	sql: Sql,
-	aids: number[],
-): Promise<EtaRow[]> {
+export async function fetchEtaEntriesByAids(sql: Sql, aids: number[]): Promise<EtaRow[]> {
 	if (aids.length === 0) return [];
 
 	const sorted = [...aids].sort((a, b) => a - b).join(",");
@@ -106,10 +91,7 @@ export async function fetchEtaEntriesByAids(
 }
 
 /** Single ETA row for a specific AID. Returns null if not found. */
-export async function fetchEtaEntry(
-	sql: Sql,
-	aid: number,
-): Promise<EtaRow | null> {
+export async function fetchEtaEntry(sql: Sql, aid: number): Promise<EtaRow | null> {
 	return withCache(`eta:${aid}`, 180, async () => {
 		const raw = (await sql`
 			SELECT e.aid::bigint, e.eta::real, e.speed::real,
@@ -159,7 +141,7 @@ export async function fetchEtaEntries(sql: Sql): Promise<EtaRow[]> {
 export async function fetchCacheMap(
 	sql: Sql,
 	aids: number[],
-	lookback: Date,
+	lookback: Date
 ): Promise<Map<string, number>> {
 	const sorted = [...aids].sort((a, b) => a - b).join(",");
 	return withCache(`cache:${sorted}:${lookback.toISOString()}`, 60, async () => {
@@ -184,7 +166,7 @@ export async function fetchCacheMap(
 /** Title and BVid lookup for the given AIDs. */
 export async function fetchTitleMap(
 	sql: Sql,
-	aids: number[],
+	aids: number[]
 ): Promise<Map<number, { title: string; bvid: string | null }>> {
 	const sorted = [...aids].sort((a, b) => a - b).join(",");
 	return withCache(`titles:${sorted}`, 60, async () => {
@@ -211,7 +193,7 @@ export async function fetchTitleMap(
 export async function fetchSnapshotsByAid(
 	sql: Sql,
 	aids: number[],
-	lookback: Date,
+	lookback: Date
 ): Promise<Map<number, SnapshotRow[]>> {
 	if (aids.length === 0) return new Map();
 
@@ -248,22 +230,22 @@ export async function fetchSnapshotsByAid(
 export async function insertCacheEntries(
 	sql: Sql,
 	entries: NewCacheEntry[],
-	existingKeys: Set<string>,
+	existingKeys: Set<string>
 ): Promise<number> {
 	const trulyNew = entries.filter(
-		(e) => !existingKeys.has(`${e.aid}_${e.end_time.toISOString()}`),
+		(e) => !existingKeys.has(`${e.aid}_${e.end_time.toISOString()}`)
 	);
 	if (trulyNew.length === 0) return 0;
 
 	const values = trulyNew.map(
-		(e) => `(${e.aid}, '${e.end_time.toISOString()}', ${e.views_increment})`,
+		(e) => `(${e.aid}, '${e.end_time.toISOString()}', ${e.views_increment})`
 	);
 
 	const chunkSize = 1000;
 	for (let i = 0; i < values.length; i += chunkSize) {
 		const chunk = values.slice(i, i + chunkSize);
 		await sql.unsafe(
-			`INSERT INTO internal.increment_cache_day (aid, end_time, views_increment) VALUES ${chunk.join(", ")}`,
+			`INSERT INTO internal.increment_cache_day (aid, end_time, views_increment) VALUES ${chunk.join(", ")}`
 		);
 	}
 

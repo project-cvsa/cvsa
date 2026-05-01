@@ -12,12 +12,7 @@ interface StockMiniChartProps {
 	height?: number;
 }
 
-export function StockMiniChart({
-	data,
-	change,
-	width = 100,
-	height = 32,
-}: StockMiniChartProps) {
+export function StockMiniChart({ data, change, width = 100, height = 32 }: StockMiniChartProps) {
 	const svgRef = useRef<SVGSVGElement>(null);
 	const { mode } = useColorMode();
 
@@ -31,9 +26,7 @@ export function StockMiniChart({
 		const innerWidth = width - margin.left - margin.right;
 		const innerHeight = height - margin.top - margin.bottom;
 
-		const g = svg
-			.append("g")
-			.attr("transform", `translate(${margin.left},${margin.top})`);
+		const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
 		const xScale = d3
 			.scaleLinear()
@@ -86,10 +79,7 @@ export function StockMiniChart({
 			.attr("stop-color", strokeColor)
 			.attr("stop-opacity", 0);
 
-		g.append("path")
-			.datum(data)
-			.attr("fill", `url(#${gradientId})`)
-			.attr("d", area);
+		g.append("path").datum(data).attr("fill", `url(#${gradientId})`).attr("d", area);
 
 		g.append("path")
 			.datum(data)
@@ -100,12 +90,5 @@ export function StockMiniChart({
 			.attr("d", line);
 	}, [data, change, width, height, mode]);
 
-	return (
-		<svg
-			ref={svgRef}
-			width={width}
-			height={height}
-			className="inline-block"
-		/>
-	);
+	return <svg ref={svgRef} width={width} height={height} className="inline-block" />;
 }

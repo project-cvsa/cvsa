@@ -10,9 +10,6 @@ export async function GET() {
 		return NextResponse.json({ stocks, marketIndex });
 	} catch (error) {
 		console.error("Failed to fetch stocks:", error);
-		return NextResponse.json(
-			{ error: "Failed to fetch stock data" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to fetch stock data" }, { status: 500 });
 	}
 }

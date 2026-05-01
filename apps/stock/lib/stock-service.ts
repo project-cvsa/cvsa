@@ -42,9 +42,7 @@ export async function getTopStocks(): Promise<{
 	}
 
 	const aids = etaEntries.map((e) => e.aid);
-	const lookback = new Date(
-		now.getTime() - TOTAL_LOOKBACK_HOURS * 3600 * 1000,
-	);
+	const lookback = new Date(now.getTime() - TOTAL_LOOKBACK_HOURS * 3600 * 1000);
 
 	console.time("getTopStocks: cache query");
 	const cacheMap = await fetchCacheMap(sql, aids, lookback);
@@ -63,15 +61,11 @@ export async function getTopStocks(): Promise<{
 		}
 	}
 	console.log(
-		`getTopStocks: cache split — ${aids.length - uncachedAids.length} fully cached, ${uncachedAids.length} need snapshots`,
+		`getTopStocks: cache split — ${aids.length - uncachedAids.length} fully cached, ${uncachedAids.length} need snapshots`
 	);
 
 	console.time("getTopStocks: snapshot query");
-	const snapshotsByAid = await fetchSnapshotsByAid(
-		sql,
-		uncachedAids,
-		lookback,
-	);
+	const snapshotsByAid = await fetchSnapshotsByAid(sql, uncachedAids, lookback);
 	console.timeEnd("getTopStocks: snapshot query");
 
 	console.time("getTopStocks: window computation");
@@ -80,26 +74,18 @@ export async function getTopStocks(): Promise<{
 		titleMap,
 		cacheMap,
 		snapshotsByAid,
-		now,
+		now
 	);
 	console.timeEnd("getTopStocks: window computation");
 
-	const realEntries = newCacheEntries.filter(
-		(e) => e.views_increment >= 0,
-	).length;
-	const sentinelEntries = newCacheEntries.filter(
-		(e) => e.views_increment === -1,
-	).length;
+	const realEntries = newCacheEntries.filter((e) => e.views_increment >= 0).length;
+	const sentinelEntries = newCacheEntries.filter((e) => e.views_increment === -1).length;
 	console.log(
-		`getTopStocks: computed ${stocks.length} stocks, ${realEntries} new + ${sentinelEntries} sentinel cache entries`,
+		`getTopStocks: computed ${stocks.length} stocks, ${realEntries} new + ${sentinelEntries} sentinel cache entries`
 	);
 
 	console.time("getTopStocks: cache insert");
-	const inserted = await insertCacheEntries(
-		sql,
-		newCacheEntries,
-		existingCacheKeys,
-	);
+	const inserted = await insertCacheEntries(sql, newCacheEntries, existingCacheKeys);
 	console.timeEnd("getTopStocks: cache insert");
 	console.log(`getTopStocks: inserted ${inserted} truly new entries`);
 
@@ -108,5 +94,5 @@ export async function getTopStocks(): Promise<{
 	const marketIndex = computeMarketIndex(stocks, now);
 
 	console.timeEnd("getTopStocks: total");
-	return { stocks, marketIndex };
+	return { stocks: stocks.slice(0, 100), marketIndex };
 }

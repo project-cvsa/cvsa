@@ -29,7 +29,7 @@ const RANGES = ["week", "2week", "month", "quarter"] as const;
 export default function StockDetailPage() {
 	const { aid } = useParams<{ aid: string }>();
 	const [data, setData] = useState<DetailData | null>(null);
-	const [_loading, setLoading] = useState(true);
+	const [loading, setLoading] = useState(true);
 	const { mode } = useColorMode();
 	const [error, setError] = useState<string | null>(null);
 	const [range, setRange] = useState<string>(DEFAULT_RANGE);
@@ -53,7 +53,7 @@ export default function StockDetailPage() {
 		fetchDetail();
 	}, [fetchDetail]);
 
-	if (error || !data) {
+	if (error || (!data && !loading)) {
 		return (
 			<div className="min-h-screen flex flex-col items-center justify-center gap-4">
 				<div className="text-red-400 font-mono text-sm">{error ?? "没有数据"}</div>
@@ -63,6 +63,14 @@ export default function StockDetailPage() {
 				>
 					返回大盘
 				</Link>
+			</div>
+		);
+	}
+
+	if (!data) {
+		return (
+			<div className="min-h-screen flex flex-col items-center justify-center gap-4">
+				<p>加载中……</p>
 			</div>
 		);
 	}

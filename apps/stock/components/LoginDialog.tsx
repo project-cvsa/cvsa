@@ -64,9 +64,7 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
 			<DialogContent>
 				<DialogHeader>
 					<DialogTitle>管理员登录</DialogTitle>
-					<DialogDescription>
-						请输入主密码以登录管理后台
-					</DialogDescription>
+					<DialogDescription>请输入主密码以登录管理后台</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-3 mt-2">
 					<Input
@@ -79,13 +77,8 @@ export function LoginDialog({ open, onOpenChange, onLogin }: LoginDialogProps) {
 						}}
 						autoFocus
 					/>
-					{error && (
-						<div className="text-sm text-destructive">{error}</div>
-					)}
-					<Button
-						onClick={handleLogin}
-						disabled={!password || loading}
-					>
+					{error && <div className="text-sm text-destructive">{error}</div>}
+					<Button onClick={handleLogin} disabled={!password || loading}>
 						{loading ? "验证中..." : "登录"}
 					</Button>
 				</div>

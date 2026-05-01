@@ -8,10 +8,7 @@ function mapReplacer(_key: string, value: unknown): unknown {
 }
 
 function fullReviver(_key: string, value: unknown): unknown {
-	if (
-		typeof value === "string" &&
-		/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)
-	) {
+	if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)) {
 		const d = new Date(value);
 		if (!Number.isNaN(d.getTime())) return d;
 	}
@@ -22,11 +19,12 @@ function fullReviver(_key: string, value: unknown): unknown {
 }
 
 export async function withCache<T>(
-	key: string,
+	rawKey: string,
 	ttlSeconds: number,
-	fetcher: () => Promise<T>,
+	fetcher: () => Promise<T>
 ): Promise<T> {
 	const redis = getRedis();
+	const key = `cvsa:stock:${rawKey}`;
 	const cached = await redis.get(key);
 	if (cached !== null) return JSON.parse(cached, fullReviver) as T;
 

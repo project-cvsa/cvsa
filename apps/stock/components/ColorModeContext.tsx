@@ -34,9 +34,7 @@ export function ColorModeProvider({ children }: { children: ReactNode }) {
 	}, []);
 
 	return (
-		<ColorModeContext.Provider value={{ mode, toggle }}>
-			{children}
-		</ColorModeContext.Provider>
+		<ColorModeContext.Provider value={{ mode, toggle }}>{children}</ColorModeContext.Provider>
 	);
 }
 

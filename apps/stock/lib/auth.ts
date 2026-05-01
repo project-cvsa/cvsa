@@ -7,9 +7,7 @@ function getMasterPassword(): string {
 }
 
 function getJwtSecret(): Uint8Array {
-	return new TextEncoder().encode(
-		process.env.JWT_SECRET ?? getMasterPassword(),
-	);
+	return new TextEncoder().encode(process.env.JWT_SECRET ?? getMasterPassword());
 }
 
 const TOKEN_EXPIRY = "14d";

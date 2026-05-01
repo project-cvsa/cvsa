@@ -17,20 +17,13 @@ interface HeaderMenuProps {
 	onLogout: () => void;
 }
 
-export function HeaderMenu({
-	isAuthenticated,
-	onLoginClick,
-	onLogout,
-}: HeaderMenuProps) {
+export function HeaderMenu({ isAuthenticated, onLoginClick, onLogout }: HeaderMenuProps) {
 	const { mode, toggle } = useColorMode();
 
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon-lg"
-				>
+				<Button variant="ghost" size="icon-lg">
 					<Menu className="size-5" />
 				</Button>
 			</DropdownMenuTrigger>

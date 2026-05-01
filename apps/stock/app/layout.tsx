@@ -18,10 +18,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html
-			lang="en"
-			className={`${interSans.variable} h-full antialiased dark`}
-		>
+		<html lang="en" className={`${interSans.variable} h-full antialiased dark`}>
 			<body className="font-sans  bg-[#0a0a0a] text-white">
 				<ColorModeProvider>{children}</ColorModeProvider>
 			</body>

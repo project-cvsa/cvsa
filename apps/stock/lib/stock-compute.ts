@@ -9,24 +9,15 @@ import {
 	INDEX_FACTOR,
 } from "./stock-constants";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /** Find the snapshot closest in time to `target`. Linear scan (snapshots are already ordered by `aid` but may be sparse). */
-export function findNearest(
-	snapshots: SnapshotRow[],
-	target: Date,
-): SnapshotRow | null {
+export function findNearest(snapshots: SnapshotRow[], target: Date): SnapshotRow | null {
 	if (snapshots.length === 0) return null;
 
 	let nearest = snapshots[0];
 	let minDiff = Math.abs(nearest.created_at.getTime() - target.getTime());
 
 	for (let i = 1; i < snapshots.length; i++) {
-		const diff = Math.abs(
-			snapshots[i].created_at.getTime() - target.getTime(),
-		);
+		const diff = Math.abs(snapshots[i].created_at.getTime() - target.getTime());
 		if (diff < minDiff) {
 			minDiff = diff;
 			nearest = snapshots[i];
@@ -41,7 +32,7 @@ export function isFullyCached(
 	aid: number,
 	cacheMap: Map<string, number>,
 	now: Date,
-	windowCount = WINDOW_COUNT,
+	windowCount = WINDOW_COUNT
 ): boolean {
 	for (let i = 0; i < windowCount; i++) {
 		const endTime = new Date(now.getTime() - i * STEP_HOURS * 3600 * 1000);
@@ -50,10 +41,6 @@ export function isFullyCached(
 	}
 	return true;
 }
-
-// ---------------------------------------------------------------------------
-// Core computation
-// ---------------------------------------------------------------------------
 
 export interface SingleStockResult {
 	stock: Stock;
@@ -67,18 +54,14 @@ export function computeSingleStock(
 	cacheMap: ReadonlyMap<string, number>,
 	snapshots: SnapshotRow[],
 	now: Date,
-	windowCount = WINDOW_COUNT,
+	windowCount = WINDOW_COUNT
 ): SingleStockResult | null {
 	const newCacheEntries: NewCacheEntry[] = [];
 	const increments = new Array<number>(windowCount).fill(0);
 
 	for (let i = 0; i < windowCount; i++) {
-		const endTime = new Date(
-			now.getTime() - i * STEP_HOURS * 3600 * 1000,
-		);
-		const startTime = new Date(
-			endTime.getTime() - WINDOW_HOURS * 3600 * 1000,
-		);
+		const endTime = new Date(now.getTime() - i * STEP_HOURS * 3600 * 1000);
+		const startTime = new Date(endTime.getTime() - WINDOW_HOURS * 3600 * 1000);
 
 		const cacheKey = `${aid}_${endTime.toISOString()}`;
 		const cached = cacheMap.get(cacheKey);
@@ -95,14 +78,10 @@ export function computeSingleStock(
 		if (snapStart && snapEnd && snapStart.id !== snapEnd.id) {
 			const viewsDiff = snapEnd.views - snapStart.views;
 			const hoursDiff =
-				(snapEnd.created_at.getTime() -
-					snapStart.created_at.getTime()) /
-				3600000;
+				(snapEnd.created_at.getTime() - snapStart.created_at.getTime()) / 3600000;
 
 			if (hoursDiff > 0) {
-				const increment = Math.round(
-					(viewsDiff / hoursDiff) * WINDOW_HOURS,
-				);
+				const increment = Math.round((viewsDiff / hoursDiff) * WINDOW_HOURS);
 				increments[i] = increment;
 				newCacheEntries.push({
 					aid,
@@ -132,8 +111,7 @@ export function computeSingleStock(
 			break;
 		}
 	}
-	const changePercent =
-		oldest !== 0 ? ((change - oldest) / oldest) * 100 : 0;
+	const changePercent = oldest !== 0 ? ((change - oldest) / oldest) * 100 : 0;
 
 	return {
 		stock: {
@@ -154,7 +132,7 @@ export function computeStocks(
 	titleMap: Map<number, { title: string; bvid: string | null }>,
 	cacheMap: ReadonlyMap<string, number>,
 	snapshotsByAid: ReadonlyMap<number, SnapshotRow[]>,
-	now: Date,
+	now: Date
 ): { stocks: Stock[]; newCacheEntries: NewCacheEntry[] } {
 	const newCacheEntries: NewCacheEntry[] = [];
 	const stocks: Stock[] = [];
@@ -166,14 +144,7 @@ export function computeStocks(
 		const symbol = meta?.bvid ?? `AV${aid}`;
 		const snapshots = snapshotsByAid.get(aid) ?? [];
 
-		const result = computeSingleStock(
-			aid,
-			name,
-			symbol,
-			cacheMap,
-			snapshots,
-			now,
-		);
+		const result = computeSingleStock(aid, name, symbol, cacheMap, snapshots, now);
 		if (!result) continue;
 
 		stocks.push(result.stock);
@@ -194,17 +165,14 @@ export function computeMarketIndex(stocks: Stock[], now: Date): MarketIndex {
 			.sort((a, b) => b - a)
 			.slice(0, INDEX_SIZE);
 
-		marketHistory[w] =
-			top.reduce((sum, v) => sum + v, 0) / INDEX_FACTOR;
+		marketHistory[w] = top.reduce((sum, v) => sum + v, 0) / INDEX_FACTOR;
 	}
 
 	const lastValue = marketHistory[marketHistory.length - 1] ?? 0;
 	const firstValue = marketHistory[0] ?? 0;
 	const marketChange = lastValue - firstValue;
 	const marketChangePercent =
-		firstValue !== 0
-			? Number(((marketChange / firstValue) * 100).toFixed(2))
-			: 0;
+		firstValue !== 0 ? Number(((marketChange / firstValue) * 100).toFixed(2)) : 0;
 
 	return {
 		name: "中V指数",

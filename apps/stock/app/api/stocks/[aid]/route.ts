@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import { getSql } from "@/lib/db";
-import {
-	snapToGrid,
-	lookbackHours,
-	RANGE_CONFIG,
-	DEFAULT_RANGE,
-} from "@/lib/stock-constants";
+import { snapToGrid, lookbackHours, RANGE_CONFIG, DEFAULT_RANGE } from "@/lib/stock-constants";
 import {
 	fetchEtaEntry,
 	fetchCacheMap,
@@ -16,10 +11,7 @@ import {
 } from "@/lib/stock-repository";
 import { isFullyCached, computeSingleStock } from "@/lib/stock-compute";
 
-export async function GET(
-	request: Request,
-	{ params }: { params: Promise<{ aid: string }> },
-) {
+export async function GET(request: Request, { params }: { params: Promise<{ aid: string }> }) {
 	try {
 		const { aid } = await params;
 		const aidNum = Number(aid);
@@ -38,9 +30,7 @@ export async function GET(
 		}
 
 		const now = snapToGrid(Date.now());
-		const lookback = new Date(
-			now.getTime() - lookbackHours(windowCount) * 3600 * 1000,
-		);
+		const lookback = new Date(now.getTime() - lookbackHours(windowCount) * 3600 * 1000);
 
 		const [titleMap, cacheMap] = await Promise.all([
 			fetchTitleMap(sql, [aidNum]),
@@ -66,7 +56,7 @@ export async function GET(
 			cacheMap,
 			snapshots,
 			now,
-			windowCount,
+			windowCount
 		);
 
 		const baseTime = now.toISOString();
@@ -104,36 +94,24 @@ export async function GET(
 		});
 	} catch (error) {
 		console.error("Failed to fetch stock detail:", error);
-		return NextResponse.json(
-			{ error: "Failed to fetch stock detail" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to fetch stock detail" }, { status: 500 });
 	}
 }
 
-export async function DELETE(
-	request: Request,
-	{ params }: { params: Promise<{ aid: string }> },
-) {
+export async function DELETE(request: Request, { params }: { params: Promise<{ aid: string }> }) {
 	try {
 		const authHeader = request.headers.get("authorization");
 		const token = authHeader?.replace("Bearer ", "");
 
 		if (!token || !(await verifyToken(token))) {
-			return NextResponse.json(
-				{ error: "Unauthorized" },
-				{ status: 401 },
-			);
+			return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 		}
 
 		const { aid } = await params;
 		const aidNum = Number(aid);
 
 		if (Number.isNaN(aidNum)) {
-			return NextResponse.json(
-				{ error: "Invalid aid" },
-				{ status: 400 },
-			);
+			return NextResponse.json({ error: "Invalid aid" }, { status: 400 });
 		}
 
 		const sql = getSql();
@@ -147,9 +125,6 @@ export async function DELETE(
 
 		return NextResponse.json({ success: true });
 	} catch {
-		return NextResponse.json(
-			{ error: "Failed to blacklist" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to blacklist" }, { status: 500 });
 	}
 }

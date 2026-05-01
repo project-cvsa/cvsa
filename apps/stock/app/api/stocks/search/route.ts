@@ -26,9 +26,7 @@ export async function GET(request: NextRequest) {
 		}
 
 		const now = snapToGrid(Date.now());
-		const lookback = new Date(
-			now.getTime() - TOTAL_LOOKBACK_HOURS * 3600 * 1000,
-		);
+		const lookback = new Date(now.getTime() - TOTAL_LOOKBACK_HOURS * 3600 * 1000);
 
 		const [etaEntries, titleMap, cacheMap] = await Promise.all([
 			fetchEtaEntriesByAids(sql, aids),
@@ -38,21 +36,15 @@ export async function GET(request: NextRequest) {
 
 		const existingCacheKeys = new Set(cacheMap.keys());
 
-		const uncachedAids = aids.filter(
-			(aid) => !isFullyCached(aid, cacheMap, now),
-		);
-		const snapshotsByAid = await fetchSnapshotsByAid(
-			sql,
-			uncachedAids,
-			lookback,
-		);
+		const uncachedAids = aids.filter((aid) => !isFullyCached(aid, cacheMap, now));
+		const snapshotsByAid = await fetchSnapshotsByAid(sql, uncachedAids, lookback);
 
 		const { stocks, newCacheEntries } = computeStocks(
 			etaEntries,
 			titleMap,
 			cacheMap,
 			snapshotsByAid,
-			now,
+			now
 		);
 
 		await insertCacheEntries(sql, newCacheEntries, existingCacheKeys);
@@ -60,9 +52,6 @@ export async function GET(request: NextRequest) {
 		return NextResponse.json({ stocks });
 	} catch (error) {
 		console.error("Search failed:", error);
-		return NextResponse.json(
-			{ error: "Search failed" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Search failed" }, { status: 500 });
 	}
 }
