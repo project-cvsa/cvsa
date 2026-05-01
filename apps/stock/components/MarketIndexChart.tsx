@@ -5,26 +5,12 @@ import * as d3 from "d3";
 import type { MarketIndex } from "@/lib/stock-data";
 import { getChangeColor } from "@/lib/colors";
 import { useColorMode } from "@/components/ColorModeContext";
-import { STEP_HOURS } from "@/lib/stock-constants";
+import { STEP_HOURS, STEP_PER_WINDOW } from "@/lib/stock-constants";
 
 const STEP_HOURS_MS = STEP_HOURS * 3600 * 1000;
 
 interface MarketIndexChartProps {
 	data: MarketIndex;
-}
-
-function getTickInterval(totalPoints: number, stepMs: number): number {
-	const stepHours = stepMs / 3600000;
-	if (stepHours <= 0.5) {
-		if (totalPoints <= 100) return Math.round(6 / stepHours);
-		if (totalPoints <= 500) return Math.round(24 / stepHours);
-		return Math.round(168 / stepHours);
-	}
-	if (totalPoints <= 50) return 6 / stepHours;
-	if (totalPoints <= 100) return 12 / stepHours;
-	if (totalPoints <= 300) return 42 / stepHours;
-	if (totalPoints <= 600) return 84 / stepHours;
-	return 180 / stepHours;
 }
 
 export function MarketIndexChart({ data }: MarketIndexChartProps) {
@@ -33,6 +19,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 	const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 	const { mode } = useColorMode();
 	const color = getChangeColor(mode, data.changePercent);
+	const isIndex = data.pointIntervalMs !== undefined;
 	const stepMs = data.pointIntervalMs ?? STEP_HOURS_MS;
 	const totalPoints = data.history.length;
 
@@ -77,28 +64,57 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.range([height, 0]);
 
 		const baseTime = new Date(data.baseTime);
-		const tickInterval = getTickInterval(totalPoints, stepMs);
 
 		function formatLabel(index: number): string {
+			if (!isIndex) {
+				const hoursAgo = (totalPoints - 1 - index) * STEP_HOURS;
+				const d = new Date(baseTime.getTime() - hoursAgo * 3600 * 1000);
+				return `${d.getMonth() + 1}/${d.getDate()}`;
+			}
 			const msAgo = (totalPoints - 1 - index) * stepMs;
 			const d = new Date(baseTime.getTime() - msAgo);
-			const month = d.getMonth() + 1;
-			const day = d.getDate();
-			const hour = d.getHours();
-			if (stepMs <= 30 * 60000) {
-				return `${month}/${day} ${hour}:00`;
+			const rangeMs = (totalPoints - 1) * stepMs;
+			if (rangeMs <= 2 * 24 * 3600 * 1000) {
+				return `${d.getHours()}:00`;
 			}
-			if (stepMs <= 3600000) {
-				return `${month}/${day}`;
-			}
-			return `${month}/${day}`;
+			return `${d.getMonth() + 1}/${d.getDate()}`;
 		}
 
-		const dayTicks: number[] = [];
-		for (let i = totalPoints - 1; i >= 0; i -= tickInterval) {
-			dayTicks.push(i);
+		let dayTicks: number[];
+		if (isIndex) {
+			const rangeMs = (totalPoints - 1) * stepMs;
+			const tickStepMs = rangeMs <= 2 * 24 * 3600 * 1000 ? 4 * 3600 * 1000 : 24 * 3600 * 1000;
+
+			dayTicks = [];
+			const earliest = new Date(baseTime.getTime() - (totalPoints - 1) * stepMs);
+			const cursor = new Date(
+				Math.ceil(earliest.getTime() / tickStepMs) * tickStepMs,
+			);
+
+			while (cursor <= baseTime) {
+				const msFromEnd = baseTime.getTime() - cursor.getTime();
+				const idx = totalPoints - 1 - Math.round(msFromEnd / stepMs);
+				if (idx >= 0 && idx < totalPoints) {
+					dayTicks.push(idx);
+				}
+				cursor.setTime(cursor.getTime() + tickStepMs);
+			}
+		} else {
+			const tickInterval =
+				totalPoints <= 50 ? STEP_PER_WINDOW
+				: totalPoints <= 100 ? STEP_PER_WINDOW * 2
+				: totalPoints <= 300 ? STEP_PER_WINDOW * 7
+				: totalPoints <= 600 ? STEP_PER_WINDOW * 14
+				: STEP_PER_WINDOW * 30;
+
+			dayTicks = [];
+			const hoursToShift = baseTime.getHours() / STEP_HOURS;
+			const firstMidnight = totalPoints - 1 - hoursToShift;
+			for (let i = firstMidnight; i >= 0; i -= tickInterval) {
+				dayTicks.push(i);
+			}
+			dayTicks.reverse();
 		}
-		dayTicks.reverse();
 
 		const xAxis = d3
 			.axisBottom(xScale)
@@ -116,7 +132,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 					.selectAll(".tick text")
 					.attr("fill", "#71717a")
 					.attr("font-size", isMobile ? "10px" : "11px")
-					.attr("font-family", "Inter")
+					.attr("font-family", "Inter"),
 			);
 
 		const yAxis = d3
@@ -139,7 +155,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 					.selectAll(".tick text")
 					.attr("fill", "#71717a")
 					.attr("font-size", isMobile ? "10px" : "11px")
-					.attr("font-family", "Inter")
+					.attr("font-family", "Inter"),
 			);
 
 		const line = d3
@@ -196,7 +212,6 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.ease(d3.easeCubicOut)
 			.attr("stroke-dashoffset", 0);
 
-		// Open line (Monday 08:00 CST)
 		if (data.openValue !== undefined && data.openValue > 0) {
 			const mondayUtc = new Date(baseTime);
 			const dow = mondayUtc.getUTCDay();
@@ -227,11 +242,10 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			}
 		}
 
-		// Stats labels (high / low)
 		if (data.highValue !== undefined || data.lowValue !== undefined) {
 			const statsBox = g.append("g");
-
 			let yOffset = 0;
+
 			const addStat = (label: string, value: number, valueColor: string) => {
 				const txt = statsBox
 					.append("text")
@@ -240,11 +254,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 					.attr("text-anchor", "end")
 					.attr("font-size", "10px")
 					.attr("font-family", "Inter");
-
-				txt
-					.append("tspan")
-					.attr("fill", "#71717a")
-					.text(`${label} `);
+				txt.append("tspan").attr("fill", "#71717a").text(`${label} `);
 				txt
 					.append("tspan")
 					.attr("fill", valueColor)
@@ -253,12 +263,10 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 				yOffset += 14;
 			};
 
-			if (data.highValue !== undefined && data.highValue > 0) {
+			if (data.highValue !== undefined && data.highValue > 0)
 				addStat("H", data.highValue, "#ef4444");
-			}
-			if (data.lowValue !== undefined && data.lowValue > 0) {
+			if (data.lowValue !== undefined && data.lowValue > 0)
 				addStat("L", data.lowValue, "#22c55e");
-			}
 		}
 
 		const crosshairGroup = g.append("g").attr("class", "crosshair").style("opacity", 0);
@@ -322,12 +330,26 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			crosshairLine.attr("x1", x).attr("x2", x);
 			crosshairCircle.attr("cx", x).attr("cy", y);
 
-			tooltipText.text(d.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-			const msAgo = (totalPoints - 1 - i) * stepMs;
-			const labelDate = new Date(baseTime.getTime() - msAgo);
-			tooltipTime.text(
-				`${labelDate.getMonth() + 1}/${labelDate.getDate()} ${labelDate.getHours()}:${String(labelDate.getMinutes()).padStart(2, "0")}`,
+			tooltipText.text(
+				d.toLocaleString("en-US", {
+					minimumFractionDigits: 2,
+					maximumFractionDigits: 2,
+				}),
 			);
+
+			if (isIndex) {
+				const msAgo = (totalPoints - 1 - i) * stepMs;
+				const labelDate = new Date(baseTime.getTime() - msAgo);
+				tooltipTime.text(
+					`${labelDate.getMonth() + 1}/${labelDate.getDate()} ${labelDate.getHours()}:${String(labelDate.getMinutes()).padStart(2, "0")}`,
+				);
+			} else {
+				const hoursAgo = (totalPoints - 1 - i) * STEP_HOURS;
+				const labelDate = new Date(baseTime.getTime() - hoursAgo * 3600 * 1000);
+				tooltipTime.text(
+					`${labelDate.getMonth() + 1}/${labelDate.getDate()} ${labelDate.getHours()}时`,
+				);
+			}
 
 			const tb = tooltipText.node()?.getBBox() ?? { width: 60, height: 16 };
 			const tib = tooltipTime.node()?.getBBox() ?? { width: 60, height: 16 };
@@ -358,7 +380,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			crosshairGroup.style("opacity", 0);
 			tooltipGroup.style("opacity", 0);
 		});
-	}, [data, dimensions, color, stepMs, totalPoints]);
+	}, [data, dimensions, color, stepMs, totalPoints, isIndex]);
 
 	return (
 		<div ref={containerRef} className="relative w-full h-full">
