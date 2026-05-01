@@ -14,6 +14,7 @@ import type { Stock } from "@/lib/stock-data";
 import { copyToClipboard } from "@/lib/copy";
 import { getChangeBg } from "@/lib/colors";
 import { useColorMode } from "@/components/ColorModeContext";
+import { BiliBili } from "./BiliBili";
 
 interface StockListProps {
 	stocks: Stock[];
@@ -91,6 +92,13 @@ const StockItem = memo(
 					<ContextMenuContent>
 						<ContextMenuItem onClick={() => copyToClipboard(stock.symbol)}>
 							<Copy className="size-4 mr-2" /> 复制BV号
+						</ContextMenuItem>
+						<ContextMenuItem onClick={() => {
+							window.open(`https://www.bilibili.com/video/${stock.symbol}`, '_blank');
+						}}>
+							<div className="mr-2">
+								<BiliBili />
+							</div> 在哔哩哔哩中查看
 						</ContextMenuItem>
 						<ContextMenuItem variant="destructive" onClick={() => onDelete(stock.id)}>
 							<Trash2 className="size-4 mr-2" /> 删除
