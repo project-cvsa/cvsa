@@ -122,11 +122,19 @@ export default function Home() {
 										: "text-muted-foreground hover:text-white hover:bg-white/5"
 								}`}
 							>
-								{{ day: "日", week: "周", "2week": "2周", month: "月", quarter: "季度" }[r]}
+								{
+									{
+										day: "日",
+										week: "周",
+										"2week": "2周",
+										month: "月",
+										quarter: "季度",
+									}[r]
+								}
 							</button>
 						))}
 					</div>
-					{marketIndex?.baseTime && (
+					{marketIndex?.baseTime && !indexLoading && (
 						<div className="text-muted-foreground text-xs font-mono">
 							{new Date(marketIndex.baseTime).toLocaleString("zh-CN", {
 								month: "2-digit",
@@ -136,6 +144,9 @@ export default function Home() {
 							})}{" "}
 							更新
 						</div>
+					)}
+					{indexLoading && (
+						<div className="text-muted-foreground text-xs font-mono ">加载中……</div>
 					)}
 				</div>
 

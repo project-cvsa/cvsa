@@ -1,13 +1,8 @@
-import type { SnapshotRow } from "./stock-repository";
+import { fetchEtaEntries, fetchSnapshotsByAid, type SnapshotRow } from "./stock-repository";
 import type { EtaRow, NewCacheEntry } from "./stock-repository";
-import type { Stock, MarketIndex } from "./stock-data";
-import {
-	WINDOW_COUNT,
-	STEP_HOURS,
-	WINDOW_HOURS,
-	INDEX_SIZE,
-	INDEX_FACTOR,
-} from "./stock-constants";
+import type { Stock } from "./stock-data";
+import { WINDOW_COUNT, STEP_HOURS, WINDOW_HOURS, INDEX_FACTOR } from "./stock-constants";
+import { getSql } from "./db";
 
 /** Find the snapshot closest in time to `target`. Linear scan (snapshots are already ordered by `aid` but may be sparse). */
 export function findNearest(snapshots: SnapshotRow[], target: Date): SnapshotRow | null {
@@ -77,21 +72,17 @@ export function computeSingleStock(
 
 	for (let i = 0; i < windowCount; i++) {
 		const endTime = new Date(now.getTime() - i * STEP_HOURS * 3600 * 1000);
-		const startTime = new Date(endTime.getTime() - WINDOW_HOURS * 3600 * 1000);
 
 		const cacheKey = `${aid}_${endTime.toISOString()}`;
 		const cached = cacheMap.get(cacheKey);
 
 		if (cached !== undefined && !isNewborn) {
-			// When forceFreshPrice is on, skip cache for the newest window (i=0)
-			// so the returned price always reflects the latest snapshot data.
-			if (!(forceFreshPrice && i === 0)) {
-				if (cached >= 0) increments[i] = cached;
-				continue;
-			}
+			if (cached >= 0) increments[i] = cached;
+			continue;
 		}
 
 		let computed = false;
+		const startTime = new Date(endTime.getTime() - WINDOW_HOURS * 3600 * 1000);
 		const snapStart = findNearest(snapshots, startTime);
 		const snapEnd = findNearest(snapshots, endTime);
 
@@ -123,27 +114,51 @@ export function computeSingleStock(
 		}
 	}
 
-	if (!increments.some((v) => v > 0)) return null;
-
-	const change = increments[0];
-	let oldest = 0;
-	for (let i = windowCount - 1; i >= 0; i--) {
-		if (increments[i] > 0) {
-			oldest = increments[i];
-			break;
-		}
+	// Trim trailing non-positive windows (oldest windows beyond available snapshot data)
+	let tail = increments.length;
+	while (tail > 0 && increments[tail - 1] <= 0) tail--;
+	if (tail === 0) return null;
+	if (tail < increments.length) {
+		increments.length = tail;
 	}
-	const changePercent = oldest !== 0 ? ((change - oldest) / oldest) * 100 : 0;
+
+	let price: number;
+	if (forceFreshPrice) {
+		const liveEnd = now;
+		const liveStart = new Date(now.getTime() - WINDOW_HOURS * 3600 * 1000);
+		const snapStart = findNearest(snapshots, liveStart);
+		const snapEnd = findNearest(snapshots, liveEnd);
+
+		if (snapStart && snapEnd && snapStart.id !== snapEnd.id) {
+			const viewsDiff = snapEnd.views - snapStart.views;
+			const hoursDiff =
+				(snapEnd.created_at.getTime() - snapStart.created_at.getTime()) / 3600000;
+
+			if (hoursDiff > 0) {
+				price = isNewborn ? Math.round(viewsDiff) : (viewsDiff / hoursDiff) * WINDOW_HOURS;
+			} else {
+				price = increments[0];
+			}
+		} else {
+			price = increments[0];
+		}
+	} else {
+		price = increments[0];
+	}
+
+	const oldest = increments[increments.length - 1];
+	const change = price - oldest;
+	const changePercent = oldest !== 0 ? ((price - oldest) / oldest) * 100 : 0;
 
 	return {
 		stock: {
 			id: aid.toString(),
 			name,
 			symbol,
-			price: change,
-			change: change - oldest,
+			price,
+			change,
 			changePercent: Number.isNaN(changePercent) ? 0 : changePercent,
-			sparkline: increments.slice().reverse(),
+			sparkline: increments.reverse(),
 		},
 		newCacheEntries,
 	};
@@ -167,7 +182,15 @@ export function computeStocks(
 		const symbol = meta?.bvid ?? `AV${aid}`;
 		const snapshots = snapshotsByAid.get(aid) ?? [];
 
-		const result = computeSingleStock(aid, name, symbol, cacheMap, snapshots, now, forceFreshPrice);
+		const result = computeSingleStock(
+			aid,
+			name,
+			symbol,
+			cacheMap,
+			snapshots,
+			now,
+			forceFreshPrice
+		);
 		if (!result) continue;
 
 		stocks.push(result.stock);
@@ -178,31 +201,62 @@ export function computeStocks(
 }
 
 /** Build the market index from the top stocks. */
-export function computeMarketIndex(stocks: Stock[], now: Date): MarketIndex {
-	const marketHistory = new Array<number>(WINDOW_COUNT).fill(0);
+export async function computeMarketIndex(time: Date): Promise<number> {
+	const startTime = new Date(time.getTime() - WINDOW_HOURS * 3600 * 1000);
+	const sql = getSql();
 
-	for (let w = 0; w < WINDOW_COUNT; w++) {
-		const top = stocks
-			.map((s) => s.sparkline[w] ?? 0)
-			.filter((v) => v > 0)
-			.sort((a, b) => b - a)
-			.slice(0, INDEX_SIZE);
-
-		marketHistory[w] = top.reduce((sum, v) => sum + v, 0) / INDEX_FACTOR;
+	const rows = (await sql`
+		SELECT value FROM internal.composite_index
+		WHERE time = ${time}
+		LIMIT 1
+	`) as { value: number }[];
+	if (rows.length > 0) {
+		console.log(`[computeMarketIndex] found index at ${time.toISOString()}`);
+		return rows[0].value;
 	}
 
-	const lastValue = marketHistory[marketHistory.length - 1] ?? 0;
-	const firstValue = marketHistory[0] ?? 0;
-	const marketChange = lastValue - firstValue;
-	const marketChangePercent =
-		firstValue !== 0 ? Number(((marketChange / firstValue) * 100).toFixed(2)) : 0;
+	console.time("[index-scheduler] eta");
+	const etaEntries = await fetchEtaEntries(sql);
+	console.timeEnd("[index-scheduler] eta");
+	console.log(`[index-scheduler] eta rows=${etaEntries.length}`);
 
-	return {
-		name: "中V指数",
-		value: lastValue,
-		change: marketChange,
-		changePercent: marketChangePercent,
-		history: marketHistory,
-		baseTime: now.toISOString(),
-	};
+	if (etaEntries.length === 0) return 0;
+
+	const aids = etaEntries.map((e) => e.aid);
+	const snapshots = await fetchSnapshotsByAid(
+		sql,
+		aids,
+		new Date(time.getTime() - 8 * 86400 * 1000)
+	);
+	const values = [];
+	for (const aid of aids) {
+		const snapshotsForAid = snapshots.get(aid);
+		if (!snapshotsForAid) {
+			console.warn(`cannot get snapshots for aid=${aid}`);
+			continue;
+		}
+		const startSnapshot = findNearest(snapshotsForAid, startTime);
+		const endSnapshot = findNearest(snapshotsForAid, time);
+		if (!startSnapshot) {
+			console.warn(`cannot find snapshot for aid=${aid}, time=${startTime.toISOString()}`);
+			continue;
+		}
+		if (!endSnapshot) {
+			console.warn(`cannot find snapshot for aid=${aid}, time=${startTime.toISOString()}`);
+			continue;
+		}
+		const viewsDiff = endSnapshot.views - startSnapshot.views;
+		const hoursDiff =
+			(endSnapshot.created_at.getTime() - startSnapshot.created_at.getTime()) / 3600 / 1000;
+		if (hoursDiff > 0) {
+			const value = (viewsDiff / hoursDiff) * WINDOW_HOURS;
+			values.push(value);
+		}
+	}
+	return (
+		values
+			.sort((a, b) => b - a)
+			.slice(0, 100)
+			.reduce((sum, v) => sum + v, 0) / INDEX_FACTOR
+	);
 }

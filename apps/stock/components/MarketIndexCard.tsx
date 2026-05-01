@@ -54,8 +54,13 @@ export function MarketIndexCard({ marketIndex, loading }: MarketIndexCardProps) 
 							</div>
 						</div>
 					</div>
-					<div className="h-80 sm:h-100">
-						<MarketIndexChart data={marketIndex} />
+					<div className="absolute mx-2 text-muted-foreground text-sm flex gap-4">
+						<span>开盘: {marketIndex.openValue?.toFixed(2) ?? "N/A"}</span>
+						<span>最高: {marketIndex.highValue?.toFixed(2) ?? "N/A"}</span>
+						<span>最低: {marketIndex.lowValue?.toFixed(2) ?? "N/A"}</span>
+					</div>
+					<div className="h-80 sm:h-100 -translate-y-2">
+						<MarketIndexChart data={marketIndex} isIndex={true} />
 					</div>
 				</>
 			)}

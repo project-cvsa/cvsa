@@ -114,9 +114,9 @@ export async function fetchEtaEntry(sql: Sql, aid: number): Promise<EtaRow | nul
 	});
 }
 
-/** Top-500 videos by speed, not blacklisted, active within last 3 days. */
+/** Top videos by speed, not blacklisted, active within last 3 days. */
 export async function fetchEtaEntries(sql: Sql): Promise<EtaRow[]> {
-	return withCache("eta:top500", 180, async () => {
+	return withCache("eta:top1000", 180, async () => {
 		const raw = (await sql`
 			SELECT e.aid::bigint, e.eta::real, e.speed::real,
 			       e.current_views::integer, e.updated_at
@@ -125,7 +125,7 @@ export async function fetchEtaEntries(sql: Sql): Promise<EtaRow[]> {
 			WHERE e.updated_at > NOW() - INTERVAL '3 days'
 			  AND vb.aid IS NULL
 			ORDER BY e.speed DESC
-			LIMIT 500
+			LIMIT 1000
 		`) as Record<string, unknown>[];
 
 		return raw.map((r) => ({
@@ -152,6 +152,19 @@ export async function fetchCacheMap(
 
 	const out = new Map<string, number>();
 	for (const [aid, entries] of hits) {
+		if (entries.length === 0) {
+			misses.push(aid);
+			continue;
+		}
+		let oldestCached = new Date(entries[0].end_time);
+		for (let i = 1; i < entries.length; i++) {
+			const d = new Date(entries[i].end_time);
+			if (d < oldestCached) oldestCached = d;
+		}
+		if (oldestCached > lookback) {
+			misses.push(aid);
+			continue;
+		}
 		for (const e of entries) {
 			if (new Date(e.end_time) >= lookback) {
 				out.set(`${aid}_${e.end_time}`, e.views_increment);
@@ -228,7 +241,7 @@ export async function fetchTitleMap(
 			byAid.set(aid, val);
 		}
 
-		await perAidMset("title", 1200, byAid);
+		await perAidMset("title", 60, byAid);
 	}
 
 	return out;
@@ -242,16 +255,27 @@ export async function fetchSnapshotsByAid(
 ): Promise<Map<number, SnapshotRow[]>> {
 	if (aids.length === 0) return new Map();
 
-	const { hits, misses } = await perAidMget<
-		{ id: number; created_at: string; views: number; aid: number }[]
-	>(
+	const { hits, misses } = await perAidMget<SnapshotRow[]>(
 		"snap",
 		aids,
-		(raw) => JSON.parse(raw) as { id: number; created_at: string; views: number; aid: number }[]
+		(raw) => JSON.parse(raw) as SnapshotRow[]
 	);
 
 	const out = new Map<number, SnapshotRow[]>();
 	for (const [aid, rows] of hits) {
+		if (rows.length === 0) {
+			misses.push(aid);
+			continue;
+		}
+		let oldestCached = new Date(rows[0].created_at);
+		for (let i = 1; i < rows.length; i++) {
+			const d = new Date(rows[i].created_at);
+			if (d < oldestCached) oldestCached = d;
+		}
+		if (oldestCached > lookback) {
+			misses.push(aid);
+			continue;
+		}
 		const filtered = rows
 			.filter((r) => new Date(r.created_at) >= lookback)
 			.map(
@@ -348,7 +372,7 @@ export async function insertCacheEntries(
 export async function fetchCompositeIndex(
 	sql: Sql,
 	rangeMs?: number,
-	stepMs = 30 * 60 * 1000,
+	stepMs = 30 * 60 * 1000
 ): Promise<MarketIndex> {
 	const effectiveRange = rangeMs ?? 7 * 24 * 3600 * 1000;
 	const lookback = new Date(Date.now() - effectiveRange - stepMs * 2);
@@ -364,6 +388,15 @@ export async function fetchCompositeIndex(
 		ORDER BY bucket ASC
 	`) as { bucket: Date; value: number }[];
 
+	const newestRec = (await sql`
+		SELECT *
+		FROM internal.composite_index
+		ORDER BY time DESC
+		LIMIT 1
+	`) as { time: Date, value: number }[];
+
+	const latest = newestRec[0].value;
+
 	if (raw.length === 0) {
 		return {
 			name: "中V指数",
@@ -376,20 +409,10 @@ export async function fetchCompositeIndex(
 		};
 	}
 
-	const latestRowTime = raw[raw.length - 1].bucket.getTime();
-	const now = new Date(Math.floor(latestRowTime / stepMs) * stepMs);
+	const now = newestRec[0].time;
 
-	const bucketMap = new Map<number, number>();
-	for (const r of raw) {
-		bucketMap.set(r.bucket.getTime(), r.value);
-	}
-
-	const pointCount = Math.ceil(effectiveRange / stepMs);
-	const history: number[] = [];
-	for (let i = pointCount; i >= 0; i--) {
-		const ts = now.getTime() - i * stepMs;
-		history.push(bucketMap.get(ts) ?? 0);
-	}
+	const history = raw.map((v) => v.value);
+	const pointCount = history.length;
 
 	const mondayUtc = new Date(now);
 	const dow = mondayUtc.getUTCDay();
@@ -408,7 +431,6 @@ export async function fetchCompositeIndex(
 	}
 
 	const positives = history.filter((v) => v > 0);
-	const latest = raw[raw.length - 1].value;
 	const firstOfRange = positives.length > 0 ? positives[0] : latest;
 	const change = latest - firstOfRange;
 	const changePercent = firstOfRange !== 0 ? (change / firstOfRange) * 100 : 0;

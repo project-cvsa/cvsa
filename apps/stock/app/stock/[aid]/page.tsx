@@ -146,25 +146,28 @@ export default function StockDetailPage() {
 					</Button>
 				</div>
 
-				<div className="mx-2 mb-3 flex gap-1">
-					{RANGES.map((r) => (
-						<button
-							key={r}
-							type="button"
-							onClick={() => setRange(r)}
-							className={`px-3 py-1 text-xs rounded-md transition-colors ${
-								r === range
-									? "bg-white/10 text-white"
-									: "text-muted-foreground hover:text-white hover:bg-white/5"
-							}`}
-						>
-							{RANGE_LABELS[r]}
-						</button>
-					))}
+				<div className="flex w-full justify-between">
+					<div className="mx-2 mb-3 flex gap-1">
+						{RANGES.map((r) => (
+							<button
+								key={r}
+								type="button"
+								onClick={() => setRange(r)}
+								className={`px-3 py-1 text-xs rounded-md transition-colors ${
+									r === range
+										? "bg-white/10 text-white"
+										: "text-muted-foreground hover:text-white hover:bg-white/5"
+								}`}
+							>
+								{RANGE_LABELS[r]}
+							</button>
+						))}
+					</div>
+					{loading && <span className="text-sm fade-in-delayed">加载中……</span>}
 				</div>
 
 				<div className="aspect-2/1 w-full overflow-hidden">
-					<MarketIndexChart data={chartData} />
+					<MarketIndexChart data={chartData} isIndex={false} />
 				</div>
 
 				<div className="mx-2 mt-6 grid grid-cols-2 sm:grid-cols-5 gap-3">

@@ -11,6 +11,7 @@ const interSans = Inter({
 const googleSans = Google_Sans({
 	variable: "--font-google-sans",
 	subsets: ["latin"],
+	adjustFontFallback: false
 });
 
 export const metadata: Metadata = {

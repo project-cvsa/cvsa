@@ -11,15 +11,15 @@ const STEP_HOURS_MS = STEP_HOURS * 3600 * 1000;
 
 interface MarketIndexChartProps {
 	data: MarketIndex;
+	isIndex: boolean;
 }
 
-export function MarketIndexChart({ data }: MarketIndexChartProps) {
+export function MarketIndexChart({ data, isIndex }: MarketIndexChartProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const svgRef = useRef<SVGSVGElement>(null);
 	const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 	const { mode } = useColorMode();
 	const color = getChangeColor(mode, data.changePercent);
-	const isIndex = data.pointIntervalMs !== undefined;
 	const stepMs = data.pointIntervalMs ?? STEP_HOURS_MS;
 	const totalPoints = data.history.length;
 
@@ -85,15 +85,25 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			const rangeDays = rangeMs / (24 * 3600 * 1000);
 			let tickStepDays: number;
 			if (rangeDays <= 2) tickStepDays = 4 / 24;
-			else if (rangeDays <= 7) tickStepDays = 1;
-			else if (rangeDays <= 30) tickStepDays = 3;
-			else if (rangeDays <= 90) tickStepDays = 7;
+			else if (rangeDays <= 8) tickStepDays = 1;
+			else if (rangeDays <= 31) tickStepDays = 3;
+			else if (rangeDays <= 91) tickStepDays = 7;
 			else tickStepDays = 14;
 			const tickStepMs = tickStepDays * 24 * 3600 * 1000;
 
 			dayTicks = [];
 			const earliest = new Date(baseTime.getTime() - (totalPoints - 1) * stepMs);
-			const cursor = new Date(Math.ceil(earliest.getTime() / tickStepMs) * tickStepMs);
+
+			let cursor: Date;
+			if (tickStepDays >= 1) {
+				cursor = new Date(earliest);
+				cursor.setHours(0, 0, 0, 0);
+				if (cursor.getTime() < earliest.getTime()) {
+					cursor.setDate(cursor.getDate() + 1);
+				}
+			} else {
+				cursor = new Date(Math.ceil(earliest.getTime() / tickStepMs) * tickStepMs);
+			}
 
 			while (cursor <= baseTime) {
 				const msFromEnd = baseTime.getTime() - cursor.getTime();
@@ -101,7 +111,11 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 				if (idx >= 0 && idx < totalPoints) {
 					dayTicks.push(idx);
 				}
-				cursor.setTime(cursor.getTime() + tickStepMs);
+				if (tickStepDays >= 1) {
+					cursor.setDate(cursor.getDate() + tickStepDays);
+				} else {
+					cursor.setTime(cursor.getTime() + tickStepMs);
+				}
 			}
 		} else {
 			const tickInterval =
@@ -215,62 +229,6 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.duration(1500)
 			.ease(d3.easeCubicOut)
 			.attr("stroke-dashoffset", 0);
-
-		if (data.openValue !== undefined && data.openValue > 0) {
-			const mondayUtc = new Date(baseTime);
-			const dow = mondayUtc.getUTCDay();
-			mondayUtc.setUTCDate(mondayUtc.getUTCDate() - (dow === 0 ? 6 : dow - 1));
-			mondayUtc.setUTCHours(0, 0, 0, 0);
-
-			const msFromEnd = baseTime.getTime() - mondayUtc.getTime();
-			const openIdx = Math.round(msFromEnd / stepMs);
-			if (openIdx >= 0 && openIdx < totalPoints) {
-				const ox = xScale(totalPoints - 1 - openIdx);
-
-				g.append("line")
-					.attr("x1", ox)
-					.attr("x2", ox)
-					.attr("y1", 0)
-					.attr("y2", height)
-					.attr("stroke", "rgba(255,255,255,0.2)")
-					.attr("stroke-dasharray", "4 4");
-
-				g.append("text")
-					.attr("x", ox + 4)
-					.attr("y", 12)
-					.attr("fill", "rgba(255,255,255,0.4)")
-					.attr("font-size", "10px")
-					.attr("font-family", "sans-serif")
-					.text("开盘");
-			}
-		}
-
-		if (data.highValue !== undefined || data.lowValue !== undefined) {
-			const statsBox = g.append("g");
-			let yOffset = 0;
-
-			const addStat = (label: string, value: number, valueColor: string) => {
-				const txt = statsBox
-					.append("text")
-					.attr("x", width)
-					.attr("y", yOffset)
-					.attr("text-anchor", "end")
-					.attr("font-size", "10px")
-					.attr("font-family", "Inter");
-				txt.append("tspan").attr("fill", "#71717a").text(`${label} `);
-				txt
-					.append("tspan")
-					.attr("fill", valueColor)
-					.attr("font-weight", "600")
-					.text(value.toLocaleString("en-US", { maximumFractionDigits: 0 }));
-				yOffset += 14;
-			};
-
-			if (data.highValue !== undefined && data.highValue > 0)
-				addStat("H", data.highValue, "#ef4444");
-			if (data.lowValue !== undefined && data.lowValue > 0)
-				addStat("L", data.lowValue, "#22c55e");
-		}
 
 		const crosshairGroup = g.append("g").attr("class", "crosshair").style("opacity", 0);
 		const crosshairLine = crosshairGroup
