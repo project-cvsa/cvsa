@@ -11,72 +11,77 @@ import {
 } from "./stock-repository";
 import { computeStocks } from "./stock-compute";
 
-export async function getTopStocks(): Promise<{
-	stocks: Stock[];
-	marketIndex: MarketIndex;
-}> {
-	console.time("getTopStocks: total");
+export async function getStocks(): Promise<Stock[]> {
+	console.time("getStocks: total");
 
 	const sql = getSql();
 	const now = snapToGrid(Date.now());
 
-	console.time("getTopStocks: eta query");
+	console.time("getStocks: eta query");
 	const etaEntries = await fetchEtaEntries(sql);
-	console.timeEnd("getTopStocks: eta query");
-	console.log(`getTopStocks: eta returned ${etaEntries.length} rows`);
+	console.timeEnd("getStocks: eta query");
+	console.log(`getStocks: eta returned ${etaEntries.length} rows`);
 
 	if (etaEntries.length === 0) {
-		const marketIndex = await fetchCompositeIndex(sql);
-		console.timeEnd("getTopStocks: total");
-		return {
-			stocks: [],
-			marketIndex,
-		};
+		console.timeEnd("getStocks: total");
+		return [];
 	}
 
 	const aids = etaEntries.map((e) => e.aid);
 	const lookback = new Date(now.getTime() - TOTAL_LOOKBACK_HOURS * 3600 * 1000);
 
-	console.time("getTopStocks: cache query");
+	console.time("getStocks: cache query");
 	const cacheMap = await fetchCacheMap(sql, aids, lookback);
-	console.timeEnd("getTopStocks: cache query");
+	console.timeEnd("getStocks: cache query");
 
-	console.time("getTopStocks: title query");
+	console.time("getStocks: title query");
 	const titleMap = await fetchTitleMap(sql, aids);
-	console.timeEnd("getTopStocks: title query");
+	console.timeEnd("getStocks: title query");
 
 	const existingCacheKeys = new Set(cacheMap.keys());
 
-	console.time("getTopStocks: snapshot query");
+	console.time("getStocks: snapshot query");
 	const snapshotsByAid = await fetchSnapshotsByAid(sql, aids, lookback);
-	console.timeEnd("getTopStocks: snapshot query");
+	console.timeEnd("getStocks: snapshot query");
 
-	console.time("getTopStocks: window computation");
+	console.time("getStocks: window computation");
 	const { stocks, newCacheEntries } = computeStocks(
 		etaEntries,
 		titleMap,
 		cacheMap,
 		snapshotsByAid,
 		now,
-		true
+		true,
 	);
-	console.timeEnd("getTopStocks: window computation");
+	console.timeEnd("getStocks: window computation");
 
 	const realEntries = newCacheEntries.filter((e) => e.views_increment >= 0).length;
 	const sentinelEntries = newCacheEntries.filter((e) => e.views_increment === -1).length;
 	console.log(
-		`getTopStocks: computed ${stocks.length} stocks, ${realEntries} new + ${sentinelEntries} sentinel cache entries`
+		`getStocks: computed ${stocks.length} stocks, ${realEntries} new + ${sentinelEntries} sentinel cache entries`,
 	);
 
-	console.time("getTopStocks: cache insert");
+	console.time("getStocks: cache insert");
 	const inserted = await insertCacheEntries(sql, newCacheEntries, existingCacheKeys);
-	console.timeEnd("getTopStocks: cache insert");
-	console.log(`getTopStocks: inserted ${inserted} truly new entries`);
+	console.timeEnd("getStocks: cache insert");
+	console.log(`getStocks: inserted ${inserted} truly new entries`);
 
 	stocks.sort((a, b) => b.price - a.price);
 
-	const marketIndex = await fetchCompositeIndex(sql);
+	console.timeEnd("getStocks: total");
+	return stocks.slice(0, 100);
+}
 
-	console.timeEnd("getTopStocks: total");
-	return { stocks: stocks.slice(0, 100), marketIndex };
+const INDEX_RANGES: Record<string, { days: number; stepMs: number }> = {
+	day: { days: 1, stepMs: 30 * 60 * 1000 },
+	week: { days: 7, stepMs: 30 * 60 * 1000 },
+	"2week": { days: 14, stepMs: 60 * 60 * 1000 },
+	month: { days: 30, stepMs: 2 * 3600 * 1000 },
+	quarter: { days: 90, stepMs: 6 * 3600 * 1000 },
+};
+
+export async function getIndex(range = "week"): Promise<MarketIndex> {
+	const r = INDEX_RANGES[range] ?? INDEX_RANGES.week;
+	const sql = getSql();
+	return fetchCompositeIndex(sql, r.days * 24 * 3600 * 1000, r.stepMs);
 }

@@ -1,7 +1,6 @@
 import type { Sql } from "postgres";
 import { withCache, perAidMget, perAidMset } from "./cache";
 import type { MarketIndex } from "./stock-data";
-import { WINDOW_COUNT, STEP_HOURS_MS } from "./stock-constants";
 
 export interface EtaRow {
 	aid: number;
@@ -346,9 +345,13 @@ export async function insertCacheEntries(
 	return trulyNew.length;
 }
 
-export async function fetchCompositeIndex(sql: Sql): Promise<MarketIndex> {
-	const totalLookbackMs = WINDOW_COUNT * STEP_HOURS_MS + STEP_HOURS_MS;
-	const lookback = new Date(Date.now() - totalLookbackMs);
+export async function fetchCompositeIndex(
+	sql: Sql,
+	rangeMs?: number,
+	stepMs = 30 * 60 * 1000,
+): Promise<MarketIndex> {
+	const effectiveRange = rangeMs ?? 7 * 24 * 3600 * 1000;
+	const lookback = new Date(Date.now() - effectiveRange - stepMs);
 
 	const rows = (await sql`
 		SELECT time, value
@@ -368,13 +371,13 @@ export async function fetchCompositeIndex(sql: Sql): Promise<MarketIndex> {
 		};
 	}
 
-	const now = new Date(
-		Math.ceil(rows[rows.length - 1].time.getTime() / STEP_HOURS_MS) * STEP_HOURS_MS,
-	);
+	const pointCount = Math.ceil(effectiveRange / stepMs);
+	const latestRowTime = rows[rows.length - 1].time.getTime();
+	const now = new Date(Math.floor(latestRowTime / stepMs) * stepMs);
 	const history: number[] = [];
 
-	for (let i = WINDOW_COUNT - 1; i >= 0; i--) {
-		const target = new Date(now.getTime() - i * STEP_HOURS_MS);
+	for (let i = pointCount; i >= 0; i--) {
+		const target = new Date(now.getTime() - i * stepMs);
 		let nearest = rows[0].value;
 		let minDiff = Math.abs(rows[0].time.getTime() - target.getTime());
 		for (let j = 1; j < rows.length; j++) {
@@ -387,10 +390,28 @@ export async function fetchCompositeIndex(sql: Sql): Promise<MarketIndex> {
 		history.push(nearest);
 	}
 
-	const latest = history[history.length - 1];
-	const previous = history.length > 1 ? history[history.length - 2] : latest;
-	const change = latest - previous;
-	const changePercent = previous !== 0 ? (change / previous) * 100 : 0;
+	// Monday 08:00 CST = Monday 00:00 UTC
+	const mondayUtc = new Date(now);
+	const dow = mondayUtc.getUTCDay();
+	mondayUtc.setUTCDate(mondayUtc.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+	mondayUtc.setUTCHours(0, 0, 0, 0);
+
+	let openValue = history[history.length - 1];
+	let minOpenDiff = Infinity;
+	for (let i = 0; i < history.length; i++) {
+		const t = new Date(now.getTime() - (pointCount - i) * stepMs);
+		const diff = Math.abs(t.getTime() - mondayUtc.getTime());
+		if (diff < minOpenDiff) {
+			minOpenDiff = diff;
+			openValue = history[i];
+		}
+	}
+
+	const positives = history.filter((v) => v > 0);
+	const latest = rows[rows.length - 1].value;
+	const firstOfRange = positives.length > 0 ? positives[0] : latest;
+	const change = latest - firstOfRange;
+	const changePercent = firstOfRange !== 0 ? (change / firstOfRange) * 100 : 0;
 
 	return {
 		name: "中V指数",
@@ -399,5 +420,9 @@ export async function fetchCompositeIndex(sql: Sql): Promise<MarketIndex> {
 		changePercent: Number(changePercent.toFixed(2)),
 		history,
 		baseTime: now.toISOString(),
+		pointIntervalMs: stepMs,
+		openValue,
+		highValue: positives.length > 0 ? Math.max(...positives) : 0,
+		lowValue: positives.length > 0 ? Math.min(...positives) : 0,
 	};
 }

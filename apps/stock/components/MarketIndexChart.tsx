@@ -5,19 +5,27 @@ import * as d3 from "d3";
 import type { MarketIndex } from "@/lib/stock-data";
 import { getChangeColor } from "@/lib/colors";
 import { useColorMode } from "@/components/ColorModeContext";
-import { STEP_HOURS, STEP_PER_WINDOW } from "@/lib/stock-constants";
+import { STEP_HOURS } from "@/lib/stock-constants";
+
+const STEP_HOURS_MS = STEP_HOURS * 3600 * 1000;
 
 interface MarketIndexChartProps {
 	data: MarketIndex;
 }
 
-const getTickInterval = (totalPoints: number): number => {
-	if (totalPoints <= 50) return STEP_PER_WINDOW;
-	if (totalPoints <= 100) return STEP_PER_WINDOW * 2;
-	if (totalPoints <= 300) return STEP_PER_WINDOW * 7;
-	if (totalPoints <= 600) return STEP_PER_WINDOW * 14;
-	return STEP_PER_WINDOW * 30;
-};
+function getTickInterval(totalPoints: number, stepMs: number): number {
+	const stepHours = stepMs / 3600000;
+	if (stepHours <= 0.5) {
+		if (totalPoints <= 100) return Math.round(6 / stepHours);
+		if (totalPoints <= 500) return Math.round(24 / stepHours);
+		return Math.round(168 / stepHours);
+	}
+	if (totalPoints <= 50) return 6 / stepHours;
+	if (totalPoints <= 100) return 12 / stepHours;
+	if (totalPoints <= 300) return 42 / stepHours;
+	if (totalPoints <= 600) return 84 / stepHours;
+	return 180 / stepHours;
+}
 
 export function MarketIndexChart({ data }: MarketIndexChartProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -25,34 +33,30 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 	const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 	const { mode } = useColorMode();
 	const color = getChangeColor(mode, data.changePercent);
+	const stepMs = data.pointIntervalMs ?? STEP_HOURS_MS;
+	const totalPoints = data.history.length;
 
 	useEffect(() => {
 		if (!containerRef.current) return;
-
 		const observer = new ResizeObserver((entries) => {
 			for (const entry of entries) {
 				const { width, height } = entry.contentRect;
 				setDimensions({ width, height });
 			}
 		});
-
 		observer.observe(containerRef.current);
 		return () => observer.disconnect();
 	}, []);
 
 	useEffect(() => {
 		if (!svgRef.current || dimensions.width === 0 || dimensions.height === 0) return;
+		if (totalPoints === 0) return;
 
 		const svg = d3.select(svgRef.current);
 		svg.selectAll("*").remove();
 
 		const isMobile = dimensions.width < 500;
-		const margin = {
-			top: 10,
-			right: 15,
-			bottom: 30,
-			left: isMobile ? 45 : 55,
-		};
+		const margin = { top: 30, right: 15, bottom: 30, left: isMobile ? 45 : 55 };
 		const width = dimensions.width - margin.left - margin.right;
 		const height = dimensions.height - margin.top - margin.bottom;
 
@@ -60,65 +64,59 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 
 		const xScale = d3
 			.scaleLinear()
-			.domain([0, data.history.length - 1])
+			.domain([0, totalPoints - 1])
 			.range([0, width]);
 
 		const yMin = d3.min(data.history) ?? 0;
 		const yMax = d3.max(data.history) ?? 100;
-		const yPadding = (yMax - yMin) * 0.1;
+		const yPadding = (yMax - yMin) * 0.15;
 
 		const yScale = d3
 			.scaleLinear()
 			.domain([yMin - yPadding, yMax + yPadding])
 			.range([height, 0]);
 
-		const totalPoints = data.history.length;
 		const baseTime = new Date(data.baseTime);
+		const tickInterval = getTickInterval(totalPoints, stepMs);
 
-		const tickInterval = getTickInterval(totalPoints);
-
-		const dayTicks: number[] = [];
-		const hoursToShift = baseTime.getHours() / STEP_HOURS;
-		const firstMidnight = totalPoints - 1 - hoursToShift;
-		for (let i = firstMidnight; i >= 0; i -= tickInterval) {
-			dayTicks.push(i);
-		}
-		dayTicks.reverse();
-
-		function formatDateLabel(index: number, showHour = false): string {
-			const hoursAgo = (totalPoints - 1 - index) * STEP_HOURS;
-			const d = new Date(baseTime.getTime() - hoursAgo * 3600 * 1000);
+		function formatLabel(index: number): string {
+			const msAgo = (totalPoints - 1 - index) * stepMs;
+			const d = new Date(baseTime.getTime() - msAgo);
 			const month = d.getMonth() + 1;
 			const day = d.getDate();
 			const hour = d.getHours();
-			const hourText = showHour ? `${hour}时` : "";
-			if (showHour) {
-				return `${month}月${day}日${hourText}`;
+			if (stepMs <= 30 * 60000) {
+				return `${month}/${day} ${hour}:00`;
 			}
-			if (tickInterval >= 120) {
-				return `${month}月`;
+			if (stepMs <= 3600000) {
+				return `${month}/${day}`;
 			}
 			return `${month}/${day}`;
 		}
+
+		const dayTicks: number[] = [];
+		for (let i = totalPoints - 1; i >= 0; i -= tickInterval) {
+			dayTicks.push(i);
+		}
+		dayTicks.reverse();
 
 		const xAxis = d3
 			.axisBottom(xScale)
 			.tickValues(dayTicks)
 			.tickSize(4)
-			.tickFormat((d) => formatDateLabel(Math.round(d as number)));
+			.tickFormat((d) => formatLabel(Math.round(d as number)));
 
 		g.append("g")
 			.attr("transform", `translate(0,${height})`)
 			.call(xAxis)
-			.call((g) => g.select(".domain").remove())
-			.call((g) => g.selectAll(".tick line").attr("stroke", "rgba(255,255,255,0.1)"))
-			.call((g) =>
-				g
+			.call((g2) => g2.select(".domain").remove())
+			.call((g2) => g2.selectAll(".tick line").attr("stroke", "rgba(255,255,255,0.1)"))
+			.call((g2) =>
+				g2
 					.selectAll(".tick text")
 					.attr("fill", "#71717a")
 					.attr("font-size", isMobile ? "10px" : "11px")
 					.attr("font-family", "Inter")
-					.attr("font-variant-numeric", "tabular-nums")
 			);
 
 		const yAxis = d3
@@ -127,24 +125,21 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.tickSize(4)
 			.tickSizeOuter(0)
 			.tickFormat((d) => {
-				const value = d as number;
-				if (value >= 10000) {
-					return `${(value / 1000).toLocaleString("en-US")}k`;
-				}
-				return Math.round(value).toLocaleString("en-US");
+				const val = d as number;
+				if (val >= 10000) return `${(val / 1000).toLocaleString("en-US")}k`;
+				return Math.round(val).toLocaleString("en-US");
 			});
 
 		g.append("g")
 			.call(yAxis)
-			.call((g) => g.select(".domain").remove())
-			.call((g) => g.selectAll(".tick line").attr("stroke", "rgba(255,255,255,0.1)"))
-			.call((g) =>
-				g
+			.call((g2) => g2.select(".domain").remove())
+			.call((g2) => g2.selectAll(".tick line").attr("stroke", "rgba(255,255,255,0.1)"))
+			.call((g2) =>
+				g2
 					.selectAll(".tick text")
 					.attr("fill", "#71717a")
 					.attr("font-size", isMobile ? "10px" : "11px")
 					.attr("font-family", "Inter")
-					.attr("font-variant-numeric", "tabular-nums")
 			);
 
 		const line = d3
@@ -176,7 +171,6 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.attr("offset", "0%")
 			.attr("stop-color", color)
 			.attr("stop-opacity", 0.3);
-
 		gradient
 			.append("stop")
 			.attr("offset", "100%")
@@ -193,23 +187,87 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.attr("stroke-width", 2.5)
 			.attr("d", line);
 
-		const pathLength = path.node()?.getTotalLength() ?? 0;
-		path.attr("stroke-dasharray", pathLength)
-			.attr("stroke-dashoffset", pathLength)
+		const pathLen = path.node()?.getTotalLength() ?? 0;
+		path
+			.attr("stroke-dasharray", pathLen)
+			.attr("stroke-dashoffset", pathLen)
 			.transition()
 			.duration(1500)
 			.ease(d3.easeCubicOut)
 			.attr("stroke-dashoffset", 0);
 
-		const crosshairGroup = g.append("g").attr("class", "crosshair").style("opacity", 0);
+		// Open line (Monday 08:00 CST)
+		if (data.openValue !== undefined && data.openValue > 0) {
+			const mondayUtc = new Date(baseTime);
+			const dow = mondayUtc.getUTCDay();
+			mondayUtc.setUTCDate(mondayUtc.getUTCDate() - (dow === 0 ? 6 : dow - 1));
+			mondayUtc.setUTCHours(0, 0, 0, 0);
 
+			const msFromEnd = baseTime.getTime() - mondayUtc.getTime();
+			const openIdx = Math.round(msFromEnd / stepMs);
+			if (openIdx >= 0 && openIdx < totalPoints) {
+				const ox = xScale(totalPoints - 1 - openIdx);
+				const oy = yScale(data.openValue);
+
+				g.append("line")
+					.attr("x1", ox)
+					.attr("x2", ox)
+					.attr("y1", 0)
+					.attr("y2", height)
+					.attr("stroke", "rgba(255,255,255,0.2)")
+					.attr("stroke-dasharray", "4 4");
+
+				g.append("text")
+					.attr("x", ox + 4)
+					.attr("y", 12)
+					.attr("fill", "rgba(255,255,255,0.4)")
+					.attr("font-size", "10px")
+					.attr("font-family", "sans-serif")
+					.text("开盘");
+			}
+		}
+
+		// Stats labels (high / low)
+		if (data.highValue !== undefined || data.lowValue !== undefined) {
+			const statsBox = g.append("g");
+
+			let yOffset = 0;
+			const addStat = (label: string, value: number, valueColor: string) => {
+				const txt = statsBox
+					.append("text")
+					.attr("x", width)
+					.attr("y", yOffset)
+					.attr("text-anchor", "end")
+					.attr("font-size", "10px")
+					.attr("font-family", "Inter");
+
+				txt
+					.append("tspan")
+					.attr("fill", "#71717a")
+					.text(`${label} `);
+				txt
+					.append("tspan")
+					.attr("fill", valueColor)
+					.attr("font-weight", "600")
+					.text(value.toLocaleString("en-US", { maximumFractionDigits: 0 }));
+				yOffset += 14;
+			};
+
+			if (data.highValue !== undefined && data.highValue > 0) {
+				addStat("H", data.highValue, "#ef4444");
+			}
+			if (data.lowValue !== undefined && data.lowValue > 0) {
+				addStat("L", data.lowValue, "#22c55e");
+			}
+		}
+
+		const crosshairGroup = g.append("g").attr("class", "crosshair").style("opacity", 0);
 		const crosshairLine = crosshairGroup
 			.append("line")
 			.attr("y1", 0)
 			.attr("y2", height)
 			.attr("stroke", "rgba(255,255,255,0.3)")
 			.attr("stroke-width", 1);
-
 		const crosshairCircle = crosshairGroup
 			.append("circle")
 			.attr("r", 4)
@@ -218,23 +276,18 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.attr("stroke-width", 2);
 
 		const tooltipGroup = g.append("g").attr("class", "tooltip").style("opacity", 0);
-
 		const tooltipRect = tooltipGroup
 			.append("rect")
 			.attr("fill", "#18181b")
 			.attr("stroke", "rgba(255,255,255,0.1)")
-			.attr("rx", 6)
-			.attr("ry", 6);
-
+			.attr("rx", 6);
 		const tooltipText = tooltipGroup
 			.append("text")
 			.attr("fill", "white")
 			.attr("font-size", "12px")
 			.attr("font-family", "Inter")
-			.attr("font-variant-numeric", "tabular-nums")
 			.attr("text-anchor", "middle")
 			.attr("dominant-baseline", "middle");
-
 		const tooltipTime = tooltipGroup
 			.append("text")
 			.attr("fill", "#71717a")
@@ -253,81 +306,59 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 
 		const handlePointerMove = (event: PointerEvent) => {
 			const [mouseX] = d3.pointer(event, svg.node() as SVGSVGElement);
-			const adjustedX = mouseX - margin.left;
-
-			if (adjustedX < 0 || adjustedX > width) {
+			const adjX = mouseX - margin.left;
+			if (adjX < 0 || adjX > width) {
 				crosshairGroup.style("opacity", 0);
 				tooltipGroup.style("opacity", 0);
 				return;
 			}
-
-			const x0 = xScale.invert(adjustedX);
-			const i = Math.round(x0);
-			const clampedIndex = Math.max(0, Math.min(data.history.length - 1, i));
-			const d = data.history[clampedIndex];
-			const x = xScale(clampedIndex);
+			const x0 = xScale.invert(adjX);
+			const i = Math.max(0, Math.min(totalPoints - 1, Math.round(x0)));
+			const d = data.history[i];
+			const x = xScale(i);
 			const y = yScale(d);
 
 			crosshairGroup.style("opacity", 1);
 			crosshairLine.attr("x1", x).attr("x2", x);
 			crosshairCircle.attr("cx", x).attr("cy", y);
 
-			const formattedValue = d.toLocaleString("en-US", {
-				minimumFractionDigits: 2,
-				maximumFractionDigits: 2,
-			});
-			tooltipText.text(formattedValue);
-			tooltipTime.text(formatDateLabel(clampedIndex, true));
+			tooltipText.text(d.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+			const msAgo = (totalPoints - 1 - i) * stepMs;
+			const labelDate = new Date(baseTime.getTime() - msAgo);
+			tooltipTime.text(
+				`${labelDate.getMonth() + 1}/${labelDate.getDate()} ${labelDate.getHours()}:${String(labelDate.getMinutes()).padStart(2, "0")}`,
+			);
 
-			const textBox = tooltipText.node()?.getBBox() ?? {
-				width: 60,
-				height: 16,
-			};
-			const timeBox = tooltipTime.node()?.getBBox() ?? {
-				width: 60,
-				height: 16,
-			};
-			const padding = 8;
-			const rectWidth = Math.max(textBox.width, timeBox.width) + padding * 2;
-			const rectHeight = textBox.height + timeBox.height + padding * 2;
+			const tb = tooltipText.node()?.getBBox() ?? { width: 60, height: 16 };
+			const tib = tooltipTime.node()?.getBBox() ?? { width: 60, height: 16 };
+			const pad = 8;
+			const rw = Math.max(tb.width, tib.width) + pad * 2;
+			const rh = tb.height + tib.height + pad * 2;
+			tooltipRect.attr("width", rw).attr("height", rh);
 
-			tooltipRect.attr("width", rectWidth).attr("height", rectHeight);
-
-			let tooltipX: number;
-			let tooltipY: number;
-
+			let tx: number;
+			let ty: number;
 			if (isMobile) {
-				tooltipX = x - rectWidth / 2;
-				tooltipY = y - rectHeight - 12;
+				tx = x - rw / 2;
+				ty = y - rh - 12;
 			} else {
-				if (x > width / 2) {
-					tooltipX = x - rectWidth - 12;
-				} else {
-					tooltipX = x + 12;
-				}
-				tooltipY = y - rectHeight / 2;
+				tx = x > width / 2 ? x - rw - 12 : x + 12;
+				ty = y - rh / 2;
 			}
-
-			tooltipX = Math.max(0, Math.min(width - rectWidth, tooltipX));
-			tooltipY = Math.max(0, Math.min(height - rectHeight, tooltipY));
-
-			tooltipGroup.attr("transform", `translate(${tooltipX},${tooltipY})`);
-
-			tooltipText.attr("x", rectWidth / 2).attr("y", rectHeight / 2 - 6);
-
-			tooltipTime.attr("x", rectWidth / 2).attr("y", rectHeight / 2 + 10);
-
+			tx = Math.max(0, Math.min(width - rw, tx));
+			ty = Math.max(0, Math.min(height - rh, ty));
+			tooltipGroup.attr("transform", `translate(${tx},${ty})`);
+			tooltipText.attr("x", rw / 2).attr("y", rh / 2 - 6);
+			tooltipTime.attr("x", rw / 2).attr("y", rh / 2 + 10);
 			tooltipGroup.style("opacity", 1);
 		};
 
-		const handlePointerLeave = () => {
+		overlay.on("pointermove", handlePointerMove);
+		overlay.on("pointerleave", () => {
 			crosshairGroup.style("opacity", 0);
 			tooltipGroup.style("opacity", 0);
-		};
-
-		overlay.on("pointermove", handlePointerMove);
-		overlay.on("pointerleave", handlePointerLeave);
-	}, [data, dimensions, color]);
+		});
+	}, [data, dimensions, color, stepMs, totalPoints]);
 
 	return (
 		<div ref={containerRef} className="relative w-full h-full">

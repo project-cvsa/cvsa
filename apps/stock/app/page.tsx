@@ -12,8 +12,10 @@ import { DescDialog } from "@/components/DescDialog";
 export default function Home() {
 	const [marketIndex, setMarketIndex] = useState<MarketIndex | null>(null);
 	const [stocks, setStocks] = useState<Stock[]>([]);
-	const [loading, setLoading] = useState(true);
+	const [indexLoading, setIndexLoading] = useState(true);
+	const [stocksLoading, setStocksLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [range, setRange] = useState("week");
 
 	const [token, setToken] = useState<string | null>(() => {
 		if (typeof window !== "undefined") {
@@ -23,23 +25,36 @@ export default function Home() {
 	});
 	const [showLogin, setShowLogin] = useState(false);
 
+	const fetchIndex = useCallback(() => {
+		setIndexLoading(true);
+		fetch(`/api/index?range=${range}`)
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then(setMarketIndex)
+			.catch((err: Error) => console.error("Failed to load index:", err))
+			.finally(() => setIndexLoading(false));
+	}, [range]);
+
 	const fetchStocks = useCallback(() => {
-		setLoading(true);
+		setStocksLoading(true);
 		fetch("/api/stocks")
 			.then((res) => {
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 				return res.json();
 			})
-			.then((data) => {
-				setStocks(data.stocks);
-				setMarketIndex(data.marketIndex);
-			})
+			.then((data: { stocks: Stock[] }) => setStocks(data.stocks))
 			.catch((err: Error) => {
 				console.error("Failed to load stocks:", err);
 				setError(err.message);
 			})
-			.finally(() => setLoading(false));
+			.finally(() => setStocksLoading(false));
 	}, []);
+
+	useEffect(() => {
+		fetchIndex();
+	}, [fetchIndex]);
 
 	useEffect(() => {
 		fetchStocks();
@@ -92,10 +107,39 @@ export default function Home() {
 					</div>
 				</header>
 
-				<MarketIndexCard marketIndex={marketIndex} loading={loading} />
+				<MarketIndexCard marketIndex={marketIndex} loading={indexLoading} />
+
+				<div className="mx-2 mt-3 flex items-center justify-between">
+					<div className="flex gap-1 flex-wrap">
+						{(["day", "week", "2week", "month", "quarter"] as const).map((r) => (
+							<button
+								key={r}
+								type="button"
+								onClick={() => setRange(r)}
+								className={`px-3 py-1 text-xs rounded-md transition-colors ${
+									r === range
+										? "bg-white/10 text-white"
+										: "text-muted-foreground hover:text-white hover:bg-white/5"
+								}`}
+							>
+								{{ day: "日", week: "周", "2week": "2周", month: "月", quarter: "季度" }[r]}
+							</button>
+						))}
+					</div>
+					{marketIndex?.baseTime && (
+						<div className="text-muted-foreground text-xs font-mono">
+							{new Date(marketIndex.baseTime).toLocaleString("zh-CN", {
+								month: "2-digit",
+								day: "2-digit",
+								hour: "2-digit",
+								minute: "2-digit",
+							})}
+						</div>
+					)}
+				</div>
 
 				<SearchBox isAuthenticated={isAuthenticated} onDelete={handleDelete}>
-					{loading && (
+					{stocksLoading && (
 						<div className="rounded-2xl bg-[#0a0a0a] border border-white/5 p-8 text-center">
 							<div className="text-zinc-500 font-mono text-sm">正在加载...</div>
 						</div>
@@ -107,7 +151,7 @@ export default function Home() {
 						</div>
 					)}
 
-					{!loading && !error && stocks.length > 0 && (
+					{!stocksLoading && !error && stocks.length > 0 && (
 						<StockList
 							stocks={stocks}
 							isAuthenticated={isAuthenticated}
@@ -115,7 +159,7 @@ export default function Home() {
 						/>
 					)}
 
-					{!loading && !error && stocks.length === 0 && (
+					{!stocksLoading && !error && stocks.length === 0 && (
 						<div className="rounded-2xl bg-[#0a0a0a] border border-white/5 p-8 text-center">
 							<div className="text-zinc-500 font-mono text-sm">暂无数据</div>
 						</div>
