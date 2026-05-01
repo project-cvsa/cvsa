@@ -1,5 +1,5 @@
 import { getSql } from "./db";
-import type { MarketIndex, Stock } from "./stock-data";
+import type { Stock, MarketIndex } from "./stock-data";
 import { snapToGrid, TOTAL_LOOKBACK_HOURS } from "./stock-constants";
 import {
 	fetchEtaEntries,
@@ -7,17 +7,9 @@ import {
 	fetchTitleMap,
 	fetchSnapshotsByAid,
 	insertCacheEntries,
+	fetchCompositeIndex,
 } from "./stock-repository";
-import { computeStocks, computeMarketIndex } from "./stock-compute";
-
-const EMPTY_MARKET: MarketIndex = {
-	name: "中V指数",
-	value: 0,
-	change: 0,
-	changePercent: 0,
-	history: [],
-	baseTime: "",
-};
+import { computeStocks } from "./stock-compute";
 
 export async function getTopStocks(): Promise<{
 	stocks: Stock[];
@@ -34,10 +26,11 @@ export async function getTopStocks(): Promise<{
 	console.log(`getTopStocks: eta returned ${etaEntries.length} rows`);
 
 	if (etaEntries.length === 0) {
+		const marketIndex = await fetchCompositeIndex(sql);
 		console.timeEnd("getTopStocks: total");
 		return {
 			stocks: [],
-			marketIndex: { ...EMPTY_MARKET, baseTime: now.toISOString() },
+			marketIndex,
 		};
 	}
 
@@ -82,7 +75,7 @@ export async function getTopStocks(): Promise<{
 
 	stocks.sort((a, b) => b.price - a.price);
 
-	const marketIndex = computeMarketIndex(stocks, now);
+	const marketIndex = await fetchCompositeIndex(sql);
 
 	console.timeEnd("getTopStocks: total");
 	return { stocks: stocks.slice(0, 100), marketIndex };

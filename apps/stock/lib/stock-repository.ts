@@ -1,5 +1,7 @@
 import type { Sql } from "postgres";
 import { withCache, perAidMget, perAidMset } from "./cache";
+import type { MarketIndex } from "./stock-data";
+import { WINDOW_COUNT, STEP_HOURS_MS } from "./stock-constants";
 
 export interface EtaRow {
 	aid: number;
@@ -342,4 +344,60 @@ export async function insertCacheEntries(
 	}
 
 	return trulyNew.length;
+}
+
+export async function fetchCompositeIndex(sql: Sql): Promise<MarketIndex> {
+	const totalLookbackMs = WINDOW_COUNT * STEP_HOURS_MS + STEP_HOURS_MS;
+	const lookback = new Date(Date.now() - totalLookbackMs);
+
+	const rows = (await sql`
+		SELECT time, value
+		FROM internal.composite_index
+		WHERE time >= ${lookback}
+		ORDER BY time ASC
+	`) as { time: Date; value: number }[];
+
+	if (rows.length === 0) {
+		return {
+			name: "中V指数",
+			value: 0,
+			change: 0,
+			changePercent: 0,
+			history: [],
+			baseTime: "",
+		};
+	}
+
+	const now = new Date(
+		Math.ceil(rows[rows.length - 1].time.getTime() / STEP_HOURS_MS) * STEP_HOURS_MS,
+	);
+	const history: number[] = [];
+
+	for (let i = WINDOW_COUNT - 1; i >= 0; i--) {
+		const target = new Date(now.getTime() - i * STEP_HOURS_MS);
+		let nearest = rows[0].value;
+		let minDiff = Math.abs(rows[0].time.getTime() - target.getTime());
+		for (let j = 1; j < rows.length; j++) {
+			const diff = Math.abs(rows[j].time.getTime() - target.getTime());
+			if (diff < minDiff) {
+				minDiff = diff;
+				nearest = rows[j].value;
+			}
+		}
+		history.push(nearest);
+	}
+
+	const latest = history[history.length - 1];
+	const previous = history.length > 1 ? history[history.length - 2] : latest;
+	const change = latest - previous;
+	const changePercent = previous !== 0 ? (change / previous) * 100 : 0;
+
+	return {
+		name: "中V指数",
+		value: latest,
+		change: Number(change.toFixed(2)),
+		changePercent: Number(changePercent.toFixed(2)),
+		history,
+		baseTime: now.toISOString(),
+	};
 }
