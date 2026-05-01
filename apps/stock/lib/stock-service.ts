@@ -73,11 +73,11 @@ export async function getStocks(): Promise<Stock[]> {
 }
 
 const INDEX_RANGES: Record<string, { days: number; stepMs: number }> = {
-	day: { days: 1, stepMs: 30 * 60 * 1000 },
-	week: { days: 7, stepMs: 30 * 60 * 1000 },
-	"2week": { days: 14, stepMs: 60 * 60 * 1000 },
-	month: { days: 30, stepMs: 2 * 3600 * 1000 },
-	quarter: { days: 90, stepMs: 6 * 3600 * 1000 },
+	day: { days: 1, stepMs: 10 * 60 * 1000 },
+	week: { days: 7, stepMs: 60 * 60 * 1000 },
+	"2week": { days: 14, stepMs: 2 * 3600 * 1000 },
+	month: { days: 30, stepMs: 4 * 3600 * 1000 },
+	quarter: { days: 90, stepMs: 12 * 3600 * 1000 },
 };
 
 export async function getIndex(range = "week"): Promise<MarketIndex> {

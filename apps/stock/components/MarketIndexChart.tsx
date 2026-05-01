@@ -73,23 +73,27 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			}
 			const msAgo = (totalPoints - 1 - index) * stepMs;
 			const d = new Date(baseTime.getTime() - msAgo);
-			const rangeMs = (totalPoints - 1) * stepMs;
-			if (rangeMs <= 2 * 24 * 3600 * 1000) {
-				return `${d.getHours()}:00`;
-			}
+			const rangeDays = ((totalPoints - 1) * stepMs) / (24 * 3600 * 1000);
+			if (rangeDays <= 2) return `${d.getHours()}:00`;
+			if (rangeDays <= 7) return `${d.getMonth() + 1}/${d.getDate()}`;
 			return `${d.getMonth() + 1}/${d.getDate()}`;
 		}
 
 		let dayTicks: number[];
 		if (isIndex) {
 			const rangeMs = (totalPoints - 1) * stepMs;
-			const tickStepMs = rangeMs <= 2 * 24 * 3600 * 1000 ? 4 * 3600 * 1000 : 24 * 3600 * 1000;
+			const rangeDays = rangeMs / (24 * 3600 * 1000);
+			let tickStepDays: number;
+			if (rangeDays <= 2) tickStepDays = 4 / 24;
+			else if (rangeDays <= 7) tickStepDays = 1;
+			else if (rangeDays <= 30) tickStepDays = 3;
+			else if (rangeDays <= 90) tickStepDays = 7;
+			else tickStepDays = 14;
+			const tickStepMs = tickStepDays * 24 * 3600 * 1000;
 
 			dayTicks = [];
 			const earliest = new Date(baseTime.getTime() - (totalPoints - 1) * stepMs);
-			const cursor = new Date(
-				Math.ceil(earliest.getTime() / tickStepMs) * tickStepMs,
-			);
+			const cursor = new Date(Math.ceil(earliest.getTime() / tickStepMs) * tickStepMs);
 
 			while (cursor <= baseTime) {
 				const msFromEnd = baseTime.getTime() - cursor.getTime();
@@ -137,7 +141,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 
 		const yAxis = d3
 			.axisLeft(yScale)
-			.ticks(4)
+			.ticks(6)
 			.tickSize(4)
 			.tickSizeOuter(0)
 			.tickFormat((d) => {
@@ -200,7 +204,7 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			.datum(data.history)
 			.attr("fill", "none")
 			.attr("stroke", color)
-			.attr("stroke-width", 2.5)
+			.attr("stroke-width", 2)
 			.attr("d", line);
 
 		const pathLen = path.node()?.getTotalLength() ?? 0;
@@ -222,7 +226,6 @@ export function MarketIndexChart({ data }: MarketIndexChartProps) {
 			const openIdx = Math.round(msFromEnd / stepMs);
 			if (openIdx >= 0 && openIdx < totalPoints) {
 				const ox = xScale(totalPoints - 1 - openIdx);
-				const oy = yScale(data.openValue);
 
 				g.append("line")
 					.attr("x1", ox)

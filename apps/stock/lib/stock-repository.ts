@@ -351,16 +351,20 @@ export async function fetchCompositeIndex(
 	stepMs = 30 * 60 * 1000,
 ): Promise<MarketIndex> {
 	const effectiveRange = rangeMs ?? 7 * 24 * 3600 * 1000;
-	const lookback = new Date(Date.now() - effectiveRange - stepMs);
+	const lookback = new Date(Date.now() - effectiveRange - stepMs * 2);
+	const stepSec = stepMs / 1000;
 
-	const rows = (await sql`
-		SELECT time, value
+	const raw = (await sql`
+		SELECT
+			date_bin(${`${stepSec} seconds`}::interval, time, TIMESTAMP '2000-01-01') AS bucket,
+			AVG(value)::float8 AS value
 		FROM internal.composite_index
 		WHERE time >= ${lookback}
-		ORDER BY time ASC
-	`) as { time: Date; value: number }[];
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`) as { bucket: Date; value: number }[];
 
-	if (rows.length === 0) {
+	if (raw.length === 0) {
 		return {
 			name: "中V指数",
 			value: 0,
@@ -368,29 +372,25 @@ export async function fetchCompositeIndex(
 			changePercent: 0,
 			history: [],
 			baseTime: "",
+			pointIntervalMs: stepMs,
 		};
 	}
 
-	const pointCount = Math.ceil(effectiveRange / stepMs);
-	const latestRowTime = rows[rows.length - 1].time.getTime();
+	const latestRowTime = raw[raw.length - 1].bucket.getTime();
 	const now = new Date(Math.floor(latestRowTime / stepMs) * stepMs);
-	const history: number[] = [];
 
-	for (let i = pointCount; i >= 0; i--) {
-		const target = new Date(now.getTime() - i * stepMs);
-		let nearest = rows[0].value;
-		let minDiff = Math.abs(rows[0].time.getTime() - target.getTime());
-		for (let j = 1; j < rows.length; j++) {
-			const diff = Math.abs(rows[j].time.getTime() - target.getTime());
-			if (diff < minDiff) {
-				minDiff = diff;
-				nearest = rows[j].value;
-			}
-		}
-		history.push(nearest);
+	const bucketMap = new Map<number, number>();
+	for (const r of raw) {
+		bucketMap.set(r.bucket.getTime(), r.value);
 	}
 
-	// Monday 08:00 CST = Monday 00:00 UTC
+	const pointCount = Math.ceil(effectiveRange / stepMs);
+	const history: number[] = [];
+	for (let i = pointCount; i >= 0; i--) {
+		const ts = now.getTime() - i * stepMs;
+		history.push(bucketMap.get(ts) ?? 0);
+	}
+
 	const mondayUtc = new Date(now);
 	const dow = mondayUtc.getUTCDay();
 	mondayUtc.setUTCDate(mondayUtc.getUTCDate() - (dow === 0 ? 6 : dow - 1));
@@ -408,7 +408,7 @@ export async function fetchCompositeIndex(
 	}
 
 	const positives = history.filter((v) => v > 0);
-	const latest = rows[rows.length - 1].value;
+	const latest = raw[raw.length - 1].value;
 	const firstOfRange = positives.length > 0 ? positives[0] : latest;
 	const change = latest - firstOfRange;
 	const changePercent = firstOfRange !== 0 ? (change / firstOfRange) * 100 : 0;

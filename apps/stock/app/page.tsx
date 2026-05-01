@@ -133,7 +133,8 @@ export default function Home() {
 								day: "2-digit",
 								hour: "2-digit",
 								minute: "2-digit",
-							})}
+							})}{" "}
+							更新
 						</div>
 					)}
 				</div>

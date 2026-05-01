@@ -10,7 +10,7 @@ import {
 import { computeStocks } from "./stock-compute";
 import type { Stock } from "./stock-data";
 
-const INTERVAL_MS = 10 * 60 * 1000;
+const INTERVAL_MS = 1 * 60 * 1000;
 
 function floorToInterval(ts: number): Date {
 	return new Date(Math.floor(ts / INTERVAL_MS) * INTERVAL_MS);
