@@ -10,7 +10,7 @@ import {
 import { computeStocks } from "./stock-compute";
 import type { Stock } from "./stock-data";
 
-const INTERVAL_MS = 1 * 60 * 1000;
+const INTERVAL_MS = 10 * 60 * 1000;
 
 function floorToInterval(ts: number): Date {
 	return new Date(Math.floor(ts / INTERVAL_MS) * INTERVAL_MS);
@@ -132,6 +132,8 @@ export async function computeAndRecordIndex(targetTime = Date.now()): Promise<nu
 	return newValue;
 }
 
+const JOB_INTERVAL_MS = 1 * 60 * 1000;
+
 export function startIndexScheduler(): void {
 	const run = async () => {
 		try {
@@ -145,6 +147,6 @@ export function startIndexScheduler(): void {
 	};
 
 	run();
-	setInterval(run, INTERVAL_MS);
-	console.log(`[index-scheduler] started, interval=${INTERVAL_MS / 1000}s`);
+	setInterval(run, JOB_INTERVAL_MS);
+	console.log(`[index-scheduler] started, interval=${JOB_INTERVAL_MS / 1000}s`);
 }
