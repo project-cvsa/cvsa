@@ -7,10 +7,10 @@ export async function computeAndRecordIndex(targetTime = Date.now()): Promise<nu
 	const sql = getSql();
 	const now = new Date(targetTime);
 	const snapped = new Date(Math.floor(now.getTime() / INDEX_SNAP_MS) * INDEX_SNAP_MS);
-	const value = await computeMarketIndex(snapped);
+	const [value, aids] = await computeMarketIndex(snapped);
 	await sql`
-		INSERT INTO internal.composite_index (time, value)
-		VALUES (${snapped}, ${value})
+		INSERT INTO internal.composite_index (time, value, aids)
+		VALUES (${snapped}, ${value}, ${aids})
 		ON CONFLICT (time) DO NOTHING
 	`;
 	return value;

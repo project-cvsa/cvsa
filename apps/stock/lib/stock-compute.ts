@@ -1,7 +1,13 @@
 import { fetchEtaEntries, fetchSnapshotsByAid, type SnapshotRow } from "./stock-repository";
 import type { EtaRow, NewCacheEntry } from "./stock-repository";
 import type { Stock } from "./stock-data";
-import { WINDOW_COUNT, STEP_HOURS, WINDOW_HOURS, INDEX_FACTOR } from "./stock-constants";
+import {
+	WINDOW_COUNT,
+	STEP_HOURS,
+	WINDOW_HOURS,
+	INDEX_FACTOR,
+	INDEX_SIZE,
+} from "./stock-constants";
 import { getSql } from "./db";
 
 /** Find the snapshot closest in time to `target`. Linear scan (snapshots are already ordered by `aid` but may be sparse). */
@@ -200,19 +206,20 @@ export function computeStocks(
 	return { stocks, newCacheEntries };
 }
 
+type aid = number;
 /** Build the market index from the top stocks. */
-export async function computeMarketIndex(time: Date): Promise<number> {
+export async function computeMarketIndex(time: Date): Promise<[number, aid[]]> {
 	const startTime = new Date(time.getTime() - WINDOW_HOURS * 3600 * 1000);
 	const sql = getSql();
 
 	const rows = (await sql`
-		SELECT value FROM internal.composite_index
+		SELECT value, aids FROM internal.composite_index
 		WHERE time = ${time}
 		LIMIT 1
-	`) as { value: number }[];
+	`) as { value: number; aids: number[] }[];
 	if (rows.length > 0) {
 		console.log(`[computeMarketIndex] found index at ${time.toISOString()}`);
-		return rows[0].value;
+		return [rows[0].value, rows[0].aids];
 	}
 
 	console.time("[index-scheduler] eta");
@@ -220,7 +227,7 @@ export async function computeMarketIndex(time: Date): Promise<number> {
 	console.timeEnd("[index-scheduler] eta");
 	console.log(`[index-scheduler] eta rows=${etaEntries.length}`);
 
-	if (etaEntries.length === 0) return 0;
+	if (etaEntries.length === 0) return [0, []];
 
 	const aids = etaEntries.map((e) => e.aid);
 	const snapshots = await fetchSnapshotsByAid(
@@ -228,7 +235,7 @@ export async function computeMarketIndex(time: Date): Promise<number> {
 		aids,
 		new Date(time.getTime() - 8 * 86400 * 1000)
 	);
-	const values = [];
+	const values: [number, number][] = [];
 	for (const aid of aids) {
 		const snapshotsForAid = snapshots.get(aid);
 		if (!snapshotsForAid) {
@@ -250,13 +257,12 @@ export async function computeMarketIndex(time: Date): Promise<number> {
 			(endSnapshot.created_at.getTime() - startSnapshot.created_at.getTime()) / 3600 / 1000;
 		if (hoursDiff > 0) {
 			const value = (viewsDiff / hoursDiff) * WINDOW_HOURS;
-			values.push(value);
+			values.push([value, aid]);
 		}
 	}
-	return (
-		values
-			.sort((a, b) => b - a)
-			.slice(0, 100)
-			.reduce((sum, v) => sum + v, 0) / INDEX_FACTOR
-	);
+	
+	const topValues = values.sort((a, b) => b[0] - a[0]).slice(0, INDEX_SIZE);
+	const value = topValues.reduce((sum, v) => sum + v[0], 0) / INDEX_FACTOR;
+	const filteredAids = topValues.map((v) => v[1]);
+	return [value, filteredAids];
 }
