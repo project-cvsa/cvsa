@@ -380,7 +380,7 @@ export async function fetchCompositeIndex(
 
 	const raw = (await sql`
 		SELECT
-			date_bin(${`${stepSec} seconds`}::interval, time, TIMESTAMP '2000-01-01') AS bucket,
+			date_bin(${`${stepSec} seconds`}::interval, time, TIMESTAMP '2000-01-01 00:00:00+08:00') AS bucket,
 			AVG(value)::float8 AS value
 		FROM internal.composite_index
 		WHERE time >= ${lookback}
@@ -393,9 +393,32 @@ export async function fetchCompositeIndex(
 		FROM internal.composite_index
 		ORDER BY time DESC
 		LIMIT 1
-	`) as { time: Date, value: number }[];
+	`) as { time: Date; value: number }[];
+
+	const getLastMondayUTC = () => {
+		const d = new Date();
+		d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7 || 7));
+		d.setUTCHours(0, 0, 0, 0);
+		return d.toISOString();
+	};
+
+	const openRec = (await sql`
+		SELECT *
+		FROM internal.composite_index
+		ORDER BY ABS(EXTRACT(EPOCH FROM (time - ${getLastMondayUTC()}::timestamptz)))
+		LIMIT 1
+	`) as { time: Date; value: number }[];
+
+	const highLow = (await sql`
+		SELECT MAX(value) as max, MIN(value) as min
+		FROM internal.composite_index
+		WHERE time >= ${lookback}
+	`) as { max: number; min: number }[];
 
 	const latest = newestRec[0].value;
+	const openValue = openRec[0].value;
+	const highValue = highLow[0].max;
+	const lowValue = highLow[0].min;
 
 	if (raw.length === 0) {
 		return {
@@ -412,23 +435,6 @@ export async function fetchCompositeIndex(
 	const now = newestRec[0].time;
 
 	const history = raw.map((v) => v.value);
-	const pointCount = history.length;
-
-	const mondayUtc = new Date(now);
-	const dow = mondayUtc.getUTCDay();
-	mondayUtc.setUTCDate(mondayUtc.getUTCDate() - (dow === 0 ? 6 : dow - 1));
-	mondayUtc.setUTCHours(0, 0, 0, 0);
-
-	let openValue = history[history.length - 1];
-	let minOpenDiff = Infinity;
-	for (let i = 0; i < history.length; i++) {
-		const t = new Date(now.getTime() - (pointCount - i) * stepMs);
-		const diff = Math.abs(t.getTime() - mondayUtc.getTime());
-		if (diff < minOpenDiff) {
-			minOpenDiff = diff;
-			openValue = history[i];
-		}
-	}
 
 	const positives = history.filter((v) => v > 0);
 	const firstOfRange = positives.length > 0 ? positives[0] : latest;
@@ -444,7 +450,7 @@ export async function fetchCompositeIndex(
 		baseTime: now.toISOString(),
 		pointIntervalMs: stepMs,
 		openValue,
-		highValue: positives.length > 0 ? Math.max(...positives) : 0,
-		lowValue: positives.length > 0 ? Math.min(...positives) : 0,
+		highValue,
+		lowValue,
 	};
 }
