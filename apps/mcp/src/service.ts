@@ -1,3 +1,4 @@
+import { getRedis } from "./redis";
 import { getSql } from "./sql";
 
 export async function blacklistVideo(aid: number) {
@@ -9,4 +10,6 @@ export async function blacklistVideo(aid: number) {
             SELECT 1 FROM public.video_blacklist WHERE aid = ${aid}
         )
     `;
+	const redis = getRedis();
+	await redis.del("cvsa:stock:eta:top1000");
 }
