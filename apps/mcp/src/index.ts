@@ -7,7 +7,7 @@ const app = new Hono();
 
 const mcpServer = new McpServer({
 	name: "CVSA MCP",
-	version: "0.0.2",
+	version: "0.0.3",
 });
 
 stockDeleteSetup(mcpServer);
@@ -36,5 +36,6 @@ app.all("/mcp", async (c) => {
 
 export default {
 	fetch: app.fetch,
-	port: 15800
+	port: 15800,
+	idleTimeout: 0
 };
