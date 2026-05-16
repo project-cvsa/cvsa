@@ -2,17 +2,16 @@
 alwaysApply: true
 scene: git_message
 ---
-
 ### 基本格式
 
 每条提交信息应遵循以下结构（只允许使用英文）：
 
 ```text
-<类型>(<作用域>): <描述>
+<类型（英文）>(<作用域>): <描述（英文）>
 
-[正文(英文描述)]
+[正文(英文)]
 
-[脚注(英文描述)]
+[脚注(英文)]
 ```
 
 -   **类型**：必填，表示本次提交的类别（见下文“类型列表”）。
@@ -20,22 +19,6 @@ scene: git_message
 -   **描述**：必填，是对变更的简短说明，使用祈使句、现在时态，首字母小写，末尾不加句号。
 -   **正文**：可选，对变更动机及与之前行为的对比进行详细说明。
 -   **脚注**：可选，主要用于关联 Issue 或标记破坏性变更（BREAKING CHANGE）。
-
-### 示例
-
-1.  新增一个用户登录功能：
-
-    ```text
-    feat(auth): add user login endpoint
-    ```
-
-2.  包含破坏性变更的提交（需在脚注中标记）：
-
-    ```text
-    feat(api): change response format for user details
-
-    BREAKING CHANGE: The 'user' field in the response is now nested under 'data'.
-    ```
 
 ### 允许的类型列表
 
