@@ -1,6 +1,7 @@
 ---
 title: 网络代理架构
-description: 代理类型、请求路由与限速配置
+description: 代理类型、请求路由与限速配置。
+og:title: Project CVSA 网络代理架构
 ---
 
 网络层负责提供一个网络请求的抽象层，用于将API请求转发到不同的代理后端，并提供限速和流控。

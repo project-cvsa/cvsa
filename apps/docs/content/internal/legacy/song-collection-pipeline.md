@@ -1,6 +1,7 @@
 ---
 title: 歌曲收集流程
-description: 将ML分类为歌曲的视频收集到songs表并触发追踪
+description: 将ML分类为歌曲的视频收集到songs表并触发追踪。
+og:title: Project CVSA 歌曲收集流程
 ---
 
 歌曲收集流程负责将ML分类为歌曲的视频正式纳入歌曲库，并开始持续的数据追踪。

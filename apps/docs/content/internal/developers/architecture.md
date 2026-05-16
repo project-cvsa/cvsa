@@ -1,6 +1,7 @@
 ---
 title: 项目架构
 description: 了解档案馆的项目组织架构。
+og:title: Project CVSA 项目架构
 ---
 
 ## 目录结构

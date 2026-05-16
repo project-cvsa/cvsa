@@ -1,6 +1,7 @@
 ---
 title: 快照调度系统
-description: 快照调度的三种类型、时间计算策略与流量控制机制
+description: 快照调度的三种类型、时间计算策略与流量控制机制。
+og:title: Project CVSA 快照调度系统
 ---
 
 快照调度系统负责决定何时对哪些视频执行数据采集，核心数据存储于 `snapshot_schedule` 表。

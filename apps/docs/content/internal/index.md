@@ -1,6 +1,7 @@
 ---
 title: 成员指南
-description: 档案馆成员的内部协作指南
+description: 档案馆成员的内部协作指南。
+og:title: Project CVSA 内部成员协作指南
 ---
 
 欢迎加入中 V 档案馆！本指南旨在帮助新成员快速了解项目运作模式、协作规范及工具使用方法。
