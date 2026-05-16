@@ -1,6 +1,7 @@
 ---
 title: 代码风格指南
 description: 档案馆项目的代码风格、架构决策及类型安全规范。
+og:title: Project CVSA 代码风格指南
 ---
 
 ## TypeScript 代码规范

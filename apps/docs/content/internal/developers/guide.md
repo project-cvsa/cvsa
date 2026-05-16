@@ -1,6 +1,7 @@
 ---
 title: 开发者指南
 description: 了解如何参与档案馆的开发工作。
+og:title: Project CVSA 开发开发者指南
 ---
 
 ## 准备环境
@@ -43,22 +44,31 @@ cp apps/backend/.env.example apps/backend/.env
 cp apps/backend/.env.example apps/backend/.env.test
 ```
 
-为了避免开发和测试环境冲突，你需要将所有 `.env.test` 中的 `DATABASE_URL` 修改为用于测试的数据库。例如：
+为了避免开发和测试环境冲突，你需要将所有 `.env.test` 中的 `DATABASE_URL`、`MEILI_API_URL` 和 `REDIS_URL` 修改为用于测试的地址。例如：
 ```bash
 # 在 .env 中
 DATABASE_URL=postgres://cvsa:password@localhost:5432/cvsa
+MEILI_API_URL=http://localhost:7700
+REDIS_URL=redis://localhost:6379
 # 在 .env.test 中
 DATABASE_URL=postgres://cvsa:password@localhost:5432/cvsa_test
+MEILI_API_URL=http://localhost:7700
+REDIS_URL=redis://localhost:6379
 ```
+
+如果`.env`和`.env.test`中缺少`REDIS_URL`可以手动添加（通常只需要在`/packages/core/`中的`.env`和`.env.test`添加）。不要修改`.ts`文件中的默认值。
+`MEILI_MASTER_KEY`、`cvsa`和`password`如需修改需要和`.env.docker`文件中的值一致。
 
 ## 启动外部服务
 
-你需要准备一个 PostgreSQL 18 以及 MeiliSearch 1.40 实例来辅助开发和调试。推荐使用 Docker，因为它易于管理和隔离。  
-确保你安装了 [Docker Compose](https://docs.docker.com/compose/install/)，之后便可以在根路径下通过 compose 拉起这两个容器。
+你需要准备一个 PostgreSQL 18 、Redis 7 以及 MeiliSearch 1.40 实例来辅助开发和调试。推荐使用 Docker，因为它易于管理和隔离。  
+确保你安装了 [Docker Compose](https://docs.docker.com/compose/install/)，之后便可以在根路径下通过 compose 拉起这三个容器。
 
 ```bash
 docker compose up -d
 ```
+
+如果 Docker 服务不在本机，可能需要使用`docker-compose-remote.yml`来启动服务。需要将`.env.docker`一起复制到远端配置目录。
 
 ## 初始化项目
 
