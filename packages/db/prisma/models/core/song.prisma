@@ -37,6 +37,9 @@ model Song {
 enum SongType {
     ORIGINAL
     COVER
+    RETUNE
+    CONTRAFACTUM
+    TRANSLYRICS
     REMIX
     REMASTER
     MASHUP
