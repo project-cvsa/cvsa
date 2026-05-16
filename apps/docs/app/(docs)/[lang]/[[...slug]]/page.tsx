@@ -83,15 +83,30 @@ export async function generateMetadata({
 	if (!page) notFound();
 	const cleanSlug = slug ? slug : [];
 	const currentPage = cleanSlug.join("/");
+	const url = `${baseUrl}/${lang}/${currentPage}`;
 	return {
 		title: page.data.title,
 		description: page.data.description,
 		alternates: {
+			canonical: url,
 			languages: {
 				zh: `${baseUrl}/zh/${currentPage}`,
 				en: `${baseUrl}/en/${currentPage}`,
 				"x-default": `${baseUrl}/en/${currentPage}`,
 			},
+		},
+		openGraph: {
+			title: page.data.title,
+			description: page.data.description,
+			url,
+			siteName: "Project CVSA",
+			locale: lang === "zh" ? "zh_CN" : "en_US",
+			type: "article",
+		},
+		twitter: {
+			card: "summary_large_image",
+			title: page.data.title,
+			description: page.data.description,
 		},
 	};
 }
