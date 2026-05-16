@@ -1,6 +1,7 @@
 ---
 title: 系统架构概览
-description: 爬虫系统的整体架构、核心组件与数据流向
+description: 爬虫系统的整体架构、核心组件与数据流向。
+og:title: Project CVSA 系统架构概览
 ---
 
 CVSA 的爬虫系统是一个基于 BullMQ 消息队列的数据采集系统，用于持续追踪 Bilibili 视频的播放数据。

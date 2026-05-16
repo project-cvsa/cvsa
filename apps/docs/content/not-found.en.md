@@ -1,5 +1,6 @@
 ---
 title: Oops! We can’t find the page you’re looking for.
+og:title: Oops! Page Not Found
 ---
 
 It seems the link is broken, or the page has been moved to a new location.

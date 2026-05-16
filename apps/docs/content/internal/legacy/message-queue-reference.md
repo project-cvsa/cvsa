@@ -1,6 +1,7 @@
 ---
 title: 消息队列与任务定义
-description: BullMQ队列配置、定时任务与Job数据结构
+description: BullMQ队列配置、定时任务与Job数据结构。
+og:title: Project CVSA 消息队列与任务定义
 ---
 
 爬虫系统使用BullMQ作为消息队列，Redis作为底层存储。

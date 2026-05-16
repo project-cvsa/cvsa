@@ -1,6 +1,7 @@
 ---
 title: 视频发现与元数据采集
-description: 从B站发现新视频、采集元数据并触发分类的流程
+description: 从B站发现新视频、采集元数据并触发分类的流程。
+og:title: Project CVSA 视频发现与元数据采集
 ---
 
 视频发现流程负责从Bilibili获取最新视频，采集元数据，并触发后续的分类和追踪。
