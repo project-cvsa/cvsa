@@ -19,7 +19,7 @@ export class ArtistSearchService extends ISearchService<
 
 	protected async getDocument(
 		artist: ArtistDetailsResponseDto,
-		language: string,
+		language: string
 	): Promise<ArtistSearchIndex> {
 		const vectors = await this.embeddingManager.embeddings.post({
 			texts: [

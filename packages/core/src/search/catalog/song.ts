@@ -21,15 +21,12 @@ export interface SongSearchIndex {
 	};
 }
 
-export class SongSearchService extends ISearchService<
-	SongDetailsResponseDto,
-	SongSearchIndex
-> {
+export class SongSearchService extends ISearchService<SongDetailsResponseDto, SongSearchIndex> {
 	protected readonly entityType = "song";
 
 	protected async getDocument(
 		song: SongDetailsResponseDto,
-		language: string,
+		language: string
 	): Promise<SongSearchIndex> {
 		const getLyrics = () => {
 			return song.lyrics.find((item) => item.language === language)?.plainText;
@@ -73,9 +70,7 @@ Artists: ${getArtists().join(", ")}
 			engine: song.singers
 				.map((item) => item.engine ?? undefined)
 				.filter(Boolean) as string[],
-			publishedAt: song.publishedAt
-				? new Date(song.publishedAt).getTime()
-				: undefined,
+			publishedAt: song.publishedAt ? new Date(song.publishedAt).getTime() : undefined,
 			_vectors: this.buildVectors(vectors.data?.embeddings[0]),
 		};
 	}

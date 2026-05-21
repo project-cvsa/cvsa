@@ -126,7 +126,7 @@ export class EmbeddingManager {
 		const tokenizer = await this.getTokenizer();
 		const session = await this.getModelSession();
 
-		const { input_ids } = await tokenizer(texts, {
+		const { input_ids } = tokenizer(texts, {
 			add_special_tokens: false,
 			return_tensor: false,
 		});
@@ -143,7 +143,7 @@ export class EmbeddingManager {
 
 		const offsets: number[] = [
 			0,
-			...cumsum(input_ids.slice(0, -1).map((x: string) => x.length)),
+			...cumsum(input_ids.slice(0, -1).map((x: number[]) => x.length)),
 		];
 		const flattened_input_ids = input_ids.flat();
 

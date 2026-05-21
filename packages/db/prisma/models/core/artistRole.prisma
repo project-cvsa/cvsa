@@ -3,6 +3,7 @@ model ArtistRole {
     name           String
     /// [LocalizedField]
     localizedNames Json?      @map("localized_names")
+    language       String     @default("zh")
     creations      Creation[]
     createdAt      DateTime   @default(now()) @map("created_at")
     updatedAt      DateTime   @updatedAt @map("updated_at")

@@ -7,6 +7,7 @@ import {
 	songHandler,
 	engineHandler,
 	artistHandler,
+	artistRoleHandler,
 	singerHandler,
 } from "@handlers/index";
 import { errorHandler } from "./errorHandler";
@@ -64,6 +65,7 @@ export const app = new Elysia({
 	.use(songHandler)
 	.use(engineHandler)
 	.use(artistHandler)
+	.use(artistRoleHandler)
 	.use(singerHandler)
 	.use(devHandler)
 	.listen(16412);

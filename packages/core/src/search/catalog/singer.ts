@@ -19,7 +19,7 @@ export class SingerSearchService extends ISearchService<
 
 	protected async getDocument(
 		singer: SingerDetailsResponseDto,
-		language: string,
+		language: string
 	): Promise<SingerSearchIndex> {
 		const vectors = await this.embeddingManager.embeddings.post({
 			texts: [
