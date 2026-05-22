@@ -18,7 +18,7 @@ export class ArtistRoleSearchService extends ISearchService<
 
 	protected async getDocument(
 		role: ArtistRoleDetailsResponseDto,
-		language: string,
+		language: string
 	): Promise<ArtistRoleSearchIndex> {
 		const vectors = await this.embeddingManager.embeddings.post({
 			texts: [`Name: ${this.getName(role, language) ?? ""}`],

@@ -177,18 +177,19 @@ async function main() {
 					await importSinger(data);
 					console.warn(`unkown type ${data.type} for file ${file}`);
 			}
-		}
-		catch (e) {
+		} catch (e) {
 			console.error("error at: ", file);
 			console.error(e);
 		}
 	}
 }
 
-main().catch((err) => {
-	console.error("fatal:", err);
-	process.exit(1);
-}).finally(() => {
-	console.log("completed");
-	process.exit(0);
-})
+main()
+	.catch((err) => {
+		console.error("fatal:", err);
+		process.exit(1);
+	})
+	.finally(() => {
+		console.log("completed");
+		process.exit(0);
+	});
