@@ -18,7 +18,7 @@
 	"[prisma]": {
 		"editor.defaultFormatter": "Prisma.prisma"
 	},
-	"[github-actions-workflow]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	"[astro]": {
+		"editor.defaultFormatter": "biomejs.biome"
 	}
 }

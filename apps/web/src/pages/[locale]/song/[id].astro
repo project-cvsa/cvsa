@@ -1,0 +1,119 @@
+---
+import Layout from "@layouts/layout.astro";
+import Condition from "@components/Condition.astro";
+import { i18nRuntime } from "@lib/i18n";
+import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
+
+const { locale, id } = Astro.params;
+const t = i18nRuntime.t({ locale });
+let data: SongDetailsResponseDto | undefined;
+try {
+	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);
+} catch (e) {
+	if (AppError.isAppError(e)) {
+		return new Response(null, {
+			status: e.statusCode,
+			statusText: e.code,
+		});
+	}
+}
+if (!data) return;
+const details: SongDetailsResponseDto = data;
+---
+
+<Layout>
+	<style>
+	.wireframe {
+		background: repeating-linear-gradient(
+			-45deg,
+			var(--background),
+			var(--background) 13px,
+			var(--wireframe-line) 13px,
+			var(--wireframe-line) 14px
+		);
+		border: var(--wireframe-line) 1px solid;
+	}
+	.wireframe-transparent {
+		background: repeating-linear-gradient(
+			-45deg,
+			transparent,
+			transparent 13px,
+			var(--wireframe-line) 13px,
+			var(--wireframe-line) 14px
+		);
+		border: var(--wireframe-line) 1px solid;
+	}
+	.highlight {
+		position: relative;
+		display: inline-block;
+		z-index: 1;
+		text-shadow: 0px 2px 4px var(--highlight-shadow-color);
+	}
+
+	.highlight::after {
+		content: "";
+		width: 100%;
+		height: 8px;
+		background-color: var(--highlight-color);
+		position: absolute;
+		left: 0;
+		bottom: 2px;
+		z-index: -1;
+	}
+	</style>
+	<header class="h-20 mb-2 flex items-center mx-auto max-w-[110rem] px-8 wireframe">
+		<div class="w-full flex justify-center">
+			<span class="font-[IBM_Plex_Mono] opacity-50 uppercase text-lg">Header</span>
+		</div>
+	</header>
+
+	<div class="flex mx-auto max-w-[110rem]">
+		<aside class="relative hidden lg:flex md:w-60 lg:w-64 xl:w-80 items-center min-h-screen">
+			<div
+				class="fixed top-24 w-[inherit] h-[calc(100vh-10rem)] overflow-y-auto py-3 px-4 wireframe"
+			>
+				<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Left Sidebar</span>
+			</div>
+		</aside>
+
+		<main
+			class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-12"
+		>
+			<div>
+				<Condition condition={details.coverUrl}>
+					<div class="w-full">
+						<img alt="视频封面" src={details.coverUrl} referrerpolicy="no-referrer">
+					</div>
+				</Condition>
+			</div>
+			<div>
+				<div class="w-full">
+					<div
+						class="w-full h-11 sm:h-13 bg-neutral-800 dark:bg-neutral-100 text-neutral-50 dark:text-neutral-900
+						text-lg sm:text-xl flex items-center justify-between px-4"
+					>
+						<span class="font-[Outfit,sans-serif] uppercase"
+							>{t("song.info.title")}</span
+						>
+						<Condition condition={locale !== "en"}>
+							<span class="opacity-60 font-[Outfit] uppercase">Information</span>
+						</Condition>
+					</div>
+					<div class="bg-neutral-50 dark:bg-neutral-800 h-20 px-6 py-5">
+						<h1 class="text-2xl sm:text-3xl font-500 highlight">{details.name}</h1>
+					</div>
+				</div>
+			</div>
+		</main>
+
+		<aside class="relative hidden md:w-60 lg:w-64 xl:w-80 2xl:flex items-center min-h-screen">
+			<div
+				class="fixed top-24 w-[inherit] h-[calc(100vh-10rem)] overflow-y-auto py-3 px-4 wireframe"
+			>
+				<div class="w-full flex justify-end">
+					<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Right Sidebar</span>
+				</div>
+			</div>
+		</aside>
+	</div>
+</Layout>
