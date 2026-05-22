@@ -4,6 +4,7 @@ import { prisma } from "@cvsa/db";
 import { getRandomId } from "@cvsa/core/internal";
 import { username } from "better-auth/plugins";
 import { bearer } from "better-auth/plugins";
+import { appLogger } from "@cvsa/logger";
 
 const DAY = 24 * 60 * 60;
 const HOUR = 60 * 60;
@@ -52,6 +53,13 @@ export const auth = betterAuth({
 		}),
 		bearer(),
 	],
+	logger: {
+		log: (level, message, ...args) => {
+			appLogger[level](message, {
+				metadata: args,
+			});
+		},
+	},
 });
 
 export { APIError as BetterAuthAPIError };

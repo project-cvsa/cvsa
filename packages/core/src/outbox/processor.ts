@@ -1,6 +1,11 @@
 import type { Job } from "bullmq";
 import type { OutboxEntryDto, OutboxService } from "@cvsa/core/internal";
-import { songSearchService, artistSearchService, singerSearchService } from "@cvsa/core/internal";
+import {
+	songSearchService,
+	artistSearchService,
+	singerSearchService,
+	artistRoleSearchService,
+} from "@cvsa/core/internal";
 import { outboxService } from "../modules/outbox/container";
 import { appLogger } from "@cvsa/logger";
 
@@ -45,5 +50,6 @@ export const processOutboxEntry = createOutboxProcessor({
 		song: songSearchService,
 		artist: artistSearchService,
 		singer: singerSearchService,
+		artistRole: artistRoleSearchService,
 	},
 });

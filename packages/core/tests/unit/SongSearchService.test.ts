@@ -81,6 +81,7 @@ const mockSongDetails: SongDetailsResponseDto = {
 			aliases: [],
 			userId: null,
 			role: {
+				language: "zh",
 				id: 1,
 				name: "",
 				localizedNames: null,
