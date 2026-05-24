@@ -1,6 +1,7 @@
 {
 	"name": "@cvsa/web",
 	"type": "module",
+	"version": "0.3.0",
 	"scripts": {
 		"dev": "bunx --bun astro dev --port 10199",
 		"build": "bunx --bun astro build",
@@ -8,16 +9,14 @@
 		"astro": "bunx --bun astro"
 	},
 	"dependencies": {
+		"@ark-ui/solid": "^5.36.2",
 		"@astrojs/node": "^10.0.3",
-		"@astrojs/react": "^5.0.1",
-		"@fanee/runtime-node": "^0.2.1",
-		"@types/react": "^19.2.14",
-		"@types/react-dom": "^19.2.3",
-		"astro": "^6.0.8",
-		"react": "^19.2.4",
-		"react-dom": "^19.2.4",
+		"@astrojs/solid-js": "^6.0.1",
+		"@cvsa/core": "workspace:*",
 		"@cvsa/db": "workspace:*",
-		"@cvsa/core": "workspace:*"
+		"@fanee/runtime-node": "^0.2.1",
+		"astro": "^6.0.8",
+		"solid-js": "^1.9.13"
 	},
 	"devDependencies": {
 		"@types/fs-extra": "^11.0.4",

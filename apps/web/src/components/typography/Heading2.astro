@@ -1,0 +1,7 @@
+---
+const { ...attrs } = Astro.props;
+---
+
+<h2 class="color-display ts-heading-2 pt-7.5" class:list={[attrs.class]} {...attrs}>
+	<slot />
+</h2>

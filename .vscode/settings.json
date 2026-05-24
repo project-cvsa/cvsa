@@ -20,5 +20,10 @@
 	},
 	"[astro]": {
 		"editor.defaultFormatter": "biomejs.biome"
-	}
+	},
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"unocss.autocomplete.matchType": "prefix",
+	"unocss.autocomplete.maxItems": 100,
+	"unocss.autocomplete.strict": false,
+	"unocss.selectionStyle": true
 }

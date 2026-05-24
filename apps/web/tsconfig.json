@@ -3,12 +3,12 @@
 	"include": [".astro/types.d.ts", "**/*"],
 	"exclude": ["dist"],
 	"compilerOptions": {
-		"jsx": "react-jsx",
-		"jsxImportSource": "react",
+		"jsx": "preserve",
+		"jsxImportSource": "solid-js",
 		"paths": {
-			"@layouts/*": ["./src/layouts/*"],
+			"@layouts/*": ["./src/components/layout/*"],
 			"@components/*": ["./src/components/*"],
-			"@lib/*": ["./src/lib/*"],
+			"@lib/*": ["./src/lib/*"]
 		}
 	}
 }

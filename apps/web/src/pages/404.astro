@@ -1,0 +1,19 @@
+---
+import DisplayL from "@components/typography/DisplayL.astro";
+import Paragraph from "@components/typography/Paragraph.astro";
+import Layout from "@layouts/Layout.astro";
+---
+
+<Layout>
+	<main class="w-screen h-screen flex items-center justify-center">
+		<div class="w-11/12 sm:w-120">
+			<DisplayL>404</DisplayL>
+			<div class="h-0.25 bg-split-lines" />
+			<Paragraph>
+				The page you requested could not be found. <br>
+				您访问的页面不存在。 <br>
+				お探しのページは見つかりませんでした。<br>
+			</Paragraph>
+		</div>
+	</main>
+</Layout>

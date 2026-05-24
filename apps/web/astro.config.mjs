@@ -1,12 +1,12 @@
 // @ts-check
 import { defineConfig } from "astro/config";
 import UnoCSS from "unocss/astro";
-import react from "@astrojs/react";
+import solid from "@astrojs/solid-js";
 import node from "@astrojs/node";
 import ssrCopyPlugin from "@lib/copy-plugin";
 
 export default defineConfig({
-	integrations: [UnoCSS({ injectReset: true }), react()],
+	integrations: [UnoCSS({ injectReset: true }), solid()],
 	adapter: node({
 		mode: "standalone",
 	}),

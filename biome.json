@@ -22,6 +22,9 @@
 				"noExplicitAny": "error",
 				"noDeprecatedImports": "error"
 			},
+			"style": {
+				"useTemplate": "off"
+			},
 			"nursery": {}
 		}
 	},

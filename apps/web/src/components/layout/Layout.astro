@@ -1,4 +1,7 @@
 ---
+import { ToastContainer } from "@components/ui/Toast";
+import { getThemeColorVariables } from "@lib/theme";
+
 interface Props {
 	title?: string;
 	description?: string;
@@ -8,6 +11,9 @@ interface Props {
 }
 
 const { title, description } = Astro.props;
+const themeCookie = Astro.cookies.get("theme");
+const theme = themeCookie?.value || "system";
+const themeCSS = getThemeColorVariables(theme);
 ---
 
 <!DOCTYPE html>
@@ -27,40 +33,39 @@ const { title, description } = Astro.props;
 		<link rel="preconnect" href="https://fonts.googleapis.com">
 		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 		<link
-			href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@90,800&family=IBM+Plex+Mono&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Outfit:wght@100..900&display=swap"
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=Outfit:wght@100..900&display=swap"
 			rel="stylesheet"
 		>
-
+		<style title="cvsa-color-vars" set:html={themeCSS}>
+		</style>
 		<style>
 		:root {
 			--wireframe-line: oklch(92% 0 0);
-			--grid-line: oklch(94% 0 0);
-			--background: oklch(96% 0 0);
 			--highlight-color: oklch(94% 50% 105);
 			--highlight-shadow-color: rgba(67, 46, 18, 0);
 		}
 		@media (prefers-color-scheme: dark) {
 			:root {
 				--wireframe-line: oklch(27% 0 0);
-				--grid-line: oklch(16% 0 0);
-				--background: oklch(8% 0 0);
 				--highlight-color: oklch(94% 52% 105deg);
 				--highlight-shadow-color: rgba(67, 46, 18, 0.6);
 			}
 		}
 		body {
-			font-family: "Inter", system-ui, sans-serif;
+			font-size: 16px;
+			font-weight: 400;
+			font-family: "Outfit", system-ui, sans-serif;
 			background-color: var(--background);
 			background-image:
-				linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
-				linear-gradient(to bottom, var(--grid-line) 1px, var(--background) 1px);
+				linear-gradient(to right, var(--grid-lines) 1px, transparent 1px),
+				linear-gradient(to bottom, var(--grid-lines) 1px, var(--background) 1px);
 			background-size: 100px 100px;
 		}
 		</style>
 		<slot name="head" />
 	</head>
 
-	<body class=" dark:text-white overflow-x-hidden">
+	<body class="dark:text-white overflow-x-hidden">
 		<slot />
 	</body>
 </html>
