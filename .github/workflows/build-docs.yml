@@ -30,6 +30,8 @@ jobs:
 
       - name: Build docs app
         run: bun run build --filter=docs
+        env:
+          NEXT_PUBLIC_SITE_URL: https://docs.projectcvsa.com
 
       - name: Verify build output
         run: |

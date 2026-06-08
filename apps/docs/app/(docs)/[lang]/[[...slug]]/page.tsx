@@ -8,6 +8,7 @@ import { gitConfig } from "@/lib/layout.shared";
 import { MarkdownCopyButton, ViewOptionsPopover } from "@/components/page-actions";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { t } from "@/lib/i18n";
+import { siteUrl } from "@/lib/env";
 
 export async function generateStaticParams() {
 	const pages = source.getPages();
@@ -79,20 +80,19 @@ export async function generateMetadata({
 }): Promise<Metadata> {
 	const { slug, lang } = await params;
 	const page = source.getPage(slug, lang);
-	const baseUrl = "https://docs.projectcvsa.com";
 	if (!page) notFound();
 	const cleanSlug = slug ? slug : [];
 	const currentPage = cleanSlug.join("/");
-	const url = `${baseUrl}/${lang}/${currentPage}`;
+	const url = `${siteUrl}/${lang}/${currentPage}`;
 	return {
 		title: page.data.title,
 		description: page.data.description,
 		alternates: {
 			canonical: url,
 			languages: {
-				zh: `${baseUrl}/zh/${currentPage}`,
-				en: `${baseUrl}/en/${currentPage}`,
-				"x-default": `${baseUrl}/en/${currentPage}`,
+				zh: `${siteUrl}/zh/${currentPage}`,
+				en: `${siteUrl}/en/${currentPage}`,
+				"x-default": `${siteUrl}/en/${currentPage}`,
 			},
 		},
 		openGraph: {

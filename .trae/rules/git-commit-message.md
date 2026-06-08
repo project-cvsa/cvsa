@@ -1,6 +1,7 @@
 ---
 alwaysApply: true
 scene: git_message
+language: en_US
 ---
 
 ### 基本格式
