@@ -2,15 +2,34 @@ import "./global.css";
 import { Inter } from "next/font/google";
 import { UpdateLanguage } from "@/components/update-language";
 import type { Metadata } from "next";
+import { SITE_TITLE, ogImageUrl, OG_IMAGE_SIZE } from "@/lib/metadata";
 
 const inter = Inter({
 	subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-	title: "Not Found - Project CVSA",
+	title: `Not Found - ${SITE_TITLE}`,
 	description: "The page you are looking for does not exist.",
 	robots: { index: false, follow: false },
+	openGraph: {
+		title: `Not Found - ${SITE_TITLE}`,
+		description: "The page you are looking for does not exist.",
+		images: [
+			{
+				url: ogImageUrl(),
+				width: OG_IMAGE_SIZE,
+				height: OG_IMAGE_SIZE,
+				alt: SITE_TITLE,
+			},
+		],
+	},
+	// twitter: {
+	// 	card: "summary_large_image",
+	// 	title: `Not Found - ${SITE_TITLE}`,
+	// 	description: "The page you are looking for does not exist.",
+	// 	images: [ogImageUrl()],
+	// },
 };
 
 export default function NotFound() {

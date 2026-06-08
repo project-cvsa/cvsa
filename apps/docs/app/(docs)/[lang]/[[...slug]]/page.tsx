@@ -9,6 +9,7 @@ import { MarkdownCopyButton, ViewOptionsPopover } from "@/components/page-action
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { t } from "@/lib/i18n";
 import { siteUrl } from "@/lib/env";
+import { ogImageUrl, OG_IMAGE_SIZE } from "@/lib/metadata";
 
 export async function generateStaticParams() {
 	const pages = source.getPages();
@@ -84,6 +85,7 @@ export async function generateMetadata({
 	const cleanSlug = slug ? slug : [];
 	const currentPage = cleanSlug.join("/");
 	const url = `${siteUrl}/${lang}/${currentPage}`;
+	const ogImage = ogImageUrl();
 	return {
 		title: page.data.title,
 		description: page.data.description,
@@ -99,14 +101,23 @@ export async function generateMetadata({
 			title: page.data.title,
 			description: page.data.description,
 			url,
-			siteName: "Project CVSA",
+			siteName: t("siteName", lang),
 			locale: lang === "zh" ? "zh_CN" : "en_US",
 			type: "article",
+			images: [
+				{
+					url: ogImage,
+					width: OG_IMAGE_SIZE,
+					height: OG_IMAGE_SIZE,
+					alt: page.data.title,
+				},
+			],
 		},
-		twitter: {
-			card: "summary_large_image",
-			title: page.data.title,
-			description: page.data.description,
-		},
+		// twitter: {
+		// 	card: "summary_large_image",
+		// 	title: page.data.title,
+		// 	description: page.data.description,
+		// 	images: [ogImage],
+		// },
 	};
 }

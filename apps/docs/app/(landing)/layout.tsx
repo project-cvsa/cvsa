@@ -3,15 +3,16 @@ import { Funnel_Sans } from "next/font/google";
 import { UpdateLanguage } from "@/components/update-language";
 import type { Metadata } from "next";
 import { siteUrl } from "@/lib/env";
+import { t } from "@/lib/i18n";
+import { SITE_TITLE, SITE_DESCRIPTION, ogImageUrl, OG_IMAGE_SIZE } from "@/lib/metadata";
 
 const inter = Funnel_Sans({
 	subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-	title: "Project CVSA | Archive for a Better Future",
-	description:
-		"Project CVSA is an archive program aiming to collect and preserve all information about the Chinese singing voice synthesis community.",
+	title: SITE_TITLE,
+	description: SITE_DESCRIPTION,
 	alternates: {
 		canonical: siteUrl,
 		languages: {
@@ -21,20 +22,27 @@ export const metadata: Metadata = {
 		},
 	},
 	openGraph: {
-		title: "Project CVSA | Archive for a Better Future",
-		description:
-			"Project CVSA is an archive program aiming to collect and preserve all information about the Chinese singing voice synthesis community.",
+		title: SITE_TITLE,
+		description: SITE_DESCRIPTION,
 		url: siteUrl,
-		siteName: "Project CVSA",
+		siteName: t("siteName", "en"),
 		locale: "en_US",
 		type: "website",
+		images: [
+			{
+				url: ogImageUrl(),
+				width: OG_IMAGE_SIZE,
+				height: OG_IMAGE_SIZE,
+				alt: SITE_TITLE,
+			},
+		],
 	},
-	twitter: {
-		card: "summary_large_image",
-		title: "Project CVSA | Archive for a Better Future",
-		description:
-			"Project CVSA is an archive program aiming to collect and preserve all information about the Chinese singing voice synthesis community.",
-	},
+	// twitter: {
+	// 	card: "summary_large_image",
+	// 	title: SITE_TITLE,
+	// 	description: SITE_DESCRIPTION,
+	// 	images: [ogImageUrl()],
+	// },
 };
 
 export default function Layout({ children }: { children: React.ReactNode }) {
