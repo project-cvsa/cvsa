@@ -1,7 +1,6 @@
 ---
 title: 核心数据表
 description: 爬虫系统关键数据表的结构与用途。
-og:title: Project CVSA 核心数据表
 ---
 
 ## snapshot_schedule

@@ -1,6 +1,5 @@
 {
 	"title": "旧版爬虫文档",
-	"og:title": "Project CVSA 旧版爬虫文档",
 	"pages": [
 		"architecture-overview",
 		"crawling-lifecycle",

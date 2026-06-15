@@ -11,7 +11,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
 		return {
 			url,
-			lastModified: new Date(),
+			// lastModified: new Date(),
 			changeFrequency: "weekly" as const,
 			priority: page.slugs.length === 0 ? 0.8 : 0.6,
 		};
@@ -19,7 +19,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
 	const landingPage: MetadataRoute.Sitemap[number] = {
 		url: siteUrl,
-		lastModified: new Date(),
+		// lastModified: new Date(),
 		changeFrequency: "monthly",
 		priority: 1.0,
 	};

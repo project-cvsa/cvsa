@@ -1,7 +1,6 @@
 ---
 title: 流程规范
 description: 了解档案馆的开发工作流和相关规范。
-og:title: Project CVSA 流程规范
 ---
 
 ## 分支命名

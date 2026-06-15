@@ -84,7 +84,9 @@ export async function generateMetadata({
 	if (!page) notFound();
 	const cleanSlug = slug ? slug : [];
 	const currentPage = cleanSlug.join("/");
-	const url = `${siteUrl}/${lang}/${currentPage}`;
+	const pagePath = currentPage ? `/${currentPage}` : "";
+
+	const url = `${siteUrl}/${lang}${currentPage}`;
 	const ogImage = ogImageUrl();
 	return {
 		title: page.data.title,
@@ -92,9 +94,9 @@ export async function generateMetadata({
 		alternates: {
 			canonical: url,
 			languages: {
-				zh: `${siteUrl}/zh/${currentPage}`,
-				en: `${siteUrl}/en/${currentPage}`,
-				"x-default": `${siteUrl}/en/${currentPage}`,
+				zh: `${siteUrl}/zh${pagePath}`,
+				en: `${siteUrl}/en${pagePath}`,
+				"x-default": `${siteUrl}/en${pagePath}`,
 			},
 		},
 		openGraph: {

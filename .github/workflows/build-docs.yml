@@ -12,10 +12,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
-
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
