@@ -1,6 +1,6 @@
 import "./global.css";
 import { Inter } from "next/font/google";
-import { UpdateLanguage } from "@/components/update-language";
+import { UpdateLanguage } from "@/components/UpdateLanguage";
 import type { Metadata } from "next";
 import { SITE_TITLE_404, SITE_DESCRIPTION_404, ogImageUrl, OG_IMAGE_SIZE } from "@/lib/metadata";
 

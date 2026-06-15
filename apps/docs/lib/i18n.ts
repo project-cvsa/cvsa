@@ -38,9 +38,13 @@ type Resource = typeof resources;
 type Lang = keyof Resource;
 type MessageKey = keyof Resource[Lang];
 
+function isLang(lang: string): lang is Lang {
+	return lang in resources;
+}
+
 export function t(key: MessageKey, lang: string): string {
-	if (resources[lang as Lang] === undefined) {
+	if (!isLang(lang)) {
 		return key;
 	}
-	return resources[lang as Lang][key] || key;
+	return resources[lang][key] || key;
 }

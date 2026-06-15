@@ -5,7 +5,7 @@ import { getMDXComponents } from "@/components/mdx";
 import type { Metadata } from "next";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import { gitConfig } from "@/lib/layout.shared";
-import { MarkdownCopyButton, ViewOptionsPopover } from "@/components/page-actions";
+import { MarkdownCopyButton, ViewOptionsPopover } from "@/components/PageActions";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { t } from "@/lib/i18n";
 import { siteUrl } from "@/lib/env";

@@ -1,6 +1,6 @@
 import "./global.css";
 import { Funnel_Sans } from "next/font/google";
-import { UpdateLanguage } from "@/components/update-language";
+import { UpdateLanguage } from "@/components/UpdateLanguage";
 import type { Metadata } from "next";
 import { siteUrl } from "@/lib/env";
 import { t } from "@/lib/i18n";
