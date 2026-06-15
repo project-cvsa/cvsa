@@ -1,5 +1,4 @@
 model Artist {
-<<<<<<< HEAD
     id                    Int          @id @default(autoincrement())
     name                  String?
     /// [LocalizedField]
@@ -14,23 +13,6 @@ model Artist {
     user                  User?        @relation(fields: [userId], references: [id])
     userId                String?         @unique @map("user_id")
     deletedAt             DateTime?    @map("deleted_at")
-=======
-    id                    Int        @id @default(autoincrement())
-    name                  String?
-    /// [LocalizedField]
-    localizedNames        Json?      @map("localized_names")
-    language              String     @default("zh")
-    aliases               String[]
-    description           String?
-    /// [LocalizedField]
-    localizedDescriptions Json?      @map("localized_descriptions")
-    creations             Creation[]
-    createdAt             DateTime   @default(now()) @map("created_at")
-    updatedAt             DateTime   @updatedAt @map("updated_at")
-    user                  User?      @relation(fields: [userId], references: [id])
-    userId                String?    @unique @map("user_id")
-    deletedAt             DateTime?  @map("deleted_at")
->>>>>>> origin/develop
 
     @@map("artist")
     @@schema("core")

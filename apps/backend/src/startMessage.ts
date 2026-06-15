@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { env } from "@lib/env";
-=======
-import { env } from "@cvsa/env";
->>>>>>> origin/develop
 import chalk from "chalk";
 import os from "node:os";
 

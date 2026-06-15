@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
     "$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
     "root": true,
     "assist": {
@@ -42,60 +41,4 @@
         "enabled": true,
         "useIgnoreFile": true
     }
-=======
-	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
-	"assist": {
-		"actions": {
-			"source": {
-				"useSortedKeys": "off",
-				"organizeImports": "off"
-			}
-		},
-		"enabled": true
-	},
-	"formatter": {
-		"enabled": true,
-		"indentStyle": "tab",
-		"indentWidth": 4,
-		"lineWidth": 100,
-		"formatWithErrors": true
-	},
-	"linter": {
-		"rules": {
-			"suspicious": {
-				"noExplicitAny": "error",
-				"noDeprecatedImports": "error"
-			},
-			"nursery": {}
-		}
-	},
-	"javascript": {
-		"formatter": {
-			"enabled": true,
-			"indentStyle": "tab",
-			"quoteStyle": "double",
-			"semicolons": "always",
-			"trailingCommas": "es5"
-		}
-	},
-	"json": {
-		"assist": {
-			"enabled": false
-		},
-		"formatter": {
-			"enabled": true
-		},
-		"linter": {
-			"enabled": false
-		}
-	},
-	"vcs": {
-		"clientKind": "git",
-		"enabled": true,
-		"useIgnoreFile": true
-	},
-	"files": {
-		"includes": ["**/*", "!.zed/*", "!packages/typescript-config/base.json", "!**/*.grit"]
-	}
->>>>>>> origin/develop
 }

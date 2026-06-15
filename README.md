@@ -57,21 +57,11 @@ cvsa/
 
 3. **Set up environment variables**
 
-<<<<<<< HEAD
     Create `.env` files in each service directory following their `.env.example` templates:
 
     ```bash
     cp apps/frontend/.env.example apps/frontend/.env
     cp packages/db/.env.example packages/db/.env
-=======
-    Create `.env` and `.env.test` files in each service directory following their `.env.example` templates:
-
-    ```bash
-    cp apps/frontend/.env.example apps/frontend/.env
-    cp apps/frontend/.env.example apps/frontend/.env.test
-    cp packages/db/.env.example packages/db/.env
-    cp packages/core/.env.example packages/core/.env.test
->>>>>>> origin/develop
     ```
 
 4. **Initialize the database**

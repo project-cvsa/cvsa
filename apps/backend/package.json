@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
     "name": "@project-cvsa/backend",
     "type": "module",
     "version": "0.0.1",
@@ -34,47 +33,4 @@
         "@project-cvsa/db": "workspace:*",
         "@project-cvsa/configs": "workspace:*"
     }
-=======
-	"name": "@cvsa/backend",
-	"type": "module",
-	"version": "2.1.0",
-	"scripts": {
-		"lint": "bunx --bun biome lint",
-		"dev": "NODE_ENV=development bun --watch src/index.ts",
-		"start": "bun src/index.ts",
-		"test": "bun test --concurrent",
-		"test:coverage": "bun test --coverage --concurrent",
-		"typecheck": "bunx --bun tsc --noEmit"
-	},
-	"devDependencies": {
-		"@biomejs/biome": "^2.4.4",
-		"@types/bun": "latest",
-		"@cvsa/typescript-config": "workspace:*"
-	},
-	"dependencies": {
-		"@better-auth/prisma-adapter": "^1.5.4",
-		"@cvsa/core": "workspace:*",
-		"@cvsa/db": "workspace:*",
-		"@cvsa/env": "workspace:*",
-		"@cvsa/logger": "workspace:*",
-		"@elysiajs/eden": "^1.4.9",
-		"@elysiajs/openapi": "^1.4.14",
-		"@elysiajs/opentelemetry": "^1.4.10",
-		"@fanee/runtime-node": "^0.2.1",
-		"@opentelemetry/api": "^1.9.1",
-		"@opentelemetry/exporter-trace-otlp-proto": "^0.214.0",
-		"@opentelemetry/sdk-trace-node": "^2.6.1",
-		"@prisma/adapter-pg": "^7.4.1",
-		"@t3-oss/env-core": "^0.13.10",
-		"argon2": "^0.44.0",
-		"better-auth": "^1.5.4",
-		"chalk": "^5.6.2",
-		"elysia": "^1.4.26",
-		"elysia-ip": "^1.0.10",
-		"elysia-rate-limit": "^4.5.0",
-		"nanoid": "^5.1.6",
-		"pino": "^10.3.1",
-		"zod": "^4.3.6"
-	}
->>>>>>> origin/develop
 }

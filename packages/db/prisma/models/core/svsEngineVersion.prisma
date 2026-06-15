@@ -1,5 +1,4 @@
 model SvsEngineVersion {
-<<<<<<< HEAD
     id                      Int                      @id @default(autoincrement())
     versionString           String                   @map("version_string")
     singerSvsEngineVersions SingerSvsEngineVersion[]
@@ -10,17 +9,6 @@ model SvsEngineVersion {
     createdAt               DateTime                 @default(now()) @map("created_at")
     updatedAt               DateTime                 @updatedAt @map("updated_at")
     deletedAt               DateTime?                @map("deleted_at")
-=======
-    id            Int           @id @default(autoincrement())
-    versionString String        @map("version_string")
-    svsEngine     SvsEngine     @relation(fields: [svsEngineId], references: [id])
-    svsEngineId   Int           @map("svs_engine_id")
-    voicebanks    Voicebank[]
-    createdAt     DateTime      @default(now()) @map("created_at")
-    updatedAt     DateTime      @updatedAt @map("updated_at")
-    deletedAt     DateTime?     @map("deleted_at")
-    performances  Performance[]
->>>>>>> origin/develop
 
     @@map("svs_engine_version")
     @@schema("core")

@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
     "extends": "@project-cvsa/configs/tsconfig/server.json",
     "compilerOptions": {
         "paths": {
@@ -13,16 +12,4 @@
             "@/*": ["./src/*"]
         },
     }
-=======
-	"extends": "@cvsa/typescript-config/base.json",
-	"compilerOptions": {
-		"paths": {
-			"@/*": ["./src/*"],
-			"@handlers/*": ["./src/handlers/*"],
-			"@common/*": ["./src/common/*"]
-		}
-	},
-	"include": ["./src/**/*", "./tests/**/*"],
-	"exclude": ["../../packages/**/*"]
->>>>>>> origin/develop
 }

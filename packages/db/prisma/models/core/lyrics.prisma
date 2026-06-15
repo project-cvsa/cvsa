@@ -1,5 +1,4 @@
 model Lyrics {
-<<<<<<< HEAD
     id        Int       @id @default(autoincrement())
     song      Song      @relation(fields: [songId], references: [id])
     songId    Int       @map("song_id")
@@ -10,19 +9,6 @@ model Lyrics {
     createdAt DateTime  @default(now()) @map("created_at")
     updatedAt DateTime  @updatedAt @map("updated_at")
     deletedAt DateTime? @map("deleted_at")
-=======
-    id           Int       @id @default(autoincrement())
-    song         Song      @relation(fields: [songId], references: [id])
-    songId       Int       @map("song_id")
-    language     String   @default("zh")
-    isTranslated Boolean   @default(false) @map("is_translated")
-    plainText    String?   @map("plain_text")
-    ttml         String?
-    lrc          String?
-    createdAt    DateTime  @default(now()) @map("created_at")
-    updatedAt    DateTime  @updatedAt @map("updated_at")
-    deletedAt    DateTime? @map("deleted_at")
->>>>>>> origin/develop
 
     @@map("lyrics")
     @@schema("core")

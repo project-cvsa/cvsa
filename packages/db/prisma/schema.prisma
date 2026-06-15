@@ -12,15 +12,7 @@ datasource db {
     schemas  = ["core", "meta", "platform", "auth"]
 }
 
-generator zod {
-	provider     = "prisma-zod"
-    output       = "./zod"
-    extendSchema = "zodSchema"
-    dateSchema   = "string"
-    bigintSchema = "number"
-}
-
-/*
+/* 
 # CVSA (Chinese Vocal Synthesis Archive) Database Schema
 
 ## Overview
@@ -35,9 +27,9 @@ The database is partitioned into several PostgreSQL schemas.
 
 ### A. [core] - The Encyclopedia
 This is the heart of the project. It stores universal SVS data that remains objective across platforms.
-- Entities: Songs, Singers (virtual characters), Artists (producers/illustrators),
+- Entities: Songs, Singers (virtual characters), Artists (producers/illustrators), 
 SVS Engines (Vocaloid, Synthesizer V), Voicebanks, Albums, and Tags.
-- Localization: Uses `LocalizedField` (JSON) to support multi-language metadata
+- Localization: Uses `LocalizedField` (JSON) to support multi-language metadata 
 (Simplified Chinese, Traditional Chinese, Japanese, English, etc.).
 - Versioning: Supports tracking of specific SVS engine versions and voicebank iterations.
 
@@ -52,13 +44,13 @@ Handles user accounts, session persistence, and secure authentication.
 
 ### D. [meta] - Governance & Auditing
 Manages the "data about data."
-- Audit Logs: The `History` table tracks every mutation (Create/Update/Delete)
+- Audit Logs: The `History` table tracks every mutation (Create/Update/Delete) 
 in the `core` schema for accountability and rollbacks.
 - Permissions: Granular action-based permissions assigned to roles.
 
 ## 3. Technical Constraints & Design Patterns
 - Soft Deletion: Most core entities implement a `deletedAt` timestamp for soft-deletion support.
-- Modular Relations: Many-to-Many relations are extracted into separate files
+- Modular Relations: Many-to-Many relations are extracted into separate files 
 within the `/relations` directory to keep entity definitions clean and prevent Prisma file bloat.
 
 ## 4. Current Status & TODO

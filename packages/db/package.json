@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
     "name": "@project-cvsa/db",
     "type": "module",
     "module": "index.ts",
@@ -24,34 +23,4 @@
         "@prisma/client": "^7.4.1",
         "@types/pg": "^8.16.0"
     }
-=======
-	"name": "@cvsa/db",
-	"type": "module",
-	"main": "src/index.ts",
-	"module": "src/index.ts",
-	"scripts": {
-		"gen": "bunx --bun prisma generate",
-		"migrate": "bunx --bun prisma migrate dev --create-only",
-		"migrate:dev": "bunx --bun prisma migrate dev",
-		"push": "bunx --bun prisma db push",
-		"db:deploy": "bunx --bun prisma migrate deploy",
-		"test:setup": "NODE_ENV=test bunx --bun prisma db push --accept-data-loss",
-		"test:reset": "NODE_ENV=test bunx --bun prisma db push --force-reset",
-		"studio": "bunx --bun prisma studio",
-		"reset": "bunx --bun prisma migrate reset"
-	},
-	"devDependencies": {
-		"@cvsa/prisma-zod": "^3.6.0",
-		"@cvsa/typescript-config": "workspace:*",
-		"prisma": "^7.6.0",
-		"prisma-json-types-generator": "^4.1.1"
-	},
-	"dependencies": {
-		"@cvsa/env": "workspace:*",
-		"@prisma/adapter-pg": "^7.6.0",
-		"@prisma/client": "^7.6.0",
-		"@types/pg": "^8.16.0",
-		"zod": "^4.3.6"
-	}
->>>>>>> origin/develop
 }

@@ -1,18 +1,9 @@
 ---
 alwaysApply: true
 scene: git_message
-<<<<<<< HEAD
 language: en_US
 ---
 
-=======
----
-
-## 提交信息
-
-项目采用 Conventional Commits 规范来格式化提交信息。
-
->>>>>>> origin/develop
 ### 基本格式
 
 每条提交信息应遵循以下结构（只允许使用英文）：
@@ -20,15 +11,9 @@ language: en_US
 ```text
 <类型>(<作用域>): <描述>
 
-<<<<<<< HEAD
 [正文(英文描述)]
 
 [脚注(英文描述)]
-=======
-[正文]
-
-[脚注]
->>>>>>> origin/develop
 ```
 
 -   **类型**：必填，表示本次提交的类别（见下文“类型列表”）。
