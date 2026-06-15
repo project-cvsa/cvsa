@@ -1,0 +1,15 @@
+{
+	"error.unauthorized": "Unauthorized",
+	"error.song.notfound": "This song does not exist.",
+	"error.lyric.notfound": "This lyric does not exist.",
+	"error.signup.failed": "Unable to sign up. Please try again in a moment.",
+	"error.login.failed": "Unable to log in. Please try again in a moment.",
+	"error.not-found": "The requested resource was not found.",
+	"error.invalid-cred": "Invalid Credentials",
+	"error.internal": "Internal Error",
+	"error.validation": "Invalid Input",
+	"error.username-taken": "This username is already taken.",
+	"error.email-taken": "This email is already registered.",
+	"error.artist.notfound": "This artist does not exist.",
+	"error.engine.notfound": "This engine does not exist."
+}

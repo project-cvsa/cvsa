@@ -1,0 +1,15 @@
+{
+	"error.unauthorized": "未登录",
+	"error.song.notfound": "此歌曲不存在",
+	"error.lyric.notfound": "此歌词不存在",
+	"error.signup.failed": "很抱歉，暂时无法注册",
+	"error.login.failed": "很抱歉，暂时无法登录",
+	"error.not-found": "请求的路径不存在",
+	"error.invalid-cred": "提交的凭据无效",
+	"error.internal": "服务器内部错误",
+	"error.validation": "输入信息有误",
+	"error.username-taken": "此用户名已被注册",
+	"error.email-taken": "此邮箱已被注册",
+	"error.artist.notfound": "该创作者不存在",
+	"error.engine.notfound": "该引擎不存在"
+}

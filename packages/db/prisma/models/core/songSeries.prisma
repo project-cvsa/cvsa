@@ -6,6 +6,7 @@ model SongSeries {
     description           String?
     /// [LocalizedField]
     localizedDescriptions Json?          @map("localized_descriptions")
+    language              String        @default("zh")
     songInSeries          SongInSeries[]
     createdAt             DateTime       @default(now()) @map("created_at")
     updatedAt             DateTime       @updatedAt @map("updated_at")

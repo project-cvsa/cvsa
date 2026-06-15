@@ -1,0 +1,9 @@
+engine biome(1.0)
+language js(typescript)
+
+`z.any()` as $any where {
+	register_diagnostic(
+		span = $any,
+		message = "Unexpected z.any(). Specify a different schema."
+	)
+}

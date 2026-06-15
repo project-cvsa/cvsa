@@ -1,4 +1,5 @@
 model ArtistRole {
+<<<<<<< HEAD
     id             Int       @id @default(autoincrement())
     role           String
     /// [LocalizedField]
@@ -10,6 +11,17 @@ model ArtistRole {
     createdAt      DateTime  @default(now()) @map("created_at")
     updatedAt      DateTime  @updatedAt @map("updated_at")
     deletedAt      DateTime? @map("deleted_at")
+=======
+    id             Int        @id @default(autoincrement())
+    name           String
+    /// [LocalizedField]
+    localizedNames Json?      @map("localized_names")
+    language       String     @default("zh")
+    creations      Creation[]
+    createdAt      DateTime   @default(now()) @map("created_at")
+    updatedAt      DateTime   @updatedAt @map("updated_at")
+    deletedAt      DateTime?  @map("deleted_at")
+>>>>>>> origin/develop
 
     @@map("artist_role")
     @@schema("core")

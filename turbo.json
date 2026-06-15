@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
     "$schema": "https://turbo.build/schema.json",
     "tasks": {
         "build": {
@@ -15,4 +16,66 @@
             "outputs": ["out/**"]
         }
     }
+=======
+	"remoteCache": {
+		"enabled": true
+	},
+	"$schema": "https://turbo.build/schema.json",
+	"ui": "tui",
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"outputs": ["dist/**", ".output/**"]
+		},
+		"dev": {
+			"cache": false,
+			"persistent": true
+		},
+		"lint": {
+			"inputs": ["tests/**.ts", "src/**.ts", "biome.json", ".biome*"]
+		},
+		"test": {
+			"inputs": [
+				"src/**.ts",
+				"tests/**.ts",
+				"tsconfig.json",
+				"$TURBO_ROOT$/packages/typescript-config/base.json"
+			]
+		},
+		"test:coverage": {},
+		"setup": {
+			"cache": false,
+			"dependsOn": ["@cvsa/db#push", "@cvsa/db#test:setup", "@cvsa/db#gen"]
+		},
+		"setup:ci": {
+			"cache": false,
+			"dependsOn": ["@cvsa/db#test:setup", "@cvsa/db#gen"]
+		},
+		"@cvsa/db#test:setup": {
+			"cache": false
+		},
+		"@cvsa/db#push": {
+			"cache": false
+		},
+		"@cvsa/db#gen": {
+			"cache": false
+		},
+		"typecheck": {
+			"inputs": [
+				"src/**.ts",
+				"tsconfig.json",
+				"$TURBO_ROOT$/packages/typescript-config/base.json"
+			]
+		},
+		"@cvsa/db#test:reset": {
+			"cache": false
+		},
+		"@cvsa/core#test:reset": {
+			"cache": false
+		},
+		"//test:reset": {
+			"dependsOn": ["@cvsa/db#test:reset", "@cvsa/core#test:reset"]
+		}
+	}
+>>>>>>> origin/develop
 }

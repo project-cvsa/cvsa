@@ -1,4 +1,5 @@
 model Session {
+<<<<<<< HEAD
     id             String   @id
     user           User     @relation(fields: [userId], references: [id])
     userId         String      @map("user_id")
@@ -8,6 +9,20 @@ model Session {
     createdAt      DateTime @default(now()) @map("created_at")
     lastVerifiedAt DateTime @default(now()) @map("last_verified_at")
 
+=======
+    id         String   @id
+    token      String
+    user       User     @relation(fields: [userId], references: [id])
+    userId     String   @map("user_id")
+    ipAddress  String?  @map("ip_address")
+    userAgent  String?  @map("user_agent")
+    expiresAt  DateTime
+    createdAt  DateTime @default(now()) @map("created_at")
+    updatedAt  DateTime @updatedAt @map("updated_at")
+
+    @@unique([token])
+    @@index([userId])
+>>>>>>> origin/develop
     @@map("session")
     @@schema("auth")
 }

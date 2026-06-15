@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # @project-cvsa/db
+=======
+# @cvsa/db
+>>>>>>> origin/develop
 
 ## Available Scripts
 

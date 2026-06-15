@@ -1,0 +1,15 @@
+[test]
+coveragePathIgnorePatterns = [
+  "**/db/prisma/**",
+  "**/db/src/**",
+  "**/env/src/**",
+  "**/logger/src/**",
+  "**/modules/auth/**",
+  "src/error/**",
+  "**/**.interface.ts",
+  "src/utils/randomId.ts",
+  "src/types/**",
+  "**/observability/src/**",
+  "**/packages/core/**",
+  "src/*.ts"
+]

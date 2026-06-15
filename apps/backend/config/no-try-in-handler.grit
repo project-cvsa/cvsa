@@ -1,0 +1,33 @@
+engine biome(1.0)
+language js(typescript)
+
+pattern new_expr($identifier) {
+	JsNewExpression() as $n where {
+		$n <: contains JsIdentifierExpression() as $ie where {
+			$ie <: contains JsReferenceIdentifier() as $i where {
+				$i <: `$identifier`
+			}
+		}
+	}
+}
+
+JsCallExpression() as $c where {
+	$c <: contains JsStaticMemberExpression() as $sme where {
+		$sme <: contains JsName() as $jsn where {
+			$jsn <: or { `get`, `post`, `put`, `patch`, `delete`, `all` }
+		}
+	},
+	$c <: contains new_expr(identifier = `Elysia`),
+	$c <: contains JsCallArgumentList[$arg1, $arg2, ...] where {
+		$arg1 <: contains JsStringLiteralExpression(),
+		$arg2 <: contains JsArrowFunctionExpression() as $func where {
+			$func <: contains JsTryStatement() as $try where {
+				register_diagnostic(
+					span=$try,
+					message="Avoid using try-catch statement in route handlers. Errors should be handled by separate ErrorHandler.",
+					severity="warn"
+				)
+			}
+		}
+	}
+}

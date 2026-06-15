@@ -1,0 +1,22 @@
+{
+	"name": "@cvsa/logger",
+	"type": "module",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"version": "0.1.0",
+	"scripts": {
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@cvsa/typescript-config": "workspace:*"
+	},
+	"dependencies": {
+		"@cvsa/env": "workspace:*",
+		"@cvsa/observability": "workspace:*",
+		"@opentelemetry/api": "^1.9.0",
+		"@opentelemetry/api-logs": "^0.214.0",
+		"pino": "^10.3.1",
+		"pino-pretty": "^13.1.3"
+	}
+}

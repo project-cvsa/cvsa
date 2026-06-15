@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
     "name": "cvsa",
     "private": true,
     "workspaces": [
@@ -17,4 +18,32 @@
         "turbo": "latest"
     },
     "packageManager": "bun@1.3.10"
+=======
+	"name": "cvsa",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"dev": "bunx --bun turbo run dev",
+		"build": "bunx --bun turbo run build",
+		"lint": "bunx --bun turbo run lint",
+		"lint:fix": "bunx --bun biome check --write --unsafe .",
+		"format": "bunx --bun biome format --write .",
+		"ci": "bunx --bun biome ci .",
+		"test": "bunx --bun turbo run test:reset && bunx --bun turbo run test",
+		"test:coverage": "bunx --bun turbo run test:reset && bunx --bun turbo run test:coverage",
+		"typecheck": "bunx --bun turbo typecheck",
+		"setup": "bunx --bun turbo setup",
+		"setup:ci": "bunx --bun turbo setup:ci"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.10",
+		"@types/bun": "^1.3.10",
+		"turbo": "^2.8.18",
+		"typescript": "^6.0.3"
+	},
+	"packageManager": "bun@1.3.12"
+>>>>>>> origin/develop
 }

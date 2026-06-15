@@ -1,0 +1,21 @@
+{
+	"name": "@cvsa/observability",
+	"type": "module",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"version": "0.1.0",
+	"scripts": {
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@cvsa/typescript-config": "workspace:*"
+	},
+	"dependencies": {
+		"@cvsa/env": "workspace:*",
+		"@opentelemetry/api": "^1.9.0",
+		"@opentelemetry/api-logs": "^0.214.0",
+		"@opentelemetry/resources": "^2.6.1",
+		"@opentelemetry/sdk-node": "^0.214.0"
+	}
+}
