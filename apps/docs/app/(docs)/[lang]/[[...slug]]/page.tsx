@@ -86,7 +86,7 @@ export async function generateMetadata({
 	const currentPage = cleanSlug.join("/");
 	const pagePath = currentPage ? `/${currentPage}` : "";
 
-	const url = `${siteUrl}/${lang}${currentPage}`;
+	const url = `${siteUrl}/${lang}${pagePath}`;
 	const ogImage = ogImageUrl();
 	return {
 		title: page.data.title,
