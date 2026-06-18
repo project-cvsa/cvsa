@@ -15,7 +15,7 @@ description: 档案馆项目的代码风格、架构决策及类型安全规范�
         - 其它源码文件使用 `camelCase`（如 `rateLimitPlugin.ts`）
 - **类型声明**:
     - 严禁使用 `any` 与 `z.any()`
-    - 严谨在第一方代码中使用`@ts-ignore`与`@ts-expect-error`
+    - 严禁在第一方代码中使用`@ts-ignore`与`@ts-expect-error`
     - 定义对象结构和类实现时使用 `interface`；定义联合类型、元组或类型别名时使用 `type`。
 - **逻辑组织**:
     - 对于异步操作，统一使用 `async/await`，禁止使用 `.then()` 链式调用。

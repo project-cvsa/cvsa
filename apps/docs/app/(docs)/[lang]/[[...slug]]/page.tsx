@@ -56,7 +56,7 @@ export default async function Page({
 				)}
 				<ViewOptionsPopover
 					lang={lang}
-					markdownUrl={`/raw/${currentPage}.mdx`}
+					markdownUrl={`/raw/${lang}/${currentPage}.mdx`}
 					githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/apps/docs/content/${page.path}`}
 				/>
 			</div>
