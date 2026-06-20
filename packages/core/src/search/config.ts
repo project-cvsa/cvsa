@@ -14,7 +14,15 @@ export const INDEX_SETTINGS: Record<string, Settings> = {
 		],
 		filterableAttributes: ["type", "tags", "singers", "engine"],
 		sortableAttributes: ["publishedAt", "bilibiliViews"],
-		rankingRules: ["attribute", "words", "proximity", "exactness", "typo", "sort"],
+		rankingRules: [
+			"words",
+			"typo",
+			"proximity",
+			"attributeRank",
+			"sort",
+			"wordPosition",
+			"exactness",
+		],
 		embedders: {
 			"potion-multilingual-128M": {
 				source: "userProvided",

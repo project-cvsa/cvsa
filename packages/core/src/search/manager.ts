@@ -211,6 +211,10 @@ export class SearchManager {
 			const settings = INDEX_SETTINGS[name as keyof typeof INDEX_SETTINGS];
 			const currentSettings = await index.getSettings();
 			for (const [key, value] of Object.entries(settings)) {
+				if (key === "rankingRules" && value !== currentSettings[key]) {
+					const updateTask = await index.updateSettings(settings);
+					await this.waitForTask(updateTask.taskUid);
+				}
 				if (deepEqualUnordered(value, currentSettings[key as keyof Settings])) continue;
 				// These settings do not trigger a full reindex
 				if (["displayedAttributes", "rankingRules"].includes(key)) continue;

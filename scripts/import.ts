@@ -100,11 +100,13 @@ async function importSong(data: JsonFile) {
 		else lyrics.push({ ttml: data.lyricsTTML, language: "zh" });
 	}
 
+	const publishedAt = data.publishedAt ? new Date(data.publishedAt).toISOString() : undefined;
+
 	const song = await songService.create({
 		name: data.name,
 		type: data.songType ? (songTypeMap[data.songType] as never) : undefined,
 		description: data.description,
-		publishedAt: new Date(data.publishedAt ?? "").toISOString(),
+		publishedAt,
 		performances: performances.length ? performances : undefined,
 		creations: creations.length ? creations : undefined,
 		lyrics: lyrics.length ? lyrics : undefined,
@@ -161,8 +163,20 @@ async function main() {
 		.sort();
 
 	for (const file of files) {
+		if (file.startsWith("Category:") || file.startsWith("User:")) {
+			console.log(`Skipping ${file}`);
+			continue;
+		}
 		try {
-			const data: JsonFile = JSON.parse(readFileSync(join(folderPath, file), "utf-8"));
+			const rawData: JsonFile | JsonFile[] = JSON.parse(
+				readFileSync(join(folderPath, file), "utf-8")
+			);
+			let data: JsonFile;
+			if ("length" in rawData) {
+				data = rawData[0];
+			} else {
+				data = rawData;
+			}
 			switch (data.type) {
 				case "singer":
 					await importSinger(data);
@@ -174,7 +188,7 @@ async function main() {
 					await importSong(data);
 					break;
 				default:
-					await importSinger(data);
+					await importSong(data);
 					console.warn(`unkown type ${data.type} for file ${file}`);
 			}
 		} catch (e) {

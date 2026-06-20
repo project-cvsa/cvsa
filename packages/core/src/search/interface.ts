@@ -96,7 +96,7 @@ export abstract class ISearchService<T extends LocalizableEntity, TIndex extends
 			hybrid: embeddingAvailable
 				? {
 						embedder: "potion-multilingual-128M",
-						semanticRatio: 0.25,
+						semanticRatio: 0.1,
 					}
 				: undefined,
 			showRankingScore: true,
