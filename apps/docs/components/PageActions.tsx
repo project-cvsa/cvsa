@@ -27,7 +27,10 @@ export function MarkdownCopyButton({
 		setLoading(true);
 
 		try {
-			const promise = fetch(markdownUrl).then((res) => res.text());
+			const promise = (async () => {
+				const res = await fetch(markdownUrl);
+				return res.text();
+			})();
 			cache.set(markdownUrl, promise);
 			await navigator.clipboard.write([
 				new ClipboardItem({

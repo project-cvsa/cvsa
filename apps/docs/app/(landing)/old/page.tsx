@@ -1,4 +1,4 @@
-import { HeroLinks } from "@/components/links";
+import { HeroLinks } from "@/components/Links";
 import { LogoEnglish } from "@/components/icon/LogoEnglish";
 
 export default function Page() {

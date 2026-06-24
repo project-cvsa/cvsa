@@ -1,6 +1,7 @@
 import { defineConfig, defineDocs } from "fumadocs-mdx/config";
 import { metaSchema, pageSchema } from "fumadocs-core/source/schema";
 import { visit } from "unist-util-visit";
+import type { Root } from "hast";
 import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
@@ -19,8 +20,7 @@ export const docs = defineDocs({
 });
 
 function rehypeFootnote() {
-	// biome-ignore lint/suspicious/noExplicitAny: I don't really know the type.
-	return (tree: any) => {
+	return (tree: Root) => {
 		visit(tree, "element", (node) => {
 			if (node.tagName === "h2" && node.properties?.id === "footnote-label") {
 				node.children = [];

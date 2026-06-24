@@ -15,7 +15,8 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
-
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,6 +31,8 @@ jobs:
 
       - name: Build docs app
         run: bun run build --filter=docs
+        env:
+          NEXT_PUBLIC_SITE_URL: https://docs.projectcvsa.com
 
       - name: Verify build output
         run: |
@@ -44,3 +47,4 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: pages deploy apps/docs/out --project-name="cvsa-docs"
+          

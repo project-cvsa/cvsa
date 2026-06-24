@@ -5,9 +5,11 @@ import { getMDXComponents } from "@/components/mdx";
 import type { Metadata } from "next";
 import { createRelativeLink } from "fumadocs-ui/mdx";
 import { gitConfig } from "@/lib/layout.shared";
-import { MarkdownCopyButton, ViewOptionsPopover } from "@/components/page-actions";
+import { MarkdownCopyButton, ViewOptionsPopover } from "@/components/PageActions";
 import { buttonVariants } from "fumadocs-ui/components/ui/button";
 import { t } from "@/lib/i18n";
+import { siteUrl } from "@/lib/env";
+import { ogImageUrl, OG_IMAGE_SIZE } from "@/lib/metadata";
 
 export async function generateStaticParams() {
 	const pages = source.getPages();
@@ -79,19 +81,45 @@ export async function generateMetadata({
 }): Promise<Metadata> {
 	const { slug, lang } = await params;
 	const page = source.getPage(slug, lang);
-	const baseUrl = "https://docs.projectcvsa.com";
 	if (!page) notFound();
 	const cleanSlug = slug ? slug : [];
 	const currentPage = cleanSlug.join("/");
+	const pagePath = currentPage ? `/${currentPage}` : "";
+
+	const url = `${siteUrl}/${lang}${pagePath}`;
+	const ogImage = ogImageUrl();
 	return {
 		title: page.data.title,
 		description: page.data.description,
 		alternates: {
+			canonical: url,
 			languages: {
-				zh: `${baseUrl}/zh/${currentPage}`,
-				en: `${baseUrl}/en/${currentPage}`,
-				"x-default": `${baseUrl}/en/${currentPage}`,
+				zh: `${siteUrl}/zh${pagePath}`,
+				en: `${siteUrl}/en${pagePath}`,
+				"x-default": `${siteUrl}/en${pagePath}`,
 			},
 		},
+		openGraph: {
+			title: page.data.title,
+			description: page.data.description,
+			url,
+			siteName: t("siteName", lang),
+			locale: lang === "zh" ? "zh_CN" : "en_US",
+			type: "article",
+			images: [
+				{
+					url: ogImage,
+					width: OG_IMAGE_SIZE,
+					height: OG_IMAGE_SIZE,
+					alt: page.data.title,
+				},
+			],
+		},
+		// twitter: {
+		// 	card: "summary_large_image",
+		// 	title: page.data.title,
+		// 	description: page.data.description,
+		// 	images: [ogImage],
+		// },
 	};
 }

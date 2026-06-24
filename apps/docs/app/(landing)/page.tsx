@@ -1,6 +1,6 @@
 "use client";
 
-import { HeroLinks } from "@/components/links";
+import { HeroLinks } from "@/components/Links";
 import { LogoEnglish } from "@/components/icon/LogoEnglish";
 import { DigitGrid } from "./DigitGrid";
 import { Description } from "./Description";

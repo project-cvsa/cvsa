@@ -13,6 +13,7 @@ export const i18n = defineI18n({
 const resources = {
 	en: {
 		title: "Project CVSA | Archive for a Better Future",
+		siteName: "Project CVSA",
 		more: "More",
 		viewAsMarkdown: "View as Markdown",
 		openInGitHub: "Open in GitHub",
@@ -23,6 +24,7 @@ const resources = {
 	},
 	zh: {
 		title: "中V档案馆 | Archive for a Better Future",
+		siteName: "中V档案馆",
 		more: "更多",
 		viewAsMarkdown: "查看 Markdown 源码",
 		openInGitHub: "在 GitHub 中打开",
@@ -36,9 +38,13 @@ type Resource = typeof resources;
 type Lang = keyof Resource;
 type MessageKey = keyof Resource[Lang];
 
+function isLang(lang: string): lang is Lang {
+	return lang in resources;
+}
+
 export function t(key: MessageKey, lang: string): string {
-	if (resources[lang as Lang] === undefined) {
+	if (!isLang(lang)) {
 		return key;
 	}
-	return resources[lang as Lang][key] || key;
+	return resources[lang][key] || key;
 }

@@ -1,6 +1,7 @@
 ---
 alwaysApply: true
 scene: git_message
+language: en_US
 ---
 
 ### 基本格式
@@ -10,9 +11,9 @@ scene: git_message
 ```text
 <类型>(<作用域>): <描述>
 
-[正文]
+[正文(英文描述)]
 
-[脚注]
+[脚注(英文描述)]
 ```
 
 -   **类型**：必填，表示本次提交的类别（见下文“类型列表”）。
