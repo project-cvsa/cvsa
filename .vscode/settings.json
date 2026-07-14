@@ -13,7 +13,7 @@
 		"editor.defaultFormatter": "biomejs.biome"
 	},
 	"[json]": {
-		"editor.defaultFormatter": "biomejs.biome"
+		"editor.defaultFormatter": "vscode.json-language-features"
 	},
 	"[prisma]": {
 		"editor.defaultFormatter": "Prisma.prisma"
@@ -25,5 +25,17 @@
 	"unocss.autocomplete.matchType": "prefix",
 	"unocss.autocomplete.maxItems": 100,
 	"unocss.autocomplete.strict": false,
-	"unocss.selectionStyle": true
+	"unocss.selectionStyle": true,
+	"yaml.schemas": {
+		"file:///Users/alikia/.vscode/extensions/continue.continue-1.2.17-darwin-arm64/config-yaml-schema.json": [
+			".continue/**/*.yaml",
+			"file:///Users/alikia/.continue/config.yaml"
+		],
+		"file:///Users/alikia/.vscode/extensions/continue.continue-1.2.22-darwin-arm64/config-yaml-schema.json": [
+			".continue/**/*.yaml"
+		],
+		"file:///Users/alikia/.vscode/extensions/continue.continue-1.2.24-darwin-arm64/config-yaml-schema.json": [
+			".continue/**/*.yaml"
+		]
+	}
 }

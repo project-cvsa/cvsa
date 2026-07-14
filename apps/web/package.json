@@ -5,28 +5,38 @@
 	"scripts": {
 		"dev": "bunx --bun astro dev --port 10199",
 		"build": "bunx --bun astro build",
-		"preview": "bunx --bun astro preview",
-		"astro": "bunx --bun astro"
+		"preview": "bunx --bun astro preview --port 10199",
+		"astro": "bunx --bun astro",
+		"test": "bunx --bun vitest run"
 	},
 	"dependencies": {
 		"@ark-ui/solid": "^5.36.2",
-		"@astrojs/node": "^10.0.3",
-		"@astrojs/solid-js": "^6.0.1",
+		"@astrojs/node": "11.0.2",
+		"@astrojs/solid-js": "7.0.1",
 		"@cvsa/core": "workspace:*",
 		"@cvsa/db": "workspace:*",
-		"@fanee/runtime-node": "^0.2.1",
-		"astro": "^6.0.8",
-		"solid-js": "^1.9.13"
+		"@fanee/core": "^0.8.1",
+		"@fanee/node": "^0.8.1",
+		"@fanee/solid": "^0.8.1",
+		"accept-language-parser": "^1.5.0",
+		"astro": "7.0.9",
+		"opencc": "^1.4.1",
+		"resolve-accept-language": "^3.2.2",
+		"solid-js": "^1.9.14",
+		"wikiparser-node": "^1.45.0"
 	},
 	"devDependencies": {
+		"@fanee/vite": "^0.8.1",
+		"@types/accept-language-parser": "^1.5.8",
 		"@types/fs-extra": "^11.0.4",
-		"@unocss/astro": "^66.6.7",
-		"@unocss/preset-mini": "^66.6.7",
-		"@unocss/reset": "^66.6.7",
-		"fs-extra": "^11.3.4",
+		"@unocss/astro": "^66.7.5",
+		"@unocss/preset-mini": "^66.7.5",
+		"@unocss/reset": "^66.7.5",
+		"fs-extra": "^11.3.6",
 		"postcss-load-config": "^6.0.1",
-		"postcss-preset-env": "^11.2.0",
-		"unocss": "^66.6.7",
-		"vite": "^7.3.1"
+		"postcss-preset-env": "^11.3.2",
+		"unocss": "^66.7.5",
+		"vite": "^8.1.4",
+		"vitest": "^4.1.10"
 	}
 }

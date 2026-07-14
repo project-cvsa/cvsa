@@ -1,5 +1,4 @@
 ---
-import { ToastContainer } from "@components/ui/Toast";
 import { getThemeColorVariables } from "@lib/theme";
 
 interface Props {
@@ -36,9 +35,9 @@ const themeCSS = getThemeColorVariables(theme);
 			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=Outfit:wght@100..900&display=swap"
 			rel="stylesheet"
 		>
-		<style title="cvsa-color-vars" set:html={themeCSS}>
+		<style id="cvsa-color-vars" set:html={themeCSS} is:global>
 		</style>
-		<style>
+		<style is:global>
 		:root {
 			--wireframe-line: oklch(92% 0 0);
 			--highlight-color: oklch(94% 50% 105);
@@ -60,6 +59,10 @@ const themeCSS = getThemeColorVariables(theme);
 				linear-gradient(to right, var(--grid-lines) 1px, transparent 1px),
 				linear-gradient(to bottom, var(--grid-lines) 1px, var(--background) 1px);
 			background-size: 100px 100px;
+		}
+		::selection {
+			background-color: var(--primary);
+			color: var(--background);
 		}
 		</style>
 		<slot name="head" />

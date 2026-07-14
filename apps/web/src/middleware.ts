@@ -1,25 +1,16 @@
+import { i18nMiddleware } from "@lib/i18n/server";
 import { defineMiddleware } from "astro:middleware";
 
 export const onRequest = defineMiddleware((context, next) => {
-	const { url, request, redirect } = context;
-
-	if (url.pathname !== "/") {
-		return next();
+	const { request, redirect } = context;
+	const i18nAction = i18nMiddleware(request);
+	if (!i18nAction) {
+		return new Response(null, {
+			status: 403,
+		});
 	}
-
-	const acceptLanguage = request.headers.get("accept-language");
-
-	let preferredLocale = "en";
-
-	if (!acceptLanguage) {
-		return redirect(`/${preferredLocale}`, 302);
+	if (i18nAction.action === "redirect") {
+		return redirect(i18nAction.target, 302);
 	}
-
-	if (acceptLanguage.includes("zh")) {
-		preferredLocale = "zh";
-	} else if (acceptLanguage.includes("ja")) {
-		preferredLocale = "jp";
-	}
-
-	return redirect(`/${preferredLocale}`, 302);
+	return next();
 });

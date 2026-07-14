@@ -14,7 +14,7 @@ export const getErrorResponse = <T extends StatusFunc>(
 	const traceId = getTraceId();
 	const { message } = data;
 	const translatedMessages = message ? i18nRuntime.tAll(message) : undefined;
-	const translatedMessage = message ? i18nRuntime.t({ locale })(message) : undefined;
+	const translatedMessage = message ? i18nRuntime.getT({ locale })(message) : undefined;
 	return statusFunc(statusCode, {
 		...data,
 		message: translatedMessage,

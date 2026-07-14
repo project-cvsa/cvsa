@@ -1,11 +1,15 @@
 ---
 import Layout from "@layouts/Layout.astro";
 import Condition from "@components/Condition.astro";
-import { i18nRuntime } from "@lib/i18n";
+import { getLocale, i18nServer } from "@lib/i18n/server";
 import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
+import Card from "@layouts/Card.astro";
+import Heading1 from "@components/typography/Heading1.astro";
+import { renderWiki } from "@lib/wiki";
 
-const { locale, id } = Astro.params;
-const t = i18nRuntime.t({ locale });
+const { id } = Astro.params;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language });
 let data: SongDetailsResponseDto | undefined;
 try {
 	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);
@@ -15,14 +19,27 @@ try {
 			status: e.statusCode,
 			statusText: e.code,
 		});
+	} else {
+		return new Response(null, {
+			status: 500,
+			statusText: "Internal Server Error",
+		});
 	}
 }
-if (!data) return;
+if (!data)
+	return new Response(null, {
+		status: 404,
+	});
 const details: SongDetailsResponseDto = data;
+const introduction = renderWiki(details.description ?? "", {
+	data: details,
+	entity: "song",
+	language,
+});
 ---
 
 <Layout>
-	<style>
+	<style is:global>
 	.wireframe {
 		background: repeating-linear-gradient(
 			-45deg,
@@ -60,6 +77,11 @@ const details: SongDetailsResponseDto = data;
 		bottom: 2px;
 		z-index: -1;
 	}
+	article {
+		& > p:not(:first-child) {
+			margin-top: 14px;
+		}
+	}
 	</style>
 	<header class="h-20 mb-2 flex items-center mx-auto max-w-[110rem] px-8 wireframe">
 		<div class="w-full flex justify-center">
@@ -85,23 +107,23 @@ const details: SongDetailsResponseDto = data;
 						<img alt="视频封面" src={details.coverUrl} referrerpolicy="no-referrer">
 					</div>
 				</Condition>
+				<Card>
+					<Fragment slot="title">{t("song.intro.title")}</Fragment>
+					<Fragment slot="title-en">Introduction</Fragment>
+					<Fragment slot="body">
+						<article set:html={introduction} />
+					</Fragment>
+				</Card>
 			</div>
 			<div>
 				<div class="w-full">
-					<div
-						class="w-full h-11 sm:h-13 bg-neutral-800 dark:bg-neutral-100 text-neutral-50 dark:text-neutral-900
-						text-lg sm:text-xl flex items-center justify-between px-4"
-					>
-						<span class="font-[Outfit,sans-serif] uppercase"
-							>{t("song.info.title")}</span
-						>
-						<Condition condition={locale !== "en"}>
-							<span class="opacity-60 font-[Outfit] uppercase">Information</span>
-						</Condition>
-					</div>
-					<div class="bg-neutral-50 dark:bg-neutral-800 h-20 px-6 py-5">
-						<h1 class="text-2xl sm:text-3xl font-500 highlight">{details.name}</h1>
-					</div>
+					<Card>
+						<Fragment slot="title">{t("song.info.title")}</Fragment>
+						<Fragment slot="title-en">Information</Fragment>
+						<Fragment slot="body">
+							<Heading1>{details.name}</Heading1>
+						</Fragment>
+					</Card>
 				</div>
 			</div>
 		</main>

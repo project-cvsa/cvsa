@@ -9,6 +9,7 @@
 			"@layouts/*": ["./src/components/layout/*"],
 			"@components/*": ["./src/components/*"],
 			"@lib/*": ["./src/lib/*"]
-		}
+		},
+		"types": ["@fanee/vite/client"]
 	}
 }

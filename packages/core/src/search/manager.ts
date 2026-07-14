@@ -55,7 +55,6 @@ export class SearchManager {
 		} catch (e) {
 			appLogger.warn("Cannot initialize SearchManager clients.");
 			appLogger.error(Bun.inspect(e));
-			throw e;
 		}
 	}
 

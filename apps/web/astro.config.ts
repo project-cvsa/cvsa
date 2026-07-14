@@ -3,7 +3,7 @@ import { defineConfig } from "astro/config";
 import UnoCSS from "unocss/astro";
 import solid from "@astrojs/solid-js";
 import node from "@astrojs/node";
-import ssrCopyPlugin from "@lib/copy-plugin";
+import { fanee } from "@fanee/vite";
 
 export default defineConfig({
 	integrations: [UnoCSS({ injectReset: true }), solid()],
@@ -12,11 +12,13 @@ export default defineConfig({
 	}),
 	vite: {
 		plugins: [
-			ssrCopyPlugin({
-				src: "../../locale",
-				dest: "locale",
+			fanee({
+				bundlePath: "../../locale",
 			}),
 		],
+		server: {
+			allowedHosts: ['.projectcvsa.com'],
+		},
 	},
 	devToolbar: {
 		enabled: false,
