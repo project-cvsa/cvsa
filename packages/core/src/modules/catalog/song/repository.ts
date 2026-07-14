@@ -8,6 +8,8 @@ import type {
 	SongDetailsResponseDto,
 	SongLyricsCreateRequestDto,
 	SongLyricsUpdateRequestDto,
+	SongExternalLinkCreateRequestDto,
+	SongExternalLinkUpdateRequestDto,
 } from "./dto";
 import type { ISongRepository } from "./repository.interface";
 
@@ -50,6 +52,12 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 							deletedAt: true,
 						},
 					},
+					externalLinks: {
+						where: { deletedAt: null },
+						omit: {
+							deletedAt: true,
+						},
+					},
 				},
 				omit: {
 					deletedAt: true,
@@ -57,7 +65,7 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 			})
 		);
 		if (!data) return null;
-		const { performances, creations, lyrics, ...song } = data;
+		const { performances, creations, lyrics, externalLinks, ...song } = data;
 		return {
 			singers: performances.map((item) => {
 				const engineName = item.svsEngine?.name ?? "";
@@ -79,6 +87,7 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 				};
 			}),
 			lyrics: lyrics,
+			externalLinks: externalLinks.map(({ songId: _songId, ...link }) => link),
 			...song,
 		};
 	}
@@ -191,6 +200,59 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 		await this.query("db.song.softDeleteLyric", () =>
 			client.lyrics.update({
 				where: { id: lyricId },
+				data: { deletedAt: new Date() },
+			})
+		);
+	}
+
+	async createExternalLink(id: SongId, input: SongExternalLinkCreateRequestDto, tx?: TxClient) {
+		const client = tx ?? this.prisma;
+
+		return this.query("db.song.createExternalLink", () =>
+			client.songExternalLink.create({
+				data: {
+					songId: id,
+					label: input.label,
+					url: input.url,
+					platform: input.platform,
+					platformId: input.platformId,
+				},
+				omit: {
+					deletedAt: true,
+				},
+			})
+		);
+	}
+
+	async getExternalLinkById(linkId: number, tx?: TxClient) {
+		const client = tx ?? this.prisma;
+
+		return this.query("db.song.getExternalLinkById", () =>
+			client.songExternalLink.findFirst({
+				where: { id: linkId, deletedAt: null },
+				omit: { deletedAt: true },
+			})
+		);
+	}
+
+	async updateExternalLink(linkId: number, input: SongExternalLinkUpdateRequestDto, tx?: TxClient) {
+		const client = tx ?? this.prisma;
+
+		return this.query("db.song.updateExternalLink", () =>
+			client.songExternalLink.update({
+				where: { id: linkId },
+				data: input,
+				omit: { deletedAt: true },
+			})
+		);
+	}
+
+	async softDeleteExternalLink(linkId: number, tx?: TxClient) {
+		const client = tx ?? this.prisma;
+
+		await this.query("db.song.softDeleteExternalLink", () =>
+			client.songExternalLink.update({
+				where: { id: linkId },
 				data: { deletedAt: new Date() },
 			})
 		);
