@@ -125,7 +125,9 @@ export type SongLyricsListResponseDto = Serialized<z.infer<typeof SongLyricsList
 export type SongLyricsCreateRequestDto = Serialized<z.infer<typeof SongLyricsCreateRequestSchema>>;
 export type SongLyricsUpdateRequestDto = Serialized<z.infer<typeof SongLyricsUpdateRequestSchema>>;
 
-export type SongExternalLinkResponseDto = Serialized<z.infer<typeof SongExternalLinkResponseSchema>>;
+export type SongExternalLinkResponseDto = Serialized<
+	z.infer<typeof SongExternalLinkResponseSchema>
+>;
 export type SongExternalLinkCreateRequestDto = Serialized<
 	z.infer<typeof SongExternalLinkCreateRequestSchema>
 >;

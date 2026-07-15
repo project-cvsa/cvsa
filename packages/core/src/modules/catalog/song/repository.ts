@@ -235,7 +235,11 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 		);
 	}
 
-	async updateExternalLink(linkId: number, input: SongExternalLinkUpdateRequestDto, tx?: TxClient) {
+	async updateExternalLink(
+		linkId: number,
+		input: SongExternalLinkUpdateRequestDto,
+		tx?: TxClient
+	) {
 		const client = tx ?? this.prisma;
 
 		return this.query("db.song.updateExternalLink", () =>
