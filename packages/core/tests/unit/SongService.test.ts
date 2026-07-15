@@ -1,6 +1,11 @@
 import { describe, expect, mock, test } from "bun:test";
 import { SongService, AppError } from "@cvsa/core/internal";
-import type { SongDetailsResponseDto, ISongRepository, OutboxService } from "@cvsa/core";
+import type {
+	SongDetailsResponseDto,
+	SongExternalLinkResponseDto,
+	ISongRepository,
+	OutboxService,
+} from "@cvsa/core";
 import { createMockRepository } from "../utils";
 
 const mockSongDetails: SongDetailsResponseDto = {
@@ -25,6 +30,17 @@ const mockSongDetails: SongDetailsResponseDto = {
 	singers: [],
 	artists: [],
 	lyrics: [],
+	externalLinks: [],
+};
+
+const mockExternalLink: SongExternalLinkResponseDto = {
+	id: 1,
+	label: "Test Link",
+	url: "https://example.com",
+	platform: "YOUTUBE",
+	platformId: "test123",
+	createdAt: new Date().toISOString(),
+	updatedAt: new Date().toISOString(),
 };
 
 describe("SongService", () => {
@@ -55,8 +71,8 @@ describe("SongService", () => {
 			updatedAt: new Date().toISOString(),
 		}),
 		getLyricsBySongId: async () => [],
-		getLyricById: async () => null,
-		updateLyric: async () => ({
+		getLyricById: async (_songId: number, _lyricId: number) => null,
+		updateLyric: async (_songId: number, _lyricId: number, _input: unknown) => ({
 			id: 1,
 			language: "zh",
 			isTranslated: false,
@@ -66,7 +82,17 @@ describe("SongService", () => {
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
 		}),
-		softDeleteLyric: async () => {},
+		softDeleteLyric: async (_songId: number, _lyricId: number) => {},
+		createExternalLink: async () => mockExternalLink,
+		getExternalLinkById: async (_songId: number, linkId: number) => {
+			if (linkId === 1) {
+				return mockExternalLink;
+			}
+			return null;
+		},
+		updateExternalLink: async (_songId: number, _linkId: number, _input: unknown) =>
+			mockExternalLink,
+		softDeleteExternalLink: async (_songId: number, _linkId: number) => {},
 	});
 
 	const mockOutboxService = {
@@ -226,6 +252,7 @@ describe("SongService", () => {
 
 			expect(result.id).toBe(1);
 			expect(result.plainText).toBe("歌词");
+			expect(mockRepository.getLyricById).toHaveBeenCalledWith(1, 1);
 		});
 
 		test("throws NOT_FOUND error when song does not exist", async () => {
@@ -294,6 +321,7 @@ describe("SongService", () => {
 			expect(result.plainText).toBe("Updated lyrics");
 			expect(mockRepository.updateLyric).toHaveBeenCalledWith(
 				1,
+				1,
 				updateInput,
 				expect.anything()
 			);
@@ -333,7 +361,7 @@ describe("SongService", () => {
 
 			await songService.deleteLyric(1, 1);
 
-			expect(mockRepository.softDeleteLyric).toHaveBeenCalledWith(1, expect.anything());
+			expect(mockRepository.softDeleteLyric).toHaveBeenCalledWith(1, 1, expect.anything());
 		});
 
 		test("throws NOT_FOUND error when song does not exist", async () => {
@@ -348,6 +376,108 @@ describe("SongService", () => {
 
 			expect(songService.deleteLyric(1, 999)).rejects.toThrow(AppError);
 			expect(songService.deleteLyric(1, 999)).rejects.toThrow("error.lyric.notfound");
+		});
+	});
+
+	describe("createExternalLink", () => {
+		const createInput = {
+			label: "Test Label",
+			url: "https://example.com",
+			platform: "YOUTUBE" as const,
+			platformId: "test123",
+		};
+
+		test("creates external link when song exists", async () => {
+			const result = await songService.createExternalLink(1, createInput);
+
+			expect(result).toMatchObject({
+				id: 1,
+				url: "https://example.com",
+				platform: "YOUTUBE",
+			});
+			expect(mockRepository.createExternalLink).toHaveBeenCalledWith(
+				1,
+				createInput,
+				expect.anything()
+			);
+		});
+
+		test("throws NOT_FOUND error when song does not exist", async () => {
+			mockRepository.getById.mockResolvedValueOnce(null);
+
+			expect(songService.createExternalLink(999, createInput)).rejects.toThrow(AppError);
+			expect(songService.createExternalLink(999, createInput)).rejects.toThrow(
+				"error.song.notfound"
+			);
+		});
+	});
+
+	describe("updateExternalLink", () => {
+		const updateInput = { label: "Updated Label" };
+
+		test("updates external link when song and link exist", async () => {
+			mockRepository.getExternalLinkById.mockResolvedValueOnce(mockExternalLink);
+
+			const result = await songService.updateExternalLink(1, 1, updateInput);
+
+			expect(result).toMatchObject({
+				id: 1,
+				url: "https://example.com",
+			});
+			expect(mockRepository.updateExternalLink).toHaveBeenCalledWith(
+				1,
+				1,
+				updateInput,
+				expect.anything()
+			);
+		});
+
+		test("throws NOT_FOUND error when song does not exist", async () => {
+			mockRepository.getById.mockResolvedValueOnce(null);
+
+			expect(songService.updateExternalLink(999, 1, updateInput)).rejects.toThrow(AppError);
+			expect(songService.updateExternalLink(999, 1, updateInput)).rejects.toThrow(
+				"error.song.notfound"
+			);
+		});
+
+		test("throws NOT_FOUND error when link does not exist", async () => {
+			mockRepository.getExternalLinkById.mockResolvedValueOnce(null);
+
+			expect(songService.updateExternalLink(1, 999, updateInput)).rejects.toThrow(AppError);
+			expect(songService.updateExternalLink(1, 999, updateInput)).rejects.toThrow(
+				"error.externalLink.notfound"
+			);
+		});
+	});
+
+	describe("deleteExternalLink", () => {
+		test("soft deletes external link when song and link exist", async () => {
+			mockRepository.getExternalLinkById.mockResolvedValueOnce(mockExternalLink);
+
+			await songService.deleteExternalLink(1, 1);
+
+			expect(mockRepository.softDeleteExternalLink).toHaveBeenCalledWith(
+				1,
+				1,
+				expect.anything()
+			);
+		});
+
+		test("throws NOT_FOUND error when song does not exist", async () => {
+			mockRepository.getById.mockResolvedValueOnce(null);
+
+			expect(songService.deleteExternalLink(999, 1)).rejects.toThrow(AppError);
+			expect(songService.deleteExternalLink(999, 1)).rejects.toThrow("error.song.notfound");
+		});
+
+		test("throws NOT_FOUND error when link does not exist", async () => {
+			mockRepository.getExternalLinkById.mockResolvedValueOnce(null);
+
+			expect(songService.deleteExternalLink(1, 999)).rejects.toThrow(AppError);
+			expect(songService.deleteExternalLink(1, 999)).rejects.toThrow(
+				"error.externalLink.notfound"
+			);
 		});
 	});
 });

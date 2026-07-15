@@ -1,6 +1,7 @@
 import { env } from "@cvsa/env";
-import { FaneeRuntime } from "@fanee/runtime-node";
+import { i18n } from "@fanee/core";
 import path from "node:path";
+import { initFaneeNode } from "@fanee/node";
 
 const getBundleLocation = () => {
 	if (env.NODE_ENV !== "production") {
@@ -10,10 +11,12 @@ const getBundleLocation = () => {
 	}
 };
 
-export const i18nRuntime: FaneeRuntime = new FaneeRuntime({
-	bundlePath: getBundleLocation(),
-	defaultLocale: "zh",
-	namespace: "backend",
-});
+i18n.use(
+	initFaneeNode({
+		bundlePath: getBundleLocation(),
+	})
+);
 
-await i18nRuntime.load();
+export const i18nRuntime = i18n;
+
+await i18n.ready();

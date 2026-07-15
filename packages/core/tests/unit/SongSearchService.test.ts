@@ -115,6 +115,7 @@ const mockSongDetails: SongDetailsResponseDto = {
 			songId: 1,
 		},
 	],
+	externalLinks: [],
 };
 
 describe("SongSearchService", () => {
