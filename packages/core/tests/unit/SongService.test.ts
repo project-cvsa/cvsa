@@ -71,8 +71,8 @@ describe("SongService", () => {
 			updatedAt: new Date().toISOString(),
 		}),
 		getLyricsBySongId: async () => [],
-		getLyricById: async () => null,
-		updateLyric: async () => ({
+		getLyricById: async (_songId: number, _lyricId: number) => null,
+		updateLyric: async (_songId: number, _lyricId: number, _input: unknown) => ({
 			id: 1,
 			language: "zh",
 			isTranslated: false,
@@ -82,16 +82,17 @@ describe("SongService", () => {
 			createdAt: new Date().toISOString(),
 			updatedAt: new Date().toISOString(),
 		}),
-		softDeleteLyric: async () => {},
+		softDeleteLyric: async (_songId: number, _lyricId: number) => {},
 		createExternalLink: async () => mockExternalLink,
-		getExternalLinkById: async (linkId: number) => {
+		getExternalLinkById: async (_songId: number, linkId: number) => {
 			if (linkId === 1) {
 				return mockExternalLink;
 			}
 			return null;
 		},
-		updateExternalLink: async () => mockExternalLink,
-		softDeleteExternalLink: async () => {},
+		updateExternalLink: async (_songId: number, _linkId: number, _input: unknown) =>
+			mockExternalLink,
+		softDeleteExternalLink: async (_songId: number, _linkId: number) => {},
 	});
 
 	const mockOutboxService = {
@@ -251,6 +252,7 @@ describe("SongService", () => {
 
 			expect(result.id).toBe(1);
 			expect(result.plainText).toBe("歌词");
+			expect(mockRepository.getLyricById).toHaveBeenCalledWith(1, 1);
 		});
 
 		test("throws NOT_FOUND error when song does not exist", async () => {
@@ -319,6 +321,7 @@ describe("SongService", () => {
 			expect(result.plainText).toBe("Updated lyrics");
 			expect(mockRepository.updateLyric).toHaveBeenCalledWith(
 				1,
+				1,
 				updateInput,
 				expect.anything()
 			);
@@ -358,7 +361,7 @@ describe("SongService", () => {
 
 			await songService.deleteLyric(1, 1);
 
-			expect(mockRepository.softDeleteLyric).toHaveBeenCalledWith(1, expect.anything());
+			expect(mockRepository.softDeleteLyric).toHaveBeenCalledWith(1, 1, expect.anything());
 		});
 
 		test("throws NOT_FOUND error when song does not exist", async () => {
@@ -423,6 +426,7 @@ describe("SongService", () => {
 			});
 			expect(mockRepository.updateExternalLink).toHaveBeenCalledWith(
 				1,
+				1,
 				updateInput,
 				expect.anything()
 			);
@@ -454,6 +458,7 @@ describe("SongService", () => {
 			await songService.deleteExternalLink(1, 1);
 
 			expect(mockRepository.softDeleteExternalLink).toHaveBeenCalledWith(
+				1,
 				1,
 				expect.anything()
 			);

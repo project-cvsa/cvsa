@@ -171,35 +171,40 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 		);
 	}
 
-	async getLyricById(lyricId: number, tx?: TxClient) {
+	async getLyricById(songId: SongId, lyricId: number, tx?: TxClient) {
 		const client = tx ?? this.prisma;
 
 		return this.query("db.song.getLyricById", () =>
 			client.lyrics.findFirst({
-				where: { id: lyricId, deletedAt: null },
+				where: { id: lyricId, songId, deletedAt: null },
 				omit: { deletedAt: true, songId: true },
 			})
 		);
 	}
 
-	async updateLyric(lyricId: number, input: SongLyricsUpdateRequestDto, tx?: TxClient) {
+	async updateLyric(
+		songId: SongId,
+		lyricId: number,
+		input: SongLyricsUpdateRequestDto,
+		tx?: TxClient
+	) {
 		const client = tx ?? this.prisma;
 
 		return this.query("db.song.updateLyric", () =>
 			client.lyrics.update({
-				where: { id: lyricId },
+				where: { id: lyricId, songId },
 				data: input,
 				omit: { deletedAt: true, songId: true },
 			})
 		);
 	}
 
-	async softDeleteLyric(lyricId: number, tx?: TxClient) {
+	async softDeleteLyric(songId: SongId, lyricId: number, tx?: TxClient) {
 		const client = tx ?? this.prisma;
 
 		await this.query("db.song.softDeleteLyric", () =>
 			client.lyrics.update({
-				where: { id: lyricId },
+				where: { id: lyricId, songId },
 				data: { deletedAt: new Date() },
 			})
 		);
@@ -224,18 +229,19 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 		);
 	}
 
-	async getExternalLinkById(linkId: number, tx?: TxClient) {
+	async getExternalLinkById(songId: SongId, linkId: number, tx?: TxClient) {
 		const client = tx ?? this.prisma;
 
 		return this.query("db.song.getExternalLinkById", () =>
 			client.songExternalLink.findFirst({
-				where: { id: linkId, deletedAt: null },
+				where: { id: linkId, songId, deletedAt: null },
 				omit: { deletedAt: true },
 			})
 		);
 	}
 
 	async updateExternalLink(
+		songId: SongId,
 		linkId: number,
 		input: SongExternalLinkUpdateRequestDto,
 		tx?: TxClient
@@ -244,19 +250,19 @@ export class SongRepository extends BaseRepository implements ISongRepository {
 
 		return this.query("db.song.updateExternalLink", () =>
 			client.songExternalLink.update({
-				where: { id: linkId },
+				where: { id: linkId, songId },
 				data: input,
 				omit: { deletedAt: true },
 			})
 		);
 	}
 
-	async softDeleteExternalLink(linkId: number, tx?: TxClient) {
+	async softDeleteExternalLink(songId: SongId, linkId: number, tx?: TxClient) {
 		const client = tx ?? this.prisma;
 
 		await this.query("db.song.softDeleteExternalLink", () =>
 			client.songExternalLink.update({
-				where: { id: linkId },
+				where: { id: linkId, songId },
 				data: { deletedAt: new Date() },
 			})
 		);

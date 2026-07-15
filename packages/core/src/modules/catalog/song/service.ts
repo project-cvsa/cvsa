@@ -106,7 +106,7 @@ export class SongService implements IServiceWithGetDetails<SongDetailsResponseDt
 		if (existing === null) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
-		const lyric = await this.repository.getLyricById(lyricId);
+		const lyric = await this.repository.getLyricById(id, lyricId);
 		if (lyric === null) {
 			throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
 		}
@@ -148,13 +148,13 @@ export class SongService implements IServiceWithGetDetails<SongDetailsResponseDt
 		if (existing === null) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
-		const lyric = await this.repository.getLyricById(lyricId);
+		const lyric = await this.repository.getLyricById(id, lyricId);
 		if (lyric === null) {
 			throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
 		}
 
 		const { lyric: updated, entry } = await prisma.$transaction(async (tx) => {
-			const lyric = await this.repository.updateLyric(lyricId, input, tx);
+			const lyric = await this.repository.updateLyric(id, lyricId, input, tx);
 			const entry = await this.outbox.createEntry(
 				{
 					aggregateType: "song",
@@ -175,13 +175,13 @@ export class SongService implements IServiceWithGetDetails<SongDetailsResponseDt
 		if (existing === null) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
-		const lyric = await this.repository.getLyricById(lyricId);
+		const lyric = await this.repository.getLyricById(id, lyricId);
 		if (lyric === null) {
 			throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
 		}
 
 		const entry = await prisma.$transaction(async (tx) => {
-			await this.repository.softDeleteLyric(lyricId, tx);
+			await this.repository.softDeleteLyric(id, lyricId, tx);
 			return await this.outbox.createEntry(
 				{
 					aggregateType: "song",
@@ -230,13 +230,13 @@ export class SongService implements IServiceWithGetDetails<SongDetailsResponseDt
 		if (existing === null) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
-		const link = await this.repository.getExternalLinkById(linkId);
+		const link = await this.repository.getExternalLinkById(id, linkId);
 		if (link === null) {
 			throw new AppError("error.externalLink.notfound", "NOT_FOUND", 404);
 		}
 
 		const { link: updated, entry } = await prisma.$transaction(async (tx) => {
-			const link = await this.repository.updateExternalLink(linkId, input, tx);
+			const link = await this.repository.updateExternalLink(id, linkId, input, tx);
 			const entry = await this.outbox.createEntry(
 				{
 					aggregateType: "song",
@@ -257,13 +257,13 @@ export class SongService implements IServiceWithGetDetails<SongDetailsResponseDt
 		if (existing === null) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
-		const link = await this.repository.getExternalLinkById(linkId);
+		const link = await this.repository.getExternalLinkById(id, linkId);
 		if (link === null) {
 			throw new AppError("error.externalLink.notfound", "NOT_FOUND", 404);
 		}
 
 		const entry = await prisma.$transaction(async (tx) => {
-			await this.repository.softDeleteExternalLink(linkId, tx);
+			await this.repository.softDeleteExternalLink(id, linkId, tx);
 			return await this.outbox.createEntry(
 				{
 					aggregateType: "song",

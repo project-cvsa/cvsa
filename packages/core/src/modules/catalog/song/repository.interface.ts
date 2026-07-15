@@ -31,26 +31,33 @@ export abstract class ISongRepository implements IRepositoryWithGetDetails<SongD
 		tx?: TxClient
 	): Promise<SongLyricsResponseDto>;
 	abstract getLyricsBySongId(id: SongId, tx?: TxClient): Promise<SongLyricsListResponseDto>;
-	abstract getLyricById(lyricId: number, tx?: TxClient): Promise<SongLyricsResponseDto | null>;
+	abstract getLyricById(
+		songId: SongId,
+		lyricId: number,
+		tx?: TxClient
+	): Promise<SongLyricsResponseDto | null>;
 	abstract updateLyric(
+		songId: SongId,
 		lyricId: number,
 		input: SongLyricsUpdateRequestDto,
 		tx?: TxClient
 	): Promise<SongLyricsResponseDto>;
-	abstract softDeleteLyric(lyricId: number, tx?: TxClient): Promise<void>;
+	abstract softDeleteLyric(songId: SongId, lyricId: number, tx?: TxClient): Promise<void>;
 	abstract createExternalLink(
 		id: SongId,
 		input: SongExternalLinkCreateRequestDto,
 		tx?: TxClient
 	): Promise<SongExternalLinkResponseDto>;
 	abstract getExternalLinkById(
+		songId: SongId,
 		linkId: number,
 		tx?: TxClient
 	): Promise<SongExternalLinkResponseDto | null>;
 	abstract updateExternalLink(
+		songId: SongId,
 		linkId: number,
 		input: SongExternalLinkUpdateRequestDto,
 		tx?: TxClient
 	): Promise<SongExternalLinkResponseDto>;
-	abstract softDeleteExternalLink(linkId: number, tx?: TxClient): Promise<void>;
+	abstract softDeleteExternalLink(songId: SongId, linkId: number, tx?: TxClient): Promise<void>;
 }

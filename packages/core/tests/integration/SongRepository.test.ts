@@ -250,7 +250,7 @@ describe("SongRepository Integration Tests", () => {
 				isTranslated: false,
 				plainText: "将被删除的歌词",
 			});
-			await repository.softDeleteLyric(lyric.id);
+			await repository.softDeleteLyric(song.id, lyric.id);
 
 			const lyrics = await repository.getLyricsBySongId(song.id);
 
@@ -267,7 +267,7 @@ describe("SongRepository Integration Tests", () => {
 				plainText: "歌词",
 			});
 
-			const lyric = await repository.getLyricById(created.id);
+			const lyric = await repository.getLyricById(song.id, created.id);
 
 			expect(lyric).toBeDefined();
 			expect(lyric?.id).toBe(created.id);
@@ -275,7 +275,7 @@ describe("SongRepository Integration Tests", () => {
 		});
 
 		test("should return null when lyric does not exist", async () => {
-			const lyric = await repository.getLyricById(999999);
+			const lyric = await repository.getLyricById(0, 999999);
 
 			expect(lyric).toBeNull();
 		});
@@ -287,9 +287,9 @@ describe("SongRepository Integration Tests", () => {
 				isTranslated: false,
 				plainText: "歌词",
 			});
-			await repository.softDeleteLyric(created.id);
+			await repository.softDeleteLyric(song.id, created.id);
 
-			const lyric = await repository.getLyricById(created.id);
+			const lyric = await repository.getLyricById(song.id, created.id);
 
 			expect(lyric).toBeNull();
 		});
@@ -304,7 +304,7 @@ describe("SongRepository Integration Tests", () => {
 				plainText: "原歌词",
 			});
 
-			const updated = await repository.updateLyric(created.id, {
+			const updated = await repository.updateLyric(song.id, created.id, {
 				language: "en",
 				isTranslated: true,
 				plainText: "Updated lyrics",
@@ -328,7 +328,7 @@ describe("SongRepository Integration Tests", () => {
 				ttml: "<tt>original</tt>",
 			});
 
-			const updated = await repository.updateLyric(created.id, {
+			const updated = await repository.updateLyric(song.id, created.id, {
 				plainText: "新歌词",
 			});
 
@@ -348,9 +348,9 @@ describe("SongRepository Integration Tests", () => {
 				plainText: "将被删除",
 			});
 
-			await repository.softDeleteLyric(created.id);
+			await repository.softDeleteLyric(song.id, created.id);
 
-			const lyric = await repository.getLyricById(created.id);
+			const lyric = await repository.getLyricById(song.id, created.id);
 			expect(lyric).toBeNull();
 		});
 	});
