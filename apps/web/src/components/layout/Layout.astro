@@ -1,0 +1,74 @@
+---
+import { getThemeColorVariables } from "@lib/theme";
+
+interface Props {
+	title?: string;
+	description?: string;
+	image?: string;
+	canonicalURL?: URL;
+	type?: "website" | "article";
+}
+
+const { title, description } = Astro.props;
+const themeCookie = Astro.cookies.get("theme");
+const theme = themeCookie?.value || "system";
+const themeCSS = getThemeColorVariables(theme);
+---
+
+<!DOCTYPE html>
+<html lang="zh-CN" class="scroll-smooth">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+		<title>{title}</title>
+		<meta name="description" content={description}>
+		<meta name="robots" content="index, follow">
+
+		<link rel="icon" href="/favicon.ico">
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+		<link rel="manifest" href="/site.webmanifest">
+
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=Outfit:wght@100..900&display=swap"
+			rel="stylesheet"
+		>
+		<style id="cvsa-color-vars" set:html={themeCSS} is:global>
+		</style>
+		<style is:global>
+		:root {
+			--wireframe-line: oklch(92% 0 0);
+			--highlight-color: oklch(94% 50% 105);
+			--highlight-shadow-color: rgba(67, 46, 18, 0);
+		}
+		@media (prefers-color-scheme: dark) {
+			:root {
+				--wireframe-line: oklch(27% 0 0);
+				--highlight-color: oklch(94% 52% 105deg);
+				--highlight-shadow-color: rgba(67, 46, 18, 0.6);
+			}
+		}
+		body {
+			font-size: 16px;
+			font-weight: 400;
+			font-family: "Outfit", system-ui, sans-serif;
+			background-color: var(--background);
+			background-image:
+				linear-gradient(to right, var(--grid-lines) 1px, transparent 1px),
+				linear-gradient(to bottom, var(--grid-lines) 1px, var(--background) 1px);
+			background-size: 100px 100px;
+		}
+		::selection {
+			background-color: var(--primary);
+			color: var(--background);
+		}
+		</style>
+		<slot name="head" />
+	</head>
+
+	<body class="dark:text-white overflow-x-hidden">
+		<slot />
+	</body>
+</html>

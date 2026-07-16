@@ -1,0 +1,7 @@
+---
+const { ...attrs } = Astro.props;
+---
+
+<div class="bg-surface p-8 shadow-xl shadow-shadow" class:list={[attrs.class]} {...attrs}>
+	<slot />
+</div>

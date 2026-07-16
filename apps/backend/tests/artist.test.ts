@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
-import { app } from "@/index";
+import { app } from "../src/index";
 import { prisma } from "@cvsa/db";
 
 const api = treaty(app);

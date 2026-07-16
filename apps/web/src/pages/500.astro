@@ -1,0 +1,19 @@
+---
+import DisplayL from "@components/typography/DisplayL.astro";
+import Paragraph from "@components/typography/Paragraph.astro";
+import Layout from "@layouts/Layout.astro";
+---
+
+<Layout>
+	<main class="w-screen h-screen flex items-center justify-center">
+		<div class="w-11/12 sm:w-120">
+			<DisplayL>500</DisplayL>
+			<div class="h-0.25 bg-split-lines" />
+			<Paragraph>
+				Something went wrong on our server. Please try again later. <br>
+				服务器发生错误，请稍后再试。 <br>
+				サーバーでエラーが発生しました。時間を置いて再度お試しください。<br>
+			</Paragraph>
+		</div>
+	</main>
+</Layout>

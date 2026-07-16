@@ -1,0 +1,66 @@
+---
+import GraphicLogo from "@components/icon/GraphicLogo.astro";
+import TextLogoChinese from "@components/icon/TextLogoChinese.astro";
+import TextLogoLatin from "@components/icon/TextLogoLatin.astro";
+import Layout from "@layouts/Layout.astro";
+import Paragraph from "@components/typography/Paragraph.astro";
+import pkg from "../../../package.json";
+import Caption from "@components/typography/Caption.astro";
+
+export interface Props {
+	title: string;
+	logoVariant: "chinese" | "latin";
+	description: string;
+	links: Array<{
+		href: string;
+		text: string;
+	}>;
+}
+
+const { title, logoVariant, description, links } = Astro.props;
+---
+
+<Layout {title}>
+	<main
+		class="w-screen min-h-screen relative flex items-end transition-colors duration-300 overflow-hidden color-primary"
+	>
+		<div class="absolute w-full top-10 px-5 md:px-20 flex items-center justify-between gap-2">
+			<div class="text-[27px] md:text-[28px] lg:text-[32px] xl:text-[42px]">
+				<GraphicLogo />
+			</div>
+
+			{logoVariant === "chinese" ? <TextLogoChinese /> : <TextLogoLatin />}
+		</div>
+
+		<div class="mb-32 sm:mb-25 ml-3 sm:ml-6 md:ml-14 lg:ml-20 z-10">
+			<h1
+				class="text-4xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl 
+				uppercase font-800 leading-[0.85]"
+			>
+				Under<br>Construction
+			</h1>
+
+			<Paragraph set:html={description}></Paragraph>
+
+			{links.map((link, i) => (
+				<a
+					class={`${i === 0 ? "mt-10" : "mt-3"} group flex items-center gap-4 cursor-pointer`}
+					href={link.href}
+				>
+					<div
+						class={`h-[2px] ${i === 0 ? "w-12 lg:w-16" : "w-30 lg:w-34"} bg-current opacity-50 transition-all ${i === 0 ? "group-hover:w-20" : "group-hover:w-40"} group-hover:opacity-100`}
+					/>
+					<span class="text-base sm:text-base lg:text-lg tracking-widest uppercase font-bold opacity-75 group-hover:opacity-100">
+						{link.text}
+					</span>
+				</a>
+			))}
+		</div>
+
+		<div class="absolute bottom-10 right-5 md:right-20 text-right font-[IBM_Plex_Mono]">
+			<Caption class="color-quaternary">
+				&copy; 2026 Project CVSA / v{pkg.version}
+			</Caption>
+		</div>
+	</main>
+</Layout>

@@ -6,7 +6,14 @@ import type {
 	ISongRepository,
 	OutboxService,
 } from "@cvsa/core";
+import { prisma } from "@cvsa/db";
 import { createMockRepository } from "../utils";
+
+(
+	prisma as unknown as {
+		$transaction: (fn: (tx: unknown) => Promise<unknown>) => Promise<unknown>;
+	}
+).$transaction = mock(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma));
 
 const mockSongDetails: SongDetailsResponseDto = {
 	id: 1,

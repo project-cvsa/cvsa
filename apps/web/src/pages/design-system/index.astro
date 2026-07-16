@@ -1,0 +1,30 @@
+---
+import Surface from "@components/layout/Surface.astro";
+import Heading1 from "@components/typography/Heading1.astro";
+import Heading2 from "@components/typography/Heading2.astro";
+import Paragraph from "@components/typography/Paragraph.astro";
+import Layout from "@layouts/Layout.astro";
+import Heading3 from "@components/typography/Heading3.astro";
+import { ButtonSizes, ButtonVariants } from "@components/pages/design-system/Buttons";
+---
+
+<Layout title="Design System">
+	<main class="max-w-4xl mx-4 md:mx-12 lg:mx-auto mt-20">
+		<Surface>
+			<Heading1>Design System</Heading1>
+			<Paragraph>This page is a showcase of the CVSA design system.<br> </Paragraph>
+			<Heading2>Components</Heading2>
+			<Heading3>Buttons</Heading3>
+			<Paragraph>
+				Buttons prompt most actions in a UI. There are 3 variants of buttons: filled,
+				outlined, and ghost. Each variant has 3 sizes: small, medium, and large.
+			</Paragraph>
+			<Paragraph class="inline-flex flex-wrap items-end gap-4">
+				<ButtonVariants client:load />
+			</Paragraph>
+			<Paragraph class="inline-flex flex-wrap items-end gap-4">
+				<ButtonSizes client:load />
+			</Paragraph>
+		</Surface>
+	</main>
+</Layout>
