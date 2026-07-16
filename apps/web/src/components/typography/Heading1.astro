@@ -2,6 +2,7 @@
 const { ...attrs } = Astro.props;
 ---
 
+<!-- biome-ignore lint/a11y/useHeadingContent: Utility Component -->
 <h1 class="color-display ts-heading-1 pb-2" class:list={[attrs.class]} {...attrs}>
 	<slot />
 </h1>

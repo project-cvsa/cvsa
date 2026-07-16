@@ -1,12 +1,17 @@
 .toast-root {
-    translate: var(--x) var(--y);
-    scale: var(--scale);
-    z-index: var(--z-index);
-    height: var(--height);
-    opacity: var(--opacity);
-    box-shadow: 0px 4px 8px var(--shadow);
+	translate: var(--x) var(--y);
+	scale: var(--scale);
+	z-index: var(--z-index);
+	height: var(--height);
+	opacity: var(--opacity);
+	box-shadow: 0px 4px 8px var(--shadow);
 
-    will-change: translate, opacity, scale;
-    transition: translate 350ms, scale 350ms, opacity 350ms, height 350ms, box-shadow 350ms;
-    transition-timing-function: cubic-bezier(0.15, 0.96, 0.23, 1.00);
+	will-change: translate, opacity, scale;
+	transition:
+		translate 350ms,
+		scale 350ms,
+		opacity 350ms,
+		height 350ms,
+		box-shadow 350ms;
+	transition-timing-function: cubic-bezier(0.15, 0.96, 0.23, 1);
 }

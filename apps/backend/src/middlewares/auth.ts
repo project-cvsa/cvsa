@@ -1,6 +1,5 @@
 import { Elysia } from "elysia";
 import { AppError, auth, betterAuthUserToEntity, toBetterAuthHeaders } from "@cvsa/core";
-import { appLogger } from "@cvsa/logger";
 
 export const authMiddleware = new Elysia({ name: "authMiddleware" }).derive(
 	{ as: "scoped" },

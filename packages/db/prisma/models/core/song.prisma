@@ -20,7 +20,7 @@ model Song {
     vocadbId              Int?           @map("vocadb_id")
     vcpediaId             Int?           @map("vcpedia_id")
     moegirlId             Int?           @map("moegirl_id")
-    externalLinks         ExternalLink[]
+    externalLinks         SongExternalLink[]
     coverUrl              String?        @map("cover_url")
     creations             Creation[]
     performances          Performance[]

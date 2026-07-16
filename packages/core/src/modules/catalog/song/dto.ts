@@ -7,6 +7,8 @@ import {
 	SongTypeSchema,
 	type Serialized,
 	LyricsSchema,
+	SongExternalLinkSchema,
+	PlatformSchema,
 } from "@cvsa/db";
 
 export type SongId = number;
@@ -63,6 +65,25 @@ export const UpdateSongRequestSchema = z.object({
 	publishedAt: z.iso.datetime().optional(),
 });
 
+export const SongExternalLinkResponseSchema = SongExternalLinkSchema.omit({
+	deletedAt: true,
+	songId: true,
+});
+
+export const SongExternalLinkCreateRequestSchema = z.object({
+	label: z.string().optional().nullable(),
+	url: z.string().min(1),
+	platform: PlatformSchema.optional().nullable(),
+	platformId: z.string().optional().nullable(),
+});
+
+export const SongExternalLinkUpdateRequestSchema = z.object({
+	label: z.string().optional().nullable(),
+	url: z.string().min(1).optional(),
+	platform: PlatformSchema.optional().nullable(),
+	platformId: z.string().optional().nullable(),
+});
+
 export const SongDetailsResponseSchema = z.intersection(
 	SongSchema.omit({ deletedAt: true }),
 	z.object({
@@ -81,6 +102,7 @@ export const SongDetailsResponseSchema = z.intersection(
 			)
 			.array(),
 		lyrics: LyricsSchema.omit({ deletedAt: true }).array(),
+		externalLinks: SongExternalLinkResponseSchema.array(),
 	})
 );
 
@@ -102,3 +124,13 @@ export type SongLyricsResponseDto = Serialized<z.infer<typeof SongLyricsResponse
 export type SongLyricsListResponseDto = Serialized<z.infer<typeof SongLyricsListResponseSchema>>;
 export type SongLyricsCreateRequestDto = Serialized<z.infer<typeof SongLyricsCreateRequestSchema>>;
 export type SongLyricsUpdateRequestDto = Serialized<z.infer<typeof SongLyricsUpdateRequestSchema>>;
+
+export type SongExternalLinkResponseDto = Serialized<
+	z.infer<typeof SongExternalLinkResponseSchema>
+>;
+export type SongExternalLinkCreateRequestDto = Serialized<
+	z.infer<typeof SongExternalLinkCreateRequestSchema>
+>;
+export type SongExternalLinkUpdateRequestDto = Serialized<
+	z.infer<typeof SongExternalLinkUpdateRequestSchema>
+>;

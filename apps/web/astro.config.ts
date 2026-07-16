@@ -17,7 +17,7 @@ export default defineConfig({
 			}),
 		],
 		server: {
-			allowedHosts: ['.projectcvsa.com'],
+			allowedHosts: [".projectcvsa.com"],
 		},
 	},
 	devToolbar: {

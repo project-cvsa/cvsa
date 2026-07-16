@@ -18,21 +18,22 @@ function getConnection(): IORedis {
 	return connection;
 }
 
-export const outboxQueue = new Queue<OutboxEntryDto>(QUEUE_NAME, {
-	connection: getConnection(),
-	defaultJobOptions: {
-		attempts: 5,
-		backoff: {
-			type: "exponential",
-			delay: 1000,
+export const outboxQueue: Queue<OutboxEntryDto, unknown, string, OutboxEntryDto, unknown, string> =
+	new Queue<OutboxEntryDto>(QUEUE_NAME, {
+		connection: getConnection(),
+		defaultJobOptions: {
+			attempts: 5,
+			backoff: {
+				type: "exponential",
+				delay: 1000,
+			},
+			removeOnComplete: true,
+			removeOnFail: {
+				age: 24 * 3600,
+				count: 1000,
+			},
 		},
-		removeOnComplete: true,
-		removeOnFail: {
-			age: 24 * 3600,
-			count: 1000,
-		},
-	},
-});
+	});
 
 export function createOutboxWorker(
 	processor: (job: Job<OutboxEntryDto>) => Promise<void>

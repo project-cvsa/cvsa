@@ -30,9 +30,7 @@ export default function ssrCopyPlugin(options: PluginOptions): Plugin {
 						overwrite: true,
 						errorOnExist: false,
 					});
-					console.log(
-						`[ssr-copy] Copy ${srcPath} to ${destPath}`
-					);
+					console.log(`[ssr-copy] Copy ${srcPath} to ${destPath}`);
 				} else {
 					console.warn(`[ssr-copy] Source path not found: ${srcPath}`);
 				}

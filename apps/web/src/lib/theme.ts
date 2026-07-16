@@ -99,7 +99,7 @@ const baseVariables = {
 	"--shadow": {
 		light: primitives.gray[1000] + "10",
 		dark: primitives.gray[1000] + "30",
-	}
+	},
 } as const;
 
 const keysToInvert: Array<keyof typeof baseVariables> = [

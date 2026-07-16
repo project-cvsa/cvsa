@@ -25,7 +25,9 @@ const { title, logoVariant, description, links } = Astro.props;
 		class="w-screen min-h-screen relative flex items-end transition-colors duration-300 overflow-hidden color-primary"
 	>
 		<div class="absolute w-full top-10 px-5 md:px-20 flex items-center justify-between gap-2">
-			<div class="text-[27px] md:text-[28px] lg:text-[32px] xl:text-[42px]"><GraphicLogo/></div>
+			<div class="text-[27px] md:text-[28px] lg:text-[32px] xl:text-[42px]">
+				<GraphicLogo />
+			</div>
 
 			{logoVariant === "chinese" ? <TextLogoChinese /> : <TextLogoLatin />}
 		</div>

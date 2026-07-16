@@ -210,7 +210,7 @@ export class SearchManager {
 			const settings = INDEX_SETTINGS[name as keyof typeof INDEX_SETTINGS];
 			const currentSettings = await index.getSettings();
 			for (const [key, value] of Object.entries(settings)) {
-				if (key === "rankingRules" && value !== currentSettings[key]) {
+				if (key === "rankingRules" && !deepEqualUnordered(value, currentSettings[key])) {
 					const updateTask = await index.updateSettings(settings);
 					await this.waitForTask(updateTask.taskUid);
 				}

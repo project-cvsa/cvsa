@@ -11,9 +11,11 @@ const getBundleLocation = () => {
 	}
 };
 
-i18n.use(initFaneeNode({
-	bundlePath: getBundleLocation(),
-}));
+i18n.use(
+	initFaneeNode({
+		bundlePath: getBundleLocation(),
+	})
+);
 
 export const i18nRuntime = i18n;
 

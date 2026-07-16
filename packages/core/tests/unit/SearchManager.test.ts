@@ -1,6 +1,7 @@
 import { describe, expect, mock, test, beforeEach } from "bun:test";
 import type { Index, RecordAny, Task, MeiliSearch as MeiliSearchType } from "meilisearch";
 import { SearchManager } from "../../src/search/manager";
+import { INDEX_SETTINGS } from "../../src/search/config";
 
 interface MockClient {
 	index: ReturnType<typeof mock>;
@@ -188,26 +189,7 @@ describe("SearchManager", () => {
 
 		test("skips sync when settings match", async () => {
 			const { client, adminClient } = createMockClient();
-			const matchingSettings = {
-				searchableAttributes: [
-					"name",
-					"lyrics",
-					"description",
-					"singers",
-					"artists",
-					"bilibiliAid",
-					"bilibiliBvid",
-				],
-				filterableAttributes: ["type", "tags", "singers", "engine"],
-				sortableAttributes: ["publishedAt", "bilibiliViews"],
-				rankingRules: ["attribute", "words", "proximity", "exactness", "typo", "sort"],
-				embedders: {
-					"potion-multilingual-128M": {
-						source: "userProvided",
-						dimensions: 256,
-					},
-				},
-			};
+			const matchingSettings = INDEX_SETTINGS.song;
 
 			mockGetKeys.mockResolvedValue({
 				results: [
