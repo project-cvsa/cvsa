@@ -6,12 +6,6 @@ import {
 	createFakeSnapshotDb,
 } from "@cvsa/core/crawler";
 
-const logger = {
-	info: () => {},
-	warn: () => {},
-	error: () => {},
-};
-
 describe("crawler runtime", () => {
 	test("starts dependencies and shuts them down gracefully", async () => {
 		const mq = createFakeMq();
@@ -19,7 +13,6 @@ describe("crawler runtime", () => {
 		let initialized = false;
 		let shutdown = false;
 		const runtime = createCrawlerRuntime({
-			logger,
 			mq,
 			snapshotDb,
 			metrics: createCrawlerMetrics(),

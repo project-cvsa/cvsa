@@ -56,6 +56,7 @@
         "@cvsa/logger": "workspace:*",
         "@cvsa/observability": "workspace:*",
         "@cvsa/snapshot-db": "workspace:*",
+        "elysia": "^1.4.26",
       },
       "devDependencies": {
         "@cvsa/typescript-config": "workspace:*",
@@ -111,6 +112,7 @@
         "@cvsa/env": "workspace:*",
         "@cvsa/logger": "workspace:*",
         "@cvsa/observability": "workspace:*",
+        "@cvsa/snapshot-db": "workspace:*",
         "@elysiajs/eden": "^1.4.9",
         "@opentelemetry/api": "^1.9.0",
         "better-auth": "^1.5.6",

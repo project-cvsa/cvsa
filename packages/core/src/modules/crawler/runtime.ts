@@ -1,4 +1,5 @@
 import { traceTask } from "@cvsa/observability";
+import { appLogger } from "@cvsa/logger";
 import type { CrawlerRuntimeDependencies } from "./shared/types";
 
 export interface CrawlerRuntime {
@@ -13,12 +14,14 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 		if (shutdownComplete) return;
 		shutdownComplete = true;
 		await traceTask("crawler.runtime.shutdown", async () => {
+			if (deps.networkRuntime?.close) await deps.networkRuntime.close();
+			else deps.networkRuntime?.stopPolling();
 			await deps.mq.close();
 			await deps.snapshotDb.disconnect();
 			await deps.observability.shutdown();
 		});
 		deps.metrics?.runtimeShutdowns.add(1);
-		deps.logger.info("Crawler runtime shut down", { component: "crawler-runtime" });
+		appLogger.info("Crawler runtime shut down", { component: "crawler-runtime" });
 	};
 
 	return {
@@ -31,13 +34,15 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 					await deps.snapshotDb.connect();
 					await deps.snapshotDb.healthCheck();
 					await deps.mq.connect();
+					await deps.networkRuntime?.load();
+					deps.networkRuntime?.startPolling();
 				});
 				started = true;
 				deps.metrics?.runtimeStarts.add(1);
-				deps.logger.info("Crawler runtime started", { component: "crawler-runtime" });
+				appLogger.info("Crawler runtime started", { component: "crawler-runtime" });
 			} catch (error) {
 				deps.metrics?.dependencyFailures.add(1);
-				deps.logger.error("Crawler runtime failed to start", {
+				appLogger.error("Crawler runtime failed to start", {
 					component: "crawler-runtime",
 					error,
 				});

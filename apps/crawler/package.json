@@ -18,6 +18,7 @@
 		"@cvsa/env": "workspace:*",
 		"@cvsa/logger": "workspace:*",
 		"@cvsa/observability": "workspace:*",
-		"@cvsa/snapshot-db": "workspace:*"
+		"@cvsa/snapshot-db": "workspace:*",
+		"elysia": "^1.4.26"
 	}
 }

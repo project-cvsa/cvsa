@@ -50,6 +50,6 @@ describe("SnapshotDB", () => {
 	});
 
 	test("uses the crawler-owned SnapshotDB configuration", () => {
-		expect(crawlerEnv.CRAWLER_SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot");
+		expect(crawlerEnv.SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot");
 	});
 });

@@ -1,65 +1,34 @@
-import {
-	createCrawlerMq,
-	createCrawlerMetrics,
-	createCrawlerRuntime,
-	type CrawlerRuntime,
-} from "@cvsa/core/crawler";
 import { crawlerEnv } from "@cvsa/env";
-import { createApplicationLogger, createPinoLogger } from "@cvsa/logger";
-import { createOtelLogger, initOtelSdk } from "@cvsa/observability";
-import { createSnapshotDb } from "@cvsa/snapshot-db";
-
-export function createCrawlerAppRuntime(): CrawlerRuntime {
-	const logger = createApplicationLogger(
-		createPinoLogger({ level: crawlerEnv.CRAWLER_LOG_LEVEL, nodeEnv: crawlerEnv.NODE_ENV }),
-		createOtelLogger(crawlerEnv.CRAWLER_OTEL_SERVICE_NAME)
-	);
-	const snapshotDb = createSnapshotDb();
-	const mq = createCrawlerMq(crawlerEnv.CRAWLER_REDIS_URL, logger);
-	let otelSdk: Awaited<ReturnType<typeof initOtelSdk>> | undefined;
-
-	return createCrawlerRuntime({
-		logger,
-		mq,
-		snapshotDb,
-		metrics: createCrawlerMetrics(),
-		observability: {
-			async init(): Promise<void> {
-				otelSdk = await initOtelSdk({
-					serviceName: crawlerEnv.CRAWLER_OTEL_SERVICE_NAME,
-					serviceVersion: crawlerEnv.CRAWLER_OTEL_SERVICE_VERSION,
-					nodeEnv: crawlerEnv.NODE_ENV,
-				});
-			},
-			async shutdown(): Promise<void> {
-				if (otelSdk) await otelSdk.shutdown();
-			},
-		},
-	});
-}
+import { appLogger } from "@cvsa/logger";
+import { crawlerControlPlane } from "./controlPlane";
+import { crawlerRuntime } from "./container";
 
 async function main(): Promise<void> {
-	const runtime = createCrawlerAppRuntime();
+	if (!crawlerEnv.CONTROL_API_TOKEN) {
+		throw new Error("CONTROL_API_TOKEN must be configured before starting crawler");
+	}
+
 	let shuttingDown = false;
 
 	const shutdown = async (signal: string): Promise<void> => {
 		if (shuttingDown) return;
 		shuttingDown = true;
-		const logger = createApplicationLogger(
-			createPinoLogger({ level: crawlerEnv.CRAWLER_LOG_LEVEL, nodeEnv: crawlerEnv.NODE_ENV }),
-			createOtelLogger(crawlerEnv.CRAWLER_OTEL_SERVICE_NAME)
-		);
-		logger.info(`Received ${signal}, shutting down crawler gracefully`, {
+		crawlerControlPlane.stop();
+		appLogger.info(`Received ${signal}, shutting down crawler gracefully`, {
 			component: "crawler-runtime",
 			signal,
 		});
-		await runtime.shutdown();
+		await crawlerRuntime.shutdown();
 	};
 
 	process.once("SIGINT", () => void shutdown("SIGINT"));
 	process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
-	await runtime.start();
+	await crawlerRuntime.start();
+	crawlerControlPlane.listen({
+		hostname: crawlerEnv.CONTROL_API_HOST,
+		port: crawlerEnv.CONTROL_API_PORT,
+	});
 	await new Promise<void>(() => {});
 }
 

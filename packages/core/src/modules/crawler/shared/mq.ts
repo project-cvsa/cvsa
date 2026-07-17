@@ -3,7 +3,6 @@ import IORedis from "ioredis";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
 import type {
-	CrawlerLogger,
 	CrawlerJob,
 	CrawlerMq,
 	CrawlerProcessor,
@@ -19,8 +18,7 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 };
 
 export function createCrawlerMq(
-	redisUrl = crawlerEnv.CRAWLER_REDIS_URL,
-	logger: CrawlerLogger = appLogger
+	redisUrl = crawlerEnv.REDIS_URL
 ): CrawlerMq {
 	const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
 	const queues: Array<Queue<unknown>> = [];
@@ -29,7 +27,7 @@ export function createCrawlerMq(
 	return {
 		async connect(): Promise<void> {
 			await connection.ping();
-			logger.info("Crawler MQ connected", { component: "crawler-mq" });
+			appLogger.info("Crawler MQ connected", { component: "crawler-mq" });
 		},
 
 		createQueue<T>(name: string, options: JobsOptions = {}): CrawlerQueue<T> {
@@ -61,7 +59,7 @@ export function createCrawlerMq(
 			);
 			workers.push(worker as Worker<unknown>);
 			worker.on("failed", (job, error) => {
-				logger.error("Crawler MQ job failed", {
+				appLogger.error("Crawler MQ job failed", {
 					component: "crawler-mq",
 					jobId: job?.id,
 					error,
@@ -74,7 +72,7 @@ export function createCrawlerMq(
 			await Promise.all(workers.map((worker) => worker.close()));
 			await Promise.all(queues.map((queue) => queue.close()));
 			await connection.quit();
-			logger.info("Crawler MQ closed", { component: "crawler-mq" });
+			appLogger.info("Crawler MQ closed", { component: "crawler-mq" });
 		},
 	};
 }

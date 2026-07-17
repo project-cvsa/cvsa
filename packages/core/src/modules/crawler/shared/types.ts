@@ -27,12 +27,6 @@ export interface CrawlerMq {
 	close(): Promise<void>;
 }
 
-export interface CrawlerLogger {
-	info(message: string, attributes?: Record<string, unknown>): void;
-	warn(message: string, attributes?: Record<string, unknown>): void;
-	error(message: string, attributes?: Record<string, unknown>): void;
-}
-
 export interface CrawlerObservability {
 	init(): Promise<void>;
 	shutdown(): Promise<void>;
@@ -49,7 +43,6 @@ export interface CrawlerMetrics {
 }
 
 export interface CrawlerRuntimeDependencies {
-	logger: CrawlerLogger;
 	observability: CrawlerObservability;
 	mq: CrawlerMq;
 	snapshotDb: {
@@ -58,4 +51,10 @@ export interface CrawlerRuntimeDependencies {
 		healthCheck(): Promise<void>;
 	};
 	metrics?: CrawlerMetrics;
+	networkRuntime?: {
+		load(): Promise<boolean>;
+		startPolling(): void;
+		stopPolling(): void;
+		close?(): Promise<void>;
+	};
 }

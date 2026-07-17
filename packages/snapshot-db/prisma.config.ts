@@ -1,8 +1,5 @@
 import { defineConfig } from "prisma/config";
-
-const snapshotDatabaseUrl =
-	process.env.CRAWLER_SNAPSHOT_DATABASE_URL ??
-	"postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot";
+import { crawlerEnv } from "@cvsa/env";
 
 export default defineConfig({
 	schema: "prisma/",
@@ -10,6 +7,6 @@ export default defineConfig({
 		path: "prisma/migrations",
 	},
 	datasource: {
-		url: snapshotDatabaseUrl,
+		url: crawlerEnv.SNAPSHOT_DATABASE_URL,
 	},
 });

@@ -30,15 +30,18 @@ export const env = createEnv({
 export const crawlerEnv = createEnv({
 	server: {
 		NODE_ENV: z.enum(["development", "test", "production"]).optional(),
-		CRAWLER_REDIS_URL: z.url().default("redis://127.0.0.1:6379"),
-		CRAWLER_SNAPSHOT_DATABASE_URL: z
+		REDIS_URL: z.url().default("redis://127.0.0.1:6379"),
+		SNAPSHOT_DATABASE_URL: z
 			.url()
 			.default("postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot"),
-		CRAWLER_LOG_LEVEL: z
+		LOG_LEVEL: z
 			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
 			.default("info"),
-		CRAWLER_OTEL_SERVICE_NAME: z.string().default("cvsa-crawler"),
-		CRAWLER_OTEL_SERVICE_VERSION: z.string().default("0.0.0"),
+		OTEL_SERVICE_NAME: z.string().default("cvsa-crawler"),
+		OTEL_SERVICE_VERSION: z.string().default("0.0.0"),
+		CONTROL_API_HOST: z.string().default("127.0.0.1"),
+		CONTROL_API_PORT: z.coerce.number().int().min(1).max(65_535).default(16_413),
+		CONTROL_API_TOKEN: z.string().min(1).optional(),
 	},
 	runtimeEnv: import.meta.env,
 	emptyStringAsUndefined: true,
