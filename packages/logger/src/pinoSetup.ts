@@ -1,16 +1,22 @@
 import { env } from "@cvsa/env";
 import pino, { stdTimeFunctions } from "pino";
 
-function createPinoLogger(): pino.Logger {
-	const isProduction = env.NODE_ENV === "production";
-	const isTest = env.NODE_ENV === "test";
+export interface PinoLoggerOptions {
+	level?: pino.Level;
+	nodeEnv?: "development" | "test" | "production";
+}
+
+export function createPinoLogger(options: PinoLoggerOptions = {}): pino.Logger {
+	const nodeEnv = options.nodeEnv ?? env.NODE_ENV;
+	const isProduction = nodeEnv === "production";
+	const isTest = nodeEnv === "test";
 
 	const redact = ["authorization", "cookie", "password", "token"];
 
 	const timestamp = stdTimeFunctions.isoTime;
 
 	const baseOptions = {
-		level: env.LOG_LEVEL || "info",
+		level: options.level ?? env.LOG_LEVEL ?? "info",
 		redact,
 		timestamp,
 		formatters: {
@@ -25,7 +31,7 @@ function createPinoLogger(): pino.Logger {
 	if (isTest) {
 		return pino({
 			...baseOptions,
-			level: "warn",
+			level: options.level ?? "warn",
 			transport: {
 				target: "pino-pretty",
 				options: { colorize: true },
@@ -35,7 +41,7 @@ function createPinoLogger(): pino.Logger {
 
 	return pino({
 		...baseOptions,
-		level: "debug",
+		level: options.level ?? "debug",
 		transport: {
 			target: "pino-pretty",
 			options: { colorize: true },

@@ -1,5 +1,6 @@
 export { pinoLogger } from "./pinoSetup";
-export { appLogger } from "./appLogger";
+export { createPinoLogger } from "./pinoSetup";
+export { appLogger, createApplicationLogger } from "./appLogger";
 
 export type {
 	Severity,
@@ -9,3 +10,5 @@ export type {
 	RequestLogger,
 	OtelSdkInitResult,
 } from "./types";
+
+export type { PinoLoggerOptions } from "./pinoSetup";

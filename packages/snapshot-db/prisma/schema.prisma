@@ -1,0 +1,25 @@
+generator client {
+	provider = "prisma-client"
+	output   = "./generated"
+}
+
+datasource db {
+	provider = "postgresql"
+}
+
+model VideoSnapshot {
+	aid        BigInt   @db.BigInt
+	capturedAt DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+	views      Int
+	coins      Int
+	likes      Int
+	favorites  Int
+	shares     Int
+	danmakus   Int
+	replies    Int
+
+	@@id([aid, capturedAt])
+	@@index([aid, capturedAt(sort: Desc)])
+	@@index([capturedAt])
+	@@map("video_snapshot")
+}

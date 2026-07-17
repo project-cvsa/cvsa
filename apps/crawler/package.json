@@ -1,0 +1,23 @@
+{
+	"name": "@cvsa/crawler",
+	"type": "module",
+	"version": "0.1.0",
+	"scripts": {
+		"dev": "NODE_ENV=development bun --watch src/index.ts",
+		"start": "bun src/index.ts",
+		"test": "bun test --concurrent",
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*",
+		"@types/bun": "latest"
+	},
+	"dependencies": {
+		"@cvsa/core": "workspace:*",
+		"@cvsa/env": "workspace:*",
+		"@cvsa/logger": "workspace:*",
+		"@cvsa/observability": "workspace:*",
+		"@cvsa/snapshot-db": "workspace:*"
+	}
+}

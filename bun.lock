@@ -47,6 +47,21 @@
         "@types/bun": "1.4.2",
       },
     },
+    "apps/crawler": {
+      "name": "@cvsa/crawler",
+      "version": "0.1.0",
+      "dependencies": {
+        "@cvsa/core": "workspace:*",
+        "@cvsa/env": "workspace:*",
+        "@cvsa/logger": "workspace:*",
+        "@cvsa/observability": "workspace:*",
+        "@cvsa/snapshot-db": "workspace:*",
+      },
+      "devDependencies": {
+        "@cvsa/typescript-config": "workspace:*",
+        "@types/bun": "latest",
+      },
+    },
     "apps/web": {
       "name": "@cvsa/web",
       "version": "0.3.0",
@@ -97,6 +112,7 @@
         "@cvsa/logger": "workspace:*",
         "@cvsa/observability": "workspace:*",
         "@elysiajs/eden": "^1.4.9",
+        "@opentelemetry/api": "^1.9.0",
         "better-auth": "^1.5.6",
         "bullmq": "5.80.2",
         "ioredis": "5.10.1",
@@ -184,6 +200,20 @@
       "devDependencies": {
         "@cvsa/typescript-config": "workspace:*",
         "@types/bun": "1.4.2",
+      },
+    },
+    "packages/snapshot-db": {
+      "name": "@cvsa/snapshot-db",
+      "version": "0.1.0",
+      "dependencies": {
+        "@cvsa/env": "workspace:*",
+        "@prisma/adapter-pg": "^7.6.0",
+        "@prisma/client": "^7.6.0",
+      },
+      "devDependencies": {
+        "@cvsa/typescript-config": "workspace:*",
+        "@types/bun": "latest",
+        "prisma": "^7.6.0",
       },
     },
     "packages/typescript-config": {
@@ -461,6 +491,8 @@
 
     "@cvsa/core": ["@cvsa/core@workspace:packages/core"],
 
+    "@cvsa/crawler": ["@cvsa/crawler@workspace:apps/crawler"],
+
     "@cvsa/db": ["@cvsa/db@workspace:packages/db"],
 
     "@cvsa/embedding": ["@cvsa/embedding@workspace:packages/embedding"],
@@ -472,6 +504,8 @@
     "@cvsa/observability": ["@cvsa/observability@workspace:packages/observability"],
 
     "@cvsa/prisma-zod": ["@cvsa/prisma-zod@3.6.0", "", { "dependencies": { "@prisma/generator-helper": "^7.5.0" }, "peerDependencies": { "@prisma/client": ">= 7.0.0", "prisma": ">= 7.0.0", "zod": ">= 4.0.0" }, "bin": { "prisma-zod": "dist/index.js" } }, "sha512-5/Vh93EqlaXwwJk9cudIclmZG8fX4XsQ2LiGSSN5JcszOzm/MPXuyuGJU9M70X1P+KAB8Vza8RsvXdXmTTJbSw=="],
+
+    "@cvsa/snapshot-db": ["@cvsa/snapshot-db@workspace:packages/snapshot-db"],
 
     "@cvsa/typescript-config": ["@cvsa/typescript-config@workspace:packages/typescript-config"],
 

@@ -1,0 +1,26 @@
+{
+	"name": "@cvsa/snapshot-db",
+	"type": "module",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"version": "0.1.0",
+	"scripts": {
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit",
+		"gen": "bunx --bun prisma generate",
+		"migrate": "bunx --bun prisma migrate dev",
+		"migrate:deploy": "bunx --bun prisma migrate deploy",
+		"test": "bun test --concurrent",
+		"test:integration": "SNAPSHOT_DB_TESTS=1 bun test tests --concurrent"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*",
+		"@types/bun": "latest",
+		"prisma": "^7.6.0"
+	},
+	"dependencies": {
+		"@cvsa/env": "workspace:*",
+		"@prisma/adapter-pg": "^7.6.0",
+		"@prisma/client": "^7.6.0"
+	}
+}
