@@ -48,7 +48,7 @@ export class RedisRateLimiter implements NetworkRateLimiter {
 			maxRequests,
 			refillRate,
 			now,
-			Math.ceil(durationSeconds * 2),
+			Math.ceil(durationSeconds * 2)
 		);
 
 		return Array.isArray(result) && result[0] === 1;

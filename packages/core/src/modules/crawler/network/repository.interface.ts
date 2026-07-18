@@ -1,4 +1,4 @@
-import type { NetworkRuntimeConfig, NetworkRuntimeConfigRecordDto } from "./dto";
+import type { NetworkRuntimeConfig, NetworkRuntimeConfigRecordDto } from "@cvsa/network-scheduler";
 
 export abstract class INetworkRuntimeConfigRepository {
 	abstract get(): Promise<NetworkRuntimeConfigRecordDto | null>;

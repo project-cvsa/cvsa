@@ -1,6 +1,7 @@
-import { AppError } from "../../../error";
-import { traceTask } from "@cvsa/observability";
-import { appLogger } from "@cvsa/logger";
+import { NetworkSchedulerError } from "./errors";
+import { createNoopNetworkSchedulerLogger, type NetworkSchedulerLogger } from "./logger";
+import { createNoopNetworkSchedulerTracer, type NetworkSchedulerTracer } from "./tracer";
+import { createNoopNetworkMetrics, type NetworkMetrics } from "./telemetry";
 import type { NetworkAdapterConfig, NetworkRuntimeConfig } from "./dto";
 import type {
 	NetworkAdapter,
@@ -10,7 +11,6 @@ import type {
 	NetworkRequest,
 	NetworkResponse,
 } from "./contracts";
-import { createNetworkMetrics, type NetworkMetrics } from "./telemetry";
 
 const HEALTH_AFFECTING_ERRORS: ReadonlySet<NetworkErrorCode> = new Set([
 	"NETWORK_FAILURE",
@@ -35,19 +35,37 @@ interface SoftReserveParams {
 	reservedQuotas: Map<string, number>;
 }
 
+export interface NetworkSchedulerOptions {
+	random?: () => number;
+	metrics?: NetworkMetrics;
+	logger?: NetworkSchedulerLogger;
+	tracer?: NetworkSchedulerTracer;
+}
+
 export class NetworkScheduler implements NetworkDelegate {
 	private readonly healthFactors = new Map<string, number>();
 	private readonly softReserve: SoftReserveParams;
+	private readonly random: () => number;
+	private readonly metrics: NetworkMetrics;
+	private readonly logger: NetworkSchedulerLogger;
+	private readonly tracer: NetworkSchedulerTracer;
 
-	private readonly healthConfig: { failurePenalty: number; recoveryBonus: number; minWeightFactor: number };
+	private readonly healthConfig: {
+		failurePenalty: number;
+		recoveryBonus: number;
+		minWeightFactor: number;
+	};
 
 	constructor(
 		private readonly config: NetworkRuntimeConfig,
 		private readonly adapters: ReadonlyMap<string, NetworkAdapter>,
 		private readonly rateLimiter: NetworkRateLimiter,
-		private readonly random: () => number = Math.random,
-		private readonly metrics: NetworkMetrics = createNetworkMetrics()
+		options: NetworkSchedulerOptions = {}
 	) {
+		this.random = options.random ?? Math.random;
+		this.metrics = options.metrics ?? createNoopNetworkMetrics();
+		this.logger = options.logger ?? createNoopNetworkSchedulerLogger();
+		this.tracer = options.tracer ?? createNoopNetworkSchedulerTracer();
 		this.healthConfig = {
 			failurePenalty: config.health?.failurePenalty ?? 0.5,
 			recoveryBonus: config.health?.recoveryBonus ?? 0.2,
@@ -57,15 +75,13 @@ export class NetworkScheduler implements NetworkDelegate {
 	}
 
 	async execute(request: NetworkRequest): Promise<NetworkResponse> {
-		return traceTask("crawler.network.delegate", () => this.executeScheduled(request));
+		return this.tracer.traceTask("crawler.network.delegate", () => this.executeScheduled(request));
 	}
 
 	private async executeScheduled(request: NetworkRequest): Promise<NetworkResponse> {
-		const binding = this.config.bindings.find(
-			(item) => item.requestType === request.requestType
-		);
+		const binding = this.config.bindings.find((item) => item.requestType === request.requestType);
 		if (!binding)
-			throw new AppError("No configured network route", "NO_AVAILABLE_ADAPTER", 503);
+			throw new NetworkSchedulerError("No configured network route", "NO_AVAILABLE_ADAPTER", 503);
 
 		if (!(await this.admitSoftReserve(request.requestType))) {
 			return {
@@ -88,7 +104,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			);
 
 		if (candidates.length === 0) {
-			throw new AppError(
+			throw new NetworkSchedulerError(
 				"No available network adapter for request type",
 				"NO_AVAILABLE_ADAPTER",
 				503
@@ -108,7 +124,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			const response = await candidate.adapter.execute(request);
 			this.updateHealthFactor(candidate.config.id, response.errorCode);
 			this.recordRequest(response, request.requestType, attempts);
-			appLogger.info("Network request completed", {
+			this.logger.info("Network request completed", {
 				component: "network-scheduler",
 				adapterId: candidate.adapter.id,
 				requestType: request.requestType,
@@ -121,7 +137,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			lastResponse = response;
 		}
 		if (lastResponse) return lastResponse;
-		throw new AppError("No available network adapter", "NO_AVAILABLE_ADAPTER", 503);
+		throw new NetworkSchedulerError("No available network adapter", "NO_AVAILABLE_ADAPTER", 503);
 	}
 
 	private computeSoftReserveParams(): SoftReserveParams {
@@ -133,9 +149,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			const limits = adapterConfig.rateLimits;
 			if (limits.length === 0) continue;
 
-			const minRate = Math.min(
-				...limits.map((l) => l.maxRequests / l.durationSeconds)
-			);
+			const minRate = Math.min(...limits.map((l) => l.maxRequests / l.durationSeconds));
 			poolRate += minRate;
 		}
 
@@ -166,11 +180,11 @@ export class NetworkScheduler implements NetworkDelegate {
 
 	private async admitSoftReserve(requestType: string): Promise<boolean> {
 		const policy = this.config.requestTypePolicies[requestType];
+		const reservedQuota = this.softReserve.reservedQuotas.get(requestType);
 
-		if (policy?.reservedShare && (this.softReserve.reservedQuotas.get(requestType) ?? 0) > 0) {
-			const quota = this.softReserve.reservedQuotas.get(requestType) as number;
+		if (policy?.reservedShare && reservedQuota && reservedQuota > 0) {
 			const scope = `soft-reserve:reserved:${requestType}`;
-			if (await this.rateLimiter.consume(scope, SOFT_RESERVE_WINDOW_SECONDS, quota)) {
+			if (await this.rateLimiter.consume(scope, SOFT_RESERVE_WINDOW_SECONDS, reservedQuota)) {
 				return true;
 			}
 		}
@@ -201,10 +215,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		return true;
 	}
 
-	private updateHealthFactor(
-		adapterId: string,
-		errorCode: NetworkErrorCode | undefined
-	): void {
+	private updateHealthFactor(adapterId: string, errorCode: NetworkErrorCode | undefined): void {
 		const current = this.healthFactors.get(adapterId) ?? 1;
 
 		if (!errorCode || !HEALTH_AFFECTING_ERRORS.has(errorCode)) {
@@ -219,7 +230,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		);
 		this.healthFactors.set(adapterId, next);
 		if (next < current) {
-			appLogger.warn("Network adapter health factor decreased", {
+			this.logger.warn("Network adapter health factor decreased", {
 				component: "network-scheduler",
 				adapterId,
 				healthFactor: next,

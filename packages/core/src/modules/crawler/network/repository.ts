@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@cvsa/snapshot-db";
 import { BaseRepository } from "../../../utils/BaseRepository";
-import type { NetworkRuntimeConfig, NetworkRuntimeConfigRecordDto } from "./dto";
+import type { NetworkRuntimeConfig, NetworkRuntimeConfigRecordDto } from "@cvsa/network-scheduler";
 import type { INetworkRuntimeConfigRepository } from "./repository.interface";
 
 const CONFIG_ID = "default";

@@ -1,20 +1,21 @@
 import { AppError } from "../../../error";
 import { appLogger } from "@cvsa/logger";
-import type { AdapterRegistry } from "./adapter";
-import type {
-	NetworkDelegate,
-	NetworkRateLimiter,
-	NetworkRequest,
-	NetworkResponse,
-} from "./contracts";
 import {
 	NetworkRuntimeConfigDocumentSchema,
 	NetworkRuntimeConfigSchema,
+	NetworkScheduler,
+	NetworkSchedulerError,
+	type AdapterRegistry,
+	type NetworkDelegate,
+	type NetworkMetrics,
+	type NetworkRateLimiter,
+	type NetworkRequest,
+	type NetworkResponse,
 	type NetworkRuntimeConfigDocument,
 	type NetworkRuntimeStatus,
-} from "./dto";
-import { NetworkScheduler } from "./scheduler";
+} from "@cvsa/network-scheduler";
 import type { INetworkRuntimeConfigRepository } from "./repository.interface";
+import { createNetworkMetrics } from "./telemetry";
 
 export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	private scheduler: NetworkScheduler | undefined;
@@ -24,7 +25,8 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	constructor(
 		private readonly repository: INetworkRuntimeConfigRepository,
 		private readonly registry: AdapterRegistry,
-		private readonly rateLimiter: NetworkRateLimiter
+		private readonly rateLimiter: NetworkRateLimiter,
+		private readonly metrics: NetworkMetrics = createNetworkMetrics()
 	) {}
 
 	async execute(request: NetworkRequest): Promise<NetworkResponse> {
@@ -34,7 +36,14 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 				"NO_AVAILABLE_ADAPTER",
 				503
 			);
-		return this.scheduler.execute(request);
+		try {
+			return await this.scheduler.execute(request);
+		} catch (error) {
+			if (error instanceof NetworkSchedulerError) {
+				throw new AppError(error.message, error.code, error.statusCode);
+			}
+			throw error;
+		}
 	}
 
 	async load(): Promise<boolean> {
@@ -61,11 +70,9 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			const adapters = new Map(
 				config.adapters.map((adapter) => [adapter.id, this.registry.create(adapter)])
 			);
-			const nextScheduler = new NetworkScheduler(
-				config,
-				adapters,
-				this.rateLimiter
-			);
+			const nextScheduler = new NetworkScheduler(config, adapters, this.rateLimiter, {
+				metrics: this.metrics,
+			});
 			this.scheduler = nextScheduler;
 			this.revision = validatedDocument.revision;
 			appLogger.info("Network runtime configuration loaded", {

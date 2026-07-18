@@ -1,4 +1,6 @@
 import { z } from "zod";
+import fetch, { type RequestInit } from "node-fetch";
+import { ProxyAgent } from "proxy-agent";
 import type { NetworkAdapterConfig } from "./dto";
 import type {
 	NetworkAdapter,
@@ -9,9 +11,9 @@ import type {
 
 const BilibiliEnvelopeSchema = z.object({ code: z.number() }).passthrough();
 
-function responseHeaders(headers: Headers): Record<string, string> {
+function responseHeaders(headers: Iterable<readonly [string, string]>): Record<string, string> {
 	const values: Record<string, string> = {};
-	for (const [key, value] of headers.entries()) values[key] = value;
+	for (const [key, value] of headers) values[key] = value;
 	return values;
 }
 
@@ -33,7 +35,9 @@ function toErrorCode(status: number, body: string): NetworkResponse["errorCode"]
 	return undefined;
 }
 
-export function createFetchNetworkTransport(): NetworkTransport {
+export function createFetchNetworkTransport(fetchImplementation: typeof fetch = fetch): NetworkTransport {
+	const proxyAgents = new Map<string, ProxyAgent>();
+
 	return {
 		async execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkResponse> {
 			const startedAt = performance.now();
@@ -42,14 +46,22 @@ export function createFetchNetworkTransport(): NetworkTransport {
 				? setTimeout(() => controller.abort(), request.timeoutMs)
 				: undefined;
 			try {
-				const init = {
+				let agent: ProxyAgent | undefined;
+				if (proxyUrl) {
+					agent = proxyAgents.get(proxyUrl);
+					if (!agent) {
+						agent = new ProxyAgent({ getProxyForUrl: () => proxyUrl });
+						proxyAgents.set(proxyUrl, agent);
+					}
+				}
+				const init: RequestInit = {
 					method: request.method ?? "GET",
 					headers: request.headers,
 					body: request.body,
 					signal: controller.signal,
-					proxy: proxyUrl,
+					agent,
 				};
-				const result = await fetch(request.url, init);
+				const result = await fetchImplementation(request.url, init);
 				const body = await result.text();
 				return {
 					adapterId: "",
@@ -60,10 +72,9 @@ export function createFetchNetworkTransport(): NetworkTransport {
 					errorCode: toErrorCode(result.status, body),
 				};
 			} catch (error) {
-				const errorCode =
-					error instanceof DOMException && error.name === "AbortError"
-						? "REQUEST_TIMEOUT"
-						: "NETWORK_FAILURE";
+				const errorCode = error instanceof Error && error.name === "AbortError"
+					? "REQUEST_TIMEOUT"
+					: "NETWORK_FAILURE";
 				return {
 					adapterId: "",
 					status: 0,

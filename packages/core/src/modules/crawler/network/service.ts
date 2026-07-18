@@ -3,7 +3,7 @@ import {
 	NetworkRuntimeConfigDocumentSchema,
 	NetworkRuntimeConfigSchema,
 	type NetworkRuntimeConfigDocument,
-} from "./dto";
+} from "@cvsa/network-scheduler";
 import type { INetworkRuntimeConfigRepository } from "./repository.interface";
 
 export class NetworkRuntimeConfigService {

@@ -38,6 +38,11 @@ function response(adapterId: string, errorCode?: NetworkResponse["errorCode"]): 
 	};
 }
 
+function randomSequence(values: number[]): () => number {
+	let index = 0;
+	return () => values[index++ % values.length] ?? 0;
+}
+
 class FakeAdapter implements NetworkAdapter {
 	constructor(
 		readonly id: string,
@@ -118,8 +123,7 @@ describe("NetworkScheduler", () => {
 			config(),
 			adapters,
 			new FakeRateLimiter(),
-			Date.now,
-			() => 0
+			{ random: () => 1 }
 		);
 
 		const result = await scheduler.execute({
@@ -144,8 +148,7 @@ describe("NetworkScheduler", () => {
 			config(),
 			adapters,
 			new FakeRateLimiter(),
-			Date.now,
-			() => 0
+			{ random: randomSequence([0, 0.25]) }
 		);
 
 		const first = await scheduler.execute({
@@ -177,8 +180,7 @@ describe("NetworkScheduler", () => {
 			}),
 			new Map([["direct-a", new FakeAdapter("direct-a", [response("direct-a")])]]),
 			limiter,
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		await expect(
@@ -217,8 +219,7 @@ describe("NetworkScheduler", () => {
 			}),
 			adapters,
 			limiter,
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		const result = await scheduler.execute({
@@ -248,8 +249,7 @@ describe("NetworkScheduler", () => {
 			}),
 			new Map([["direct-a", new FakeAdapter("direct-a", [response("direct-a")])]]),
 			limiter,
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		expect(
@@ -275,8 +275,7 @@ describe("NetworkScheduler", () => {
 			}),
 			new Map([["direct-a", new FakeAdapter("direct-a", [response("direct-a")])]]),
 			new FakeRateLimiter(),
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		await expect(
@@ -292,8 +291,7 @@ describe("NetworkScheduler", () => {
 			config(),
 			new Map(),
 			new FakeRateLimiter(),
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		await expect(
@@ -331,8 +329,7 @@ describe("NetworkScheduler", () => {
 			}),
 			adapters,
 			new FakeRateLimiter(),
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		await scheduler.execute({
@@ -380,8 +377,7 @@ describe("NetworkScheduler", () => {
 			}),
 			adapters,
 			new FakeRateLimiter(),
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		await scheduler.execute({
@@ -413,8 +409,7 @@ describe("NetworkScheduler", () => {
 			}),
 			new Map(),
 			new FakeRateLimiter(["soft-reserve:shared"]),
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		const result = await scheduler.execute({
@@ -445,8 +440,7 @@ describe("NetworkScheduler", () => {
 			}),
 			new Map([["direct-a", new FakeAdapter("direct-a", [response("direct-a")])]]),
 			limiter,
-			Date.now,
-			() => 0
+			{ random: () => 0 }
 		);
 
 		const result = await scheduler.execute({

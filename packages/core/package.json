@@ -30,6 +30,7 @@
 		"@cvsa/embedding": "workspace:*",
 		"@cvsa/env": "workspace:*",
 		"@cvsa/logger": "workspace:*",
+		"@cvsa/network-scheduler": "workspace:*",
 		"@cvsa/observability": "workspace:*",
 		"@cvsa/snapshot-db": "workspace:*",
 		"@elysiajs/eden": "^1.4.9",
