@@ -71,7 +71,6 @@ Choose one of the following adapter types:
 | --- | --- | --- |
 | `direct` | Omit it | — |
 | `http-proxy` | HTTP or HTTPS URL | `http://proxy.example.com:8080` |
-| `socks-proxy` | `socks://` or `socks5://` URL | `socks5://proxy.example.com:1080` |
 
 Use `baseWeight` to control selection probability. Set `enabled` to `false` to take an adapter out of service without removing its configuration.
 

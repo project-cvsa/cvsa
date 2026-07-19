@@ -97,13 +97,42 @@ export class NetworkScheduler implements NetworkDelegate {
 		state: SchedulerState,
 		request: NetworkRequest
 	): Promise<NetworkResponse> {
-		const binding = state.config.bindings.find(
-			(item) => item.requestType === request.requestType
-		);
-		if (!binding)
-			throw new NetworkSchedulerError("No configured network route", "NO_AVAILABLE_ADAPTER", 503);
+		const requestType = request.requestType;
+		const binding = requestType
+			? state.config.bindings?.find((item) => item.requestType === requestType)
+			: undefined;
 
-		if (!(await this.admitSoftReserve(state, request.requestType))) {
+		const candidates = binding
+			? binding.adapterIds
+					.map((id) => this.getCandidate(state, id))
+					.filter(
+						(
+							candidate
+						): candidate is {
+							adapter: NetworkAdapter;
+							config: NetworkAdapterConfig;
+						} => candidate !== undefined
+					)
+			: state.config.adapters
+					.map((adapterConfig) => this.getCandidate(state, adapterConfig.id))
+					.filter(
+						(
+							candidate
+						): candidate is {
+							adapter: NetworkAdapter;
+							config: NetworkAdapterConfig;
+						} => candidate !== undefined
+					);
+
+		if (candidates.length === 0) {
+			throw new NetworkSchedulerError(
+				"No available network adapter for request type",
+				"NO_AVAILABLE_ADAPTER",
+				503
+			);
+		}
+
+		if (requestType && !(await this.admitSoftReserve(state, requestType))) {
 			return {
 				adapterId: "",
 				status: 429,
@@ -114,22 +143,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			};
 		}
 
-		const candidates = binding.adapterIds
-			.map((id) => this.getCandidate(state, id))
-			.filter(
-				(
-					candidate
-				): candidate is { adapter: NetworkAdapter; config: NetworkAdapterConfig } =>
-					candidate !== undefined
-			);
-
-		if (candidates.length === 0) {
-			throw new NetworkSchedulerError(
-				"No available network adapter for request type",
-				"NO_AVAILABLE_ADAPTER",
-				503
-			);
-		}
+		const effectiveRequestType = requestType ?? "default";
 
 		let lastResponse: NetworkResponse | undefined;
 		let attempts = 0;
@@ -143,11 +157,11 @@ export class NetworkScheduler implements NetworkDelegate {
 
 			const response = await candidate.adapter.execute(request);
 			this.updateHealthFactor(state, candidate.config.id, response.errorCode);
-			this.recordRequest(response, request.requestType, attempts);
+			this.recordRequest(response, effectiveRequestType, attempts);
 			this.logger.info("Network request completed", {
 				component: "network-scheduler",
 				adapterId: candidate.adapter.id,
-				requestType: request.requestType,
+				requestType: effectiveRequestType,
 				durationMs: response.durationMs,
 				attempts,
 				errorCode: response.errorCode,

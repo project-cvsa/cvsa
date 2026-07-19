@@ -102,16 +102,16 @@ describe("NetworkScheduler", () => {
 			},
 		};
 		const adapter = new AdapterRegistry(transport).create({
-			id: "socks-a",
-			type: "socks-proxy",
-			proxyUrl: "socks5://127.0.0.1:1080",
+			id: "proxy-a",
+			type: "http-proxy",
+			proxyUrl: "http://127.0.0.1:8080",
 			enabled: true,
 			baseWeight: 1,
 			rateLimits: [],
 		});
 
 		await adapter.execute({ url: "https://api.bilibili.com/x", requestType: "bilibili-api" });
-		expect(usedProxy).toBe("socks5://127.0.0.1:1080");
+		expect(usedProxy).toBe("http://127.0.0.1:8080");
 	});
 
 	test("switches adapter within the same call after a retryable failure", async () => {
@@ -280,17 +280,20 @@ describe("NetworkScheduler", () => {
 		).rejects.toThrow("No available network adapter");
 	});
 
-	test("throws 503 when request type is not bound to any adapter", async () => {
-		const scheduler = new NetworkScheduler(config(), new Map(), new FakeRateLimiter(), {
-			random: () => 0,
-		});
+	test("falls back to all enabled adapters when request type is not bound", async () => {
+		const adapter = new FakeAdapter("direct-a", [response("direct-a")]);
+		const scheduler = new NetworkScheduler(
+			config(),
+			new Map([[adapter.id, adapter]]),
+			new FakeRateLimiter(),
+			{ random: () => 0 }
+		);
 
-		await expect(
-			scheduler.execute({
-				url: "https://api.bilibili.com/x",
-				requestType: "unknown-type",
-			})
-		).rejects.toThrow("No configured network route");
+		const result = await scheduler.execute({
+			url: "https://api.bilibili.com/x",
+			requestType: "unknown-type",
+		});
+		expect(result.adapterId).toBe("direct-a");
 	});
 
 	test("reduces adapter weight after failures but keeps it available (no cooldown)", async () => {
@@ -398,7 +401,7 @@ describe("NetworkScheduler", () => {
 					"bilibili-api": { reservedShare: 0 },
 				},
 			}),
-			new Map(),
+			new Map([["direct-a", new FakeAdapter("direct-a", [response("direct-a")])]]),
 			new FakeRateLimiter(["soft-reserve:shared"]),
 			{ random: () => 0 }
 		);

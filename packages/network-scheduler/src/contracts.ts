@@ -20,7 +20,7 @@ export type NetworkApplicationErrorClassifier = (
 
 export interface NetworkRequest {
 	url: string;
-	requestType: string;
+	requestType?: string;
 	method?: string;
 	headers?: Record<string, string>;
 	body?: string;
@@ -29,6 +29,14 @@ export interface NetworkRequest {
 
 export interface NetworkResponse {
 	adapterId: string;
+	status: number;
+	headers: Record<string, string>;
+	body: string;
+	durationMs: number;
+	errorCode?: NetworkErrorCode;
+}
+
+export interface NetworkTransportResponse {
 	status: number;
 	headers: Record<string, string>;
 	body: string;
@@ -46,7 +54,7 @@ export interface NetworkAdapter {
 }
 
 export interface NetworkTransport {
-	execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkResponse>;
+	execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkTransportResponse>;
 }
 
 export interface NetworkRateLimiter {

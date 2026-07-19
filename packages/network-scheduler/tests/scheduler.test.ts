@@ -124,9 +124,92 @@ describe("NetworkScheduler.reload", () => {
 		);
 
 		scheduler.reload(nextConfig, nextAdapters);
-		nextConfig.bindings[0].adapterIds[0] = "old";
+		if (nextConfig.bindings) nextConfig.bindings[0].adapterIds[0] = "old";
 		nextAdapters.clear();
 
 		expect(await scheduler.execute(request())).toMatchObject({ adapterId: "new" });
+	});
+});
+
+describe("NetworkScheduler", () => {
+	test("routes to all enabled adapters when no binding is configured", async () => {
+		const adapter = new StaticAdapter("direct-a", response("direct-a"));
+		const scheduler = new NetworkScheduler(
+			{
+				adapters: [
+					{ id: "direct-a", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
+				],
+				requestTypePolicies: {},
+			},
+			new Map([[adapter.id, adapter]]),
+			createFakeNetworkRateLimiter()
+		);
+
+		const result = await scheduler.execute({
+			url: "https://example.com",
+		});
+		expect(result.adapterId).toBe("direct-a");
+	});
+
+	test("falls back to all enabled adapters when requestType does not match any binding", async () => {
+		const adapter = new StaticAdapter("direct-a", response("direct-a"));
+		const scheduler = new NetworkScheduler(
+			{
+				adapters: [
+					{ id: "direct-a", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
+				],
+				bindings: [{ requestType: "other-type", adapterIds: [] }],
+				requestTypePolicies: {},
+			},
+			new Map([[adapter.id, adapter]]),
+			createFakeNetworkRateLimiter()
+		);
+
+		const result = await scheduler.execute({
+			url: "https://example.com",
+			requestType: "unmatched-type",
+		});
+		expect(result.adapterId).toBe("direct-a");
+	});
+
+	test("skips disabled adapters in fallback routing", async () => {
+		const enabled = new StaticAdapter("enabled", response("enabled"));
+		const disabled = new StaticAdapter("disabled", response("disabled"));
+		const scheduler = new NetworkScheduler(
+			{
+				adapters: [
+					{ id: "disabled", type: "direct", enabled: false, baseWeight: 1, rateLimits: [] },
+					{ id: "enabled", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
+				],
+				requestTypePolicies: {},
+			},
+			new Map([
+				[enabled.id, enabled],
+				[disabled.id, disabled],
+			]),
+			createFakeNetworkRateLimiter()
+		);
+
+		const result = await scheduler.execute({
+			url: "https://example.com",
+		});
+		expect(result.adapterId).toBe("enabled");
+	});
+
+	test("throws when no adapter is available in fallback mode", async () => {
+		const scheduler = new NetworkScheduler(
+			{
+				adapters: [
+					{ id: "disabled", type: "direct", enabled: false, baseWeight: 1, rateLimits: [] },
+				],
+				requestTypePolicies: {},
+			},
+			new Map(),
+			createFakeNetworkRateLimiter()
+		);
+
+		await expect(
+			scheduler.execute({ url: "https://example.com" })
+		).rejects.toThrow("No available network adapter");
 	});
 });

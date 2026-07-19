@@ -1,34 +1,49 @@
 import { describe, expect, test } from "bun:test";
-import fetch, { Response, type RequestInit } from "node-fetch";
-import { ProxyAgent } from "proxy-agent";
-import { createFetchNetworkTransport } from "../src/adapter";
+import type axios from "axios";
+import type { AxiosRequestConfig, AxiosResponse } from "axios";
+import { AdapterRegistry, createAxiosNetworkTransport } from "../src/adapter";
 
-describe("createFetchNetworkTransport", () => {
-	test("passes a proxy agent to the fetch implementation", async () => {
-		let receivedInit: RequestInit | undefined;
-		const fetchImplementation: typeof fetch = async (_url, init) => {
-			receivedInit = init;
-			return new Response("proxied", { status: 200 });
+function mockResponse(status: number, body: string): AxiosResponse<string> {
+	return {
+		status,
+		data: body,
+		headers: {},
+		config: { headers: {} } as AxiosResponse["config"],
+		statusText: "OK",
+	};
+}
+
+describe("createAxiosNetworkTransport", () => {
+	test("passes proxy config when a proxy URL is provided", async () => {
+		let receivedConfig: AxiosRequestConfig | undefined;
+		const axiosInstance = (config: AxiosRequestConfig) => {
+			receivedConfig = config;
+			return Promise.resolve(mockResponse(200, "proxied"));
 		};
-		const transport = createFetchNetworkTransport(fetchImplementation);
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios);
 
 		const result = await transport.execute(
 			{ url: "https://example.com/resource", requestType: "test" },
-			"socks5://proxy.example.com:1080"
+			"http://proxy.example.com:8080"
 		);
 
 		expect(result.status).toBe(200);
 		expect(result.body).toBe("proxied");
-		expect(receivedInit?.agent).toBeInstanceOf(ProxyAgent);
+		expect(receivedConfig?.proxy).toEqual({
+			protocol: "http",
+			host: "proxy.example.com",
+			port: 8080,
+			auth: undefined,
+		});
 	});
 
-	test("does not create a proxy agent for direct requests", async () => {
-		let receivedInit: RequestInit | undefined;
-		const fetchImplementation: typeof fetch = async (_url, init) => {
-			receivedInit = init;
-			return new Response("direct", { status: 200 });
+	test("does not configure a proxy for direct requests", async () => {
+		let receivedConfig: AxiosRequestConfig | undefined;
+		const axiosInstance = (config: AxiosRequestConfig) => {
+			receivedConfig = config;
+			return Promise.resolve(mockResponse(200, "direct"));
 		};
-		const transport = createFetchNetworkTransport(fetchImplementation);
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios);
 
 		const result = await transport.execute({
 			url: "https://example.com/resource",
@@ -37,13 +52,44 @@ describe("createFetchNetworkTransport", () => {
 
 		expect(result.status).toBe(200);
 		expect(result.body).toBe("direct");
-		expect(receivedInit?.agent).toBeUndefined();
+		expect(receivedConfig?.proxy).toBeUndefined();
+	});
+
+	test("sends the request through the configured proxy", async () => {
+		let proxiedRequestUrl: string | undefined;
+		const proxy = Bun.serve({
+			hostname: "127.0.0.1",
+			port: 0,
+			fetch(request) {
+				proxiedRequestUrl = request.url;
+				return new Response("served by proxy", {
+					headers: { "content-type": "text/plain" },
+				});
+			},
+		});
+
+		try {
+			const transport = createAxiosNetworkTransport();
+			const result = await transport.execute(
+				{
+					url: "http://unresolvable.test/resource?source=network-scheduler",
+					requestType: "test",
+				},
+				`http://127.0.0.1:${proxy.port}`
+			);
+
+			expect(result).toMatchObject({ status: 200, body: "served by proxy" });
+			expect(proxiedRequestUrl).toBe(
+				"http://unresolvable.test:80/resource?source=network-scheduler"
+			);
+		} finally {
+			proxy.stop(true);
+		}
 	});
 
 	test("does not interpret application payloads without a classifier", async () => {
-		const fetchImplementation: typeof fetch = async () =>
-			new Response('{"code":-1}', { status: 200 });
-		const transport = createFetchNetworkTransport(fetchImplementation);
+		const axiosInstance = () => Promise.resolve(mockResponse(200, '{"code":-1}'));
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios);
 
 		await expect(
 			transport.execute({ url: "https://example.com/resource", requestType: "test" })
@@ -51,9 +97,8 @@ describe("createFetchNetworkTransport", () => {
 	});
 
 	test("delegates application error interpretation to the caller", async () => {
-		const fetchImplementation: typeof fetch = async () =>
-			new Response('{"error":"quota"}', { status: 200 });
-		const transport = createFetchNetworkTransport(fetchImplementation, {
+		const axiosInstance = () => Promise.resolve(mockResponse(200, '{"error":"quota"}'));
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios, {
 			classifyApplicationError: ({ body }) =>
 				body.includes("quota") ? "APPLICATION_ERROR" : undefined,
 		});
@@ -61,5 +106,47 @@ describe("createFetchNetworkTransport", () => {
 		await expect(
 			transport.execute({ url: "https://example.com/resource", requestType: "test" })
 		).resolves.toMatchObject({ errorCode: "APPLICATION_ERROR" });
+	});
+
+	test("handles network failures gracefully", async () => {
+		const axiosInstance = () => {
+			const error = new Error("Network error");
+			Object.defineProperty(error, "name", { value: "Error" });
+			return Promise.reject(error);
+		};
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios);
+
+		const result = await transport.execute({
+			url: "https://example.com/resource",
+			requestType: "test",
+		});
+		expect(result.errorCode).toBe("NETWORK_FAILURE");
+		expect(result.status).toBe(0);
+	});
+});
+
+describe("AdapterRegistry", () => {
+	test("adds the adapter id after transport execution", async () => {
+		const registry = new AdapterRegistry({
+			async execute() {
+				return {
+					status: 200,
+					headers: {},
+					body: "custom transport",
+					durationMs: 1,
+				};
+			},
+		});
+		const adapter = registry.create({
+			id: "custom",
+			type: "direct",
+			enabled: true,
+			baseWeight: 1,
+			rateLimits: [],
+		});
+
+		await expect(
+			adapter.execute({ url: "https://example.com", requestType: "test" })
+		).resolves.toMatchObject({ adapterId: "custom", body: "custom transport" });
 	});
 });

@@ -24,22 +24,19 @@ export const DirectAdapterConfigSchema = AdapterBaseSchema.extend({
 
 export const HttpProxyAdapterConfigSchema = AdapterBaseSchema.extend({
 	type: z.literal("http-proxy"),
-	proxyUrl: z.url(),
-});
-
-export const SocksProxyAdapterConfigSchema = AdapterBaseSchema.extend({
-	type: z.literal("socks-proxy"),
 	proxyUrl: z
 		.url()
-		.refine((value) => value.startsWith("socks://") || value.startsWith("socks5://"), {
-			message: "SOCKS proxy addresses must use socks:// or socks5://",
-		}),
+		.refine(
+			(value) => value.startsWith("http://") || value.startsWith("https://"),
+			{
+				message: "HTTP proxy addresses must use http:// or https://",
+			}
+		),
 });
 
 export const NetworkAdapterConfigSchema = z.discriminatedUnion("type", [
 	DirectAdapterConfigSchema,
 	HttpProxyAdapterConfigSchema,
-	SocksProxyAdapterConfigSchema,
 ]);
 
 export const RequestAdapterBindingSchema = z.object({
@@ -60,8 +57,8 @@ export const HealthConfigSchema = z.object({
 export const NetworkRuntimeConfigSchema = z
 	.object({
 		adapters: z.array(NetworkAdapterConfigSchema),
-		bindings: z.array(RequestAdapterBindingSchema),
-		requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).default({}),
+		bindings: z.array(RequestAdapterBindingSchema).optional(),
+		requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).optional().default({}),
 		health: HealthConfigSchema.optional(),
 	})
 	.superRefine((config, context) => {
@@ -76,7 +73,7 @@ export const NetworkRuntimeConfigSchema = z
 			adapterIds.add(adapter.id);
 		}
 		const requestTypes = new Set<string>();
-		for (const binding of config.bindings) {
+		for (const binding of config.bindings ?? []) {
 			if (requestTypes.has(binding.requestType)) {
 				context.addIssue({
 					code: "custom",
