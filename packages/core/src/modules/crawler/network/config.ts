@@ -70,10 +70,13 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			const adapters = new Map(
 				config.adapters.map((adapter) => [adapter.id, this.registry.create(adapter)])
 			);
-			const nextScheduler = new NetworkScheduler(config, adapters, this.rateLimiter, {
-				metrics: this.metrics,
-			});
-			this.scheduler = nextScheduler;
+			if (this.scheduler) {
+				this.scheduler.reload(config, adapters);
+			} else {
+				this.scheduler = new NetworkScheduler(config, adapters, this.rateLimiter, {
+					metrics: this.metrics,
+				});
+			}
 			this.revision = validatedDocument.revision;
 			appLogger.info("Network runtime configuration loaded", {
 				component: "network-config",

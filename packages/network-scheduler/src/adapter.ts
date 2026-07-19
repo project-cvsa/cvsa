@@ -1,15 +1,17 @@
-import { z } from "zod";
 import fetch, { type RequestInit } from "node-fetch";
 import { ProxyAgent } from "proxy-agent";
 import type { NetworkAdapterConfig } from "./dto";
 import type {
+	NetworkApplicationErrorClassifier,
 	NetworkAdapter,
 	NetworkRequest,
 	NetworkResponse,
 	NetworkTransport,
 } from "./contracts";
 
-const BilibiliEnvelopeSchema = z.object({ code: z.number() }).passthrough();
+export interface FetchNetworkTransportOptions {
+	classifyApplicationError?: NetworkApplicationErrorClassifier;
+}
 
 function responseHeaders(headers: Iterable<readonly [string, string]>): Record<string, string> {
 	const values: Record<string, string> = {};
@@ -17,25 +19,22 @@ function responseHeaders(headers: Iterable<readonly [string, string]>): Record<s
 	return values;
 }
 
-function toErrorCode(status: number, body: string): NetworkResponse["errorCode"] {
-	let parsedBody: unknown;
-	try {
-		parsedBody = JSON.parse(body);
-	} catch {
-		if (status === 429) return "HTTP_429";
-		if (status >= 500) return "HTTP_5XX";
-		if (status >= 400) return "HTTP_4XX";
-		return undefined;
-	}
+function toErrorCode(
+	status: number,
+	headers: Record<string, string>,
+	body: string,
+	classifyApplicationError?: NetworkApplicationErrorClassifier
+): NetworkResponse["errorCode"] {
 	if (status === 429) return "HTTP_429";
 	if (status >= 500) return "HTTP_5XX";
 	if (status >= 400) return "HTTP_4XX";
-	const bilibiliEnvelope = BilibiliEnvelopeSchema.safeParse(parsedBody);
-	if (bilibiliEnvelope.success && bilibiliEnvelope.data.code !== 0) return "BILIBILI_API_ERROR";
-	return undefined;
+	return classifyApplicationError?.({ status, headers, body });
 }
 
-export function createFetchNetworkTransport(fetchImplementation: typeof fetch = fetch): NetworkTransport {
+export function createFetchNetworkTransport(
+	fetchImplementation: typeof fetch = fetch,
+	options: FetchNetworkTransportOptions = {}
+): NetworkTransport {
 	const proxyAgents = new Map<string, ProxyAgent>();
 
 	return {
@@ -63,18 +62,25 @@ export function createFetchNetworkTransport(fetchImplementation: typeof fetch = 
 				};
 				const result = await fetchImplementation(request.url, init);
 				const body = await result.text();
+				const headers = responseHeaders(result.headers);
 				return {
 					adapterId: "",
 					status: result.status,
-					headers: responseHeaders(result.headers),
+					headers,
 					body,
 					durationMs: performance.now() - startedAt,
-					errorCode: toErrorCode(result.status, body),
+					errorCode: toErrorCode(
+						result.status,
+						headers,
+						body,
+						options.classifyApplicationError
+					),
 				};
 			} catch (error) {
-				const errorCode = error instanceof Error && error.name === "AbortError"
-					? "REQUEST_TIMEOUT"
-					: "NETWORK_FAILURE";
+				const errorCode =
+					error instanceof Error && error.name === "AbortError"
+						? "REQUEST_TIMEOUT"
+						: "NETWORK_FAILURE";
 				return {
 					adapterId: "",
 					status: 0,

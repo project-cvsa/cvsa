@@ -1,25 +1,18 @@
 # @cvsa/network-scheduler
 
-`@cvsa/network-scheduler` is a small, runtime-configurable request scheduler for applications that need to spread traffic across direct and proxied network paths.
+Route requests across direct connections and proxy endpoints with weighted selection, rate limits, failover, and runtime configuration reloads.
 
-It combines:
-
-- request-type routing;
-- weighted adapter selection;
-- health-aware failover;
-- per-adapter and shared token-bucket rate limits backed by Redis;
-- pluggable transports, logging, metrics, and tracing;
-- Zod schemas for validating configuration documents.
-
-## Installation
+## Install
 
 ```bash
 bun add @cvsa/network-scheduler
 ```
 
-The package uses `node-fetch` and `proxy-agent` for its default transport. `proxy-agent` supports HTTP, HTTPS, and SOCKS proxy URLs. Redis is only required when using `RedisRateLimiter`.
+Use a Redis instance when enabling the built-in rate limiter.
 
-## Quick start
+## Create a scheduler
+
+Define adapters and bind them to request types. Validate the configuration before passing it to the scheduler.
 
 ```ts
 import {
@@ -39,7 +32,7 @@ const config = NetworkRuntimeConfigSchema.parse({
 			rateLimits: [{ durationSeconds: 60, maxRequests: 600 }],
 		},
 		{
-			id: "backup-proxy",
+			id: "proxy",
 			type: "http-proxy",
 			proxyUrl: "http://proxy.example.com:8080",
 			enabled: true,
@@ -49,8 +42,8 @@ const config = NetworkRuntimeConfigSchema.parse({
 	],
 	bindings: [
 		{
-			requestType: "bilibili-api",
-			adapterIds: ["direct", "backup-proxy"],
+			requestType: "catalog-api",
+			adapterIds: ["direct", "proxy"],
 		},
 	],
 	requestTypePolicies: {},
@@ -68,71 +61,129 @@ const rateLimiter = createRedisRateLimiter(
 	process.env.REDIS_URL ?? "redis://localhost:6379"
 );
 const scheduler = new NetworkScheduler(config, adapters, rateLimiter);
+```
 
+## Configure adapters
+
+Choose one of the following adapter types:
+
+| Type | `proxyUrl` | Example |
+| --- | --- | --- |
+| `direct` | Omit it | — |
+| `http-proxy` | HTTP or HTTPS URL | `http://proxy.example.com:8080` |
+| `socks-proxy` | `socks://` or `socks5://` URL | `socks5://proxy.example.com:1080` |
+
+Use `baseWeight` to control selection probability. Set `enabled` to `false` to take an adapter out of service without removing its configuration.
+
+Add one or more limits to `rateLimits`:
+
+```ts
+rateLimits: [
+	{ durationSeconds: 1, maxRequests: 10 },
+	{ durationSeconds: 60, maxRequests: 300 },
+],
+```
+
+An adapter must be referenced by at least one binding to receive requests:
+
+```ts
+bindings: [
+	{ requestType: "catalog-api", adapterIds: ["direct", "proxy"] },
+	{ requestType: "metadata", adapterIds: ["direct"] },
+],
+```
+
+## Send requests
+
+Pass a `requestType` that exists in `bindings`:
+
+```ts
 const response = await scheduler.execute({
-	url: "https://api.bilibili.com/x/web-interface/view?bvid=...",
-	requestType: "bilibili-api",
+	url: "https://api.example.com/catalog/items/123",
+	requestType: "catalog-api",
+	method: "GET",
+	headers: { Accept: "application/json" },
 	timeoutMs: 10_000,
 });
 
-console.log(response.status, response.body);
-await rateLimiter.close?.();
+if (response.errorCode) {
+	console.error(response.errorCode, response.status);
+} else {
+	const body = JSON.parse(response.body);
+	console.log(body);
+}
 ```
 
-`NetworkScheduler` returns the response body as text. It does not interpret application-specific payloads.
+Handle `NetworkSchedulerError` when no route or usable adapter is available:
 
-## Adapters and routing
+```ts
+import { NetworkSchedulerError } from "@cvsa/network-scheduler";
 
-An adapter has an identifier, a type, an optional weight, an enabled flag, and zero or more rate limits. A binding maps a `requestType` to the adapters that may handle it.
+try {
+	await scheduler.execute(request);
+} catch (error) {
+	if (error instanceof NetworkSchedulerError) {
+		console.error(error.code, error.statusCode, error.message);
+	}
+}
+```
 
-Supported adapter types:
-
-| Type | Example | Use |
-| --- | --- | --- |
-| `direct` | — | Connect directly to the target. |
-| `http-proxy` | `http://proxy.example.com:8080` | Route through an HTTP or HTTPS proxy. |
-| `socks-proxy` | `socks5://proxy.example.com:1080` | Route through a SOCKS proxy. |
-
-The default transport uses a cached `ProxyAgent` per proxy URL, so proxy adapters perform actual proxy connections instead of merely passing a non-standard option to `fetch`. Proxy credentials may be embedded in the URL using standard URL encoding.
-
-## Scheduling behavior
-
-For each request, the scheduler:
-
-1. resolves the request type to its binding;
-2. applies the shared soft-reserve limit;
-3. selects enabled adapters using `baseWeight * healthFactor`;
-4. applies the selected adapter's rate limits;
-5. retries the request on another candidate after a transient failure.
-
-The following failures trigger failover within the same call:
+Treat these response errors as retryable when handling the result:
 
 - `NETWORK_FAILURE`
 - `REQUEST_TIMEOUT`
 - `HTTP_429`
 - `HTTP_5XX`
 
-Business-level Bilibili errors and other 4xx responses are returned to the caller and do not reduce adapter health.
+## Reload configuration
 
-When no route or usable adapter exists, the scheduler throws `NetworkSchedulerError` with code `NO_AVAILABLE_ADAPTER` and status code `503`. A rejected soft-reserve check is returned as a `429` response with error code `RATE_LIMITED`.
-
-## Rate limiting
-
-`RedisRateLimiter` uses a Redis-backed token bucket. Create one with a Redis connection URL and close it during application shutdown:
+Keep the scheduler instance and call `reload()` with the new configuration and adapter map:
 
 ```ts
-import { createRedisRateLimiter } from "@cvsa/network-scheduler";
+const nextConfig = NetworkRuntimeConfigSchema.parse(nextDocument.config);
+const nextAdapters = new Map(
+	nextConfig.adapters.map((adapterConfig) => [
+		adapterConfig.id,
+		registry.create(adapterConfig),
+	])
+);
 
+scheduler.reload(nextConfig, nextAdapters);
+```
+
+Build and validate the complete configuration before calling `reload()`. Do not mutate a configuration or adapter map after passing it to the scheduler.
+
+## Reserve capacity by request type
+
+Use `requestTypePolicies` to reserve a share of the available request capacity:
+
+```ts
+requestTypePolicies: {
+	priority: { reservedShare: 0.25 },
+	background: { reservedShare: 0.1 },
+},
+```
+
+Keep the sum of all `reservedShare` values at or below `1`.
+
+## Use Redis rate limiting
+
+Create one limiter and share it across scheduler reloads:
+
+```ts
 const limiter = createRedisRateLimiter("redis://localhost:6379");
-// pass limiter to NetworkScheduler
+const scheduler = new NetworkScheduler(config, adapters, limiter);
+
+// Reuse `limiter` when calling scheduler.reload().
+
 await limiter.close();
 ```
 
-For tests or single-process integrations, implement `NetworkRateLimiter` yourself or use the exported `FakeRateLimiter`.
+For tests or single-process use, implement `NetworkRateLimiter` or use the exported `FakeRateLimiter`.
 
-## Custom transport and observability
+## Customize the transport
 
-The default transport is replaceable when an application needs a different HTTP client, custom TLS behavior, or a platform-specific proxy implementation:
+Provide a `NetworkTransport` when you need a different HTTP client, TLS configuration, or proxy implementation:
 
 ```ts
 import type { NetworkTransport } from "@cvsa/network-scheduler";
@@ -146,17 +197,26 @@ const transport: NetworkTransport = {
 const registry = new AdapterRegistry(transport);
 ```
 
-`NetworkSchedulerOptions` accepts custom `logger`, `metrics`, `tracer`, and a deterministic `random` function for tests. No-op implementations are used when these options are omitted.
+Pass `logger`, `metrics`, `tracer`, or a deterministic `random` function through `NetworkSchedulerOptions` when needed.
 
-## Configuration validation
+## Validate configuration
 
-Use `NetworkRuntimeConfigSchema.parse()` or `.safeParse()` before creating a scheduler. Validation covers:
+Use `NetworkRuntimeConfigSchema.parse()` to reject invalid configuration or `.safeParse()` to handle validation errors yourself. The package also exports schemas for persisted configuration documents and replacement requests.
 
-- adapter identifiers and proxy URL schemes;
-- duplicate adapter IDs and request bindings;
-- bindings that reference unknown adapters;
-- positive rate-limit values;
-- health-factor ranges;
-- a total reserved share no greater than `1`.
+## Close resources
 
-The package also exports schemas for persisted configuration documents and replacement requests.
+Close the shared rate limiter during application shutdown:
+
+```ts
+await rateLimiter.close?.();
+```
+
+## Development
+
+```bash
+bun install
+bun run --cwd packages/network-scheduler typecheck
+bun run --cwd packages/network-scheduler lint
+bun run --cwd packages/network-scheduler test
+bun run --cwd packages/network-scheduler build
+```

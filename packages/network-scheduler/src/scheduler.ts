@@ -35,6 +35,18 @@ interface SoftReserveParams {
 	reservedQuotas: Map<string, number>;
 }
 
+interface SchedulerState {
+	readonly config: NetworkRuntimeConfig;
+	readonly adapters: ReadonlyMap<string, NetworkAdapter>;
+	readonly softReserve: SoftReserveParams;
+	healthFactors: Map<string, number>;
+	readonly healthConfig: {
+		failurePenalty: number;
+		recoveryBonus: number;
+		minWeightFactor: number;
+	};
+}
+
 export interface NetworkSchedulerOptions {
 	random?: () => number;
 	metrics?: NetworkMetrics;
@@ -43,22 +55,15 @@ export interface NetworkSchedulerOptions {
 }
 
 export class NetworkScheduler implements NetworkDelegate {
-	private readonly healthFactors = new Map<string, number>();
-	private readonly softReserve: SoftReserveParams;
 	private readonly random: () => number;
 	private readonly metrics: NetworkMetrics;
 	private readonly logger: NetworkSchedulerLogger;
 	private readonly tracer: NetworkSchedulerTracer;
-
-	private readonly healthConfig: {
-		failurePenalty: number;
-		recoveryBonus: number;
-		minWeightFactor: number;
-	};
+	private state: Readonly<SchedulerState>;
 
 	constructor(
-		private readonly config: NetworkRuntimeConfig,
-		private readonly adapters: ReadonlyMap<string, NetworkAdapter>,
+		config: NetworkRuntimeConfig,
+		adapters: ReadonlyMap<string, NetworkAdapter>,
 		private readonly rateLimiter: NetworkRateLimiter,
 		options: NetworkSchedulerOptions = {}
 	) {
@@ -66,24 +71,39 @@ export class NetworkScheduler implements NetworkDelegate {
 		this.metrics = options.metrics ?? createNoopNetworkMetrics();
 		this.logger = options.logger ?? createNoopNetworkSchedulerLogger();
 		this.tracer = options.tracer ?? createNoopNetworkSchedulerTracer();
-		this.healthConfig = {
-			failurePenalty: config.health?.failurePenalty ?? 0.5,
-			recoveryBonus: config.health?.recoveryBonus ?? 0.2,
-			minWeightFactor: config.health?.minWeightFactor ?? 0.05,
-		};
-		this.softReserve = this.computeSoftReserveParams();
+		this.state = this.createState(config, adapters);
+	}
+
+	reload(config: NetworkRuntimeConfig, adapters: ReadonlyMap<string, NetworkAdapter>): void {
+		const previousState = this.state;
+		const healthFactors = new Map<string, number>();
+		for (const adapterId of adapters.keys()) {
+			const previousHealthFactor = previousState.healthFactors.get(adapterId);
+			if (previousHealthFactor !== undefined) {
+				healthFactors.set(adapterId, previousHealthFactor);
+			}
+		}
+		this.state = this.createState(config, adapters, healthFactors);
 	}
 
 	async execute(request: NetworkRequest): Promise<NetworkResponse> {
-		return this.tracer.traceTask("crawler.network.delegate", () => this.executeScheduled(request));
+		const state = this.state;
+		return this.tracer.traceTask("crawler.network.delegate", () =>
+			this.executeScheduled(state, request)
+		);
 	}
 
-	private async executeScheduled(request: NetworkRequest): Promise<NetworkResponse> {
-		const binding = this.config.bindings.find((item) => item.requestType === request.requestType);
+	private async executeScheduled(
+		state: SchedulerState,
+		request: NetworkRequest
+	): Promise<NetworkResponse> {
+		const binding = state.config.bindings.find(
+			(item) => item.requestType === request.requestType
+		);
 		if (!binding)
 			throw new NetworkSchedulerError("No configured network route", "NO_AVAILABLE_ADAPTER", 503);
 
-		if (!(await this.admitSoftReserve(request.requestType))) {
+		if (!(await this.admitSoftReserve(state, request.requestType))) {
 			return {
 				adapterId: "",
 				status: 429,
@@ -95,7 +115,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		}
 
 		const candidates = binding.adapterIds
-			.map((id) => this.getCandidate(id))
+			.map((id) => this.getCandidate(state, id))
 			.filter(
 				(
 					candidate
@@ -114,7 +134,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		let lastResponse: NetworkResponse | undefined;
 		let attempts = 0;
 		while (candidates.length > 0) {
-			const candidate = this.takeWeightedCandidate(candidates);
+			const candidate = this.takeWeightedCandidate(state, candidates);
 			attempts += 1;
 
 			if (!(await this.consumeAdapterLimits(candidate.config))) {
@@ -122,7 +142,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			}
 
 			const response = await candidate.adapter.execute(request);
-			this.updateHealthFactor(candidate.config.id, response.errorCode);
+			this.updateHealthFactor(state, candidate.config.id, response.errorCode);
 			this.recordRequest(response, request.requestType, attempts);
 			this.logger.info("Network request completed", {
 				component: "network-scheduler",
@@ -140,10 +160,35 @@ export class NetworkScheduler implements NetworkDelegate {
 		throw new NetworkSchedulerError("No available network adapter", "NO_AVAILABLE_ADAPTER", 503);
 	}
 
-	private computeSoftReserveParams(): SoftReserveParams {
+	private createState(
+		config: NetworkRuntimeConfig,
+		adapters: ReadonlyMap<string, NetworkAdapter>,
+		healthFactors: Map<string, number> = new Map()
+	): SchedulerState {
+		const configSnapshot: NetworkRuntimeConfig = structuredClone(config);
+		const adaptersSnapshot = new Map(adapters);
+		const healthConfig = {
+			failurePenalty: configSnapshot.health?.failurePenalty ?? 0.5,
+			recoveryBonus: configSnapshot.health?.recoveryBonus ?? 0.2,
+			minWeightFactor: configSnapshot.health?.minWeightFactor ?? 0.05,
+		};
+
+		return {
+			config: configSnapshot,
+			adapters: adaptersSnapshot,
+			softReserve: this.computeSoftReserveParams(configSnapshot, adaptersSnapshot),
+			healthFactors,
+			healthConfig,
+		};
+	}
+
+	private computeSoftReserveParams(
+		config: NetworkRuntimeConfig,
+		adapters: ReadonlyMap<string, NetworkAdapter>
+	): SoftReserveParams {
 		let poolRate = 0;
-		for (const [id] of this.adapters) {
-			const adapterConfig = this.config.adapters.find((a) => a.id === id);
+		for (const [id] of adapters) {
+			const adapterConfig = config.adapters.find((a) => a.id === id);
 			if (!adapterConfig?.enabled) continue;
 
 			const limits = adapterConfig.rateLimits;
@@ -153,7 +198,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			poolRate += minRate;
 		}
 
-		const totalShare = Object.values(this.config.requestTypePolicies).reduce(
+		const totalShare = Object.values(config.requestTypePolicies).reduce(
 			(sum, p) => sum + p.reservedShare,
 			0
 		);
@@ -163,7 +208,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			Math.ceil(poolRate * (1 - totalShare) * SOFT_RESERVE_WINDOW_SECONDS)
 		);
 		const reservedQuotas = new Map<string, number>();
-		for (const [rt, policy] of Object.entries(this.config.requestTypePolicies)) {
+		for (const [rt, policy] of Object.entries(config.requestTypePolicies)) {
 			if (policy.reservedShare > 0) {
 				reservedQuotas.set(
 					rt,
@@ -178,9 +223,9 @@ export class NetworkScheduler implements NetworkDelegate {
 		return { sharedMax, reservedQuotas };
 	}
 
-	private async admitSoftReserve(requestType: string): Promise<boolean> {
-		const policy = this.config.requestTypePolicies[requestType];
-		const reservedQuota = this.softReserve.reservedQuotas.get(requestType);
+	private async admitSoftReserve(state: SchedulerState, requestType: string): Promise<boolean> {
+		const policy = state.config.requestTypePolicies[requestType];
+		const reservedQuota = state.softReserve.reservedQuotas.get(requestType);
 
 		if (policy?.reservedShare && reservedQuota && reservedQuota > 0) {
 			const scope = `soft-reserve:reserved:${requestType}`;
@@ -189,11 +234,11 @@ export class NetworkScheduler implements NetworkDelegate {
 			}
 		}
 
-		if (this.softReserve.sharedMax > 0) {
+		if (state.softReserve.sharedMax > 0) {
 			return this.rateLimiter.consume(
 				"soft-reserve:shared",
 				SOFT_RESERVE_WINDOW_SECONDS,
-				this.softReserve.sharedMax
+				state.softReserve.sharedMax
 			);
 		}
 
@@ -215,20 +260,24 @@ export class NetworkScheduler implements NetworkDelegate {
 		return true;
 	}
 
-	private updateHealthFactor(adapterId: string, errorCode: NetworkErrorCode | undefined): void {
-		const current = this.healthFactors.get(adapterId) ?? 1;
+	private updateHealthFactor(
+		state: SchedulerState,
+		adapterId: string,
+		errorCode: NetworkErrorCode | undefined
+	): void {
+		const current = state.healthFactors.get(adapterId) ?? 1;
 
 		if (!errorCode || !HEALTH_AFFECTING_ERRORS.has(errorCode)) {
-			const next = Math.min(1, current + this.healthConfig.recoveryBonus);
-			this.healthFactors.set(adapterId, next);
+			const next = Math.min(1, current + state.healthConfig.recoveryBonus);
+			state.healthFactors.set(adapterId, next);
 			return;
 		}
 
 		const next = Math.max(
-			this.healthConfig.minWeightFactor,
-			current * this.healthConfig.failurePenalty
+			state.healthConfig.minWeightFactor,
+			current * state.healthConfig.failurePenalty
 		);
-		this.healthFactors.set(adapterId, next);
+		state.healthFactors.set(adapterId, next);
 		if (next < current) {
 			this.logger.warn("Network adapter health factor decreased", {
 				component: "network-scheduler",
@@ -238,25 +287,28 @@ export class NetworkScheduler implements NetworkDelegate {
 		}
 	}
 
-	private getHealthFactor(adapterId: string): number {
-		return this.healthFactors.get(adapterId) ?? 1;
+	private getHealthFactor(state: SchedulerState, adapterId: string): number {
+		return state.healthFactors.get(adapterId) ?? 1;
 	}
 
 	private getCandidate(
+		state: SchedulerState,
 		id: string
 	): { adapter: NetworkAdapter; config: NetworkAdapterConfig } | undefined {
-		const config = this.config.adapters.find((adapter) => adapter.id === id);
-		const adapter = this.adapters.get(id);
+		const config = state.config.adapters.find((adapter) => adapter.id === id);
+		const adapter = state.adapters.get(id);
 		if (!config || !adapter || !config.enabled) return undefined;
-		if (this.getHealthFactor(id) <= this.healthConfig.minWeightFactor) return undefined;
+		if (this.getHealthFactor(state, id) <= state.healthConfig.minWeightFactor)
+			return undefined;
 		return { adapter, config };
 	}
 
 	private takeWeightedCandidate(
+		state: SchedulerState,
 		candidates: Array<{ adapter: NetworkAdapter; config: NetworkAdapterConfig }>
 	): { adapter: NetworkAdapter; config: NetworkAdapterConfig } {
 		const weights = candidates.map(
-			(c) => c.config.baseWeight * this.getHealthFactor(c.config.id)
+			(c) => c.config.baseWeight * this.getHealthFactor(state, c.config.id)
 		);
 		let totalWeight = weights.reduce((sum, w) => sum + w, 0);
 

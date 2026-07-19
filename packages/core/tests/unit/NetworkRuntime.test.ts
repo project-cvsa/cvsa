@@ -119,12 +119,9 @@ describe("NetworkScheduler", () => {
 			["direct-a", new FakeAdapter("direct-a", [response("direct-a", "NETWORK_FAILURE")])],
 			["direct-b", new FakeAdapter("direct-b", [response("direct-b")])],
 		]);
-		const scheduler = new NetworkScheduler(
-			config(),
-			adapters,
-			new FakeRateLimiter(),
-			{ random: () => 1 }
-		);
+		const scheduler = new NetworkScheduler(config(), adapters, new FakeRateLimiter(), {
+			random: () => 1,
+		});
 
 		const result = await scheduler.execute({
 			url: "https://api.bilibili.com/x/web-interface/view",
@@ -133,23 +130,20 @@ describe("NetworkScheduler", () => {
 		expect(result.adapterId).toBe("direct-b");
 	});
 
-	test("does not penalize a Bilibili business error", async () => {
+	test("does not penalize an application error", async () => {
 		const adapters = new Map<string, NetworkAdapter>([
 			[
 				"direct-a",
 				new FakeAdapter("direct-a", [
-					response("direct-a", "BILIBILI_API_ERROR"),
+					response("direct-a", "APPLICATION_ERROR"),
 					response("direct-a"),
 				]),
 			],
 			["direct-b", new FakeAdapter("direct-b", [response("direct-b")])],
 		]);
-		const scheduler = new NetworkScheduler(
-			config(),
-			adapters,
-			new FakeRateLimiter(),
-			{ random: randomSequence([0, 0.25]) }
-		);
+		const scheduler = new NetworkScheduler(config(), adapters, new FakeRateLimiter(), {
+			random: randomSequence([0, 0.25]),
+		});
 
 		const first = await scheduler.execute({
 			url: "https://api.bilibili.com/x",
@@ -159,7 +153,7 @@ describe("NetworkScheduler", () => {
 			url: "https://api.bilibili.com/x",
 			requestType: "bilibili-api",
 		});
-		expect(first.errorCode).toBe("BILIBILI_API_ERROR");
+		expect(first.errorCode).toBe("APPLICATION_ERROR");
 		expect(second.adapterId).toBe("direct-a");
 	});
 
@@ -287,12 +281,9 @@ describe("NetworkScheduler", () => {
 	});
 
 	test("throws 503 when request type is not bound to any adapter", async () => {
-		const scheduler = new NetworkScheduler(
-			config(),
-			new Map(),
-			new FakeRateLimiter(),
-			{ random: () => 0 }
-		);
+		const scheduler = new NetworkScheduler(config(), new Map(), new FakeRateLimiter(), {
+			random: () => 0,
+		});
 
 		await expect(
 			scheduler.execute({

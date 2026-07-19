@@ -5,8 +5,18 @@ export type NetworkErrorCode =
 	| "HTTP_429"
 	| "HTTP_5XX"
 	| "HTTP_4XX"
-	| "BILIBILI_API_ERROR"
+	| "APPLICATION_ERROR"
 	| "RATE_LIMITED";
+
+export interface NetworkApplicationErrorContext {
+	status: number;
+	headers: Record<string, string>;
+	body: string;
+}
+
+export type NetworkApplicationErrorClassifier = (
+	context: NetworkApplicationErrorContext
+) => NetworkErrorCode | undefined;
 
 export interface NetworkRequest {
 	url: string;

@@ -192,7 +192,7 @@
     },
     "packages/network-scheduler": {
       "name": "@cvsa/network-scheduler",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "ioredis": "5.10.1",
         "node-fetch": "3.3.2",
@@ -200,10 +200,10 @@
         "zod": "^4.3.6",
       },
       "devDependencies": {
+        "@cvsa/typescript-config": "workspace:*",
         "@types/bun": "latest",
         "tsdown": "^0.22.9",
         "typescript": "^7",
-        "yuku-parser": "0.6.3",
       },
     },
     "packages/observability": {

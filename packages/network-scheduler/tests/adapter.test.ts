@@ -39,4 +39,27 @@ describe("createFetchNetworkTransport", () => {
 		expect(result.body).toBe("direct");
 		expect(receivedInit?.agent).toBeUndefined();
 	});
+
+	test("does not interpret application payloads without a classifier", async () => {
+		const fetchImplementation: typeof fetch = async () =>
+			new Response('{"code":-1}', { status: 200 });
+		const transport = createFetchNetworkTransport(fetchImplementation);
+
+		await expect(
+			transport.execute({ url: "https://example.com/resource", requestType: "test" })
+		).resolves.toMatchObject({ errorCode: undefined });
+	});
+
+	test("delegates application error interpretation to the caller", async () => {
+		const fetchImplementation: typeof fetch = async () =>
+			new Response('{"error":"quota"}', { status: 200 });
+		const transport = createFetchNetworkTransport(fetchImplementation, {
+			classifyApplicationError: ({ body }) =>
+				body.includes("quota") ? "APPLICATION_ERROR" : undefined,
+		});
+
+		await expect(
+			transport.execute({ url: "https://example.com/resource", requestType: "test" })
+		).resolves.toMatchObject({ errorCode: "APPLICATION_ERROR" });
+	});
 });
