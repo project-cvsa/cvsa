@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: cvsa-db
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+        - PGDATA=/var/lib/postgresql/18/docker
+    env_file:
+      - .env.docker
+    volumes:
+      - data:/var/lib/postgresql
+    command: postgres
+    network_mode: host
+    
+  meili:
+    image: getmeili/meilisearch:v1.40
+    container_name: cvsa-meili
+    restart: always
+    ports:
+      - "127.0.0.1:7700:7700"
+    env_file:
+      - .env.docker
+    volumes:
+      - meili:/meili_data
+    network_mode: host
+
+  redis:
+    image: redis:7-alpine
+    container_name: cvsa-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis:/data
+    network_mode: bridge
+
+volumes:
+  data:
+  meili:
+  redis:

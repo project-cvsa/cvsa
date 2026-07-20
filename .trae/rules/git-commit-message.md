@@ -3,10 +3,6 @@ alwaysApply: true
 scene: git_message
 ---
 
-## 提交信息
-
-项目采用 Conventional Commits 规范来格式化提交信息。
-
 ### 基本格式
 
 每条提交信息应遵循以下结构（只允许使用英文）：
