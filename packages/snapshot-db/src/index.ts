@@ -12,9 +12,7 @@ export interface SnapshotDb {
 	healthCheck(): Promise<void>;
 }
 
-export function createSnapshotDb(
-	connectionString = crawlerEnv.SNAPSHOT_DATABASE_URL
-): SnapshotDb {
+export function createSnapshotDb(connectionString = crawlerEnv.SNAPSHOT_DATABASE_URL): SnapshotDb {
 	const adapter = new PrismaPg({ connectionString });
 	const client = new PrismaClient({ adapter });
 

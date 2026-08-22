@@ -1,9 +1,4 @@
-import type {
-	CrawlerMq,
-	CrawlerProcessor,
-	CrawlerQueue,
-	CrawlerWorker,
-} from "../shared/types";
+import type { CrawlerMq, CrawlerProcessor, CrawlerQueue, CrawlerWorker } from "../shared/types";
 
 export interface FakeMqState {
 	connected: boolean;

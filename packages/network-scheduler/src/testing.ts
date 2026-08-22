@@ -23,11 +23,7 @@ export class FakeRateLimiter implements NetworkRateLimiter {
 		this.rejectScopes = new Set(rejectScopes);
 	}
 
-	async consume(
-		scope: string,
-		_durationSeconds: number,
-		_maxRequests: number
-	): Promise<boolean> {
+	async consume(scope: string, _durationSeconds: number, _maxRequests: number): Promise<boolean> {
 		this.scopes.push(scope);
 		return !this.rejectScopes.has(scope);
 	}

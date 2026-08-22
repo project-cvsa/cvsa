@@ -2,13 +2,7 @@ import { Queue, Worker, type JobsOptions, type WorkerOptions } from "bullmq";
 import IORedis from "ioredis";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
-import type {
-	CrawlerJob,
-	CrawlerMq,
-	CrawlerProcessor,
-	CrawlerQueue,
-	CrawlerWorker,
-} from "./types";
+import type { CrawlerJob, CrawlerMq, CrawlerProcessor, CrawlerQueue, CrawlerWorker } from "./types";
 
 const DEFAULT_JOB_OPTIONS: JobsOptions = {
 	attempts: 3,
@@ -17,9 +11,7 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 	removeOnFail: { age: 24 * 60 * 60, count: 1_000 },
 };
 
-export function createCrawlerMq(
-	redisUrl = crawlerEnv.REDIS_URL
-): CrawlerMq {
+export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 	const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
 	const queues: Array<Queue<unknown>> = [];
 	const workers: Array<Worker<unknown>> = [];

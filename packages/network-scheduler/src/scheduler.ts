@@ -74,7 +74,10 @@ export class NetworkScheduler implements NetworkDelegate {
 		this.state = this.createState(config, adapters);
 	}
 
-	reload(config: NetworkRuntimeConfig, adapters: ReadonlyMap<string, NetworkAdapter>): void {
+	public reload(
+		config: NetworkRuntimeConfig,
+		adapters: ReadonlyMap<string, NetworkAdapter>
+	): void {
 		const previousState = this.state;
 		const healthFactors = new Map<string, number>();
 		for (const adapterId of adapters.keys()) {
@@ -86,7 +89,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		this.state = this.createState(config, adapters, healthFactors);
 	}
 
-	async execute(request: NetworkRequest): Promise<NetworkResponse> {
+	public async execute(request: NetworkRequest): Promise<NetworkResponse> {
 		const state = this.state;
 		return this.tracer.traceTask("crawler.network.delegate", () =>
 			this.executeScheduled(state, request)
@@ -102,27 +105,18 @@ export class NetworkScheduler implements NetworkDelegate {
 			? state.config.bindings?.find((item) => item.requestType === requestType)
 			: undefined;
 
-		const candidates = binding
+		type Candidate = {
+			adapter: NetworkAdapter;
+			config: NetworkAdapterConfig;
+		};
+
+		const adapterIds = binding
 			? binding.adapterIds
-					.map((id) => this.getCandidate(state, id))
-					.filter(
-						(
-							candidate
-						): candidate is {
-							adapter: NetworkAdapter;
-							config: NetworkAdapterConfig;
-						} => candidate !== undefined
-					)
-			: state.config.adapters
-					.map((adapterConfig) => this.getCandidate(state, adapterConfig.id))
-					.filter(
-						(
-							candidate
-						): candidate is {
-							adapter: NetworkAdapter;
-							config: NetworkAdapterConfig;
-						} => candidate !== undefined
-					);
+			: state.config.adapters.map((adapter) => adapter.id);
+
+		const candidates = adapterIds
+			.map((id) => this.getCandidate(state, id))
+			.filter((candidate): candidate is Candidate => candidate !== undefined);
 
 		if (candidates.length === 0) {
 			throw new NetworkSchedulerError(
@@ -171,7 +165,11 @@ export class NetworkScheduler implements NetworkDelegate {
 			lastResponse = response;
 		}
 		if (lastResponse) return lastResponse;
-		throw new NetworkSchedulerError("No available network adapter", "NO_AVAILABLE_ADAPTER", 503);
+		throw new NetworkSchedulerError(
+			"No available network adapter",
+			"NO_AVAILABLE_ADAPTER",
+			503
+		);
 	}
 
 	private createState(
@@ -311,9 +309,14 @@ export class NetworkScheduler implements NetworkDelegate {
 	): { adapter: NetworkAdapter; config: NetworkAdapterConfig } | undefined {
 		const config = state.config.adapters.find((adapter) => adapter.id === id);
 		const adapter = state.adapters.get(id);
-		if (!config || !adapter || !config.enabled) return undefined;
-		if (this.getHealthFactor(state, id) <= state.healthConfig.minWeightFactor)
+
+		if (!config || !adapter || !config.enabled) {
 			return undefined;
+		}
+
+		if (this.getHealthFactor(state, id) < state.healthConfig.minWeightFactor) {
+			return undefined;
+		}
 		return { adapter, config };
 	}
 

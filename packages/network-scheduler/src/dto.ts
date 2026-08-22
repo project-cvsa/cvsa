@@ -24,14 +24,7 @@ export const DirectAdapterConfigSchema = AdapterBaseSchema.extend({
 
 export const HttpProxyAdapterConfigSchema = AdapterBaseSchema.extend({
 	type: z.literal("http-proxy"),
-	proxyUrl: z
-		.url()
-		.refine(
-			(value) => value.startsWith("http://") || value.startsWith("https://"),
-			{
-				message: "HTTP proxy addresses must use http:// or https://",
-			}
-		),
+	proxyUrl: z.url(),
 });
 
 export const NetworkAdapterConfigSchema = z.discriminatedUnion("type", [

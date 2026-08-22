@@ -34,9 +34,7 @@ export const crawlerEnv = createEnv({
 		SNAPSHOT_DATABASE_URL: z
 			.url()
 			.default("postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot"),
-		LOG_LEVEL: z
-			.enum(["trace", "debug", "info", "warn", "error", "fatal"])
-			.default("info"),
+		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
 		OTEL_SERVICE_NAME: z.string().default("cvsa-crawler"),
 		OTEL_SERVICE_VERSION: z.string().default("0.0.0"),
 		CONTROL_API_HOST: z.string().default("127.0.0.1"),

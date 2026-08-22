@@ -13,7 +13,9 @@ export interface AxiosNetworkTransportOptions {
 	classifyApplicationError?: NetworkApplicationErrorClassifier;
 }
 
-function responseHeaders(headers: Record<string, string> | AxiosResponse["headers"]): Record<string, string> {
+function responseHeaders(
+	headers: Record<string, string> | AxiosResponse["headers"]
+): Record<string, string> {
 	const values: Record<string, string> = {};
 	if (headers && typeof headers === "object") {
 		for (const [key, value] of Object.entries(headers)) {
@@ -43,7 +45,7 @@ function parseProxyUrl(proxyUrl: string): AxiosProxyConfig {
 	return {
 		protocol,
 		host: parsed.hostname,
-		port: parsed.port ? Number(parsed.port) : (protocol === "https" ? 443 : 80),
+		port: parsed.port ? Number(parsed.port) : protocol === "https" ? 443 : 80,
 		auth: parsed.username
 			? { username: parsed.username, password: parsed.password }
 			: undefined,
@@ -55,7 +57,10 @@ export function createAxiosNetworkTransport(
 	options: AxiosNetworkTransportOptions = {}
 ): NetworkTransport {
 	return {
-		async execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkTransportResponse> {
+		async execute(
+			request: NetworkRequest,
+			proxyUrl?: string
+		): Promise<NetworkTransportResponse> {
 			const startedAt = performance.now();
 			try {
 				const config: AxiosRequestConfig = {
@@ -81,14 +86,19 @@ export function createAxiosNetworkTransport(
 					headers,
 					body,
 					durationMs: performance.now() - startedAt,
-					errorCode: toErrorCode(result.status, headers, body, options.classifyApplicationError),
+					errorCode: toErrorCode(
+						result.status,
+						headers,
+						body,
+						options.classifyApplicationError
+					),
 				};
 			} catch (error) {
 				const errorCode =
 					error instanceof Error && error.name === "AbortError"
 						? "REQUEST_TIMEOUT"
 						: axios.isAxiosError(error) &&
-							  (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
+								(error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
 							? "REQUEST_TIMEOUT"
 							: "NETWORK_FAILURE";
 				return {

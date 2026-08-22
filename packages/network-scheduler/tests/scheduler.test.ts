@@ -137,7 +137,13 @@ describe("NetworkScheduler", () => {
 		const scheduler = new NetworkScheduler(
 			{
 				adapters: [
-					{ id: "direct-a", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
+					{
+						id: "direct-a",
+						type: "direct",
+						enabled: true,
+						baseWeight: 1,
+						rateLimits: [],
+					},
 				],
 				requestTypePolicies: {},
 			},
@@ -156,7 +162,13 @@ describe("NetworkScheduler", () => {
 		const scheduler = new NetworkScheduler(
 			{
 				adapters: [
-					{ id: "direct-a", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
+					{
+						id: "direct-a",
+						type: "direct",
+						enabled: true,
+						baseWeight: 1,
+						rateLimits: [],
+					},
 				],
 				bindings: [{ requestType: "other-type", adapterIds: [] }],
 				requestTypePolicies: {},
@@ -178,7 +190,13 @@ describe("NetworkScheduler", () => {
 		const scheduler = new NetworkScheduler(
 			{
 				adapters: [
-					{ id: "disabled", type: "direct", enabled: false, baseWeight: 1, rateLimits: [] },
+					{
+						id: "disabled",
+						type: "direct",
+						enabled: false,
+						baseWeight: 1,
+						rateLimits: [],
+					},
 					{ id: "enabled", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
 				],
 				requestTypePolicies: {},
@@ -200,7 +218,13 @@ describe("NetworkScheduler", () => {
 		const scheduler = new NetworkScheduler(
 			{
 				adapters: [
-					{ id: "disabled", type: "direct", enabled: false, baseWeight: 1, rateLimits: [] },
+					{
+						id: "disabled",
+						type: "direct",
+						enabled: false,
+						baseWeight: 1,
+						rateLimits: [],
+					},
 				],
 				requestTypePolicies: {},
 			},
@@ -208,8 +232,8 @@ describe("NetworkScheduler", () => {
 			createFakeNetworkRateLimiter()
 		);
 
-		await expect(
-			scheduler.execute({ url: "https://example.com" })
-		).rejects.toThrow("No available network adapter");
+		await expect(scheduler.execute({ url: "https://example.com" })).rejects.toThrow(
+			"No available network adapter"
+		);
 	});
 });

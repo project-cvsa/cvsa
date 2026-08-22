@@ -12,7 +12,10 @@
 			"default": "./dist/index.mjs"
 		}
 	},
-	"files": ["dist", "README.md"],
+	"files": [
+		"dist",
+		"README.md"
+	],
 	"scripts": {
 		"build": "bunx --bun tsdown",
 		"prepack": "bun run build",
