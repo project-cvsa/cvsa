@@ -22,6 +22,7 @@ type TextFieldBaseProps = Omit<ComponentProps<"input">, "placeholder" | "size" |
 	errorText?: string;
 	leadingIcon?: IconName;
 	trailingIcon?: IconName;
+	clearLabel?: string;
 };
 
 export type TextFieldProps = TextFieldBaseProps &
@@ -48,6 +49,7 @@ export default function TextField(props: TextFieldProps) {
 		"errorText",
 		"leadingIcon",
 		"trailingIcon",
+		"clearLabel",
 		"disabled",
 		"required",
 		"value",
@@ -179,7 +181,7 @@ export default function TextField(props: TextFieldProps) {
 						type="button"
 						class="flex shrink-0 p-1.5 mr-2 text-quaternary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
 						disabled={local.disabled || !typed()}
-						aria-label="清空输入"
+						aria-label={local.clearLabel}
 						onclick={clearValue}
 					>
 						<Icon name="clear" size={18} />

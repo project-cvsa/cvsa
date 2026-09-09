@@ -39,5 +39,12 @@
 	"auth.link.register": "注册账号",
 	"auth.link.login": "已有账号？登录",
 	"auth.error.generic": "操作失败，请稍后重试",
-	"auth.error.network": "无法连接服务器，请稍后重试"
+	"auth.error.network": "无法连接服务器，请稍后重试",
+	"designSystem.title": "设计系统",
+	"designSystem.description": "常用界面组件与交互状态。",
+	"designSystem.components.title": "组件",
+	"designSystem.buttons.title": "按钮",
+	"designSystem.buttons.description": "按钮按钮用于提交操作或触发界面变化。这里展示三种视觉样式，以及小、中、大三种尺寸。",
+	"designSystem.fields.title": "输入框",
+	"designSystem.fields.description": "输入框用于填写账号信息、搜索内容和其他简短文本。"
 }

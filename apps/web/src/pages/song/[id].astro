@@ -12,7 +12,7 @@ import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/l
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
-const t = i18nServer.getT({ locale: language });
+const t = i18nServer.getT({ locale: language, namespace: "server" });
 let data: SongDetailsResponseDto | undefined;
 try {
 	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);

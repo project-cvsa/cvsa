@@ -39,5 +39,12 @@
 	"auth.link.register": "Create an account",
 	"auth.link.login": "Already have an account? Sign in",
 	"auth.error.generic": "Something went wrong, please try again later",
-	"auth.error.network": "Cannot reach the server, please try again later"
+	"auth.error.network": "Cannot reach the server, please try again later",
+	"designSystem.title": "Design System",
+	"designSystem.description": "Common interface components and interaction states.",
+	"designSystem.components.title": "Components",
+	"designSystem.buttons.title": "Buttons",
+	"designSystem.buttons.description": "Buttons are used to submit actions or trigger interface changes. Three visual styles and three sizes—small, medium, and large—are shown here.",
+	"designSystem.fields.title": "Text Fields",
+	"designSystem.fields.description": "Text fields are used for entering account information, search queries, and other short text."
 }

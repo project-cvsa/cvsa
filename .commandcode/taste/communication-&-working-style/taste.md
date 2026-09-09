@@ -9,3 +9,4 @@
 - Writes task requests in Simplified Chinese (e.g. "做一下注册登录页，把auth跑通") and expects assistant replies, plans, explanations, and clarifying questions in Chinese; English stays for code, identifiers, and published docs. Confidence: 0.8
 - Keep plans and plan summaries short and high-level — user explicitly rejected a detailed step-by-step plan as "又臭又长" with "too many details". Granular implementation specifics belong in a reference file, not in the plan the user actually reads; lead with a brief summary of goal, changes, and prerequisites. Confidence: 0.9
 - Communicates in Simplified Chinese; respond in Chinese for conversational explanations and summaries. Confidence: 0.7
+- At the start of a task, before presenting a plan or executing changes, first give a brief summary of the current state of the relevant code/system (现状简述) — user explicitly requested this ordering: status brief → plan → execution. Confidence: 0.9
