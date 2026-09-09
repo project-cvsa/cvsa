@@ -1,0 +1,46 @@
+---
+import Layout from "@layouts/Layout.astro";
+import LoginForm from "@components/pages/auth/LoginForm";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+import { getCurrentUser } from "@lib/auth";
+import Header from "@layouts/Header.astro";
+
+const { language, baseLanguage } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language });
+
+const user = await getCurrentUser(Astro.request);
+if (user) {
+	return Astro.redirect("/");
+}
+
+const redirectParam = Astro.url.searchParams.get("redirect");
+const redirectTo =
+	redirectParam?.startsWith("/") && !redirectParam.startsWith("//") ? redirectParam : "/";
+---
+
+<Layout title={t("auth.login.title")}>
+	<Header />
+	<main class="flex min-h-screen items-center justify-center px-4 py-10">
+		<div class="flex w-full max-w-[500px] flex-col gap-8">
+			<h1 class="ts-heading-1 text-display font-300">{t("auth.login.title")}</h1>
+			<LoginForm
+				client:load
+				identifierLabel={t("auth.field.identifier")}
+				passwordLabel={t("auth.field.password")}
+				submitLabel={t("auth.action.login")}
+				genericError={t("auth.error.generic")}
+				networkError={t("auth.error.network")}
+				locale={baseLanguage}
+				redirectTo={redirectTo}
+			/>
+			<div class="ts-body mt-1 flex items-center justify-between text-tertiary">
+				<span aria-disabled="true" class="cursor-not-allowed select-none opacity-80">
+					{t("auth.link.forgot")}
+				</span>
+				<a href="/register" class="transition-colors hover:text-primary">
+					{t("auth.link.register")}
+				</a>
+			</div>
+		</div>
+	</main>
+</Layout>

@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { type ComponentProps, splitProps } from "solid-js";
 
 type ButtonVariant = "filled" | "outlined" | "ghost";
@@ -28,10 +29,13 @@ export default function Button(props: ButtonProps) {
 
 	return (
 		<button
-			class={`inline-flex items-center justify-center 
-                font-medium transition-colors focus-visible:outline-2
-				focus-visible:outline-offset-6 focus-visible:outline-primary
-                 ${variantClass[variant()]} ${sizeClass[size()]} ${local.class ?? ""}`}
+			class={clsx(
+				"inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-2",
+				"focus-visible:outline-offset-6 focus-visible:outline-primary",
+				variantClass[variant()],
+				sizeClass[size()],
+				local.class
+			)}
 			{...rest}
 		>
 			{local.children}

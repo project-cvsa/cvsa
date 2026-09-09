@@ -5,6 +5,9 @@
 		"apps/*",
 		"packages/*"
 	],
+	"overrides": {
+		"elysia": "1.4.29"
+	},
 	"scripts": {
 		"dev": "bunx --bun turbo run dev",
 		"build": "bunx --bun turbo run build",

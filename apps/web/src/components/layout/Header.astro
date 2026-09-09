@@ -1,0 +1,68 @@
+---
+import GraphicLogo from "@components/icon/GraphicLogo.astro";
+import Icon from "@components/ui/Icon";
+import LogoutButton from "@components/layout/LogoutButton";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+import { getCurrentUser } from "@lib/auth";
+
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language });
+const user = await getCurrentUser(Astro.request);
+---
+
+<header class="relative top-0 z-30 bg-background">
+	<div class="mx-auto max-w-[110rem] px-4 md:px-8 h-16 md:h-20 flex items-center gap-3 md:gap-4">
+		<a href="/" class="shrink-0 text-display" aria-label={t("song.nav.home")}>
+			<span class="block text-[27px] md:text-[32px] leading-none">
+				<GraphicLogo />
+			</span>
+		</a>
+
+		<div class="relative flex-1 max-w-2xl mx-auto w-full">
+			<span
+				class="absolute left-4 top-1/2 -translate-y-1/2 text-quaternary pointer-events-none flex"
+				aria-hidden="true"
+			>
+				<Icon name="search" size={18} />
+			</span>
+			<input
+				type="search"
+				name="q"
+				placeholder={t("song.search.placeholder")}
+				aria-label={t("song.search.placeholder")}
+				class="w-full h-10 md:h-11 bg-surface text-display placeholder:text-tertiary border border-border pl-11 pr-11 outline-none focus:border-primary transition-colors"
+			>
+			<button
+				type="button"
+				class="absolute right-3.5 top-1/2 -translate-y-1/2 text-quaternary hover:text-primary transition-colors"
+				aria-label={t("song.search.clear")}
+			>
+				<Icon name="clear" size={18} />
+			</button>
+		</div>
+
+		{user ? (
+			<div class="shrink-0 flex items-center gap-2 md:gap-3">
+				<span class="ts-body text-display truncate max-w-28 md:max-w-40">
+					{user.displayName || user.username}
+				</span>
+				<LogoutButton client:idle label={t("auth.action.logout")} />
+			</div>
+		) : (
+			<a
+				href="/login"
+				class="shrink-0 ts-body text-display hover:opacity-70 transition-opacity"
+			>
+				{t("auth.action.login")}
+			</a>
+		)}
+
+		<button
+			type="button"
+			class="shrink-0 text-display p-1.5 hover:opacity-70 transition-opacity"
+			aria-label={t("song.menu.label")}
+		>
+			<Icon name="menu" size={26} />
+		</button>
+	</div>
+</header>

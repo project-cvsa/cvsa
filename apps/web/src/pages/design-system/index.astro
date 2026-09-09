@@ -6,18 +6,18 @@ import Paragraph from "@components/typography/Paragraph.astro";
 import Layout from "@layouts/Layout.astro";
 import Heading3 from "@components/typography/Heading3.astro";
 import { ButtonSizes, ButtonVariants } from "@components/pages/design-system/Buttons";
+import { TextFieldShowcase } from "@components/pages/design-system/TextFields";
 ---
 
 <Layout title="Design System">
 	<main class="max-w-4xl mx-4 md:mx-12 lg:mx-auto mt-20">
 		<Surface>
 			<Heading1>Design System</Heading1>
-			<Paragraph>This page is a showcase of the CVSA design system.<br> </Paragraph>
-			<Heading2>Components</Heading2>
-			<Heading3>Buttons</Heading3>
+			<Paragraph>常用界面组件与交互状态。</Paragraph>
+			<Heading2>组件</Heading2>
+			<Heading3>按钮</Heading3>
 			<Paragraph>
-				Buttons prompt most actions in a UI. There are 3 variants of buttons: filled,
-				outlined, and ghost. Each variant has 3 sizes: small, medium, and large.
+				按钮用于提交操作或触发界面变化。这里展示三种视觉样式，以及小、中、大三种尺寸。
 			</Paragraph>
 			<Paragraph class="inline-flex flex-wrap items-end gap-4">
 				<ButtonVariants client:load />
@@ -25,6 +25,13 @@ import { ButtonSizes, ButtonVariants } from "@components/pages/design-system/But
 			<Paragraph class="inline-flex flex-wrap items-end gap-4">
 				<ButtonSizes client:load />
 			</Paragraph>
+			<Heading3>输入框</Heading3>
+			<Paragraph>
+				输入框用于填写账号信息、搜索内容和其他简短文本。示例涵盖常用尺寸、辅助提示、必填、禁用和错误状态。
+			</Paragraph>
+			<div class="mt-4">
+				<TextFieldShowcase client:load />
+			</div>
 		</Surface>
 	</main>
 </Layout>

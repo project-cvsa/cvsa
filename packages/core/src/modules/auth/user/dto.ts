@@ -95,7 +95,8 @@ export function toSignUpResponse(data: SignupUserInfoDto): SignupResponseDto {
 }
 
 export const LoginRequestSchema = z.object({
-	email: z.email(),
+	// Username or email; the login handler routes to better-auth's username or email sign-in.
+	email: z.string().min(1).max(255),
 	password: z.string().min(1),
 });
 
@@ -116,10 +117,9 @@ export type LoginRequestDto = z.infer<typeof LoginRequestSchema>;
 export type LoginUserInfoDto = z.infer<typeof LoginUserInfoSchema>;
 export type LoginResponseDto = z.infer<typeof LoginResponseSchema>;
 
-export function betterAuthToLoginUserInfoDto(
-	user: BetterAuthUser,
-	token: string
-): LoginUserInfoDto {
+type LoginAuthUser = Pick<BetterAuthUser, "id" | "name" | "email" | "username" | "image">;
+
+export function betterAuthToLoginUserInfoDto(user: LoginAuthUser, token: string): LoginUserInfoDto {
 	return {
 		id: user.id,
 		username: user.username ?? "",

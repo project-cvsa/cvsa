@@ -1,11 +1,14 @@
 ---
 import Layout from "@layouts/Layout.astro";
 import Condition from "@components/Condition.astro";
+import Header from "@layouts/Header.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
 import Card from "@layouts/Card.astro";
+import Field from "@layouts/Field.astro";
 import Heading1 from "@components/typography/Heading1.astro";
 import { renderWiki } from "@lib/wiki";
+import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
@@ -36,9 +39,41 @@ const introduction = renderWiki(details.description ?? "", {
 	entity: "song",
 	language,
 });
+
+const songName = localizedName(details, language) || details.name || "";
+const singers = details.singers.map((singer) => localizedName(singer, language));
+const duration = formatDuration(details.duration);
+const publishedAt = formatDateTime(details.publishedAt);
+
+const lyric = pickLyric(details.lyrics, language);
+const lyricText = lyric?.plainText ?? lyric?.lrc ?? "";
+const lyricBaseLanguage = lyric?.language?.split("-")[0] ?? "";
+const lyricLanguage =
+	lyricBaseLanguage === "zh"
+		? t("song.lang.zh.name")
+		: lyricBaseLanguage === "ja" || lyricBaseLanguage === "jp"
+			? t("song.lang.jp.name")
+			: lyricBaseLanguage;
+
+const uploaderRoleNames = new Set(["uploader", "投稿", "投稿者", "post", "contributor"]);
+const uploaderNames = details.artists
+	.filter((a) => uploaderRoleNames.has(a.role.name.toLowerCase()))
+	.map((a) => localizedName(a, language))
+	.filter(Boolean);
+
+const staffByRole = new Map<number, { role: string; artists: string[] }>();
+for (const artist of details.artists) {
+	const entry = staffByRole.get(artist.role.id) ?? {
+		role: localizedName(artist.role, language),
+		artists: [],
+	};
+	entry.artists.push(localizedName(artist, language));
+	staffByRole.set(artist.role.id, entry);
+}
+const staff = [...staffByRole.values()];
 ---
 
-<Layout>
+<Layout title={`${songName} - 中V档案馆`}>
 	<style is:global>
 	.wireframe {
 		background: repeating-linear-gradient(
@@ -50,23 +85,12 @@ const introduction = renderWiki(details.description ?? "", {
 		);
 		border: var(--wireframe-line) 1px solid;
 	}
-	.wireframe-transparent {
-		background: repeating-linear-gradient(
-			-45deg,
-			transparent,
-			transparent 13px,
-			var(--wireframe-line) 13px,
-			var(--wireframe-line) 14px
-		);
-		border: var(--wireframe-line) 1px solid;
-	}
 	.highlight {
 		position: relative;
 		display: inline-block;
 		z-index: 1;
 		text-shadow: 0px 2px 4px var(--highlight-shadow-color);
 	}
-
 	.highlight::after {
 		content: "";
 		width: 100%;
@@ -82,12 +106,11 @@ const introduction = renderWiki(details.description ?? "", {
 			margin-top: 14px;
 		}
 	}
+	.lrc {
+		white-space: pre-line;
+	}
 	</style>
-	<header class="h-20 mb-2 flex items-center mx-auto max-w-[110rem] px-8 wireframe">
-		<div class="w-full flex justify-center">
-			<span class="font-[IBM_Plex_Mono] opacity-50 uppercase text-lg">Header</span>
-		</div>
-	</header>
+	<Header />
 
 	<div class="flex mx-auto max-w-[110rem]">
 		<aside class="relative hidden lg:flex md:w-60 lg:w-64 xl:w-80 items-center min-h-screen">
@@ -99,12 +122,16 @@ const introduction = renderWiki(details.description ?? "", {
 		</aside>
 
 		<main
-			class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-12"
+			class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12"
 		>
-			<div>
+			<div class="flex flex-col gap-6">
 				<Condition condition={details.coverUrl}>
 					<div class="w-full">
-						<img alt="视频封面" src={details.coverUrl} referrerpolicy="no-referrer">
+						<img
+							alt={t("song.cover.alt")}
+							src={details.coverUrl ?? ""}
+							referrerpolicy="no-referrer"
+						>
 					</div>
 				</Condition>
 				<Card>
@@ -114,17 +141,94 @@ const introduction = renderWiki(details.description ?? "", {
 						<article set:html={introduction} />
 					</Fragment>
 				</Card>
+
+				<Card>
+					<Fragment slot="title">{t("song.lyrics.title")}</Fragment>
+					<Fragment slot="title-en">Lyrics</Fragment>
+					<Fragment slot="body">
+						<Condition condition={lyricText.length > 0}>
+							<div class="flex items-center gap-2">
+								<span
+									class="ts-overline color-surface px-2.5 py-1 bg-surface-inverted border border-border"
+								>
+									{lyricLanguage}
+								</span>
+								<Condition condition={lyric?.isTranslated}>
+									<span class="ts-caption color-tertiary">
+										{t("song.lyrics.translated")}
+									</span>
+								</Condition>
+							</div>
+							<p class="lrc ts-body color-primary mt-4 leading-7">
+								{lyricText}
+							</p>
+						</Condition>
+					</Fragment>
+				</Card>
 			</div>
-			<div>
+			<div class="flex flex-col gap-6">
 				<div class="w-full">
 					<Card>
 						<Fragment slot="title">{t("song.info.title")}</Fragment>
 						<Fragment slot="title-en">Information</Fragment>
 						<Fragment slot="body">
-							<Heading1>{details.name}</Heading1>
+							<Heading1>
+								<span class="highlight">{songName}</span>
+							</Heading1>
+
+							<div class="grid grid-cols-2 gap-x-6 gap-y-6 mt-6">
+								<Condition condition={singers.length > 0}>
+									<Field label={t("song.info.field.singers")}>
+										{singers.join("、")}
+									</Field>
+								</Condition>
+
+								<Field label={t("song.info.field.duration")}>{duration}</Field>
+
+								<Condition condition={uploaderNames.length > 0}>
+									<Field label={t("song.info.field.uploader")}>
+										{uploaderNames.join("、")}
+									</Field>
+								</Condition>
+
+								<Condition condition={details.externalLinks.length > 0}>
+									<Field label={t("song.info.field.links")}>
+										<div class="flex flex-wrap gap-x-3 gap-y-1">
+											{details.externalLinks.map((link) => (
+												<a
+													href={link.url}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="underline underline-offset-4 decoration-border hover:decoration-primary transition-colors"
+											>
+												{link.label ?? link.platform ?? "link"}
+											</a>
+										))}
+										</div>
+									</Field>
+								</Condition>
+
+								<Field label={t("song.info.field.time")}>{publishedAt}</Field>
+
+								<Field label={t("song.info.field.plays")}>—</Field>
+							</div>
 						</Fragment>
 					</Card>
 				</div>
+
+				<Condition condition={staff.length > 0}>
+					<Card>
+						<Fragment slot="title">{t("song.staff.title")}</Fragment>
+						<Fragment slot="title-en">Staff</Fragment>
+						<Fragment slot="body">
+							<div class="grid grid-cols-2 gap-x-6 gap-y-6">
+								{staff.map((entry) => (
+									<Field label={entry.role}>{entry.artists.join("、")}</Field>
+								))}
+							</div>
+						</Fragment>
+					</Card>
+				</Condition>
 			</div>
 		</main>
 
