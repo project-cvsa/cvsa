@@ -1,8 +1,8 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
 import { authMiddleware } from "@/middlewares";
-import { auth, ErrorResponseSchema, toBetterAuthHeaders, getSessionCookieName } from "@cvsa/core";
-import { env } from "@cvsa/env";
+import { auth, ErrorResponseSchema, toBetterAuthHeaders } from "@cvsa/core";
+import { clearSessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
 
 export const logoutHandler = new Elysia().use(authMiddleware).delete(
@@ -14,14 +14,7 @@ export const logoutHandler = new Elysia().use(authMiddleware).delete(
 			});
 		});
 
-		const tokenCookie = cookie[await getSessionCookieName()];
-		tokenCookie.value = "";
-		tokenCookie.expires = new Date(0);
-		tokenCookie.maxAge = 0;
-		tokenCookie.httpOnly = true;
-		tokenCookie.secure = env.NODE_ENV === "production";
-		tokenCookie.sameSite = "lax";
-		tokenCookie.domain = env.COOKIE_DOMAIN;
+		await clearSessionCookie(cookie);
 
 		set.status = 204;
 		return null;

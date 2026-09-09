@@ -3,11 +3,10 @@ import GraphicLogo from "@components/icon/GraphicLogo.astro";
 import Icon from "@components/ui/Icon";
 import LogoutButton from "@components/layout/LogoutButton";
 import { getLocale, i18nServer } from "@lib/i18n/server";
-import { getCurrentUser } from "@lib/auth";
 
 const { language } = getLocale(Astro.request);
 const t = i18nServer.getT({ locale: language });
-const user = await getCurrentUser(Astro.request);
+const user = Astro.locals.user;
 ---
 
 <header class="relative top-0 z-30 bg-background">

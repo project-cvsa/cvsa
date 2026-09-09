@@ -9,12 +9,9 @@ import {
 	betterAuthToLoginUserInfoDto,
 	toLoginResponse,
 	toBetterAuthHeaders,
-	createSessionCookie,
 } from "@cvsa/core";
-import { env } from "@cvsa/env";
+import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
-
-const DAY = 86400;
 
 export const loginHandler = new Elysia().use(ip()).post(
 	"/session",
@@ -40,14 +37,7 @@ export const loginHandler = new Elysia().use(ip()).post(
 			});
 		}
 
-		const sessionCookie = await createSessionCookie(token);
-		const tokenCookie = cookie[sessionCookie.name];
-		tokenCookie.value = sessionCookie.value;
-		tokenCookie.httpOnly = true;
-		tokenCookie.maxAge = 90 * DAY;
-		tokenCookie.secure = env.NODE_ENV === "production";
-		tokenCookie.sameSite = "lax";
-		tokenCookie.domain = env.COOKIE_DOMAIN;
+		await applySessionCookie(cookie, token);
 
 		const userInfo = betterAuthToLoginUserInfoDto(user, token);
 		const response = toLoginResponse(userInfo);

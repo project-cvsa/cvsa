@@ -34,6 +34,10 @@ export const auth = betterAuth({
 	},
 	advanced: {
 		cookiePrefix: "cvsa",
+		// Pin the __Secure- cookie name prefix to NODE_ENV instead of letting
+		// better-auth infer it from the baseURL, so every process embedding this
+		// instance derives identical cookie names.
+		useSecureCookies: env.NODE_ENV === "production",
 		database: {
 			generateId: (options) => {
 				if (options.model === "user" || options.model === "users") {

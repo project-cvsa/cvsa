@@ -2,14 +2,12 @@
 import Layout from "@layouts/Layout.astro";
 import LoginForm from "@components/pages/auth/LoginForm";
 import { getLocale, i18nServer } from "@lib/i18n/server";
-import { getCurrentUser } from "@lib/auth";
 import Header from "@layouts/Header.astro";
 
 const { language, baseLanguage } = getLocale(Astro.request);
 const t = i18nServer.getT({ locale: language });
 
-const user = await getCurrentUser(Astro.request);
-if (user) {
+if (Astro.locals.user) {
 	return Astro.redirect("/");
 }
 

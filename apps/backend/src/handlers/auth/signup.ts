@@ -2,20 +2,17 @@ import { Elysia } from "elysia";
 import { ip } from "elysia-ip";
 import {
 	betterAuthToSignupUserInfoDto,
+	ErrorResponseSchema,
 	SignupRequestSchema,
 	signupRequestToBetterAuth,
 	SignupResponseSchema,
 	toSignUpResponse,
-	ErrorResponseSchema,
 	toBetterAuthHeaders,
-	createSessionCookie,
 } from "@cvsa/core";
 import { AppError } from "@cvsa/core";
 import { auth } from "@cvsa/core";
-import { env } from "@cvsa/env";
+import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
-
-const DAY = 86400;
 
 export const signupHandler = new Elysia().use(ip()).post(
 	"/user",
@@ -33,14 +30,7 @@ export const signupHandler = new Elysia().use(ip()).post(
 			});
 		}
 
-		const sessionCookie = await createSessionCookie(token);
-		const tokenCookie = cookie[sessionCookie.name];
-		tokenCookie.value = sessionCookie.value;
-		tokenCookie.httpOnly = true;
-		tokenCookie.maxAge = 90 * DAY;
-		tokenCookie.secure = env.NODE_ENV === "production";
-		tokenCookie.sameSite = "lax";
-		tokenCookie.domain = env.COOKIE_DOMAIN;
+		await applySessionCookie(cookie, token);
 
 		const userInfo = betterAuthToSignupUserInfoDto(user, token);
 		const response = toSignUpResponse(userInfo);

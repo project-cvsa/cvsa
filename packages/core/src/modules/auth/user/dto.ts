@@ -5,6 +5,11 @@ import type { auth } from "@cvsa/core/internal";
 
 type BetterAuthUser = Exclude<Awaited<ReturnType<typeof auth.api.getSession>>, null>["user"];
 
+export type AuthSessionDto = Exclude<
+	Awaited<ReturnType<typeof auth.api.getSession>>,
+	null
+>["session"];
+
 type BetterAuthSignupRequestBody = Exclude<
 	Parameters<typeof auth.api.signUpEmail>[0],
 	undefined
