@@ -48,6 +48,11 @@ export default defineConfig({
 			caption: "0.4px",
 			overline: "1.2px",
 		},
+
+		boxShadow: {
+			md: ["0 4px 8px var(--shadow)", "0 0 16px var(--shadow)"],
+			xl: ["0 8px 16px var(--shadow)", "0 0 32px var(--shadow)"],
+		},
 	},
 	shortcuts: {
 		"ts-display-large": "text-display-large fw-300 tracking-display-large",

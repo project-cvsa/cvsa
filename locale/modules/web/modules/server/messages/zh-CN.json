@@ -46,5 +46,7 @@
 	"designSystem.buttons.title": "按钮",
 	"designSystem.buttons.description": "按钮按钮用于提交操作或触发界面变化。这里展示三种视觉样式，以及小、中、大三种尺寸。",
 	"designSystem.fields.title": "输入框",
-	"designSystem.fields.description": "输入框用于填写账号信息、搜索内容和其他简短文本。"
+	"designSystem.fields.description": "输入框用于填写账号信息、搜索内容和其他简短文本。",
+	"designSystem.menus.title": "菜单",
+	"designSystem.menus.description": "菜单用于展示与触发按钮关联的一组操作或选项。支持键盘导航、禁用项、快捷键提示和选择反馈。"
 }

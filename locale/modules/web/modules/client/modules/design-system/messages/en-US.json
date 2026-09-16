@@ -23,5 +23,22 @@
 	"fields.unavailable": "Unavailable",
 	"fields.unavailableValue": "Currently unavailable for editing",
 	"fields.invalidEmailError": "Please enter a valid email address",
-	"fields.clearLabel": "Clear input"
+	"fields.clearLabel": "Clear input",
+	"menus.actionsLabel": "Actions",
+	"menus.viewsLabel": "View density",
+	"menus.actionTrigger": "Song actions",
+	"menus.viewTrigger": "View options",
+	"menus.item.search": "Search catalog",
+	"menus.item.preview": "Preview song",
+	"menus.item.clear": "Clear filters",
+	"menus.item.list": "List view",
+	"menus.item.compact": "Compact view",
+	"menus.item.advanced": "Advanced view (coming soon)",
+	"menus.feedback.search": "Search selected",
+	"menus.feedback.preview": "Preview selected",
+	"menus.feedback.clear": "Filters cleared",
+	"menus.feedback.list": "List view selected",
+	"menus.feedback.compact": "Compact view selected",
+	"menus.feedback.advanced": "Advanced view is not available yet",
+	"menus.feedback.default": "Menu item selected"
 }

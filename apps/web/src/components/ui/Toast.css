@@ -4,7 +4,6 @@
 	z-index: var(--z-index);
 	height: var(--height);
 	opacity: var(--opacity);
-	box-shadow: 0px 4px 8px var(--shadow);
 
 	will-change: translate, opacity, scale;
 	transition:

@@ -22,7 +22,7 @@ export function ToastContainer() {
 		<Portal>
 			<Toaster toaster={toaster}>
 				{(toast) => (
-					<Toast.Root class="w-fit min-w-20rem max-w-30rem bg-surface px-6 py-4 toast-root">
+					<Toast.Root class="w-fit min-w-20rem max-w-30rem bg-surface px-6 py-4 shadow-md toast-root">
 						<Toast.Title>
 							<Heading2 class="!pt-0">{toast().title}</Heading2>
 						</Toast.Title>

@@ -1,8 +1,10 @@
 ---
 import GraphicLogo from "@components/icon/GraphicLogo.astro";
-import Icon from "@components/ui/Icon";
 import LogoutButton from "@components/layout/LogoutButton";
 import { getLocale, i18nServer } from "@lib/i18n/server";
+import MenuIcon from "lucide-solid/icons/menu";
+import Search from "lucide-solid/icons/search";
+import X from "lucide-solid/icons/x";
 
 const { language } = getLocale(Astro.request);
 const t = i18nServer.getT({ locale: language, namespace: "server" });
@@ -22,7 +24,7 @@ const user = Astro.locals.user;
 				class="absolute left-4 top-1/2 -translate-y-1/2 text-quaternary pointer-events-none flex"
 				aria-hidden="true"
 			>
-				<Icon name="search" size={18} />
+				<Search size={18} />
 			</span>
 			<input
 				type="search"
@@ -36,7 +38,7 @@ const user = Astro.locals.user;
 				class="absolute right-3.5 top-1/2 -translate-y-1/2 text-quaternary hover:text-primary transition-colors"
 				aria-label={t("song.search.clear")}
 			>
-				<Icon name="clear" size={18} />
+				<X size={18} />
 			</button>
 		</div>
 
@@ -61,7 +63,7 @@ const user = Astro.locals.user;
 			class="shrink-0 text-display p-1.5 hover:opacity-70 transition-opacity"
 			aria-label={t("song.menu.label")}
 		>
-			<Icon name="menu" size={26} />
+			<MenuIcon size={26} />
 		</button>
 	</div>
 </header>

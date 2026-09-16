@@ -8,7 +8,9 @@ import {
 	Show,
 	splitProps,
 } from "solid-js";
-import Icon, { type IconName } from "./Icon";
+import { Dynamic } from "solid-js/web";
+import type { LucideIcon } from "lucide-solid";
+import X from "lucide-solid/icons/x";
 
 type TextFieldSize = "sm" | "md" | "lg";
 
@@ -20,8 +22,9 @@ type TextFieldBaseProps = Omit<ComponentProps<"input">, "placeholder" | "size" |
 	placeholder?: string;
 	helperText?: string;
 	errorText?: string;
-	leadingIcon?: IconName;
-	trailingIcon?: IconName;
+	leadingIcon?: LucideIcon;
+	trailingIcon?: LucideIcon;
+	clearable?: boolean;
 	clearLabel?: string;
 };
 
@@ -49,6 +52,7 @@ export default function TextField(props: TextFieldProps) {
 		"errorText",
 		"leadingIcon",
 		"trailingIcon",
+		"clearable",
 		"clearLabel",
 		"disabled",
 		"required",
@@ -91,7 +95,7 @@ export default function TextField(props: TextFieldProps) {
 	});
 
 	const clearValue = () => {
-		if (!inputRef || local.disabled || !inputRef.value) return;
+		if (!inputRef || local.disabled || !local.clearable || !inputRef.value) return;
 		inputRef.value = "";
 		inputRef.dispatchEvent(new InputEvent("input", { bubbles: true }));
 	};
@@ -131,7 +135,7 @@ export default function TextField(props: TextFieldProps) {
 				<Show when={local.leadingIcon}>
 					{(icon) => (
 						<span class="flex shrink-0 pl-3 pr-1.5 text-quaternary" aria-hidden="true">
-							<Icon name={icon()} size={18} />
+							<Dynamic component={icon()} size={18} />
 						</span>
 					)}
 				</Show>
@@ -169,14 +173,14 @@ export default function TextField(props: TextFieldProps) {
 						class={clsx(
 							"box-border h-full w-full min-w-0 appearance-none bg-transparent outline-none text-body",
 							local.leadingIcon ? "pl-1" : "pl-4",
-							local.trailingIcon ? "pr-1" : "pr-4",
+							local.trailingIcon || local.clearable ? "pr-1" : "pr-4",
 							"placeholder:text-tertiary disabled:cursor-not-allowed",
 							hasLabel() && "pt-[21px] pb-1"
 						)}
 					/>
 				</div>
 
-				<Show when={local.trailingIcon === "clear"}>
+				<Show when={local.clearable}>
 					<button
 						type="button"
 						class="flex shrink-0 p-1.5 mr-2 text-quaternary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
@@ -184,14 +188,16 @@ export default function TextField(props: TextFieldProps) {
 						aria-label={local.clearLabel}
 						onclick={clearValue}
 					>
-						<Icon name="clear" size={18} />
+						<X size={18} />
 					</button>
 				</Show>
-				{local.trailingIcon && local.trailingIcon !== "clear" ? (
-					<span class="flex shrink-0 pl-1.5 pr-3 text-quaternary" aria-hidden="true">
-						<Icon name={local.trailingIcon} size={18} />
-					</span>
-				) : null}
+				<Show when={!local.clearable && local.trailingIcon}>
+					{(icon) => (
+						<span class="flex shrink-0 pl-1.5 pr-3 text-quaternary" aria-hidden="true">
+							<Dynamic component={icon()} size={18} />
+						</span>
+					)}
+				</Show>
 			</div>
 
 			<Show when={hasError()}>

@@ -6,6 +6,7 @@ import Paragraph from "@components/typography/Paragraph.astro";
 import Layout from "@layouts/Layout.astro";
 import Heading3 from "@components/typography/Heading3.astro";
 import { ButtonSizes, ButtonVariants } from "@components/pages/design-system/Buttons";
+import { MenuShowcase } from "@components/pages/design-system/Menus";
 import { TextFieldShowcase } from "@components/pages/design-system/TextFields";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 
@@ -18,7 +19,9 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 		<Surface>
 			<Heading1>{t("designSystem.title")}</Heading1>
 			<Paragraph>{t("designSystem.description")}</Paragraph>
+
 			<Heading2>{t("designSystem.components.title")}</Heading2>
+
 			<Heading3>{t("designSystem.buttons.title")}</Heading3>
 			<Paragraph>
 				{t("designSystem.buttons.description")}
@@ -26,16 +29,25 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 			<Paragraph class="inline-flex flex-wrap items-end gap-4">
 				<ButtonVariants client:load />
 			</Paragraph>
-			<br/>
+			<br>
 			<Paragraph class="inline-flex flex-wrap items-end gap-4">
 				<ButtonSizes client:load />
 			</Paragraph>
+
 			<Heading3>{t("designSystem.fields.title")}</Heading3>
 			<Paragraph>
 				{t("designSystem.fields.description")}
 			</Paragraph>
 			<div class="mt-4">
 				<TextFieldShowcase client:load />
+			</div>
+
+			<Heading3>{t("designSystem.menus.title")}</Heading3>
+			<Paragraph>
+				{t("designSystem.menus.description")}
+			</Paragraph>
+			<div class="mt-4">
+				<MenuShowcase client:load />
 			</div>
 		</Surface>
 	</main>

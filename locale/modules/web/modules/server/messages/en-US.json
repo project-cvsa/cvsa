@@ -46,5 +46,7 @@
 	"designSystem.buttons.title": "Buttons",
 	"designSystem.buttons.description": "Buttons are used to submit actions or trigger interface changes. Three visual styles and three sizes—small, medium, and large—are shown here.",
 	"designSystem.fields.title": "Text Fields",
-	"designSystem.fields.description": "Text fields are used for entering account information, search queries, and other short text."
+	"designSystem.fields.description": "Text fields are used for entering account information, search queries, and other short text.",
+	"designSystem.menus.title": "Menus",
+	"designSystem.menus.description": "Menus present a short list of actions or choices anchored to a trigger. They support keyboard navigation, disabled items, shortcuts, and selection feedback."
 }

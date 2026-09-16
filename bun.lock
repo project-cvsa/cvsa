@@ -62,6 +62,7 @@
         "accept-language-parser": "^1.5.0",
         "astro": "7.0.9",
         "clsx": "^2.1.1",
+        "lucide-solid": "^1.46.0",
         "opencc": "^1.4.1",
         "resolve-accept-language": "^3.2.2",
         "solid-js": "^1.9.14",
@@ -1729,6 +1730,8 @@
     "lru-cache": ["lru-cache@11.5.2", "", {}, "sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g=="],
 
     "lru.min": ["lru.min@1.1.4", "", {}, "sha512-DqC6n3QQ77zdFpCMASA1a3Jlb64Hv2N2DciFGkO/4L9+q/IpIAuRlKOvCXabtRW6cQf8usbmM6BE/TOPysCdIA=="],
+
+    "lucide-solid": ["lucide-solid@1.46.0", "", { "peerDependencies": { "solid-js": "^1.4.7" } }, "sha512-OOGNQ8PNGQu/2AHG+yyaJfktdnXM3m0Xz10YVWiu2A/T6DKvIwYj/lgb4oRZepwAj4ZmbG/cZGU3bgtlTdQn1w=="],
 
     "luxon": ["luxon@3.7.2", "", {}, "sha512-vtEhXh/gNjI9Yg1u4jX/0YVPMvxzHuGgCm6tC5kZyb08yjGWGnqAjGJvcXbqQR2P3MyMEFnRbpcdFS6PBcLqew=="],
 

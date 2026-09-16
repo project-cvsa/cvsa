@@ -23,5 +23,22 @@
 	"fields.unavailable": "暂不可用",
 	"fields.unavailableValue": "当前不可编辑",
 	"fields.invalidEmailError": "请输入有效的邮箱地址",
-	"fields.clearLabel": "清空输入"
+	"fields.clearLabel": "清空输入",
+	"menus.actionsLabel": "操作",
+	"menus.viewsLabel": "视图密度",
+	"menus.actionTrigger": "歌曲操作",
+	"menus.viewTrigger": "视图选项",
+	"menus.item.search": "搜索曲库",
+	"menus.item.preview": "预览歌曲",
+	"menus.item.clear": "清除筛选",
+	"menus.item.list": "列表视图",
+	"menus.item.compact": "紧凑视图",
+	"menus.item.advanced": "高级视图（即将推出）",
+	"menus.feedback.search": "已选择搜索",
+	"menus.feedback.preview": "已选择预览",
+	"menus.feedback.clear": "筛选条件已清除",
+	"menus.feedback.list": "已选择列表视图",
+	"menus.feedback.compact": "已选择紧凑视图",
+	"menus.feedback.advanced": "高级视图暂不可用",
+	"menus.feedback.default": "已选择菜单项"
 }

@@ -1,11 +1,12 @@
 import TextField from "@components/ui/TextField";
 import { getComponentT } from "@lib/i18n/isomorphic";
+import Search from "lucide-solid/icons/search";
 
 export function TextFieldShowcase() {
 	const t = getComponentT("design-system");
 	return (
 		<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-			<TextField label={t("fields.account")} value="alikia2x@outlook.com" />
+			<TextField label={t("fields.account")} value="contact@projectcvsa.com" />
 			<TextField
 				label={t("fields.password")}
 				type="password"
@@ -15,8 +16,8 @@ export function TextFieldShowcase() {
 			<TextField placeholder={t("fields.usernamePlaceholder")} />
 			<TextField
 				defaultValue={t("fields.searchValue")}
-				leadingIcon="search"
-				trailingIcon="clear"
+				leadingIcon={Search}
+				clearable
 				aria-label={t("fields.searchAriaLabel")}
 				clearLabel={t("fields.clearLabel")}
 			/>
