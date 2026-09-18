@@ -97,7 +97,7 @@ const baseVariables = {
 		dark: primitives.yellow[100],
 	},
 	"--shadow": {
-		light: primitives.gray[1000] + "20",
+		light: primitives.gray[1000] + "0A",
 		dark: primitives.gray[1000] + "30",
 	},
 } as const;

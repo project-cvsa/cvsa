@@ -1,0 +1,13 @@
+---
+import Header from "@layouts/Header.astro";
+import Layout from "@layouts/Layout.astro";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+---
+
+<Layout title={t("profile.title")}>
+	<Header />
+	<main aria-label={t("profile.title")}></main>
+</Layout>

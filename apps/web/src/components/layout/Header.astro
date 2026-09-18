@@ -1,8 +1,7 @@
 ---
 import GraphicLogo from "@components/icon/GraphicLogo.astro";
-import LogoutButton from "@components/layout/LogoutButton";
+import HeaderMenu from "@components/layout/HeaderMenu";
 import { getLocale, i18nServer } from "@lib/i18n/server";
-import MenuIcon from "lucide-solid/icons/menu";
 import Search from "lucide-solid/icons/search";
 import X from "lucide-solid/icons/x";
 
@@ -11,7 +10,7 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 const user = Astro.locals.user;
 ---
 
-<header class="relative top-0 z-30 bg-background">
+<header class="relative top-0 z-30">
 	<div class="mx-auto max-w-[110rem] px-4 md:px-8 h-16 md:h-20 flex items-center gap-3 md:gap-4">
 		<a href="/" class="shrink-0 text-display" aria-label={t("song.nav.home")}>
 			<span class="block text-[27px] md:text-[32px] leading-none">
@@ -42,28 +41,15 @@ const user = Astro.locals.user;
 			</button>
 		</div>
 
-		{user ? (
-			<div class="shrink-0 flex items-center gap-2 md:gap-3">
-				<span class="ts-body text-display truncate max-w-28 md:max-w-40">
-					{user.displayName || user.username}
-				</span>
-				<LogoutButton client:idle label={t("auth.action.logout")} />
-			</div>
-		) : (
-			<a
-				href="/login"
-				class="shrink-0 ts-body text-display hover:opacity-70 transition-opacity"
-			>
-				{t("auth.action.login")}
-			</a>
-		)}
-
-		<button
-			type="button"
-			class="shrink-0 text-display p-1.5 hover:opacity-70 transition-opacity"
-			aria-label={t("song.menu.label")}
-		>
-			<MenuIcon size={26} />
-		</button>
+		<HeaderMenu
+			client:load
+			label={t("song.menu.label")}
+			homeLabel={t("song.nav.home")}
+			loginLabel={t("auth.action.login")}
+			registerLabel={t("auth.action.register")}
+			logoutLabel={t("auth.action.logout")}
+			userName={user ? user.displayName || user.username : null}
+			userAvatarUrl={user?.image ?? null}
+		/>
 	</div>
 </header>
