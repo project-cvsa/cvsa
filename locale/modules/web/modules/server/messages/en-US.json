@@ -50,6 +50,18 @@
 	"designSystem.buttons.description": "Buttons are used to submit actions or trigger interface changes. Three visual styles and three sizes—small, medium, and large—are shown here.",
 	"designSystem.fields.title": "Text Fields",
 	"designSystem.fields.description": "Text fields are used for entering account information, search queries, and other short text.",
+	"designSystem.inputs.title": "Composite Inputs",
+	"designSystem.inputs.description": "Multiline text, typing-first dates, durations, and selects share consistent labels, help, and error states. The date field avoids native browser controls and keeps the calendar secondary.",
 	"designSystem.menus.title": "Menus",
-	"designSystem.menus.description": "Menus present a short list of actions or choices anchored to a trigger. They support keyboard navigation, disabled items, shortcuts, and selection feedback."
+	"designSystem.menus.description": "Menus present a short list of actions or choices anchored to a trigger. They support keyboard navigation, disabled items, shortcuts, and selection feedback.",
+	"designSystem.lists.title": "Lists and List Items",
+	"designSystem.lists.description": "Large touch targets with item actions, pointer dragging, and keyboard reordering.",
+	"designSystem.textarea.title": "Text area",
+	"designSystem.date.title": "Date",
+	"designSystem.duration.title": "Duration",
+	"designSystem.select.title": "Select",
+	"designSystem.textarea.description": "For longer text, such as descriptions and notes.",
+	"designSystem.date.description": "Enter the year, month and day, or choose a date from the calendar.",
+	"designSystem.duration.description": "Enter a duration in minutes and seconds.",
+	"designSystem.select.description": "Choose one item from a set of options."
 }

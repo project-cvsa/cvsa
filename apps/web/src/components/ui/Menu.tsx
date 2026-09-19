@@ -44,12 +44,12 @@ const triggerBaseClass = clsx(
 const standardTriggerClass = clsx(
 	"justify-between gap-3",
 	"border border-border bg-surface",
-	"hover:border-tertiary hover:bg-surface-container-medium"
+	"hover:border-tertiary hover:bg-hover"
 );
 
 const iconOnlyTriggerClass = clsx(
 	"h-11 w-11 justify-center border border-transparent bg-transparent px-1.5",
-	"hover:border-transparent hover:bg-surface-container-medium"
+	"hover:border-transparent hover:bg-hover"
 );
 
 const contentClass = clsx("min-w-56 border-0 bg-surface p-3 select-none", "shadow-xl outline-none");
@@ -58,7 +58,7 @@ const itemClass = clsx(
 	"group grid min-h-12 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3",
 	"px-4 text-left text-primary outline-none transition-colors",
 	"data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
-	"data-[highlighted]:bg-surface-container-medium data-[highlighted]:text-display"
+	"data-[highlighted]:bg-hover data-[highlighted]:text-display"
 );
 
 interface MenuTriggerProps {
@@ -168,7 +168,7 @@ interface MenuContentProps {
 function MenuContent(props: MenuContentProps) {
 	return (
 		<Portal>
-			<ArkMenu.Positioner class="z-50">
+			<ArkMenu.Positioner class="z-50!">
 				<ArkMenu.Content class={contentClass}>
 					<MenuList items={props.items} />
 				</ArkMenu.Content>

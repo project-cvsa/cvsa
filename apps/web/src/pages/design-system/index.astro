@@ -1,13 +1,15 @@
 ---
 import Surface from "@components/layout/Surface.astro";
-import Heading1 from "@components/typography/Heading1.astro";
 import Heading2 from "@components/typography/Heading2.astro";
 import Paragraph from "@components/typography/Paragraph.astro";
+import Heading1 from "@components/typography/Heading1.astro";
 import Layout from "@layouts/Layout.astro";
 import Heading3 from "@components/typography/Heading3.astro";
 import { ButtonSizes, ButtonVariants } from "@components/pages/design-system/Buttons";
 import { MenuShowcase } from "@components/pages/design-system/Menus";
 import { TextFieldShowcase } from "@components/pages/design-system/TextFields";
+import { InputExtensionsShowcase } from "@components/pages/design-system/Inputs";
+import { ListShowcase } from "@components/pages/design-system/Lists";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 
 const { language } = getLocale(Astro.request);
@@ -15,17 +17,14 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 ---
 
 <Layout title={t("designSystem.title")} i18nNamespace="design-system">
-	<main class="max-w-4xl mx-4 md:mx-12 lg:mx-auto my-20">
-		<Surface>
+	<main class="max-w-4xl mx-2 md:mx-12 lg:mx-auto my-20">
+		<Surface class:list={["max-md:p-5"]}>
 			<Heading1>{t("designSystem.title")}</Heading1>
 			<Paragraph>{t("designSystem.description")}</Paragraph>
-
 			<Heading2>{t("designSystem.components.title")}</Heading2>
 
 			<Heading3>{t("designSystem.buttons.title")}</Heading3>
-			<Paragraph>
-				{t("designSystem.buttons.description")}
-			</Paragraph>
+			<Paragraph>{t("designSystem.buttons.description")}</Paragraph>
 			<Paragraph class="inline-flex flex-wrap items-end gap-4">
 				<ButtonVariants client:load />
 			</Paragraph>
@@ -35,19 +34,49 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 			</Paragraph>
 
 			<Heading3>{t("designSystem.fields.title")}</Heading3>
-			<Paragraph>
-				{t("designSystem.fields.description")}
-			</Paragraph>
+			<Paragraph>{t("designSystem.fields.description")}</Paragraph>
+			<div class="mt-4"><TextFieldShowcase client:load /></div>
+
+			<Heading3>{t("designSystem.textarea.title")}</Heading3>
+			<Paragraph>{t("designSystem.textarea.description")}</Paragraph>
 			<div class="mt-4">
-				<TextFieldShowcase client:load />
+				<InputExtensionsShowcase kind="textarea" locale={language} client:load />
+			</div>
+
+			<div class="grid grid-cols-1 gap-x-10 gap-y-8 md:grid-cols-2">
+				<section class="flex flex-col">
+					<Heading3>{t("designSystem.date.title")}</Heading3>
+					<Paragraph>{t("designSystem.date.description")}</Paragraph>
+					<div class="mt-auto pt-4">
+						<InputExtensionsShowcase kind="date" locale={language} client:load />
+					</div>
+				</section>
+
+				<section class="flex flex-col">
+					<Heading3>{t("designSystem.duration.title")}</Heading3>
+					<Paragraph>{t("designSystem.duration.description")}</Paragraph>
+					<div class="mt-auto pt-4">
+						<InputExtensionsShowcase kind="duration" locale={language} client:load />
+					</div>
+				</section>
+			</div>
+
+			<Heading3>{t("designSystem.select.title")}</Heading3>
+			<Paragraph>{t("designSystem.select.description")}</Paragraph>
+			<div class="mt-4">
+				<InputExtensionsShowcase kind="select" locale={language} client:load />
 			</div>
 
 			<Heading3>{t("designSystem.menus.title")}</Heading3>
-			<Paragraph>
-				{t("designSystem.menus.description")}
-			</Paragraph>
+			<Paragraph>{t("designSystem.menus.description")}</Paragraph>
 			<div class="mt-4">
 				<MenuShowcase client:load />
+			</div>
+
+			<Heading3>{t("designSystem.lists.title")}</Heading3>
+			<Paragraph>{t("designSystem.lists.description")}</Paragraph>
+			<div class="mt-4">
+				<ListShowcase client:load />
 			</div>
 		</Surface>
 	</main>

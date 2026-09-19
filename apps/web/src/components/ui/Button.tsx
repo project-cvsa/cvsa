@@ -11,8 +11,8 @@ export interface ButtonProps extends ComponentProps<"button"> {
 
 const variantClass: Record<ButtonVariant, string> = {
 	filled: "bg-primary text-display-inverted border border-primary hover:bg-secondary hover:border-secondary",
-	outlined: "bg-transparent text-primary border border-border hover:bg-surface-container-medium",
-	ghost: "bg-transparent text-primary border border-transparent hover:bg-surface-container-medium",
+	outlined: "bg-transparent text-primary border border-border hover:bg-hover",
+	ghost: "bg-transparent text-primary border border-transparent hover:bg-hover",
 };
 
 const sizeClass: Record<ButtonSize, string> = {
