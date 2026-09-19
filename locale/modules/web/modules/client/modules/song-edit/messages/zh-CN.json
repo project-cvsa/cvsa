@@ -1,0 +1,13 @@
+{
+	"field.name": "歌曲名称",
+	"field.singers": "演唱",
+	"field.duration": "时长（秒）",
+	"field.publishedAt": "发布时间",
+	"field.externalLinks": "外部链接",
+	"action.save": "保存",
+	"action.cancel": "取消",
+	"save.success": "已保存",
+	"save.error.network": "无法连接服务器，请稍后重试",
+	"save.error.unauthorized": "登录状态已失效，请重新登录",
+	"save.error.generic": "保存失败，请稍后重试"
+}

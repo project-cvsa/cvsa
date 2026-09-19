@@ -23,6 +23,8 @@
 	"song.info.field.time": "Date",
 	"song.info.field.uploader": "Uploader",
 	"song.info.field.plays": "Plays",
+	"song.edit.action": "Edit",
+	"song.edit.title": "Edit song",
 	"auth.login.title": "Sign in to CVSA",
 	"auth.register.title": "Create your account",
 	"auth.field.identifier": "Username or email",

@@ -1,6 +1,6 @@
 import Button from "@components/ui/Button";
 import TextField from "@components/ui/TextField";
-import { apiRequest } from "@lib/api";
+import { api } from "@lib/api";
 import { createSignal } from "solid-js";
 
 export interface RegisterFormProps {
@@ -11,7 +11,6 @@ export interface RegisterFormProps {
 	submitLabel: string;
 	genericError: string;
 	networkError: string;
-	locale: string;
 	redirectTo: string;
 }
 
@@ -38,13 +37,10 @@ export default function RegisterForm(props: RegisterFormProps) {
 		setFormError(undefined);
 		setSubmitting(true);
 
-		const result = await apiRequest("POST", "/v2/user", {
-			body: {
-				username,
-				password,
-				...(email ? { email } : {}),
-			},
-			locale: props.locale,
+		const result = await api.auth.register({
+			username,
+			password,
+			...(email ? { email } : {}),
 		});
 
 		if (result.ok) {

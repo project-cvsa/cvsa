@@ -9,6 +9,7 @@ import Field from "@layouts/Field.astro";
 import Heading1 from "@components/typography/Heading1.astro";
 import { renderWiki } from "@lib/wiki";
 import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
+import Pencil from "lucide-solid/icons/pencil";
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
@@ -236,8 +237,17 @@ const staff = [...staffByRole.values()];
 			<div
 				class="fixed top-24 w-[inherit] h-[calc(100vh-10rem)] overflow-y-auto py-3 px-4 wireframe"
 			>
-				<div class="w-full flex justify-end">
-					<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Right Sidebar</span>
+				<div class="w-full flex flex-col gap-3">
+					<a
+						href={`/song/${details.id}/edit`}
+						class="inline-flex w-full h-11 items-center justify-center gap-2 border border-border bg-transparent px-4 ts-label color-primary transition-colors hover:bg-surface-container-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+					>
+						<Pencil size={18} />
+						{t("song.edit.action")}
+					</a>
+					<div class="w-full flex justify-end">
+						<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Right Sidebar</span>
+					</div>
 				</div>
 			</div>
 		</aside>

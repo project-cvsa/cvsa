@@ -1,4 +1,4 @@
-import { apiRequest } from "@lib/api";
+import { api } from "@lib/api";
 import { createSignal } from "solid-js";
 
 export interface LogoutButtonProps {
@@ -11,7 +11,7 @@ export default function LogoutButton(props: LogoutButtonProps) {
 	const handleLogout = async () => {
 		if (submitting()) return;
 		setSubmitting(true);
-		await apiRequest("DELETE", "/v2/session");
+		await api.auth.logout();
 		window.location.reload();
 	};
 

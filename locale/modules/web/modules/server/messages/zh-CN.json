@@ -23,6 +23,8 @@
 	"song.info.field.time": "时间",
 	"song.info.field.uploader": "投稿",
 	"song.info.field.plays": "再生",
+	"song.edit.action": "编辑",
+	"song.edit.title": "编辑歌曲",
 	"auth.login.title": "登入中V档案馆",
 	"auth.register.title": "注册中V档案馆账号",
 	"auth.field.identifier": "用户名或邮箱地址",

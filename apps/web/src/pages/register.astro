@@ -4,7 +4,7 @@ import RegisterForm from "@components/pages/auth/RegisterForm";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import Header from "@layouts/Header.astro";
 
-const { language, baseLanguage } = getLocale(Astro.request);
+const { language } = getLocale(Astro.request);
 const t = i18nServer.getT({ locale: language, namespace: "server" });
 
 if (Astro.locals.user) {
@@ -26,7 +26,6 @@ if (Astro.locals.user) {
 				submitLabel={t("auth.action.register")}
 				genericError={t("auth.error.generic")}
 				networkError={t("auth.error.network")}
-				locale={baseLanguage}
 				redirectTo="/"
 			/>
 			<div class="ts-body mt-1 flex items-center justify-end text-tertiary">

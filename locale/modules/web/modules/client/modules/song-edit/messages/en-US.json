@@ -1,0 +1,13 @@
+{
+	"field.name": "Song name",
+	"field.singers": "Singers",
+	"field.duration": "Duration (seconds)",
+	"field.publishedAt": "Publish time",
+	"field.externalLinks": "External links",
+	"action.save": "Save",
+	"action.cancel": "Cancel",
+	"save.success": "Saved",
+	"save.error.network": "Cannot reach the server, please try again later",
+	"save.error.unauthorized": "Your session expired, please sign in again",
+	"save.error.generic": "Could not save the song, please try again later"
+}

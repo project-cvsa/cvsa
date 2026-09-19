@@ -1,6 +1,6 @@
 import Button from "@components/ui/Button";
 import TextField from "@components/ui/TextField";
-import { apiRequest } from "@lib/api";
+import { api } from "@lib/api";
 import { createSignal } from "solid-js";
 
 export interface LoginFormProps {
@@ -9,7 +9,6 @@ export interface LoginFormProps {
 	submitLabel: string;
 	genericError: string;
 	networkError: string;
-	locale: string;
 	redirectTo: string;
 }
 
@@ -31,10 +30,7 @@ export default function LoginForm(props: LoginFormProps) {
 		setFormError(undefined);
 		setSubmitting(true);
 
-		const result = await apiRequest("POST", "/v2/session", {
-			body: { email: identifier, password },
-			locale: props.locale,
-		});
+		const result = await api.auth.login({ email: identifier, password });
 
 		if (result.ok) {
 			window.location.assign(props.redirectTo);

@@ -10,10 +10,7 @@ export function loginRedirectTarget(pathname: string, search: string): string {
 }
 
 /** Page guard: redirect anonymous visitors to the login page. */
-export function requireUser(
-	context: APIContext,
-	user: CurrentUserInfoDto | null
-): Response | null {
+export function requireUser(context: APIContext, user: CurrentUserInfoDto | null): Response | null {
 	if (user) {
 		return null;
 	}

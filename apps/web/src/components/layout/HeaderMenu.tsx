@@ -1,5 +1,5 @@
 import Menu, { type MenuItem } from "@components/ui/Menu";
-import { apiRequest } from "@lib/api";
+import { api } from "@lib/api";
 import { createSignal } from "solid-js";
 import Home from "lucide-solid/icons/home";
 import LogIn from "lucide-solid/icons/log-in";
@@ -90,7 +90,7 @@ export default function HeaderMenu(props: HeaderMenuProps) {
 		if (value !== LOGOUT_VALUE || submitting()) return;
 
 		setSubmitting(true);
-		await apiRequest("DELETE", "/v2/session");
+		await api.auth.logout();
 		window.location.reload();
 	};
 

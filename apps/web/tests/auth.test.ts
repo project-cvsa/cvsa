@@ -125,8 +125,17 @@ describe("route rule tables", () => {
 	const matches = (routes: RegExp[], pathname: string): boolean =>
 		routes.some((route) => route.test(pathname));
 
-	test("AUTH_REQUIRED_ROUTES stays empty until protected pages register", () => {
-		expect(AUTH_REQUIRED_ROUTES).toEqual([]);
+	test("AUTH_REQUIRED_ROUTES covers the song edit page only", () => {
+		expect(matches(AUTH_REQUIRED_ROUTES, "/song/12/edit")).toBe(true);
+		for (const path of [
+			"/song/12",
+			"/song/12/",
+			"/song/12/edit/extra",
+			"/song/abc/edit",
+			"/login",
+		]) {
+			expect(matches(AUTH_REQUIRED_ROUTES, path)).toBe(false);
+		}
 	});
 
 	test("anonymous-only covers exactly the login and register pages", () => {
