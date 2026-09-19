@@ -153,6 +153,39 @@ describe("api.song.update", () => {
 	});
 });
 
+describe("api.song lyrics", () => {
+	test("creates plain-text lyrics for a song", async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse(201, { id: 12, language: "zh", plainText: "第一行" })
+		);
+
+		const result = await api.song.createLyric(7, {
+			language: "zh",
+			plainText: "第一行",
+		});
+
+		const request = lastRequest();
+		expect(request.method).toBe("POST");
+		expect(request.url).toBe("https://api.test/v2/song/7/lyric");
+		await expect(request.json()).resolves.toEqual({ language: "zh", plainText: "第一行" });
+		expect(result.ok).toBe(true);
+	});
+
+	test("updates the selected lyric", async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse(200, { id: 12, language: "zh", plainText: "更新后" })
+		);
+
+		const result = await api.song.updateLyric(7, 12, { plainText: "更新后" });
+
+		const request = lastRequest();
+		expect(request.method).toBe("PATCH");
+		expect(request.url).toBe("https://api.test/v2/song/7/lyric/12");
+		await expect(request.json()).resolves.toEqual({ plainText: "更新后" });
+		expect(result.ok).toBe(true);
+	});
+});
+
 describe("failure normalization", () => {
 	test("maps a thrown fetch to NETWORK_ERROR", async () => {
 		fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));

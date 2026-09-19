@@ -8,6 +8,7 @@ import Card from "@layouts/Card.astro";
 import Field from "@layouts/Field.astro";
 import Heading1 from "@components/typography/Heading1.astro";
 import { renderWiki } from "@lib/wiki";
+import "@components/typography/Article.css";
 import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
 import Pencil from "lucide-solid/icons/pencil";
 
@@ -102,11 +103,6 @@ const staff = [...staffByRole.values()];
 		bottom: 2px;
 		z-index: -1;
 	}
-	article {
-		& > p:not(:first-child) {
-			margin-top: 14px;
-		}
-	}
 	.lrc {
 		white-space: pre-line;
 	}
@@ -139,7 +135,7 @@ const staff = [...staffByRole.values()];
 					<Fragment slot="title">{t("song.intro.title")}</Fragment>
 					<Fragment slot="title-en">Introduction</Fragment>
 					<Fragment slot="body">
-						<article set:html={introduction} />
+						<article class="ts-article" set:html={introduction} />
 					</Fragment>
 				</Card>
 

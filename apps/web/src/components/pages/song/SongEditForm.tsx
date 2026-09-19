@@ -1,26 +1,49 @@
 import Button from "@components/ui/Button";
+import DateField from "@components/ui/DateField";
+import DurationField from "@components/ui/DurationField";
+import Select, { type SelectOption } from "@components/ui/Select";
+import TextArea from "@components/ui/TextArea";
 import TextField from "@components/ui/TextField";
 import { ToastContainer, toast } from "@components/ui/Toast";
 import { api, type ApiErrorInfo } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { UpdateSongRequestDto } from "@cvsa/core";
+import type { SongType } from "@cvsa/db";
 import { createSignal } from "solid-js";
 
-/**
- * Everything the form shows, already resolved to display strings by the page
- * that loaded the song. Only the members `PATCH /v2/song/:id` accepts are
- * submitted; the rest are placeholders until they get a component of their own.
- */
+const SONG_TYPES: readonly SongType[] = [
+	"ORIGINAL",
+	"COVER",
+	"RETUNE",
+	"CONTRAFACTUM",
+	"TRANSLYRICS",
+	"REMIX",
+	"REMASTER",
+	"MASHUP",
+	"INSTRUMENTAL",
+	"OTHERS",
+];
+
+function isSongType(value: string): value is SongType {
+	return SONG_TYPES.some((type) => type === value);
+}
+
 export interface SongEditFormValues {
 	name: string;
-	singers: string;
-	duration: string;
+	type: SongType | "";
+	coverUrl: string;
+	duration: number;
 	publishedAt: string;
 	externalLinks: string;
+	lyrics: string;
+	lyricId?: number;
+	lyricLanguage: string;
+	description: string;
 }
 
 export interface SongEditFormProps {
 	songId: number;
+	locale: string;
 	values: SongEditFormValues;
 }
 
@@ -37,6 +60,12 @@ export default function SongEditForm(props: SongEditFormProps) {
 	const t = getComponentT("song-edit");
 	let formRef: HTMLFormElement | undefined;
 	const [submitting, setSubmitting] = createSignal(false);
+	const [lyricId, setLyricId] = createSignal(props.values.lyricId);
+	const [savedLyrics, setSavedLyrics] = createSignal(props.values.lyrics);
+	const typeOptions: SelectOption[] = SONG_TYPES.map((value) => ({
+		value,
+		label: t(`type.${value}`),
+	}));
 
 	const resolveErrorMessage = (error: ApiErrorInfo): string => {
 		if (error.code === "NETWORK_ERROR") {
@@ -58,7 +87,18 @@ export default function SongEditForm(props: SongEditFormProps) {
 		const data = new FormData(formRef);
 		const body: UpdateSongRequestDto = {
 			name: String(data.get("name") ?? ""),
+			description: String(data.get("description") ?? ""),
 		};
+
+		const type = String(data.get("type") ?? "");
+		if (isSongType(type)) {
+			body.type = type;
+		}
+
+		const coverUrl = String(data.get("coverUrl") ?? "").trim();
+		if (coverUrl !== "") {
+			body.coverUrl = coverUrl;
+		}
 
 		const duration = String(data.get("duration") ?? "").trim();
 		if (duration !== "") {
@@ -73,52 +113,114 @@ export default function SongEditForm(props: SongEditFormProps) {
 			body.publishedAt = publishedAt;
 		}
 
+		const lyrics = String(data.get("lyrics") ?? "");
+
 		setSubmitting(true);
 		const result = await api.song.update(props.songId, body);
-		setSubmitting(false);
 
-		if (result.ok) {
-			toast.success(t("save.success"));
+		if (!result.ok) {
+			setSubmitting(false);
+			toast.error(resolveErrorMessage(result.error));
 			return;
 		}
-		toast.error(resolveErrorMessage(result.error));
+
+		if (lyrics !== savedLyrics()) {
+			const currentLyricId = lyricId();
+			const lyricResult = currentLyricId
+				? await api.song.updateLyric(props.songId, currentLyricId, { plainText: lyrics })
+				: lyrics.trim() === ""
+					? undefined
+					: await api.song.createLyric(props.songId, {
+							language: props.values.lyricLanguage,
+							plainText: lyrics,
+						});
+
+			if (lyricResult && !lyricResult.ok) {
+				setSubmitting(false);
+				toast.error(resolveErrorMessage(lyricResult.error));
+				return;
+			}
+			if (lyricResult?.ok && lyricResult.data) {
+				setLyricId(lyricResult.data.id);
+			}
+			setSavedLyrics(lyrics);
+		}
+
+		setSubmitting(false);
+		toast.success(t("save.success"));
 	};
 
 	return (
-		<form ref={formRef} class="flex flex-col gap-8" onSubmit={handleSubmit}>
+		<form ref={formRef} class="flex flex-col gap-10" onSubmit={handleSubmit}>
 			<div class="grid grid-cols-1 gap-x-10 gap-y-8 lg:grid-cols-2">
 				<div class="flex flex-col gap-5">
 					<TextField
-						name="duration"
-						type="number"
-						min="0"
-						label={t("field.duration")}
-						value={props.values.duration}
+						name="coverUrl"
+						type="url"
+						label={t("field.coverUrl")}
+						defaultValue={props.values.coverUrl}
 					/>
 
-					<TextField
+					<DurationField
+						name="duration"
+						label={t("field.duration")}
+						minuteLabel={t("field.duration.minutes")}
+						secondLabel={t("field.duration.seconds")}
+						defaultValue={props.values.duration}
+					/>
+
+					<DateField
 						name="publishedAt"
-						type="datetime-local"
 						label={t("field.publishedAt")}
-						value={props.values.publishedAt}
+						defaultValue={props.values.publishedAt}
+						locale={props.locale}
+						granularity="second"
+						hourCycle={24}
+						clearLabel={t("field.publishedAt.clear")}
+						calendarLabel={t("field.publishedAt.calendar")}
+						todayLabel={t("field.publishedAt.today")}
 					/>
 
 					<TextField
 						name="externalLinks"
 						label={t("field.externalLinks")}
-						value={props.values.externalLinks}
+						defaultValue={props.values.externalLinks}
 					/>
 				</div>
 
 				<div class="flex flex-col gap-5">
-					<TextField name="name" label={t("field.name")} value={props.values.name} />
-
 					<TextField
-						name="singers"
-						label={t("field.singers")}
-						value={props.values.singers}
+						name="name"
+						label={t("field.name")}
+						defaultValue={props.values.name}
+					/>
+
+					<Select
+						name="type"
+						label={t("field.type")}
+						placeholder={t("field.type.placeholder")}
+						options={typeOptions}
+						defaultValue={props.values.type || undefined}
 					/>
 				</div>
+			</div>
+
+			<div class="flex flex-col gap-5">
+				<TextArea
+					name="lyrics"
+					label={t("field.lyrics")}
+					defaultValue={props.values.lyrics}
+					minRows={8}
+					maxRows={18}
+				/>
+
+				<TextArea
+					name="description"
+					label={t("field.description")}
+					defaultValue={props.values.description}
+					minRows={6}
+					maxRows={14}
+				/>
 			</div>
 
 			<div class="flex items-center justify-end gap-3">

@@ -5,6 +5,7 @@ import {
 	parseDate,
 	useDatePickerContext,
 } from "@ark-ui/solid/date-picker";
+import { parseDateTime } from "@internationalized/date";
 import clsx from "clsx";
 import { createEffect, createSignal, createUniqueId, For, Index, Show, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
@@ -21,6 +22,8 @@ export interface DateFieldProps {
 	defaultValue?: string;
 	label: string;
 	locale?: string;
+	granularity?: DateFieldGranularity;
+	hourCycle?: 12 | 24;
 	helperText?: string;
 	errorText?: string;
 	disabled?: boolean;
@@ -34,17 +37,25 @@ export interface DateFieldProps {
 	onValueChange?: (value: string | undefined) => void;
 }
 
-function parseIsoDate(value: string | undefined): DateValue | undefined {
+export type DateFieldGranularity = "day" | "hour" | "minute" | "second";
+
+function parseIsoDate(
+	value: string | undefined,
+	granularity: DateFieldGranularity
+): DateValue | undefined {
 	if (!value) return undefined;
 	try {
-		return parseDate(value);
+		if (granularity === "day") {
+			return parseDate(value.split("T")[0]);
+		}
+		return parseDateTime(value.includes("T") ? value : `${value}T00:00:00`);
 	} catch {
 		return undefined;
 	}
 }
 
-function toValues(value: string | undefined): DateValue[] {
-	const date = parseIsoDate(value);
+function toValues(value: string | undefined, granularity: DateFieldGranularity): DateValue[] {
+	const date = parseIsoDate(value, granularity);
 	return date ? [date] : [];
 }
 
@@ -57,6 +68,8 @@ export default function DateField(props: DateFieldProps) {
 		"defaultValue",
 		"label",
 		"locale",
+		"granularity",
+		"hourCycle",
 		"helperText",
 		"errorText",
 		"disabled",
@@ -75,12 +88,13 @@ export default function DateField(props: DateFieldProps) {
 	const errorId = () => `${fieldId()}-error`;
 	const helperId = () => `${fieldId()}-helper`;
 	const hasError = () => Boolean(local.errorText);
+	const granularity = () => local.granularity ?? "day";
 	const [dates, setDates] = createSignal<DateValue[]>(
-		toValues(local.value ?? local.defaultValue)
+		toValues(local.value ?? local.defaultValue, granularity())
 	);
 
 	createEffect(() => {
-		if (local.value !== undefined) setDates(toValues(local.value));
+		if (local.value !== undefined) setDates(toValues(local.value, granularity()));
 	});
 
 	const updateValue = (nextDates: DateValue[]) => {
@@ -88,8 +102,8 @@ export default function DateField(props: DateFieldProps) {
 		local.onValueChange?.(nextDates[0]?.toString());
 	};
 
-	const minDate = () => parseIsoDate(local.min);
-	const maxDate = () => parseIsoDate(local.max);
+	const minDate = () => parseIsoDate(local.min, granularity());
+	const maxDate = () => parseIsoDate(local.max, granularity());
 	const describedBy = () => {
 		if (hasError()) return errorId();
 		return local.helperText ? helperId() : undefined;
@@ -110,23 +124,27 @@ export default function DateField(props: DateFieldProps) {
 				positioning={{ placement: "bottom-start", gutter: 8 }}
 				onValueChange={(details) => updateValue(details.value)}
 			>
-				<ArkDateInput.Root
-					id={fieldId()}
-					value={dates()}
-					locale={local.locale ?? "zh-CN"}
-					min={minDate()}
-					max={maxDate()}
-					disabled={local.disabled}
-					readOnly={local.readOnly}
-					required={local.required}
-					invalid={hasError()}
-					shouldForceLeadingZeros
-					format={(date) => date.toString()}
-					onValueChange={(details) => updateValue(details.value)}
-				>
-					<DateFieldControl {...local} describedBy={describedBy()} />
-					<ArkDateInput.HiddenInput name={local.name} />
-				</ArkDateInput.Root>
+				<ArkDatePicker.Control>
+					<ArkDateInput.Root
+						id={fieldId()}
+						value={dates()}
+						locale={local.locale ?? "zh-CN"}
+						min={minDate()}
+						max={maxDate()}
+						disabled={local.disabled}
+						readOnly={local.readOnly}
+						required={local.required}
+						invalid={hasError()}
+						granularity={granularity()}
+						hourCycle={local.hourCycle}
+						shouldForceLeadingZeros
+						format={(date) => date.toString()}
+						onValueChange={(details) => updateValue(details.value)}
+					>
+						<DateFieldControl {...local} describedBy={describedBy()} />
+						<ArkDateInput.HiddenInput name={local.name} />
+					</ArkDateInput.Root>
+				</ArkDatePicker.Control>
 
 				<CalendarContent todayLabel={local.todayLabel} />
 			</ArkDatePicker.Root>
@@ -151,7 +169,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 		<ArkDateInput.Control
 			class={clsx(
 				"group relative flex h-[58px] items-center border bg-surface transition-colors",
-				Boolean(props.errorText)
+				props.errorText
 					? "border-error"
 					: "border-border hover:border-tertiary data-[focus]:border-primary",
 				props.disabled && "opacity-60"
@@ -160,7 +178,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 			<ArkDateInput.Label
 				class={clsx(
 					"absolute left-4 top-2 z-1 ts-caption",
-					Boolean(props.errorText) ? "text-error" : "text-tertiary"
+					props.errorText ? "text-error" : "text-tertiary"
 				)}
 			>
 				{props.label}
@@ -175,14 +193,21 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 			>
 				<Index each={dateInput().getSegments()}>
 					{(segment) => (
-						<ArkDateInput.Segment
-							segment={segment()}
+						// Ark's Solid Segment component looks up segments by type. Repeated
+						// literals then all resolve to the first separator, so render the
+						// machine-provided segment directly to preserve `/`, space and `:`.
+						<span
+							{...dateInput().getSegmentProps({ segment: segment() })}
 							class={clsx(
-								"min-w-0 rounded-none px-0.5 outline-none ts-body text-primary",
+								"min-w-0 rounded-none outline-none ts-body text-primary",
+								segment().type === "literal" ? "px-0" : "px-0.5",
+								segment().type === "hour" && "ml-2",
 								"data-[editable]:focus:bg-primary data-[editable]:focus:text-display-inverted",
 								"data-[placeholder-shown]:text-tertiary data-[disabled]:cursor-not-allowed"
 							)}
-						/>
+						>
+							{segment().text}
+						</span>
 					)}
 				</Index>
 			</ArkDateInput.SegmentGroup>
@@ -216,37 +241,39 @@ function CalendarContent(props: Pick<DateFieldProps, "todayLabel">) {
 	const datePicker = useDatePickerContext();
 	return (
 		<Portal>
-			<ArkDatePicker.Positioner class="z-50">
-				<ArkDatePicker.Content class="w-[min(calc(100vw-2rem),20rem)] bg-surface p-4 shadow-xl outline-none">
-					<ArkDatePicker.View view="day">
-						<ArkDatePicker.ViewControl class="mb-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center">
-							<ArkDatePicker.PrevTrigger
-								type="button"
-								class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
-							>
-								<ChevronLeft size={19} />
-							</ArkDatePicker.PrevTrigger>
-							<ArkDatePicker.RangeText class="text-center ts-label text-primary" />
-							<ArkDatePicker.NextTrigger
-								type="button"
-								class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
-							>
-								<ChevronRight size={19} />
-							</ArkDatePicker.NextTrigger>
-						</ArkDatePicker.ViewControl>
+			<div class="relative w-full h-full left-0 top-0 z-50">
+				<ArkDatePicker.Positioner class="">
+					<ArkDatePicker.Content class="w-[min(calc(100vw-2rem),20rem)] bg-surface p-4 shadow-xl outline-none">
+						<ArkDatePicker.View view="day">
+							<ArkDatePicker.ViewControl class="mb-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center">
+								<ArkDatePicker.PrevTrigger
+									type="button"
+									class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
+								>
+									<ChevronLeft size={19} />
+								</ArkDatePicker.PrevTrigger>
+								<ArkDatePicker.RangeText class="text-center ts-label text-primary" />
+								<ArkDatePicker.NextTrigger
+									type="button"
+									class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
+								>
+									<ChevronRight size={19} />
+								</ArkDatePicker.NextTrigger>
+							</ArkDatePicker.ViewControl>
 
-						<CalendarTable />
+							<CalendarTable />
 
-						<button
-							type="button"
-							class="mt-3 h-10 w-full border border-border ts-label text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
-							onclick={() => datePicker().selectToday()}
-						>
-							{props.todayLabel}
-						</button>
-					</ArkDatePicker.View>
-				</ArkDatePicker.Content>
-			</ArkDatePicker.Positioner>
+							<button
+								type="button"
+								class="mt-3 h-10 w-full border border-border ts-label text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
+								onclick={() => datePicker().selectToday()}
+							>
+								{props.todayLabel}
+							</button>
+						</ArkDatePicker.View>
+					</ArkDatePicker.Content>
+				</ArkDatePicker.Positioner>
+			</div>
 		</Portal>
 	);
 }
