@@ -79,9 +79,16 @@ describe("createAxiosNetworkTransport", () => {
 			);
 
 			expect(result).toMatchObject({ status: 200, body: "served by proxy" });
-			expect(proxiedRequestUrl).toBe(
-				"http://unresolvable.test:80/resource?source=network-scheduler"
-			);
+			if (proxiedRequestUrl === undefined) {
+				throw new Error("the proxy did not receive the request");
+			}
+			// The default port is normalized away before the request reaches the
+			// proxy, so compare the parsed target instead of the raw URL string.
+			const proxied = new URL(proxiedRequestUrl);
+			expect(proxied.protocol).toBe("http:");
+			expect(proxied.hostname).toBe("unresolvable.test");
+			expect(proxied.pathname).toBe("/resource");
+			expect(proxied.search).toBe("?source=network-scheduler");
 		} finally {
 			proxy.stop(true);
 		}
