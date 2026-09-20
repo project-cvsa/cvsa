@@ -27,11 +27,16 @@
 		"test:coverage": {},
 		"setup": {
 			"cache": false,
-			"dependsOn": ["@cvsa/db#push", "@cvsa/db#test:setup", "@cvsa/db#gen"]
+			"dependsOn": [
+				"@cvsa/db#push",
+				"@cvsa/db#test:setup",
+				"@cvsa/db#gen",
+				"@cvsa/snapshot-db#gen"
+			]
 		},
 		"setup:ci": {
 			"cache": false,
-			"dependsOn": ["@cvsa/db#test:setup", "@cvsa/db#gen"]
+			"dependsOn": ["@cvsa/db#test:setup", "@cvsa/db#gen", "@cvsa/snapshot-db#gen"]
 		},
 		"@cvsa/db#test:setup": {
 			"cache": false
@@ -40,6 +45,9 @@
 			"cache": false
 		},
 		"@cvsa/db#gen": {
+			"cache": false
+		},
+		"@cvsa/snapshot-db#gen": {
 			"cache": false
 		},
 		"typecheck": {
