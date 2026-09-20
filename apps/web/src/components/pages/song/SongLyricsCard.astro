@@ -1,0 +1,43 @@
+---
+import Condition from "@components/Condition.astro";
+import Card from "@layouts/Card.astro";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+
+interface Props {
+	text: string;
+	languageLabel: string;
+	isTranslated: boolean;
+}
+
+const { text, languageLabel, isTranslated } = Astro.props;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+---
+
+<Card>
+	<Fragment slot="title">{t("song.lyrics.title")}</Fragment>
+	<Fragment slot="title-en">Lyrics</Fragment>
+	<Fragment slot="body">
+		<Condition condition={text.length > 0}>
+			<div class="flex items-center gap-2">
+				<span
+					class="ts-label color-surface px-2.5 py-1 leading-none bg-surface-inverted"
+				>
+					{languageLabel}
+				</span>
+				<Condition condition={isTranslated}>
+					<span class="ts-caption color-tertiary">
+						{t("song.lyrics.translated")}
+					</span>
+				</Condition>
+			</div>
+			<p class="lrc ts-body color-primary mt-4 leading-7">{text}</p>
+		</Condition>
+	</Fragment>
+</Card>
+
+<style>
+.lrc {
+	white-space: pre-line;
+}
+</style>

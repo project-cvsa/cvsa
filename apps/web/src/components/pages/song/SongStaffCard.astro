@@ -1,0 +1,41 @@
+---
+import Condition from "@components/Condition.astro";
+import Field from "@layouts/Field.astro";
+import Card from "@layouts/Card.astro";
+import type { SongDetailsResponseDto } from "@cvsa/core";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+import { localizedName } from "@lib/localize";
+
+interface Props {
+	artists: SongDetailsResponseDto["artists"];
+}
+
+const { artists } = Astro.props;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+
+const staffByRole = new Map<number, { role: string; artists: string[] }>();
+for (const artist of artists) {
+	const entry = staffByRole.get(artist.role.id) ?? {
+		role: localizedName(artist.role, language),
+		artists: [],
+	};
+	entry.artists.push(localizedName(artist, language));
+	staffByRole.set(artist.role.id, entry);
+}
+const staff = [...staffByRole.values()];
+---
+
+<Condition condition={staff.length > 0}>
+	<Card>
+		<Fragment slot="title">{t("song.staff.title")}</Fragment>
+		<Fragment slot="title-en">Staff</Fragment>
+		<Fragment slot="body">
+			<div class="grid grid-cols-2 gap-x-6 gap-y-6">
+				{staff.map((entry) => (
+					<Field label={entry.role}>{entry.artists.join("、")}</Field>
+				))}
+			</div>
+		</Fragment>
+	</Card>
+</Condition>

@@ -1,16 +1,16 @@
 ---
 import Layout from "@layouts/Layout.astro";
-import Condition from "@components/Condition.astro";
 import Header from "@layouts/Header.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
-import Card from "@layouts/Card.astro";
-import Field from "@layouts/Field.astro";
-import Heading1 from "@components/typography/Heading1.astro";
 import { renderWiki } from "@lib/wiki";
-import "@components/typography/Article.css";
 import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
 import Pencil from "lucide-solid/icons/pencil";
+import SongCover from "@components/pages/song/SongCover.astro";
+import SongInformationCard from "@components/pages/song/SongInformationCard.astro";
+import SongIntroductionCard from "@components/pages/song/SongIntroductionCard.astro";
+import SongLyricsCard from "@components/pages/song/SongLyricsCard.astro";
+import SongStaffCard from "@components/pages/song/SongStaffCard.astro";
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
@@ -62,17 +62,6 @@ const uploaderNames = details.artists
 	.filter((a) => uploaderRoleNames.has(a.role.name.toLowerCase()))
 	.map((a) => localizedName(a, language))
 	.filter(Boolean);
-
-const staffByRole = new Map<number, { role: string; artists: string[] }>();
-for (const artist of details.artists) {
-	const entry = staffByRole.get(artist.role.id) ?? {
-		role: localizedName(artist.role, language),
-		artists: [],
-	};
-	entry.artists.push(localizedName(artist, language));
-	staffByRole.set(artist.role.id, entry);
-}
-const staff = [...staffByRole.values()];
 ---
 
 <Layout title={`${songName} - 中V档案馆`}>
@@ -87,25 +76,6 @@ const staff = [...staffByRole.values()];
 		);
 		border: var(--wireframe-line) 1px solid;
 	}
-	.highlight {
-		position: relative;
-		display: inline-block;
-		z-index: 1;
-		text-shadow: 0px 2px 4px var(--highlight-shadow-color);
-	}
-	.highlight::after {
-		content: "";
-		width: 100%;
-		height: 8px;
-		background-color: var(--highlight-color);
-		position: absolute;
-		left: 0;
-		bottom: 2px;
-		z-index: -1;
-	}
-	.lrc {
-		white-space: pre-line;
-	}
 	</style>
 	<Header />
 
@@ -118,114 +88,55 @@ const staff = [...staffByRole.values()];
 			</div>
 		</aside>
 
-		<main
-			class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12"
-		>
-			<div class="flex flex-col gap-6">
-				<Condition condition={details.coverUrl}>
-					<div class="w-full">
-						<img
-							alt={t("song.cover.alt")}
-							src={details.coverUrl ?? ""}
-							referrerpolicy="no-referrer"
-						>
-					</div>
-				</Condition>
-				<Card>
-					<Fragment slot="title">{t("song.intro.title")}</Fragment>
-					<Fragment slot="title-en">Introduction</Fragment>
-					<Fragment slot="body">
-						<article class="ts-article" set:html={introduction} />
-					</Fragment>
-				</Card>
-
-				<Card>
-					<Fragment slot="title">{t("song.lyrics.title")}</Fragment>
-					<Fragment slot="title-en">Lyrics</Fragment>
-					<Fragment slot="body">
-						<Condition condition={lyricText.length > 0}>
-							<div class="flex items-center gap-2">
-								<span
-									class="ts-overline color-surface px-2.5 py-1 bg-surface-inverted border border-border"
-								>
-									{lyricLanguage}
-								</span>
-								<Condition condition={lyric?.isTranslated}>
-									<span class="ts-caption color-tertiary">
-										{t("song.lyrics.translated")}
-									</span>
-								</Condition>
-							</div>
-							<p class="lrc ts-body color-primary mt-4 leading-7">
-								{lyricText}
-							</p>
-						</Condition>
-					</Fragment>
-				</Card>
+		<main class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0">
+			<!-- 
+				To make the layout work properly and universally,
+				we deliberately prepared duplicated content.
+			 	One set for mobile, one set for desktop, switched by breakpoints.
+			 -->
+			<!-- Mobile -->
+			<div class="flex flex-col gap-6 lg:hidden">
+				<SongCover src={details.coverUrl} />
+				<SongInformationCard
+					songName={songName}
+					singers={singers}
+					duration={duration}
+					uploaderNames={uploaderNames}
+					links={details.externalLinks}
+					publishedAt={publishedAt}
+				/>
+				<SongStaffCard artists={details.artists} />
+				<SongIntroductionCard html={introduction} />
+				<SongLyricsCard
+					text={lyricText}
+					languageLabel={lyricLanguage}
+					isTranslated={lyric?.isTranslated ?? false}
+				/>
 			</div>
-			<div class="flex flex-col gap-6">
-				<div class="w-full">
-					<Card>
-						<Fragment slot="title">{t("song.info.title")}</Fragment>
-						<Fragment slot="title-en">Information</Fragment>
-						<Fragment slot="body">
-							<Heading1>
-								<span class="highlight">{songName}</span>
-							</Heading1>
 
-							<div class="grid grid-cols-2 gap-x-6 gap-y-6 mt-6">
-								<Condition condition={singers.length > 0}>
-									<Field label={t("song.info.field.singers")}>
-										{singers.join("、")}
-									</Field>
-								</Condition>
-
-								<Field label={t("song.info.field.duration")}>{duration}</Field>
-
-								<Condition condition={uploaderNames.length > 0}>
-									<Field label={t("song.info.field.uploader")}>
-										{uploaderNames.join("、")}
-									</Field>
-								</Condition>
-
-								<Condition condition={details.externalLinks.length > 0}>
-									<Field label={t("song.info.field.links")}>
-										<div class="flex flex-wrap gap-x-3 gap-y-1">
-											{details.externalLinks.map((link) => (
-												<a
-													href={link.url}
-													target="_blank"
-													rel="noopener noreferrer"
-													class="underline underline-offset-4 decoration-border hover:decoration-primary transition-colors"
-											>
-												{link.label ?? link.platform ?? "link"}
-											</a>
-										))}
-										</div>
-									</Field>
-								</Condition>
-
-								<Field label={t("song.info.field.time")}>{publishedAt}</Field>
-
-								<Field label={t("song.info.field.plays")}>—</Field>
-							</div>
-						</Fragment>
-					</Card>
+			<!-- Desktop -->
+			<div class="hidden lg:grid lg:grid-cols-2 lg:gap-8 xl:gap-12">
+				<div class="flex flex-col gap-6">
+					<SongCover src={details.coverUrl} />
+					<SongIntroductionCard html={introduction} />
 				</div>
 
-				<Condition condition={staff.length > 0}>
-					<Card>
-						<Fragment slot="title">{t("song.staff.title")}</Fragment>
-						<Fragment slot="title-en">Staff</Fragment>
-						<Fragment slot="body">
-							<div class="grid grid-cols-2 gap-x-6 gap-y-6">
-								{staff.map((entry) => (
-									<Field label={entry.role}>{entry.artists.join("、")}</Field>
-								))}
-							</div>
-						</Fragment>
-					</Card>
-				</Condition>
+				<div class="flex flex-col gap-6">
+					<SongInformationCard
+						songName={songName}
+						singers={singers}
+						duration={duration}
+						uploaderNames={uploaderNames}
+						links={details.externalLinks}
+						publishedAt={publishedAt}
+					/>
+					<SongStaffCard artists={details.artists} />
+					<SongLyricsCard
+						text={lyricText}
+						languageLabel={lyricLanguage}
+						isTranslated={lyric?.isTranslated ?? false}
+					/>
+				</div>
 			</div>
 		</main>
 

@@ -1,0 +1,87 @@
+---
+import Condition from "@components/Condition.astro";
+import Heading1 from "@components/typography/Heading1.astro";
+import Field from "@layouts/Field.astro";
+import Card from "@layouts/Card.astro";
+import type { SongExternalLinkResponseDto } from "@cvsa/core";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+
+interface Props {
+	songName: string;
+	singers: string[];
+	duration: string;
+	uploaderNames: string[];
+	links: SongExternalLinkResponseDto[];
+	publishedAt: string;
+}
+
+const { songName, singers, duration, uploaderNames, links, publishedAt } = Astro.props;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+---
+
+<Card>
+	<Fragment slot="title">{t("song.info.title")}</Fragment>
+	<Fragment slot="title-en">Information</Fragment>
+	<Fragment slot="body">
+		<Heading1>
+			<span class="highlight">{songName}</span>
+		</Heading1>
+
+		<div class="grid grid-cols-2 gap-x-6 gap-y-6 mt-6">
+			<Condition condition={singers.length > 0}>
+				<Field label={t("song.info.field.singers")}>
+					{singers.join("、")}
+				</Field>
+			</Condition>
+
+			<Field label={t("song.info.field.duration")}>{duration}</Field>
+
+			<Condition condition={uploaderNames.length > 0}>
+				<Field label={t("song.info.field.uploader")}>
+					{uploaderNames.join("、")}
+				</Field>
+			</Condition>
+
+			<Condition condition={links.length > 0}>
+				<Field label={t("song.info.field.links")}>
+					<div class="flex flex-wrap gap-x-3 gap-y-1">
+						{links.map((link) => (
+							<a
+								href={link.url}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="underline underline-offset-4 decoration-border hover:decoration-primary transition-colors"
+							>
+								{link.label ?? link.platform ?? "link"}
+							</a>
+						))}
+					</div>
+				</Field>
+			</Condition>
+
+			<Field label={t("song.info.field.time")}>{publishedAt}</Field>
+
+			<Field label={t("song.info.field.plays")}>—</Field>
+		</div>
+	</Fragment>
+</Card>
+
+<style>
+.highlight {
+	position: relative;
+	display: inline-block;
+	z-index: 1;
+	text-shadow: 0px 2px 4px var(--highlight-shadow-color);
+}
+.highlight::after {
+	content: "";
+	width: 100%;
+	height: 8px;
+	background-color: var(--highlight-color);
+	position: absolute;
+	left: 0;
+	bottom: 2px;
+	z-index: -1;
+}
+</style>
