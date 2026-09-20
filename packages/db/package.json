@@ -18,7 +18,7 @@
 		"@cvsa/prisma-zod": "^3.6.0",
 		"@cvsa/typescript-config": "workspace:*",
 		"prisma": "^7.6.0",
-		"prisma-json-types-generator": "^4.1.1"
+		"prisma-json-types-generator": "^5.1.1"
 	},
 	"dependencies": {
 		"@cvsa/env": "workspace:*",

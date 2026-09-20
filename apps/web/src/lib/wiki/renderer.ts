@@ -2,6 +2,13 @@ import type { ArtistResponseDto, SongDetailsResponseDto } from "@cvsa/core";
 import Parser from "wikiparser-node";
 import { OpenCC } from "opencc";
 
+/**
+ * `wikiparser-node` uses a CommonJS `export =` assignment, so its exported node
+ * types (`AstNodes`, `Token`, `AstText`, …) cannot be imported by name. Derive
+ * the union of AST nodes from the parsed tree instead.
+ */
+type WikiAstNode = ReturnType<typeof Parser.parse>["childNodes"][number];
+
 const openccConfigMap = {
 	"zh-CN": "tw2s.json",
 	"zh-HK": "s2hk.json",
@@ -58,7 +65,7 @@ function textNodeToHtml(text: string) {
 	return htmlBlocks.join("\n");
 }
 
-function handleNode(node: Parser.AstNodes, context: RenderContext): string {
+function handleNode(node: WikiAstNode, context: RenderContext): string {
 	if (node.type === "text") {
 		return textNodeToHtml(node.data);
 	} else if (node.type === "heading") {
@@ -73,7 +80,7 @@ function handleNode(node: Parser.AstNodes, context: RenderContext): string {
 	return children.reduce((acc, child) => acc + handleNode(child, context), "");
 }
 
-function handleTemplate(node: Parser.AstNodes, context: RenderContext) {
+function handleTemplate(node: WikiAstNode, context: RenderContext): string {
 	if (node.name === "Template:Introduction" && context.entity === "song") {
 		return "";
 		// return `<p>《${context.data.name}》</p>`;
