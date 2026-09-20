@@ -12,17 +12,17 @@
 	},
 	"dependencies": {
 		"@ark-ui/solid": "^5.36.2",
-		"@astrojs/node": "11.0.2",
-		"@astrojs/solid-js": "7.0.1",
+		"@astrojs/node": "11.1.6",
+		"@astrojs/solid-js": "7.0.2",
 		"@cvsa/core": "workspace:*",
 		"@cvsa/db": "workspace:*",
 		"@elysiajs/eden": "^1.4.9",
 		"@fanee/core": "^0.8.1",
 		"@fanee/node": "^0.8.1",
 		"@fanee/solid": "^0.8.1",
-		"@internationalized/date": "3.12.2",
+		"@internationalized/date": "3.12.4",
 		"accept-language-parser": "^1.5.0",
-		"astro": "7.0.9",
+		"astro": "7.3.3",
 		"clsx": "^2.1.1",
 		"lucide-solid": "^1.46.0",
 		"opencc": "^1.4.1",
@@ -37,12 +37,12 @@
 		"@unocss/astro": "^66.7.5",
 		"@unocss/preset-mini": "^66.7.5",
 		"@unocss/reset": "^66.7.5",
-		"elysia": "1.4.29",
+		"elysia": "^1.4.30",
 		"fs-extra": "^11.3.6",
 		"postcss-load-config": "^6.0.1",
 		"postcss-preset-env": "^11.3.2",
 		"unocss": "^66.7.5",
 		"vite": "^8.1.4",
-		"vitest": "^4.1.10"
+		"vitest": "^5.0.1"
 	}
 }

@@ -2,7 +2,7 @@
 	"remoteCache": {
 		"enabled": true
 	},
-	"$schema": "https://turbo.build/schema.json",
+	"$schema": "https://v2-11-2.turborepo.dev/schema.json",
 	"ui": "tui",
 	"tasks": {
 		"build": {

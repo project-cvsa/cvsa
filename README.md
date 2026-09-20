@@ -37,7 +37,7 @@ cvsa/
 
 ### Prerequisites
 
--   [Bun](https://bun.sh) >= 1.3.10
+-   [Bun](https://bun.sh) >= 1.4.2
 -   [PostgreSQL](https://www.postgresql.org) >= 18
 
 ### Initial Setup

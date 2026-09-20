@@ -16,7 +16,7 @@
 	},
 	"devDependencies": {
 		"@prisma/adapter-pg": "^7.4.1",
-		"@types/bun": "1.3.14",
+		"@types/bun": "1.4.2",
 		"@cvsa/typescript-config": "workspace:*"
 	},
 	"exports": {
