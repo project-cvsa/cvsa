@@ -2,6 +2,7 @@ import { APIError, betterAuth } from "better-auth";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import { prisma } from "@cvsa/db";
 import { getRandomId } from "@cvsa/core/internal";
+import { env } from "@cvsa/env";
 import { username } from "better-auth/plugins";
 import { bearer } from "better-auth/plugins";
 import { appLogger } from "@cvsa/logger";
@@ -32,6 +33,11 @@ export const auth = betterAuth({
 		deferSessionRefresh: true,
 	},
 	advanced: {
+		cookiePrefix: "cvsa",
+		// Pin the __Secure- cookie name prefix to NODE_ENV instead of letting
+		// better-auth infer it from the baseURL, so every process embedding this
+		// instance derives identical cookie names.
+		useSecureCookies: env.NODE_ENV === "production",
 		database: {
 			generateId: (options) => {
 				if (options.model === "user" || options.model === "users") {
@@ -41,6 +47,14 @@ export const auth = betterAuth({
 			},
 		},
 	},
+	trustedOrigins: [
+		...(env.COOKIE_DOMAIN
+			? [`https://*.${env.COOKIE_DOMAIN}`, `http://*.${env.COOKIE_DOMAIN}`]
+			: []),
+		...(env.WEB_ORIGINS?.split(",")
+			.map((origin) => origin.trim())
+			.filter(Boolean) ?? []),
+	],
 	emailAndPassword: {
 		enabled: true,
 	},

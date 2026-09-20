@@ -14,6 +14,11 @@ export const env = createEnv({
 		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).optional().default("info"),
 
 		REDIS_URL: z.string().optional().default("redis://127.0.0.1:6379"),
+
+		COOKIE_DOMAIN: z.string().optional(),
+		BETTER_AUTH_SECRET: z.string().optional(),
+		BETTER_AUTH_URL: z.url().optional(),
+		WEB_ORIGINS: z.string().optional(),
 	},
 
 	runtimeEnv: import.meta.env,

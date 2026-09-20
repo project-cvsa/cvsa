@@ -9,6 +9,20 @@ export default defineConfig({
 		}),
 	],
 	rules: [
+		[
+			"sr-only",
+			{
+				position: "absolute",
+				width: "1px",
+				height: "1px",
+				padding: "0",
+				margin: "-1px",
+				overflow: "hidden",
+				clip: "rect(0,0,0,0)",
+				"white-space": "nowrap",
+				"border-width": "0",
+			},
+		],
 		["uppercase", { "text-transform": "uppercase" }],
 		["lowercase", { "text-transform": "lowercase" }],
 		["capitalize", { "text-transform": "capitalize" }],
@@ -30,9 +44,9 @@ export default defineConfig({
 			"heading-2": ["24px", "34px"],
 			"heading-3": ["20px", "30px"],
 			subhead: ["18px", "28px"],
-			body: ["17px", "27px"],
-			label: ["15px", "22px"],
-			caption: ["13px", "18px"],
+			body: ["16px", "25px"],
+			label: ["14px", "21px"],
+			caption: ["12px", "17px"],
 			overline: ["11px", "15px"],
 		},
 
@@ -48,6 +62,11 @@ export default defineConfig({
 			caption: "0.4px",
 			overline: "1.2px",
 		},
+
+		boxShadow: {
+			md: ["0 4px 8px var(--shadow)", "0 0 16px var(--shadow)"],
+			xl: ["0 8px 16px var(--shadow)", "0 0 32px var(--shadow)"],
+		},
 	},
 	shortcuts: {
 		"ts-display-large": "text-display-large fw-300 tracking-display-large",
@@ -57,7 +76,7 @@ export default defineConfig({
 		"ts-heading-3": "text-heading-3 fw-600 tracking-heading-3",
 		"ts-subhead": "text-subhead fw-500 tracking-subhead",
 		"ts-body": "text-body fw-400 tracking-body",
-		"ts-label": "text-label fw-500 tracking-label",
+		"ts-label": "text-label fw-600 tracking-label",
 		"ts-caption": "text-caption fw-400 tracking-caption",
 		"ts-overline": "text-overline fw-700 tracking-overline uppercase",
 	},

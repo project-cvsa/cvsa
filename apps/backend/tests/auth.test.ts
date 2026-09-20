@@ -12,8 +12,9 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 			email: `${Math.random()}@example.com`,
 		};
 
-		const { data, status } = await api.v2.user.post(payload);
+		const { data, error, status } = await api.v2.user.post(payload);
 
+		if (status !== 200) console.log("REGISTER ERROR BODY:", error?.value);
 		expect(status).toBe(200);
 		expect(data).toMatchObject({
 			message: expect.any(String),
@@ -173,7 +174,7 @@ describe("Login E2E Tests - POST /v2/session", () => {
 
 		await api.v2.user.post(signupPayload);
 
-		const { data, status } = await api.v2.session.post({
+		const { data, status, response } = await api.v2.session.post({
 			email: signupPayload.email,
 			password: signupPayload.password,
 		});
@@ -187,6 +188,65 @@ describe("Login E2E Tests - POST /v2/session", () => {
 				email: signupPayload.email,
 				token: expect.any(String),
 			},
+		});
+
+		const setCookie = response?.headers.getSetCookie().join("; ") ?? "";
+		expect(setCookie).toContain("cvsa.session_token=");
+		expect(setCookie).toContain("HttpOnly");
+	});
+
+	test("should login with username instead of email", async () => {
+		const signupPayload = {
+			username: "login_by_username",
+			password: "password123",
+			email: "login_by_username@example.com",
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const { data, status } = await api.v2.session.post({
+			email: signupPayload.username,
+			password: signupPayload.password,
+		});
+
+		expect(status).toBe(200);
+		expect(data).toMatchObject({
+			message: "Successfully logged in",
+			data: {
+				username: signupPayload.username,
+				token: expect.any(String),
+			},
+		});
+	});
+
+	test("should accept session cookie set by login on /v2/me", async () => {
+		const signupPayload = {
+			username: "login_cookie_me",
+			password: "password123",
+			email: "login_cookie_me@example.com",
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const login = await api.v2.session.post({
+			email: signupPayload.username,
+			password: signupPayload.password,
+		});
+		expect(login.status).toBe(200);
+
+		const setCookie = login.response?.headers.getSetCookie().join("; ") ?? "";
+		const token = /cvsa\.session_token=([^;]+)/.exec(setCookie)?.[1];
+		expect(token).toBeDefined();
+
+		const me = await api.v2.me.get({
+			headers: {
+				cookie: `cvsa.session_token=${token}`,
+			},
+		});
+
+		expect(me.status).toBe(200);
+		expect(me.data).toMatchObject({
+			username: signupPayload.username,
 		});
 	});
 

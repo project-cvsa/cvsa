@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { type ComponentProps, splitProps } from "solid-js";
 
 type ButtonVariant = "filled" | "outlined" | "ghost";
@@ -10,8 +11,8 @@ export interface ButtonProps extends ComponentProps<"button"> {
 
 const variantClass: Record<ButtonVariant, string> = {
 	filled: "bg-primary text-display-inverted border border-primary hover:bg-secondary hover:border-secondary",
-	outlined: "bg-transparent text-primary border border-border hover:bg-surface-container-medium",
-	ghost: "bg-transparent text-primary border border-transparent hover:bg-surface-container-medium",
+	outlined: "bg-transparent text-primary border border-border hover:bg-hover",
+	ghost: "bg-transparent text-primary border border-transparent hover:bg-hover",
 };
 
 const sizeClass: Record<ButtonSize, string> = {
@@ -28,10 +29,13 @@ export default function Button(props: ButtonProps) {
 
 	return (
 		<button
-			class={`inline-flex items-center justify-center 
-                font-medium transition-colors focus-visible:outline-2
-				focus-visible:outline-offset-6 focus-visible:outline-primary
-                 ${variantClass[variant()]} ${sizeClass[size()]} ${local.class ?? ""}`}
+			class={clsx(
+				"inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-2",
+				"focus-visible:outline-offset-6 focus-visible:outline-primary",
+				variantClass[variant()],
+				sizeClass[size()],
+				local.class
+			)}
 			{...rest}
 		>
 			{local.children}

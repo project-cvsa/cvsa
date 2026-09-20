@@ -32,6 +32,7 @@ const primitives = {
 } as const;
 
 const baseVariables = {
+	"--hover": { light: "#F7F7F7", dark: "#2D2D2D" },
 	"--background": {
 		light: primitives.gray[40],
 		dark: primitives.gray[880],
@@ -97,7 +98,7 @@ const baseVariables = {
 		dark: primitives.yellow[100],
 	},
 	"--shadow": {
-		light: primitives.gray[1000] + "10",
+		light: primitives.gray[1000] + "0A",
 		dark: primitives.gray[1000] + "30",
 	},
 } as const;

@@ -10,20 +10,24 @@ import {
 	toLoginResponse,
 	toBetterAuthHeaders,
 } from "@cvsa/core";
+import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
-
-const DAY = 86400;
 
 export const loginHandler = new Elysia().use(ip()).post(
 	"/session",
-	async ({ body, status, headers, cookie: { token: tokenCookie } }) => {
-		const { user, token } = await traceTask("auth.signInEmail", async () => {
-			return await auth.api.signInEmail({
-				body: {
-					email: body.email,
-					password: body.password,
-				},
-				headers: toBetterAuthHeaders(headers),
+	async ({ body, status, headers, cookie }) => {
+		const { user, token } = await traceTask("auth.signIn", async () => {
+			const authHeaders = toBetterAuthHeaders(headers);
+			// The identifier field accepts a username or an email; route to the matching endpoint.
+			if (body.email.includes("@")) {
+				return await auth.api.signInEmail({
+					body: { email: body.email, password: body.password },
+					headers: authHeaders,
+				});
+			}
+			return await auth.api.signInUsername({
+				body: { username: body.email, password: body.password },
+				headers: authHeaders,
 			});
 		});
 
@@ -33,11 +37,7 @@ export const loginHandler = new Elysia().use(ip()).post(
 			});
 		}
 
-		tokenCookie.value = token;
-		tokenCookie.httpOnly = true;
-		tokenCookie.maxAge = 90 * DAY;
-		tokenCookie.secure = true;
-		tokenCookie.sameSite = "lax";
+		await applySessionCookie(cookie, token);
 
 		const userInfo = betterAuthToLoginUserInfoDto(user, token);
 		const response = toLoginResponse(userInfo);

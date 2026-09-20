@@ -1,15 +1,20 @@
 ---
 import Layout from "@layouts/Layout.astro";
-import Condition from "@components/Condition.astro";
+import Header from "@layouts/Header.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
-import Card from "@layouts/Card.astro";
-import Heading1 from "@components/typography/Heading1.astro";
 import { renderWiki } from "@lib/wiki";
+import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
+import Pencil from "lucide-solid/icons/pencil";
+import SongCover from "@components/pages/song/SongCover.astro";
+import SongInformationCard from "@components/pages/song/SongInformationCard.astro";
+import SongIntroductionCard from "@components/pages/song/SongIntroductionCard.astro";
+import SongLyricsCard from "@components/pages/song/SongLyricsCard.astro";
+import SongStaffCard from "@components/pages/song/SongStaffCard.astro";
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
-const t = i18nServer.getT({ locale: language });
+const t = i18nServer.getT({ locale: language, namespace: "server" });
 let data: SongDetailsResponseDto | undefined;
 try {
 	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);
@@ -36,9 +41,30 @@ const introduction = renderWiki(details.description ?? "", {
 	entity: "song",
 	language,
 });
+
+const songName = localizedName(details, language) || details.name || "";
+const singers = details.singers.map((singer) => localizedName(singer, language));
+const duration = formatDuration(details.duration);
+const publishedAt = formatDateTime(details.publishedAt);
+
+const lyric = pickLyric(details.lyrics, language);
+const lyricText = lyric?.plainText ?? lyric?.lrc ?? "";
+const lyricBaseLanguage = lyric?.language?.split("-")[0] ?? "";
+const lyricLanguage =
+	lyricBaseLanguage === "zh"
+		? t("song.lang.zh.name")
+		: lyricBaseLanguage === "ja" || lyricBaseLanguage === "jp"
+			? t("song.lang.jp.name")
+			: lyricBaseLanguage;
+
+const uploaderRoleNames = new Set(["uploader", "投稿", "投稿者", "post", "contributor"]);
+const uploaderNames = details.artists
+	.filter((a) => uploaderRoleNames.has(a.role.name.toLowerCase()))
+	.map((a) => localizedName(a, language))
+	.filter(Boolean);
 ---
 
-<Layout>
+<Layout title={`${songName} - 中V档案馆`}>
 	<style is:global>
 	.wireframe {
 		background: repeating-linear-gradient(
@@ -50,44 +76,8 @@ const introduction = renderWiki(details.description ?? "", {
 		);
 		border: var(--wireframe-line) 1px solid;
 	}
-	.wireframe-transparent {
-		background: repeating-linear-gradient(
-			-45deg,
-			transparent,
-			transparent 13px,
-			var(--wireframe-line) 13px,
-			var(--wireframe-line) 14px
-		);
-		border: var(--wireframe-line) 1px solid;
-	}
-	.highlight {
-		position: relative;
-		display: inline-block;
-		z-index: 1;
-		text-shadow: 0px 2px 4px var(--highlight-shadow-color);
-	}
-
-	.highlight::after {
-		content: "";
-		width: 100%;
-		height: 8px;
-		background-color: var(--highlight-color);
-		position: absolute;
-		left: 0;
-		bottom: 2px;
-		z-index: -1;
-	}
-	article {
-		& > p:not(:first-child) {
-			margin-top: 14px;
-		}
-	}
 	</style>
-	<header class="h-20 mb-2 flex items-center mx-auto max-w-[110rem] px-8 wireframe">
-		<div class="w-full flex justify-center">
-			<span class="font-[IBM_Plex_Mono] opacity-50 uppercase text-lg">Header</span>
-		</div>
-	</header>
+	<Header />
 
 	<div class="flex mx-auto max-w-[110rem]">
 		<aside class="relative hidden lg:flex md:w-60 lg:w-64 xl:w-80 items-center min-h-screen">
@@ -98,32 +88,54 @@ const introduction = renderWiki(details.description ?? "", {
 			</div>
 		</aside>
 
-		<main
-			class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0 grid grid-cols-1 lg:grid-cols-2 gap-12"
-		>
-			<div>
-				<Condition condition={details.coverUrl}>
-					<div class="w-full">
-						<img alt="视频封面" src={details.coverUrl} referrerpolicy="no-referrer">
-					</div>
-				</Condition>
-				<Card>
-					<Fragment slot="title">{t("song.intro.title")}</Fragment>
-					<Fragment slot="title-en">Introduction</Fragment>
-					<Fragment slot="body">
-						<article set:html={introduction} />
-					</Fragment>
-				</Card>
+		<main class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0">
+			<!-- 
+				To make the layout work properly and universally,
+				we deliberately prepared duplicated content.
+			 	One set for mobile, one set for desktop, switched by breakpoints.
+			 -->
+			<!-- Mobile -->
+			<div class="flex flex-col gap-6 lg:hidden">
+				<SongCover src={details.coverUrl} />
+				<SongInformationCard
+					songName={songName}
+					singers={singers}
+					duration={duration}
+					uploaderNames={uploaderNames}
+					links={details.externalLinks}
+					publishedAt={publishedAt}
+				/>
+				<SongStaffCard artists={details.artists} />
+				<SongIntroductionCard html={introduction} />
+				<SongLyricsCard
+					text={lyricText}
+					languageLabel={lyricLanguage}
+					isTranslated={lyric?.isTranslated ?? false}
+				/>
 			</div>
-			<div>
-				<div class="w-full">
-					<Card>
-						<Fragment slot="title">{t("song.info.title")}</Fragment>
-						<Fragment slot="title-en">Information</Fragment>
-						<Fragment slot="body">
-							<Heading1>{details.name}</Heading1>
-						</Fragment>
-					</Card>
+
+			<!-- Desktop -->
+			<div class="hidden lg:grid lg:grid-cols-2 lg:gap-8 xl:gap-12">
+				<div class="flex flex-col gap-6">
+					<SongCover src={details.coverUrl} />
+					<SongIntroductionCard html={introduction} />
+				</div>
+
+				<div class="flex flex-col gap-6">
+					<SongInformationCard
+						songName={songName}
+						singers={singers}
+						duration={duration}
+						uploaderNames={uploaderNames}
+						links={details.externalLinks}
+						publishedAt={publishedAt}
+					/>
+					<SongStaffCard artists={details.artists} />
+					<SongLyricsCard
+						text={lyricText}
+						languageLabel={lyricLanguage}
+						isTranslated={lyric?.isTranslated ?? false}
+					/>
 				</div>
 			</div>
 		</main>
@@ -132,8 +144,17 @@ const introduction = renderWiki(details.description ?? "", {
 			<div
 				class="fixed top-24 w-[inherit] h-[calc(100vh-10rem)] overflow-y-auto py-3 px-4 wireframe"
 			>
-				<div class="w-full flex justify-end">
-					<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Right Sidebar</span>
+				<div class="w-full flex flex-col gap-3">
+					<a
+						href={`/song/${details.id}/edit`}
+						class="inline-flex w-full h-11 items-center justify-center gap-2 border border-border bg-transparent px-4 ts-label color-primary transition-colors hover:bg-surface-container-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+					>
+						<Pencil size={18} />
+						{t("song.edit.action")}
+					</a>
+					<div class="w-full flex justify-end">
+						<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Right Sidebar</span>
+					</div>
 				</div>
 			</div>
 		</aside>

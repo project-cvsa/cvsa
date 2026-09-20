@@ -8,7 +8,7 @@
 
 ### Workspace Structure
 - `apps/backend`: REST API (Elysia)
-- `apps/frontend`: Web interface (Not yet implemented)
+- `apps/web`: Web interface (Astro + Solid)
 - `packages/db`: Prisma schema and generated database client
 - `packages/core`: Shared business logic, DTOs, and Zod schemas
 - `packages/embedding`: A standalone embedding REST service
@@ -76,6 +76,15 @@ These rules are absolute. Violation will cause pipeline or runtime failures.
 - **Backend**:
 	1. Our endpoints starts with `/v2` and this prefix is already configured in root handler. In all of the rest handlers, always use the complete path **without** the version prefix (e.g. `/song/:id/details`)
 	2. **[PROHIBITED]**: DO NOT use verbs in paths. Endpoints should strictly follows the RESTful pattern.
+
+#### Web App API Client (`apps/web`)
+
+The browser talks to the backend through Eden Treaty via `@lib/api`, which is typed by the contract exported from `apps/backend/src/apiContract.ts`.
+
+1. Add a wrapper in `apps/web/src/lib/api/<module>.ts` and export it from `apps/web/src/lib/api/index.ts`. Components call `api.<module>.<action>(...)`, never `fetch` directly.
+2. `@api-contract` is a **type-only** entry point imported through a `tsconfig` path alias — always `import type`, and never add `@cvsa/backend` as a dependency. It fails loudly on purpose: `verbatimModuleSyntax` rejects a runtime use, and the alias is invisible to Vite, so the backend graph can never reach the browser bundle.
+3. `x-locale` and `accept-language` are attached automatically from `<html lang>`, and `credentials: "include"` is always set. Do not pass them per call.
+4. Errors arrive as `ApiResult<...>` with a backend `code`, translated `message` and `traceId`. Map codes to UI states; do not parse response bodies in components.
 
 ## 5. Execution Commands & Testing
 

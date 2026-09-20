@@ -6,6 +6,14 @@
 		"jsx": "preserve",
 		"jsxImportSource": "solid-js",
 		"paths": {
+			// Type-only bridge to the backend's Eden contract. `@api-contract` is the
+			// sole supported entry point and must always be imported with `import type`.
+			// The wildcard entries mirror the backend's own `paths` so the compiler can
+			// walk the contract's type graph; nothing in `src` may import them.
+			"@api-contract": ["../backend/src/apiContract.ts"],
+			"@handlers/*": ["../backend/src/handlers/*"],
+			"@common/*": ["../backend/src/common/*"],
+			"@/*": ["../backend/src/*"],
 			"@layouts/*": ["./src/components/layout/*"],
 			"@components/*": ["./src/components/*"],
 			"@lib/*": ["./src/lib/*"]

@@ -1,0 +1,71 @@
+---
+import SongEditForm, { type SongEditFormValues } from "@components/pages/song/SongEditForm";
+import Heading1 from "@components/typography/Heading1.astro";
+import Header from "@layouts/Header.astro";
+import Layout from "@layouts/Layout.astro";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+import { localizedName, pickLyric } from "@lib/localize";
+import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
+
+const { id } = Astro.params;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+
+let data: SongDetailsResponseDto | undefined;
+try {
+	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);
+} catch (e) {
+	if (AppError.isAppError(e)) {
+		return new Response(null, {
+			status: e.statusCode,
+			statusText: e.code,
+		});
+	}
+	return new Response(null, {
+		status: 500,
+		statusText: "Internal Server Error",
+	});
+}
+if (!data) {
+	return new Response(null, {
+		status: 404,
+	});
+}
+const details: SongDetailsResponseDto = data;
+
+const songName = localizedName(details, language) || details.name || "";
+
+const toDateTimeLocal = (iso?: string | null): string => {
+	if (!iso) return "";
+	const date = new Date(iso);
+	if (Number.isNaN(date.getTime())) return "";
+	const pad = (value: number) => String(value).padStart(2, "0");
+	return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+const lyric = pickLyric(details.lyrics, language);
+
+const values: SongEditFormValues = {
+	name: details.name ?? "",
+	type: details.type ?? "",
+	coverUrl: details.coverUrl ?? "",
+	duration: details.duration ?? 0,
+	publishedAt: toDateTimeLocal(details.publishedAt),
+	externalLinks: details.externalLinks.map((link) => link.url).join(", "),
+	lyrics: lyric?.plainText ?? "",
+	lyricId: lyric?.id,
+	lyricLanguage: lyric?.language ?? language.split("-")[0],
+	description: details.description ?? "",
+};
+---
+
+<Layout title={`${t("song.edit.title")} - ${songName}`} i18nNamespace="song-edit">
+	<Header />
+
+	<main class="mx-auto w-full max-w-5xl px-4 py-6 md:px-8">
+		<Heading1>{songName || t("song.edit.title")}</Heading1>
+		<div class="mt-8">
+			<SongEditForm client:load songId={details.id} locale={language} values={values} />
+		</div>
+	</main>
+</Layout>

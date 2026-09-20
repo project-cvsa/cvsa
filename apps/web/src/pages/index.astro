@@ -3,7 +3,7 @@ import UnderConstruction from "@components/pages/UnderConstruction.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 
 const { language } = getLocale(Astro.request);
-const t = i18nServer.getT({ locale: language });
+const t = i18nServer.getT({ locale: language, namespace: "server" });
 
 const linksZh = [
 	{ href: "https://qm.qq.com/q/7RXTNmvmUM", text: t("home.link.join") },

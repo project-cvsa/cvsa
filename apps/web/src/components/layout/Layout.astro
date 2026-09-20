@@ -1,5 +1,12 @@
 ---
 import { getThemeColorVariables } from "@lib/theme";
+import {
+	CLIENT_I18N_SCRIPT_ID,
+	serializeClientI18nPayload,
+	type ClientI18nPayload,
+} from "@lib/i18n/payload";
+import { defaultLanguage } from "@lib/i18n/const";
+import { getLocale, i18nServer } from "@lib/i18n/server";
 
 interface Props {
 	title?: string;
@@ -7,19 +14,50 @@ interface Props {
 	image?: string;
 	canonicalURL?: URL;
 	type?: "website" | "article";
+	i18nNamespace?: string;
 }
 
-const { title, description } = Astro.props;
+const { title, description, i18nNamespace } = Astro.props;
+const { language } = getLocale(Astro.request);
 const themeCookie = Astro.cookies.get("theme");
 const theme = themeCookie?.value || "system";
 const themeCSS = getThemeColorVariables(theme);
+let clientI18n: ClientI18nPayload | undefined;
+if (i18nNamespace) {
+	const fullI18nNamespace = `web:client:${i18nNamespace}`;
+	const namespaceResources = i18nServer.getTranslationsForNamespace(fullI18nNamespace);
+	const currentLocaleMessages = namespaceResources?.[language] ?? {};
+	const fallbackLocaleMessages = namespaceResources?.[defaultLanguage] ?? {};
+	const clientNamespaceResources =
+		language === defaultLanguage
+			? { [language]: currentLocaleMessages }
+			: {
+					[defaultLanguage]: fallbackLocaleMessages,
+					[language]: currentLocaleMessages,
+				};
+	clientI18n = {
+		locale: language,
+		resources: {
+			[fullI18nNamespace]: clientNamespaceResources,
+		},
+	};
+}
+const clientI18nJson = clientI18n ? serializeClientI18nPayload(clientI18n) : undefined;
 ---
 
 <!DOCTYPE html>
-<html lang="zh-CN" class="scroll-smooth">
+<html lang={language} class="scroll-smooth">
 	<head>
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		{clientI18nJson ? (
+			<script
+				id={CLIENT_I18N_SCRIPT_ID}
+				type="application/json"
+				is:inline
+				set:html={clientI18nJson}
+			></script>
+		) : null}
 
 		<title>{title}</title>
 		<meta name="description" content={description}>

@@ -1,3 +1,5 @@
+export const defaultLanguage = "zh-CN";
+
 export const supportedLanguages = ["zh-CN", "zh-TW", "zh-HK", "en-US"];
 export const supportedBaseLanguages = [
 	...new Set(

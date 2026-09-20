@@ -12,6 +12,7 @@ import {
 } from "@handlers/index";
 import { errorHandler } from "./errorHandler";
 import { openapi } from "@elysiajs/openapi";
+import { cors } from "@elysiajs/cors";
 import { requestLoggerMiddleware } from "@/middlewares";
 import { opentelemetry } from "@elysiajs/opentelemetry";
 import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
@@ -25,6 +26,11 @@ import { appLogger } from "@cvsa/logger";
 const [host, port] = getBindingInfo();
 
 logStartup(host, port);
+
+const corsOriginPatterns = [
+	/^https?:\/\/([a-z0-9-]+\.)*projectcvsa\.com(?::\d+)?$/,
+	/^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/,
+];
 
 const outboxWorker = createOutboxWorker(processOutboxEntry);
 
@@ -57,6 +63,14 @@ export const app = new Elysia({
 			spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
 		})
 	)
+	.use(
+		cors({
+			origin: corsOriginPatterns,
+			methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+			allowedHeaders: ["content-type", "x-locale", "authorization"],
+			credentials: true,
+		})
+	)
 	.use(onAfterHandler)
 	.use(requestLoggerMiddleware)
 	.use(errorHandler)
@@ -67,8 +81,11 @@ export const app = new Elysia({
 	.use(artistHandler)
 	.use(artistRoleHandler)
 	.use(singerHandler)
-	.use(devHandler)
-	.listen(16412);
+	.use(devHandler);
+
+if (process.env.NODE_ENV !== "test") {
+	app.listen(16412);
+}
 
 export const VERSION = pkg.version;
 

@@ -1,11 +1,11 @@
-import { i18n } from "@fanee/core";
+import { FaneeRuntime } from "@fanee/core";
 import acceptLanguageParser from "accept-language-parser";
 import { resources } from "virtual:fanee";
-import { supportedBaseLanguages, supportedLanguages } from "./const";
+import { defaultLanguage, supportedBaseLanguages, supportedLanguages } from "./const";
 
-export const i18nServer = i18n.config({
-	defaultLocale: "zh-CN",
-	baseNamespace: "web:server",
+export const i18nServer = new FaneeRuntime().config({
+	defaultLocale: defaultLanguage,
+	baseNamespace: "web",
 	resources,
 });
 

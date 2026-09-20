@@ -2,22 +2,21 @@ import { Elysia } from "elysia";
 import { ip } from "elysia-ip";
 import {
 	betterAuthToSignupUserInfoDto,
+	ErrorResponseSchema,
 	SignupRequestSchema,
 	signupRequestToBetterAuth,
 	SignupResponseSchema,
 	toSignUpResponse,
-	ErrorResponseSchema,
 	toBetterAuthHeaders,
 } from "@cvsa/core";
 import { AppError } from "@cvsa/core";
 import { auth } from "@cvsa/core";
+import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
-
-const DAY = 86400;
 
 export const signupHandler = new Elysia().use(ip()).post(
 	"/user",
-	async ({ body, status, headers, cookie: { token: tokenCookie } }) => {
+	async ({ body, status, headers, cookie }) => {
 		const { user, token } = await traceTask("auth.signUpEmail", async () => {
 			return await auth.api.signUpEmail({
 				body: signupRequestToBetterAuth(body),
@@ -31,11 +30,7 @@ export const signupHandler = new Elysia().use(ip()).post(
 			});
 		}
 
-		tokenCookie.value = token;
-		tokenCookie.httpOnly = true;
-		tokenCookie.maxAge = 90 * DAY;
-		tokenCookie.secure = true;
-		tokenCookie.sameSite = "lax";
+		await applySessionCookie(cookie, token);
 
 		const userInfo = betterAuthToSignupUserInfoDto(user, token);
 		const response = toSignUpResponse(userInfo);
