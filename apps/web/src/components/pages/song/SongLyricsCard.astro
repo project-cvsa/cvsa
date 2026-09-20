@@ -20,9 +20,7 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 	<Fragment slot="body">
 		<Condition condition={text.length > 0}>
 			<div class="flex items-center gap-2">
-				<span
-					class="ts-label color-surface px-2.5 py-1 leading-none bg-surface-inverted"
-				>
+				<span class="ts-label color-surface px-2.5 py-1 leading-none bg-surface-inverted">
 					{languageLabel}
 				</span>
 				<Condition condition={isTranslated}>

@@ -126,11 +126,10 @@ export default function DurationField(props: DurationFieldProps) {
 
 	return (
 		<div class={clsx("flex flex-col gap-1.5", local.class)}>
-			<div
-				role="group"
+			<fieldset
 				aria-label={local.label}
 				class={clsx(
-					"group relative flex h-[58px] items-center border bg-surface transition-colors",
+					"group relative flex h-[58px] min-w-0 items-center border bg-surface transition-colors",
 					hasError()
 						? "border-error"
 						: "border-border hover:border-tertiary focus-within:border-primary",
@@ -211,7 +210,7 @@ export default function DurationField(props: DurationFieldProps) {
 					value={totalSeconds()}
 					disabled={local.disabled}
 				/>
-			</div>
+			</fieldset>
 
 			<Show when={hasError()}>
 				<p id={errorId()} class="ts-caption text-error">

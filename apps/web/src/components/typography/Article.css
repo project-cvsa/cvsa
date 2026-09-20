@@ -15,7 +15,6 @@
  *                        `prefers-color-scheme` variables automatically
  */
 
-
 .ts-article {
 	font-family: inherit;
 	font-size: 16px;
@@ -46,20 +45,20 @@
 /* No block ever opens a container with a gap; a nested list is often the first
    element of its item but not the first content, so `ul`/`ol` are exempt and
    keep the gap declared in the list rules below. */
-.ts-article> :first-child,
-.ts-article blockquote> :first-child,
-.ts-article dd> :first-child,
-.ts-article li> :first-child:not(ul):not(ol) {
+.ts-article > :first-child,
+.ts-article blockquote > :first-child,
+.ts-article dd > :first-child,
+.ts-article li > :first-child:not(ul):not(ol) {
 	margin-top: 0;
 }
 
 /* A MediaWiki heading arrives wrapped in `.mw-heading`; the wrapper counts as
    the first child, so the inner heading must be reset as well — otherwise its
    margin would collapse out of the wrapper and reopen the top gap. */
-.ts-article> :first-child :is(h1, h2, h3, h4, h5, h6),
-.ts-article li> :first-child :is(h1, h2, h3, h4, h5, h6),
-.ts-article blockquote> :first-child :is(h1, h2, h3, h4, h5, h6),
-.ts-article dd> :first-child :is(h1, h2, h3, h4, h5, h6) {
+.ts-article > :first-child :is(h1, h2, h3, h4, h5, h6),
+.ts-article li > :first-child :is(h1, h2, h3, h4, h5, h6),
+.ts-article blockquote > :first-child :is(h1, h2, h3, h4, h5, h6),
+.ts-article dd > :first-child :is(h1, h2, h3, h4, h5, h6) {
 	margin-top: 0;
 }
 
@@ -153,7 +152,6 @@
 	letter-spacing: 0.1px;
 }
 
-
 .ts-article :is(ul, ol) {
 	padding-left: 20px;
 }
@@ -175,7 +173,7 @@
 	color: var(--primary);
 }
 
-.ts-article li+li {
+.ts-article li + li {
 	margin-top: 6px;
 }
 
@@ -195,7 +193,6 @@
 	padding-left: 16px;
 	color: var(--primary);
 }
-
 
 .ts-article blockquote {
 	padding: 2px 0 2px 16px;
@@ -236,7 +233,6 @@
 	line-height: inherit;
 }
 
-
 .ts-article :is(img, video) {
 	max-width: 100%;
 	height: auto;
@@ -276,7 +272,7 @@
 	color: var(--primary);
 }
 
-.ts-article :is(th, td)>*+* {
+.ts-article :is(th, td) > * + * {
 	margin-top: 6px;
 }
 
