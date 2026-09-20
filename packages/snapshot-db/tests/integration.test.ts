@@ -2,22 +2,22 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { crawlerEnv } from "@cvsa/env";
 import { snapshotDb } from "../src";
 
-const integrationTest = process.env.SNAPSHOT_DB_TESTS === "1" ? test : test.skip;
-
+/**
+ * Requires the snapshot database from `docker-compose` and the schema applied by
+ * `bun run --cwd packages/snapshot-db test:setup` (which turbo runs as part of
+ * `setup:ci`). It is deliberately not opt-in: an integration test that skips
+ * itself is indistinguishable from a passing one.
+ */
 describe("SnapshotDB", () => {
 	beforeAll(async () => {
-		if (process.env.SNAPSHOT_DB_TESTS === "1") {
-			await snapshotDb.connect();
-		}
+		await snapshotDb.connect();
 	});
 
 	afterAll(async () => {
-		if (process.env.SNAPSHOT_DB_TESTS === "1") {
-			await snapshotDb.disconnect();
-		}
+		await snapshotDb.disconnect();
 	});
 
-	integrationTest("connects and performs the minimum snapshot read/write", async () => {
+	test("connects and performs the minimum snapshot read/write", async () => {
 		await snapshotDb.healthCheck();
 		const aid = BigInt(Date.now());
 		const capturedAt = new Date();
@@ -49,7 +49,7 @@ describe("SnapshotDB", () => {
 		});
 	});
 
-	test("uses the crawler-owned SnapshotDB configuration", () => {
-		expect(crawlerEnv.SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot");
+	test("runs against the test database, never the development one", () => {
+		expect(crawlerEnv.SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot_test");
 	});
 });

@@ -6,5 +6,4 @@ export * from "./logger";
 export * from "./rateLimiter";
 export * from "./scheduler";
 export * from "./telemetry";
-export * from "./testing";
 export * from "./tracer";

@@ -3,22 +3,35 @@ import {
 	NetworkRuntimeConfigDocumentSchema,
 	NetworkRuntimeStatusSchema,
 	ReplaceNetworkRuntimeConfigRequestSchema,
+	redactNetworkRuntimeConfigDocument,
 } from "@cvsa/core/crawler";
 import { AppError, ErrorResponseSchema } from "@cvsa/core";
 import { crawlerEnv } from "@cvsa/env";
 import { networkRuntime, networkRuntimeConfigService } from "./container";
 
 function errorResponse(error: AppError): {
-	code: "ENTITY_CONFLICT" | "INTERNAL_SERVER_ERROR";
+	code: "ENTITY_CONFLICT" | "VALIDATION_ERROR" | "INTERNAL_SERVER_ERROR";
 	message: string;
 } {
 	if (error.code === "ENTITY_CONFLICT") {
 		return { code: "ENTITY_CONFLICT", message: error.message };
 	}
+	if (error.code === "VALIDATION_ERROR") {
+		return { code: "VALIDATION_ERROR", message: error.message };
+	}
 	return { code: "INTERNAL_SERVER_ERROR", message: error.message };
 }
 
 export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", prefix: "/v2" })
+	.onError(({ code, error, status }) => {
+		if (AppError.isAppError(error)) {
+			return status(error.statusCode, errorResponse(error));
+		}
+		if (code === "VALIDATION") {
+			return status(422, { code: "VALIDATION_ERROR", message: "Invalid request" });
+		}
+		return status(500, { code: "INTERNAL_SERVER_ERROR", message: "Internal server error" });
+	})
 	.onBeforeHandle(({ headers, status }) => {
 		if (
 			!crawlerEnv.CONTROL_API_TOKEN ||
@@ -37,7 +50,8 @@ export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", pre
 					message: "Network runtime config not found",
 				});
 			}
-			return config;
+			// Proxy URLs may embed credentials; they never leave the process.
+			return redactNetworkRuntimeConfigDocument(config);
 		},
 		{
 			response: {
@@ -59,7 +73,7 @@ export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", pre
 					503
 				);
 			}
-			return config;
+			return redactNetworkRuntimeConfigDocument(config);
 		},
 		{
 			body: ReplaceNetworkRuntimeConfigRequestSchema,
@@ -77,13 +91,4 @@ export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", pre
 			200: NetworkRuntimeStatusSchema,
 			401: ErrorResponseSchema,
 		},
-	})
-	.onError(({ code, error, status }) => {
-		if (AppError.isAppError(error)) {
-			return status(error.statusCode, errorResponse(error));
-		}
-		if (code === "VALIDATION") {
-			return status(422, { code: "VALIDATION_ERROR", message: "Invalid request" });
-		}
-		return status(500, { code: "INTERNAL_SERVER_ERROR", message: "Internal server error" });
 	});

@@ -1,11 +1,11 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-	entry: ["src/index.ts"],
+	entry: ["src/index.ts", "src/testing.ts"],
 	format: "esm",
 	dts: true,
 	clean: true,
 	deps: {
-		neverBundle: ["zod", "ioredis", "node-fetch", "proxy-agent"],
+		neverBundle: ["zod", "ioredis", "axios"],
 	},
 });

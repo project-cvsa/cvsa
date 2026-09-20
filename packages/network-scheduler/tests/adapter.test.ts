@@ -115,6 +115,49 @@ describe("createAxiosNetworkTransport", () => {
 		).resolves.toMatchObject({ errorCode: "APPLICATION_ERROR" });
 	});
 
+	test("consults the classifier before falling back to a generic 4xx", async () => {
+		const axiosInstance = () => Promise.resolve(mockResponse(412, "risk control"));
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios, {
+			classifyApplicationError: ({ status }) =>
+				status === 412 ? "APPLICATION_RATE_LIMIT" : undefined,
+		});
+
+		await expect(
+			transport.execute({ url: "https://example.com/resource", requestType: "test" })
+		).resolves.toMatchObject({ errorCode: "APPLICATION_RATE_LIMIT", status: 412 });
+	});
+
+	test("keeps the generic 4xx code when the classifier does not recognize the response", async () => {
+		const axiosInstance = () => Promise.resolve(mockResponse(404, "not found"));
+		const transport = createAxiosNetworkTransport(axiosInstance as unknown as typeof axios, {
+			classifyApplicationError: () => undefined,
+		});
+
+		await expect(
+			transport.execute({ url: "https://example.com/resource", requestType: "test" })
+		).resolves.toMatchObject({ errorCode: "HTTP_4XX" });
+	});
+
+	test("never lets the classifier override the HTTP 429 and 5xx codes", async () => {
+		const tooManyRequestsInstance = () => Promise.resolve(mockResponse(429, "slow down"));
+		const serverErrorInstance = () => Promise.resolve(mockResponse(503, "unavailable"));
+		const tooManyRequests = createAxiosNetworkTransport(
+			tooManyRequestsInstance as unknown as typeof axios,
+			{ classifyApplicationError: () => "APPLICATION_ERROR" }
+		);
+		const serverError = createAxiosNetworkTransport(
+			serverErrorInstance as unknown as typeof axios,
+			{ classifyApplicationError: () => "APPLICATION_ERROR" }
+		);
+
+		await expect(
+			tooManyRequests.execute({ url: "https://example.com/resource" })
+		).resolves.toMatchObject({ errorCode: "HTTP_429" });
+		await expect(
+			serverError.execute({ url: "https://example.com/resource" })
+		).resolves.toMatchObject({ errorCode: "HTTP_5XX" });
+	});
+
 	test("handles network failures gracefully", async () => {
 		const axiosInstance = () => {
 			const error = new Error("Network error");

@@ -22,6 +22,7 @@
 	"exports": {
 		".": "./src/index.ts",
 		"./crawler": "./src/modules/crawler/index.ts",
+		"./crawler/testing": "./src/modules/crawler/testing/fakes.ts",
 		"./internal": "./src/internal.ts"
 	},
 	"dependencies": {

@@ -18,13 +18,31 @@ const AdapterBaseSchema = z.object({
 	rateLimits: z.array(RateLimitSchema).default([]),
 });
 
+function hasSupportedProxyProtocol(value: string): boolean {
+	try {
+		const protocol = new URL(value).protocol;
+		return protocol === "http:" || protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * `createAxiosNetworkTransport` only implements HTTP/HTTPS proxying. Accepting
+ * another scheme here would let an operator persist a configuration that can
+ * never work, so the protocol is rejected at validation time.
+ */
+export const HttpProxyUrlSchema = z
+	.url()
+	.refine(hasSupportedProxyProtocol, "proxyUrl must use the http: or https: protocol");
+
 export const DirectAdapterConfigSchema = AdapterBaseSchema.extend({
 	type: z.literal("direct"),
 });
 
 export const HttpProxyAdapterConfigSchema = AdapterBaseSchema.extend({
 	type: z.literal("http-proxy"),
-	proxyUrl: z.url(),
+	proxyUrl: HttpProxyUrlSchema,
 });
 
 export const NetworkAdapterConfigSchema = z.discriminatedUnion("type", [
@@ -45,6 +63,10 @@ export const HealthConfigSchema = z.object({
 	failurePenalty: z.number().gt(0).lt(1).default(0.5),
 	recoveryBonus: z.number().gt(0).lt(1).default(0.2),
 	minWeightFactor: z.number().gte(0).lt(1).default(0.05),
+	/** Consecutive health-affecting failures before the adapter is isolated. */
+	failureThreshold: z.number().int().positive().max(100).default(3),
+	/** How long an isolated adapter stays out of rotation before a probe is allowed. */
+	cooldownMs: z.number().int().positive().max(3_600_000).default(30_000),
 });
 
 export const NetworkRuntimeConfigSchema = z
@@ -95,32 +117,5 @@ export const NetworkRuntimeConfigSchema = z
 		}
 	});
 
-export const NetworkRuntimeConfigDocumentSchema = z.object({
-	revision: z.number().int().positive(),
-	config: NetworkRuntimeConfigSchema,
-	updatedAt: z.coerce.date(),
-});
-
-export const ReplaceNetworkRuntimeConfigRequestSchema = z.object({
-	revision: z.number().int().nonnegative(),
-	config: NetworkRuntimeConfigSchema,
-});
-
-export const NetworkRuntimeStatusSchema = z.object({
-	ready: z.boolean(),
-	revision: z.number().int().positive().nullable(),
-});
-
 export type NetworkAdapterConfig = z.infer<typeof NetworkAdapterConfigSchema>;
 export type NetworkRuntimeConfig = z.infer<typeof NetworkRuntimeConfigSchema>;
-export type NetworkRuntimeConfigDocument = z.infer<typeof NetworkRuntimeConfigDocumentSchema>;
-export type ReplaceNetworkRuntimeConfigRequest = z.infer<
-	typeof ReplaceNetworkRuntimeConfigRequestSchema
->;
-export type NetworkRuntimeStatus = z.infer<typeof NetworkRuntimeStatusSchema>;
-
-export interface NetworkRuntimeConfigRecordDto {
-	revision: number;
-	config: unknown;
-	updatedAt: Date | string;
-}

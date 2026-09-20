@@ -5,8 +5,31 @@ export type NetworkErrorCode =
 	| "HTTP_429"
 	| "HTTP_5XX"
 	| "HTTP_4XX"
+	| "APPLICATION_RATE_LIMIT"
 	| "APPLICATION_ERROR"
 	| "RATE_LIMITED";
+
+/**
+ * Errors caused by the exit itself: the adapter could not deliver a usable
+ * response because of the network path, the proxy, or upstream throttling aimed
+ * at that exit. Only these codes reduce adapter health and trigger failover.
+ *
+ * `APPLICATION_ERROR` is deliberately excluded. A business error reported by the
+ * upstream application (the resource does not exist, is not visible, the caller
+ * lacks permission) says nothing about the health of the exit that carried the
+ * request, so it must neither be retried nor degrade the adapter.
+ */
+export const HEALTH_AFFECTING_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> = new Set([
+	"NETWORK_FAILURE",
+	"REQUEST_TIMEOUT",
+	"HTTP_429",
+	"HTTP_5XX",
+	"APPLICATION_RATE_LIMIT",
+]);
+
+/** Codes worth retrying on another adapter within the same call. */
+export const RETRYABLE_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> =
+	HEALTH_AFFECTING_NETWORK_ERROR_CODES;
 
 export interface NetworkApplicationErrorContext {
 	status: number;
@@ -60,4 +83,18 @@ export interface NetworkTransport {
 export interface NetworkRateLimiter {
 	consume(scope: string, durationSeconds: number, maxRequests: number): Promise<boolean>;
 	close?(): Promise<void>;
+}
+
+/** Observable health of a single adapter, derived from its request outcomes. */
+export type NetworkAdapterHealthState = "healthy" | "degraded" | "open" | "half-open";
+
+export interface NetworkAdapterRuntimeStatus {
+	id: string;
+	enabled: boolean;
+	healthState: NetworkAdapterHealthState;
+	healthFactor: number;
+	effectiveWeight: number;
+	consecutiveFailures: number;
+	/** Epoch milliseconds until which the adapter stays isolated, or `null`. */
+	openUntil: number | null;
 }

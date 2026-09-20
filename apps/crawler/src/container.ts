@@ -1,5 +1,5 @@
 import {
-	AdapterRegistry,
+	createCrawlerAdapterRegistry,
 	createCrawlerMetrics,
 	createCrawlerMq,
 	createCrawlerRuntime,
@@ -22,7 +22,8 @@ export const networkRuntimeConfigService = new NetworkRuntimeConfigService(
 );
 export const networkRuntime = new NetworkRuntimeConfigManager(
 	networkRuntimeConfigRepository,
-	new AdapterRegistry(),
+	// Bilibili application-error semantics are injected here, not in the scheduler.
+	createCrawlerAdapterRegistry(),
 	createRedisRateLimiter(crawlerEnv.REDIS_URL)
 );
 

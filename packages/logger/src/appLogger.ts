@@ -1,7 +1,8 @@
 import type { Logger as PinoLogger } from "pino";
+import { type Attributes, type AttributeValue, SpanStatusCode, trace } from "@opentelemetry/api";
 import { type Logger, SeverityNumber } from "@opentelemetry/api-logs";
-import { trace, SpanStatusCode, type Attributes } from "@opentelemetry/api";
 import { pinoLogger } from "./pinoSetup";
+import { sanitizeLogAttributes, sanitizeLogMessage } from "./sanitize";
 import { otelLogger } from "@cvsa/observability";
 
 type PinoLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
@@ -37,6 +38,35 @@ function getSpanContext(): { traceId: string | undefined; spanId: string | undef
 	};
 }
 
+function isAttributeValue(value: unknown): value is AttributeValue {
+	if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+		return true;
+	}
+	return (
+		Array.isArray(value) &&
+		value.every(
+			(item) =>
+				typeof item === "string" || typeof item === "number" || typeof item === "boolean"
+		)
+	);
+}
+
+/** Keeps only the values OpenTelemetry can carry on an event or log record. */
+function toAttributes(attributes: Record<string, unknown> | undefined): Attributes {
+	const converted: Attributes = {};
+	if (!attributes) return converted;
+	for (const [key, value] of Object.entries(attributes)) {
+		if (isAttributeValue(value)) converted[key] = value;
+	}
+	return converted;
+}
+
+function readError(attributes: Record<string, unknown> | undefined): Error | undefined {
+	if (!attributes || !("error" in attributes)) return undefined;
+	const value = attributes.error;
+	return value instanceof Error ? value : undefined;
+}
+
 function createLogMethod(level: PinoLevel) {
 	return function logMethod(
 		pinoLogger: PinoLogger,
@@ -50,55 +80,48 @@ function createLogMethod(level: PinoLevel) {
 		const spanContextAttrs =
 			traceId && spanId ? { trace_id: traceId, span_id: spanId } : undefined;
 
+		// Scrub credentials before they reach any sink: the pino line, the
+		// OpenTelemetry log record, and the active span event.
+		const sanitizedAttrs = sanitizeLogAttributes(attrs);
+		const message = sanitizeLogMessage(msg);
+
 		const mergedAttrs = {
-			...attrs,
+			...sanitizedAttrs,
 			...spanContextAttrs,
 		};
 
+		const error = readError(sanitizedAttrs);
+
+		// pino merges its FIRST argument into the record; later arguments are
+		// printf placeholders, so passing attributes second silently drops them.
 		const pinoMethod = pinoLogger[level].bind(pinoLogger) as (
-			msg: string,
-			...args: unknown[]
+			mergingObject: Record<string, unknown>,
+			message: string
 		) => void;
-		if (level === "error" || level === "fatal") {
-			const err = attrs && "error" in attrs ? (attrs.error as Error) : undefined;
-			if (err instanceof Error) {
-				pinoMethod(msg, {
-					...mergedAttrs,
-					err,
-				});
-			} else {
-				pinoMethod(msg, mergedAttrs);
-			}
-		} else {
-			pinoMethod(msg, mergedAttrs);
-		}
+		pinoMethod(error ? { ...mergedAttrs, err: error } : mergedAttrs, message);
 
 		if (otelLogger) {
 			const otelAttrs: Attributes = {
-				...(attrs || {}),
-				...(spanContextAttrs || {}),
+				...toAttributes(sanitizedAttrs),
+				...toAttributes(spanContextAttrs),
 			};
-
-			if (level === "error" || level === "fatal") {
-				const err = attrs && "error" in attrs ? (attrs.error as Error) : undefined;
-				if (err) {
-					otelAttrs["error.object"] = String(err);
-				}
+			if (error) {
+				otelAttrs["error.object"] = String(error);
 			}
 
 			otelLogger.emit({
 				severityText: level,
 				severityNumber: PINO_TO_OTEL_LEVEL[level],
-				body: msg,
+				body: message,
 				attributes: otelAttrs,
 			});
 		}
 
 		if (activeSpan) {
-			activeSpan.addEvent(msg, attrs as Attributes);
+			activeSpan.addEvent(message, toAttributes(sanitizedAttrs));
 
 			if (level === "error" || level === "fatal") {
-				activeSpan.setStatus({ code: SpanStatusCode.ERROR, message: msg });
+				activeSpan.setStatus({ code: SpanStatusCode.ERROR, message });
 			}
 		}
 	};

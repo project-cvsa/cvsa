@@ -16,14 +16,14 @@ export interface AxiosNetworkTransportOptions {
 function responseHeaders(
 	headers: Record<string, string> | AxiosResponse["headers"]
 ): Record<string, string> {
+	if (!headers || typeof headers !== "object") return {};
+
 	const values: Record<string, string> = {};
-	if (headers && typeof headers === "object") {
-		for (const [key, value] of Object.entries(headers)) {
-			if (typeof value === "string") {
-				values[key] = value;
-			}
-		}
+
+	for (const [key, value] of Object.entries(headers)) {
+		if (typeof value === "string") values[key] = value;
 	}
+
 	return values;
 }
 
@@ -35,13 +35,22 @@ function toErrorCode(
 ): NetworkResponse["errorCode"] {
 	if (status === 429) return "HTTP_429";
 	if (status >= 500) return "HTTP_5XX";
+
+	// Let the caller's classifier interpret the payload before falling back to a
+	// generic transport-level 4xx. Upstreams commonly report risk control or rate
+	// limiting as a 4xx status (Bilibili uses HTTP 412), and those are exit-level
+	// failures rather than business answers.
+	const classified = classifyApplicationError?.({ status, headers, body });
+	if (classified) return classified;
+
 	if (status >= 400) return "HTTP_4XX";
-	return classifyApplicationError?.({ status, headers, body });
+	return undefined;
 }
 
 function parseProxyUrl(proxyUrl: string): AxiosProxyConfig {
 	const parsed = new URL(proxyUrl);
 	const protocol = parsed.protocol.replace(":", "");
+
 	return {
 		protocol,
 		host: parsed.hostname,
@@ -52,65 +61,81 @@ function parseProxyUrl(proxyUrl: string): AxiosProxyConfig {
 	};
 }
 
+function createAxiosConfig(request: NetworkRequest, proxyUrl?: string): AxiosRequestConfig {
+	const config: AxiosRequestConfig = {
+		url: request.url,
+		method: request.method ?? "GET",
+		headers: request.headers,
+		data: request.body,
+		timeout: request.timeoutMs,
+		responseType: "text",
+		validateStatus: () => true,
+	};
+
+	if (proxyUrl) config.proxy = parseProxyUrl(proxyUrl);
+
+	return config;
+}
+
+function toTransportErrorCode(error: unknown): NetworkResponse["errorCode"] {
+	if (error instanceof Error && error.name === "AbortError") {
+		return "REQUEST_TIMEOUT";
+	}
+
+	if (
+		axios.isAxiosError(error) &&
+		(error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
+	) {
+		return "REQUEST_TIMEOUT";
+	}
+
+	return "NETWORK_FAILURE";
+}
+
+class AxiosNetworkTransport implements NetworkTransport {
+	constructor(
+		private readonly axiosInstance: typeof axios,
+		private readonly options: AxiosNetworkTransportOptions
+	) {}
+
+	async execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkTransportResponse> {
+		const startedAt = performance.now();
+
+		try {
+			const config = createAxiosConfig(request, proxyUrl);
+			const result: AxiosResponse<string> = await this.axiosInstance(config);
+			const body = typeof result.data === "string" ? result.data : "";
+			const headers = responseHeaders(result.headers);
+
+			return {
+				status: result.status,
+				headers,
+				body,
+				durationMs: performance.now() - startedAt,
+				errorCode: toErrorCode(
+					result.status,
+					headers,
+					body,
+					this.options.classifyApplicationError
+				),
+			};
+		} catch (error) {
+			return {
+				status: 0,
+				headers: {},
+				body: "",
+				durationMs: performance.now() - startedAt,
+				errorCode: toTransportErrorCode(error),
+			};
+		}
+	}
+}
+
 export function createAxiosNetworkTransport(
 	axiosInstance: typeof axios = axios,
 	options: AxiosNetworkTransportOptions = {}
 ): NetworkTransport {
-	return {
-		async execute(
-			request: NetworkRequest,
-			proxyUrl?: string
-		): Promise<NetworkTransportResponse> {
-			const startedAt = performance.now();
-			try {
-				const config: AxiosRequestConfig = {
-					url: request.url,
-					method: request.method ?? "GET",
-					headers: request.headers,
-					data: request.body,
-					timeout: request.timeoutMs,
-					responseType: "text",
-					validateStatus: () => true,
-				};
-
-				if (proxyUrl) {
-					config.proxy = parseProxyUrl(proxyUrl);
-				}
-
-				const result: AxiosResponse<string> = await axiosInstance(config);
-				const body = typeof result.data === "string" ? result.data : "";
-				const headers = responseHeaders(result.headers);
-
-				return {
-					status: result.status,
-					headers,
-					body,
-					durationMs: performance.now() - startedAt,
-					errorCode: toErrorCode(
-						result.status,
-						headers,
-						body,
-						options.classifyApplicationError
-					),
-				};
-			} catch (error) {
-				const errorCode =
-					error instanceof Error && error.name === "AbortError"
-						? "REQUEST_TIMEOUT"
-						: axios.isAxiosError(error) &&
-								(error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
-							? "REQUEST_TIMEOUT"
-							: "NETWORK_FAILURE";
-				return {
-					status: 0,
-					headers: {},
-					body: "",
-					durationMs: performance.now() - startedAt,
-					errorCode,
-				};
-			}
-		},
-	};
+	return new AxiosNetworkTransport(axiosInstance, options);
 }
 
 class ConfiguredNetworkAdapter implements NetworkAdapter {
@@ -125,7 +150,9 @@ class ConfiguredNetworkAdapter implements NetworkAdapter {
 
 	async execute(request: NetworkRequest): Promise<NetworkResponse> {
 		const proxyUrl = this.config.type === "direct" ? undefined : this.config.proxyUrl;
+
 		const response = await this.transport.execute(request, proxyUrl);
+
 		return { ...response, adapterId: this.id };
 	}
 }

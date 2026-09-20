@@ -26,6 +26,7 @@ jobs:
             cp packages/db/.env.example packages/db/.env.test
             cp packages/core/.env.example packages/core/.env.test
             cp apps/backend/.env.example apps/backend/.env.test
+            cp apps/crawler/.env.example apps/crawler/.env.test
 
       - name: Start services with Docker Compose
         run: docker compose up -d

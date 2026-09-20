@@ -26,14 +26,24 @@ export const env = createEnv({
 	emptyStringAsUndefined: true,
 });
 
+/**
+ * The snapshot database has a development and a test instance on the same
+ * docker-compose service. Deriving the default from `NODE_ENV` keeps every
+ * consumer — the crawler daemon, the crawler's own tests, and any test that
+ * builds a `SnapshotDb` — off local development data without each package
+ * restating the URL. An explicit `SNAPSHOT_DATABASE_URL` still wins.
+ */
+const SNAPSHOT_DATABASE_URL_DEFAULT =
+	process.env.NODE_ENV === "test"
+		? "postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot_test"
+		: "postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot";
+
 /** Configuration used by the crawler process without requiring primary DB settings. */
 export const crawlerEnv = createEnv({
 	server: {
 		NODE_ENV: z.enum(["development", "test", "production"]).optional(),
 		REDIS_URL: z.url().default("redis://127.0.0.1:6379"),
-		SNAPSHOT_DATABASE_URL: z
-			.url()
-			.default("postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot"),
+		SNAPSHOT_DATABASE_URL: z.url().default(SNAPSHOT_DATABASE_URL_DEFAULT),
 		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
 		OTEL_SERVICE_NAME: z.string().default("cvsa-crawler"),
 		OTEL_SERVICE_VERSION: z.string().default("0.0.0"),

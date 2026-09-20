@@ -1,7 +1,7 @@
 import { AppError } from "../../../error";
 import { appLogger } from "@cvsa/logger";
+import { traceTask } from "@cvsa/observability";
 import {
-	NetworkRuntimeConfigDocumentSchema,
 	NetworkRuntimeConfigSchema,
 	NetworkScheduler,
 	NetworkSchedulerError,
@@ -11,23 +11,76 @@ import {
 	type NetworkRateLimiter,
 	type NetworkRequest,
 	type NetworkResponse,
+	type NetworkSchedulerLogger,
+	type NetworkSchedulerTracer,
+} from "@cvsa/network-scheduler";
+import {
+	NetworkRuntimeConfigDocumentSchema,
 	type NetworkRuntimeConfigDocument,
 	type NetworkRuntimeStatus,
-} from "@cvsa/network-scheduler";
+} from "../dto";
 import type { INetworkRuntimeConfigRepository } from "./repository.interface";
 import { createNetworkMetrics } from "./telemetry";
+
+/** Bridges the scheduler's logger contract onto the application logger. */
+export function createCrawlerNetworkLogger(): NetworkSchedulerLogger {
+	return {
+		info(message, attrs) {
+			appLogger.info(message, attrs);
+		},
+		warn(message, attrs) {
+			appLogger.warn(message, attrs);
+		},
+		error(message, attrs) {
+			appLogger.error(message, attrs);
+		},
+		debug(message, attrs) {
+			appLogger.debug(message, attrs);
+		},
+		trace(message, attrs) {
+			appLogger.trace(message, attrs);
+		},
+	};
+}
+
+/** Bridges the scheduler's tracer contract onto the shared OpenTelemetry tracer. */
+export function createCrawlerNetworkTracer(): NetworkSchedulerTracer {
+	return {
+		async traceTask<T>(name: string, fn: () => T | Promise<T>): Promise<T> {
+			const result = await traceTask(name, async () => await fn());
+			return result;
+		},
+	};
+}
+
+export interface NetworkRuntimeConfigManagerOptions {
+	metrics?: NetworkMetrics;
+	logger?: NetworkSchedulerLogger;
+	tracer?: NetworkSchedulerTracer;
+	/** Injectable time source forwarded to the scheduler, used by tests. */
+	clock?: () => number;
+}
 
 export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	private scheduler: NetworkScheduler | undefined;
 	private revision: number | undefined;
 	private pollTimer: ReturnType<typeof setInterval> | undefined;
+	private readonly metrics: NetworkMetrics;
+	private readonly logger: NetworkSchedulerLogger;
+	private readonly tracer: NetworkSchedulerTracer;
+	private readonly clock: (() => number) | undefined;
 
 	constructor(
 		private readonly repository: INetworkRuntimeConfigRepository,
 		private readonly registry: AdapterRegistry,
 		private readonly rateLimiter: NetworkRateLimiter,
-		private readonly metrics: NetworkMetrics = createNetworkMetrics()
-	) {}
+		options: NetworkRuntimeConfigManagerOptions = {}
+	) {
+		this.metrics = options.metrics ?? createNetworkMetrics();
+		this.logger = options.logger ?? createCrawlerNetworkLogger();
+		this.tracer = options.tracer ?? createCrawlerNetworkTracer();
+		this.clock = options.clock;
+	}
 
 	async execute(request: NetworkRequest): Promise<NetworkResponse> {
 		if (!this.scheduler)
@@ -52,11 +105,7 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			if (!persisted) return false;
 			return this.apply(NetworkRuntimeConfigDocumentSchema.parse(persisted));
 		} catch (error) {
-			appLogger.error("Network runtime configuration rejected; keeping previous revision", {
-				component: "network-config",
-				revision: this.revision,
-				error,
-			});
+			this.logRejection(error);
 			return false;
 		}
 	}
@@ -75,26 +124,30 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			} else {
 				this.scheduler = new NetworkScheduler(config, adapters, this.rateLimiter, {
 					metrics: this.metrics,
+					logger: this.logger,
+					tracer: this.tracer,
+					...(this.clock ? { clock: this.clock } : {}),
 				});
 			}
 			this.revision = validatedDocument.revision;
 			appLogger.info("Network runtime configuration loaded", {
 				component: "network-config",
 				revision: this.revision,
+				adapterIds: config.adapters.map((adapter) => adapter.id),
 			});
 			return true;
 		} catch (error) {
-			appLogger.error("Network runtime configuration rejected; keeping previous revision", {
-				component: "network-config",
-				revision: this.revision,
-				error,
-			});
+			this.logRejection(error);
 			return false;
 		}
 	}
 
 	getStatus(): NetworkRuntimeStatus {
-		return { ready: this.scheduler !== undefined, revision: this.revision ?? null };
+		return {
+			ready: this.scheduler !== undefined,
+			revision: this.revision ?? null,
+			adapters: this.scheduler?.getAdapterStatuses() ?? [],
+		};
 	}
 
 	startPolling(intervalMs = 5_000): void {
@@ -113,5 +166,18 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	async close(): Promise<void> {
 		this.stopPolling();
 		await this.rateLimiter.close?.();
+	}
+
+	/**
+	 * Logs the failure without echoing the rejected document. Proxy URLs may carry
+	 * credentials, so only the validation summary and the retained revision are
+	 * emitted.
+	 */
+	private logRejection(error: unknown): void {
+		appLogger.error("Network runtime configuration rejected; keeping previous revision", {
+			component: "network-config",
+			revision: this.revision,
+			reason: error instanceof Error ? error.message : String(error),
+		});
 	}
 }

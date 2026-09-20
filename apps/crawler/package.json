@@ -11,6 +11,7 @@
 	},
 	"devDependencies": {
 		"@cvsa/typescript-config": "workspace:*",
+		"@elysiajs/eden": "^1.4.9",
 		"@types/bun": "latest"
 	},
 	"dependencies": {

@@ -1,8 +1,7 @@
 import IORedis from "ioredis";
 import type { NetworkRateLimiter } from "./contracts";
 
-const TOKEN_BUCKET_SCRIPT = `
-local capacity = tonumber(ARGV[1])
+const TOKEN_BUCKET_SCRIPT = `local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
 local now = tonumber(ARGV[3])
 local ttl = tonumber(ARGV[4])
@@ -33,8 +32,18 @@ redis.call('EXPIRE', KEYS[1], ttl)
 return { allowed, tokens }
 `;
 
+/**
+ * The narrow slice of the Redis client the limiter needs. Depending on this
+ * instead of the full `ioredis` type keeps the limiter's Redis contract
+ * (script, key layout, arguments, reply shape) testable without a live server.
+ */
+export interface NetworkRateLimiterRedisClient {
+	eval(script: string, numberOfKeys: number, ...args: Array<string | number>): Promise<unknown>;
+	quit(): Promise<unknown>;
+}
+
 export class RedisRateLimiter implements NetworkRateLimiter {
-	constructor(private readonly redis: IORedis) {}
+	constructor(private readonly redis: NetworkRateLimiterRedisClient) {}
 
 	async consume(scope: string, durationSeconds: number, maxRequests: number): Promise<boolean> {
 		if (durationSeconds <= 0 || maxRequests <= 0) return false;

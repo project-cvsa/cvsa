@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
-	createCrawlerMetrics,
-	createCrawlerRuntime,
-	createFakeMq,
-	createFakeSnapshotDb,
-} from "@cvsa/core/crawler";
+import { createCrawlerMetrics, createCrawlerRuntime } from "@cvsa/core/crawler";
+import { createFakeMq, createFakeSnapshotDb } from "@cvsa/core/crawler/testing";
 
 describe("crawler runtime", () => {
 	test("starts dependencies and shuts them down gracefully", async () => {

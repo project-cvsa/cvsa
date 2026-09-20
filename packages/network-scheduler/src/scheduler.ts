@@ -3,48 +3,61 @@ import { createNoopNetworkSchedulerLogger, type NetworkSchedulerLogger } from ".
 import { createNoopNetworkSchedulerTracer, type NetworkSchedulerTracer } from "./tracer";
 import { createNoopNetworkMetrics, type NetworkMetrics } from "./telemetry";
 import type { NetworkAdapterConfig, NetworkRuntimeConfig } from "./dto";
-import type {
-	NetworkAdapter,
-	NetworkDelegate,
-	NetworkErrorCode,
-	NetworkRateLimiter,
-	NetworkRequest,
-	NetworkResponse,
+import {
+	HEALTH_AFFECTING_NETWORK_ERROR_CODES,
+	RETRYABLE_NETWORK_ERROR_CODES,
+	type NetworkAdapter,
+	type NetworkAdapterHealthState,
+	type NetworkAdapterRuntimeStatus,
+	type NetworkDelegate,
+	type NetworkErrorCode,
+	type NetworkRateLimiter,
+	type NetworkRequest,
+	type NetworkResponse,
 } from "./contracts";
-
-const HEALTH_AFFECTING_ERRORS: ReadonlySet<NetworkErrorCode> = new Set([
-	"NETWORK_FAILURE",
-	"REQUEST_TIMEOUT",
-	"HTTP_429",
-	"HTTP_5XX",
-]);
-
-function isRetryable(errorCode: NetworkErrorCode | undefined): boolean {
-	return (
-		errorCode === "NETWORK_FAILURE" ||
-		errorCode === "REQUEST_TIMEOUT" ||
-		errorCode === "HTTP_429" ||
-		errorCode === "HTTP_5XX"
-	);
-}
 
 const SOFT_RESERVE_WINDOW_SECONDS = 1;
 
 interface SoftReserveParams {
-	sharedMax: number;
-	reservedQuotas: Map<string, number>;
+	/**
+	 * Soft reserve partitions an already computable request capacity. When no
+	 * reserve policy is configured, or when the pool capacity cannot be derived
+	 * (no adapter declares a rate limit), the whole mechanism stays disabled
+	 * instead of falling back to an implicit one-request-per-second limit.
+	 */
+	readonly enabled: boolean;
+	readonly sharedMax: number;
+	readonly reservedQuotas: Map<string, number>;
 }
+
+interface AdapterHealth {
+	factor: number;
+	consecutiveFailures: number;
+	openUntil: number | undefined;
+	halfOpenProbeInFlight: boolean;
+}
+
+interface HealthConfig {
+	failurePenalty: number;
+	recoveryBonus: number;
+	minWeightFactor: number;
+	failureThreshold: number;
+	cooldownMs: number;
+}
+
+type HealthOutcome = "success" | "failure" | "neutral";
 
 interface SchedulerState {
 	readonly config: NetworkRuntimeConfig;
 	readonly adapters: ReadonlyMap<string, NetworkAdapter>;
 	readonly softReserve: SoftReserveParams;
-	healthFactors: Map<string, number>;
-	readonly healthConfig: {
-		failurePenalty: number;
-		recoveryBonus: number;
-		minWeightFactor: number;
-	};
+	readonly health: Map<string, AdapterHealth>;
+	readonly healthConfig: HealthConfig;
+}
+
+interface Candidate {
+	adapter: NetworkAdapter;
+	config: NetworkAdapterConfig;
 }
 
 export interface NetworkSchedulerOptions {
@@ -52,6 +65,13 @@ export interface NetworkSchedulerOptions {
 	metrics?: NetworkMetrics;
 	logger?: NetworkSchedulerLogger;
 	tracer?: NetworkSchedulerTracer;
+	/** Injectable time source so cooldown behaviour is deterministic in tests. */
+	clock?: () => number;
+}
+
+function healthOutcome(errorCode: NetworkErrorCode | undefined): HealthOutcome {
+	if (errorCode === undefined) return "success";
+	return HEALTH_AFFECTING_NETWORK_ERROR_CODES.has(errorCode) ? "failure" : "neutral";
 }
 
 export class NetworkScheduler implements NetworkDelegate {
@@ -59,6 +79,7 @@ export class NetworkScheduler implements NetworkDelegate {
 	private readonly metrics: NetworkMetrics;
 	private readonly logger: NetworkSchedulerLogger;
 	private readonly tracer: NetworkSchedulerTracer;
+	private readonly clock: () => number;
 	private state: Readonly<SchedulerState>;
 
 	constructor(
@@ -71,22 +92,47 @@ export class NetworkScheduler implements NetworkDelegate {
 		this.metrics = options.metrics ?? createNoopNetworkMetrics();
 		this.logger = options.logger ?? createNoopNetworkSchedulerLogger();
 		this.tracer = options.tracer ?? createNoopNetworkSchedulerTracer();
+		this.clock = options.clock ?? Date.now;
 		this.state = this.createState(config, adapters);
 	}
 
+	/**
+	 * Swaps in a new configuration. Health is carried over for adapters that kept
+	 * their id, dropped for adapters that disappeared, and initialized to healthy
+	 * for adapters that are new. Requests already in flight keep operating on the
+	 * state snapshot they started with.
+	 */
 	public reload(
 		config: NetworkRuntimeConfig,
 		adapters: ReadonlyMap<string, NetworkAdapter>
 	): void {
-		const previousState = this.state;
-		const healthFactors = new Map<string, number>();
+		const health = new Map<string, AdapterHealth>();
 		for (const adapterId of adapters.keys()) {
-			const previousHealthFactor = previousState.healthFactors.get(adapterId);
-			if (previousHealthFactor !== undefined) {
-				healthFactors.set(adapterId, previousHealthFactor);
-			}
+			const previous = this.state.health.get(adapterId);
+			if (previous) health.set(adapterId, { ...previous });
 		}
-		this.state = this.createState(config, adapters, healthFactors);
+		this.state = this.createState(config, adapters, health);
+	}
+
+	/** Diagnostic snapshot of every configured adapter and its current health. */
+	public getAdapterStatuses(): NetworkAdapterRuntimeStatus[] {
+		const state = this.state;
+		return state.config.adapters.map((config) => {
+			const health = this.getHealth(state, config.id);
+			const healthState = this.getHealthState(health);
+			return {
+				id: config.id,
+				enabled: config.enabled,
+				healthState,
+				healthFactor: health.factor,
+				effectiveWeight:
+					config.enabled && healthState !== "open"
+						? config.baseWeight * health.factor
+						: 0,
+				consecutiveFailures: health.consecutiveFailures,
+				openUntil: health.openUntil ?? null,
+			};
+		});
 	}
 
 	public async execute(request: NetworkRequest): Promise<NetworkResponse> {
@@ -105,10 +151,16 @@ export class NetworkScheduler implements NetworkDelegate {
 			? state.config.bindings?.find((item) => item.requestType === requestType)
 			: undefined;
 
-		type Candidate = {
-			adapter: NetworkAdapter;
-			config: NetworkAdapterConfig;
-		};
+		// A caller that names a request type must hit an explicit binding. Falling
+		// back to every adapter would silently send work to exits that were never
+		// authorized for that traffic class.
+		if (requestType && !binding) {
+			throw new NetworkSchedulerError(
+				`No adapter binding for request type: ${requestType}`,
+				"NO_AVAILABLE_ADAPTER",
+				503
+			);
+		}
 
 		const adapterIds = binding
 			? binding.adapterIds
@@ -127,30 +179,41 @@ export class NetworkScheduler implements NetworkDelegate {
 		}
 
 		if (requestType && !(await this.admitSoftReserve(state, requestType))) {
-			return {
-				adapterId: "",
-				status: 429,
-				headers: {},
-				body: "",
-				durationMs: 0,
-				errorCode: "RATE_LIMITED",
-			};
+			return this.rateLimitedResponse();
 		}
 
 		const effectiveRequestType = requestType ?? "default";
 
 		let lastResponse: NetworkResponse | undefined;
 		let attempts = 0;
+		let budgetRefused = false;
 		while (candidates.length > 0) {
 			const candidate = this.takeWeightedCandidate(state, candidates);
+
+			// getCandidate() is a synchronous pre-filter; the authoritative claim on
+			// a half-open probe happens here, once the candidate is actually picked.
+			if (!this.beginAttempt(state, candidate.config.id)) continue;
+
 			attempts += 1;
 
 			if (!(await this.consumeAdapterLimits(candidate.config))) {
+				this.releaseHalfOpenProbe(state, candidate.config.id);
+				budgetRefused = true;
 				continue;
 			}
 
-			const response = await candidate.adapter.execute(request);
-			this.updateHealthFactor(state, candidate.config.id, response.errorCode);
+			let response: NetworkResponse;
+			try {
+				response = await candidate.adapter.execute(request);
+			} catch (error) {
+				// Adapters are expected to translate transport failures into error
+				// codes. If one throws anyway, record the failure so a claimed
+				// half-open probe is never left dangling, then surface the error.
+				this.updateHealth(state, candidate.config.id, "NETWORK_FAILURE");
+				throw error;
+			}
+
+			this.updateHealth(state, candidate.config.id, response.errorCode);
 			this.recordRequest(response, effectiveRequestType, attempts);
 			this.logger.info("Network request completed", {
 				component: "network-scheduler",
@@ -161,10 +224,18 @@ export class NetworkScheduler implements NetworkDelegate {
 				errorCode: response.errorCode,
 			});
 
-			if (!isRetryable(response.errorCode)) return response;
+			if (response.errorCode === undefined) return response;
+			if (!RETRYABLE_NETWORK_ERROR_CODES.has(response.errorCode)) return response;
 			lastResponse = response;
 		}
 		if (lastResponse) return lastResponse;
+
+		// No candidate could be attempted. A refusal by an adapter's own budget is a
+		// "retry later" answer, not a missing adapter, so callers can tell the two
+		// apart: 429 with `RATE_LIMITED` when a budget turned the request away, and
+		// the original 503 when every candidate failed its circuit breaker instead.
+		if (budgetRefused) return this.rateLimitedResponse();
+
 		throw new NetworkSchedulerError(
 			"No available network adapter",
 			"NO_AVAILABLE_ADAPTER",
@@ -172,24 +243,42 @@ export class NetworkScheduler implements NetworkDelegate {
 		);
 	}
 
+	/**
+	 * The answer for a request that was refused before it reached any adapter.
+	 * Built in one place so the soft-reserve and adapter-budget paths cannot drift
+	 * apart, and `adapterId` stays empty because no adapter carried the request.
+	 */
+	private rateLimitedResponse(): NetworkResponse {
+		return {
+			adapterId: "",
+			status: 429,
+			headers: {},
+			body: "",
+			durationMs: 0,
+			errorCode: "RATE_LIMITED",
+		};
+	}
+
 	private createState(
 		config: NetworkRuntimeConfig,
 		adapters: ReadonlyMap<string, NetworkAdapter>,
-		healthFactors: Map<string, number> = new Map()
+		health: Map<string, AdapterHealth> = new Map()
 	): SchedulerState {
 		const configSnapshot: NetworkRuntimeConfig = structuredClone(config);
 		const adaptersSnapshot = new Map(adapters);
-		const healthConfig = {
+		const healthConfig: HealthConfig = {
 			failurePenalty: configSnapshot.health?.failurePenalty ?? 0.5,
 			recoveryBonus: configSnapshot.health?.recoveryBonus ?? 0.2,
 			minWeightFactor: configSnapshot.health?.minWeightFactor ?? 0.05,
+			failureThreshold: configSnapshot.health?.failureThreshold ?? 3,
+			cooldownMs: configSnapshot.health?.cooldownMs ?? 30_000,
 		};
 
 		return {
 			config: configSnapshot,
 			adapters: adaptersSnapshot,
 			softReserve: this.computeSoftReserveParams(configSnapshot, adaptersSnapshot),
-			healthFactors,
+			health,
 			healthConfig,
 		};
 	}
@@ -198,48 +287,59 @@ export class NetworkScheduler implements NetworkDelegate {
 		config: NetworkRuntimeConfig,
 		adapters: ReadonlyMap<string, NetworkAdapter>
 	): SoftReserveParams {
+		const reservedPolicies = Object.entries(config.requestTypePolicies).filter(
+			([, policy]) => policy.reservedShare > 0
+		);
+
+		if (reservedPolicies.length === 0) {
+			return { enabled: false, sharedMax: 0, reservedQuotas: new Map() };
+		}
+
 		let poolRate = 0;
 		for (const [id] of adapters) {
-			const adapterConfig = config.adapters.find((a) => a.id === id);
+			const adapterConfig = config.adapters.find((adapter) => adapter.id === id);
 			if (!adapterConfig?.enabled) continue;
 
 			const limits = adapterConfig.rateLimits;
 			if (limits.length === 0) continue;
 
-			const minRate = Math.min(...limits.map((l) => l.maxRequests / l.durationSeconds));
-			poolRate += minRate;
+			poolRate += Math.min(
+				...limits.map((limit) => limit.maxRequests / limit.durationSeconds)
+			);
 		}
 
-		const totalShare = Object.values(config.requestTypePolicies).reduce(
-			(sum, p) => sum + p.reservedShare,
+		// No adapter declares a rate limit, so there is no capacity to partition.
+		// Soft reserve stays disabled rather than inventing a one-request-per-second
+		// budget that would strangle every request carrying a request type.
+		if (poolRate <= 0) {
+			return { enabled: false, sharedMax: 0, reservedQuotas: new Map() };
+		}
+
+		const totalShare = reservedPolicies.reduce(
+			(sum, [, policy]) => sum + policy.reservedShare,
 			0
 		);
+		const sharedMax = Math.ceil(poolRate * (1 - totalShare) * SOFT_RESERVE_WINDOW_SECONDS);
 
-		const sharedMax = Math.max(
-			1,
-			Math.ceil(poolRate * (1 - totalShare) * SOFT_RESERVE_WINDOW_SECONDS)
-		);
 		const reservedQuotas = new Map<string, number>();
-		for (const [rt, policy] of Object.entries(config.requestTypePolicies)) {
-			if (policy.reservedShare > 0) {
-				reservedQuotas.set(
-					rt,
-					Math.max(
-						1,
-						Math.ceil(poolRate * policy.reservedShare * SOFT_RESERVE_WINDOW_SECONDS)
-					)
-				);
-			}
+		for (const [requestType, policy] of reservedPolicies) {
+			reservedQuotas.set(
+				requestType,
+				Math.max(
+					1,
+					Math.ceil(poolRate * policy.reservedShare * SOFT_RESERVE_WINDOW_SECONDS)
+				)
+			);
 		}
 
-		return { sharedMax, reservedQuotas };
+		return { enabled: true, sharedMax: Math.max(0, sharedMax), reservedQuotas };
 	}
 
 	private async admitSoftReserve(state: SchedulerState, requestType: string): Promise<boolean> {
-		const policy = state.config.requestTypePolicies[requestType];
-		const reservedQuota = state.softReserve.reservedQuotas.get(requestType);
+		if (!state.softReserve.enabled) return true;
 
-		if (policy?.reservedShare && reservedQuota && reservedQuota > 0) {
+		const reservedQuota = state.softReserve.reservedQuotas.get(requestType);
+		if (reservedQuota !== undefined && reservedQuota > 0) {
 			const scope = `soft-reserve:reserved:${requestType}`;
 			if (await this.rateLimiter.consume(scope, SOFT_RESERVE_WINDOW_SECONDS, reservedQuota)) {
 				return true;
@@ -254,7 +354,9 @@ export class NetworkScheduler implements NetworkDelegate {
 			);
 		}
 
-		return true;
+		// Everything is reserved for other request types: a request without its own
+		// reservation has no shared capacity left to borrow.
+		return false;
 	}
 
 	private async consumeAdapterLimits(config: NetworkAdapterConfig): Promise<boolean> {
@@ -272,41 +374,90 @@ export class NetworkScheduler implements NetworkDelegate {
 		return true;
 	}
 
-	private updateHealthFactor(
+	private updateHealth(
 		state: SchedulerState,
 		adapterId: string,
 		errorCode: NetworkErrorCode | undefined
 	): void {
-		const current = state.healthFactors.get(adapterId) ?? 1;
+		const health = this.getHealth(state, adapterId);
+		const outcome = healthOutcome(errorCode);
+		const wasProbing = health.halfOpenProbeInFlight;
+		health.halfOpenProbeInFlight = false;
 
-		if (!errorCode || !HEALTH_AFFECTING_ERRORS.has(errorCode)) {
-			const next = Math.min(1, current + state.healthConfig.recoveryBonus);
-			state.healthFactors.set(adapterId, next);
+		if (outcome === "success") {
+			health.consecutiveFailures = 0;
+			if (wasProbing) {
+				// A successful probe closes the circuit completely.
+				health.openUntil = undefined;
+				health.factor = 1;
+			} else {
+				health.factor = Math.min(1, health.factor + state.healthConfig.recoveryBonus);
+			}
 			return;
 		}
 
-		const next = Math.max(
-			state.healthConfig.minWeightFactor,
-			current * state.healthConfig.failurePenalty
-		);
-		state.healthFactors.set(adapterId, next);
-		if (next < current) {
-			this.logger.warn("Network adapter health factor decreased", {
-				component: "network-scheduler",
-				adapterId,
-				healthFactor: next,
-			});
+		if (outcome === "neutral") {
+			// A business error still proves the exit delivered a response. Close the
+			// circuit if this was the probe, but leave the weight untouched.
+			if (wasProbing) health.openUntil = undefined;
+			return;
 		}
+
+		health.factor = Math.max(
+			state.healthConfig.minWeightFactor,
+			health.factor * state.healthConfig.failurePenalty
+		);
+		health.consecutiveFailures += 1;
+
+		if (wasProbing || health.consecutiveFailures >= state.healthConfig.failureThreshold) {
+			health.openUntil = this.clock() + state.healthConfig.cooldownMs;
+		}
+
+		this.logger.warn("Network adapter health changed", {
+			component: "network-scheduler",
+			adapterId,
+			healthState: this.getHealthState(health),
+			healthFactor: health.factor,
+			consecutiveFailures: health.consecutiveFailures,
+			openUntil: health.openUntil ?? null,
+		});
 	}
 
-	private getHealthFactor(state: SchedulerState, adapterId: string): number {
-		return state.healthFactors.get(adapterId) ?? 1;
+	private getHealth(state: SchedulerState, adapterId: string): AdapterHealth {
+		const existing = state.health.get(adapterId);
+		if (existing) return existing;
+
+		const created: AdapterHealth = {
+			factor: 1,
+			consecutiveFailures: 0,
+			openUntil: undefined,
+			halfOpenProbeInFlight: false,
+		};
+		state.health.set(adapterId, created);
+		return created;
 	}
 
-	private getCandidate(
-		state: SchedulerState,
-		id: string
-	): { adapter: NetworkAdapter; config: NetworkAdapterConfig } | undefined {
+	private getHealthState(health: AdapterHealth): NetworkAdapterHealthState {
+		if (health.openUntil !== undefined) {
+			return health.openUntil <= this.clock() ? "half-open" : "open";
+		}
+		return health.factor < 1 ? "degraded" : "healthy";
+	}
+
+	/** Claims the single half-open probe slot, or reports that the adapter is unavailable. */
+	private beginAttempt(state: SchedulerState, adapterId: string): boolean {
+		const health = this.getHealth(state, adapterId);
+		if (health.openUntil === undefined) return true;
+		if (health.openUntil > this.clock() || health.halfOpenProbeInFlight) return false;
+		health.halfOpenProbeInFlight = true;
+		return true;
+	}
+
+	private releaseHalfOpenProbe(state: SchedulerState, adapterId: string): void {
+		this.getHealth(state, adapterId).halfOpenProbeInFlight = false;
+	}
+
+	private getCandidate(state: SchedulerState, id: string): Candidate | undefined {
 		const config = state.config.adapters.find((adapter) => adapter.id === id);
 		const adapter = state.adapters.get(id);
 
@@ -314,32 +465,34 @@ export class NetworkScheduler implements NetworkDelegate {
 			return undefined;
 		}
 
-		if (this.getHealthFactor(state, id) < state.healthConfig.minWeightFactor) {
+		const health = this.getHealth(state, id);
+		if (health.openUntil !== undefined && health.openUntil > this.clock()) {
+			return undefined;
+		}
+		if (health.halfOpenProbeInFlight) {
 			return undefined;
 		}
 		return { adapter, config };
 	}
 
-	private takeWeightedCandidate(
-		state: SchedulerState,
-		candidates: Array<{ adapter: NetworkAdapter; config: NetworkAdapterConfig }>
-	): { adapter: NetworkAdapter; config: NetworkAdapterConfig } {
+	private takeWeightedCandidate(state: SchedulerState, candidates: Candidate[]): Candidate {
 		const weights = candidates.map(
-			(c) => c.config.baseWeight * this.getHealthFactor(state, c.config.id)
+			(candidate) =>
+				candidate.config.baseWeight * this.getHealth(state, candidate.config.id).factor
 		);
-		let totalWeight = weights.reduce((sum, w) => sum + w, 0);
+		let totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
 
 		if (totalWeight <= 0) {
 			totalWeight = candidates.length;
-			for (let i = 0; i < weights.length; i++) weights[i] = 1;
+			for (let index = 0; index < weights.length; index++) weights[index] = 1;
 		}
 
 		let target = this.random() * totalWeight;
 		let selectedIndex = candidates.length - 1;
-		for (let i = 0; i < weights.length; i++) {
-			target -= weights[i];
+		for (let index = 0; index < weights.length; index++) {
+			target -= weights[index];
 			if (target <= 0) {
-				selectedIndex = i;
+				selectedIndex = index;
 				break;
 			}
 		}
