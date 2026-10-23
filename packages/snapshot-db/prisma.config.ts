@@ -1,12 +1,15 @@
-import { defineConfig } from "prisma/config";
+import { definePrismaConfig } from "prisma/config";
+import { defineConfig as ormConfig } from "@prisma/orm-postgres/config";
 import { crawlerEnv } from "@cvsa/env";
 
-export default defineConfig({
-	schema: "prisma/",
-	migrations: {
-		path: "prisma/migrations",
-	},
-	datasource: {
-		url: crawlerEnv.SNAPSHOT_DATABASE_URL,
-	},
+export default definePrismaConfig({
+	orm: ormConfig({
+		contract: "./prisma/contract.prisma",
+		db: {
+			connection: crawlerEnv.SNAPSHOT_DATABASE_URL,
+		},
+		migrations: {
+			dir: "prisma/migrations",
+		},
+	}),
 });

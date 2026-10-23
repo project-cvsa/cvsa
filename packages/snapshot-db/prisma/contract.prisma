@@ -1,0 +1,45 @@
+// use prisma-8
+
+model VideoSnapshot {
+  aid        BigInt   @map("aid")
+  capturedAt DateTime @default(now()) @map("captured_at")
+  views      Int
+  coins      Int
+  likes      Int
+  favorites  Int
+  shares     Int
+  danmakus   Int
+  replies    Int
+
+  @@id([aid, capturedAt])
+  @@index([aid, capturedAt])
+  @@index([capturedAt])
+  @@map("video_snapshot")
+}
+
+model NetworkRuntimeConfig {
+  id        String   @id @default("default") @map("id")
+  revision  Int      @default(1)
+  config    Json
+  updatedAt DateTime @onCreate(now()) @onUpdate(now()) @map("updated_at")
+
+  @@map("network_runtime_config")
+}
+
+model VideoTracking {
+  aid              BigInt    @id
+  state            String    @default("regular")
+  nextSnapshotAt   DateTime  @map("next_snapshot_at")
+  lastViews        Int       @default(0) @map("last_views")
+  lastCapturedAt   DateTime? @map("last_captured_at")
+  velocity         Float     @default(0)
+  targetMilestone  Int?      @map("target_milestone")
+  etaHours         Float?    @map("eta_hours")
+  publishedAt      DateTime? @map("published_at")
+  priority         Int       @default(2)
+  consecutiveFails Int       @default(0) @map("consecutive_fails")
+  updatedAt        DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+
+  @@index([nextSnapshotAt, priority])
+  @@map("video_tracking")
+}

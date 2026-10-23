@@ -7,21 +7,22 @@
 	"scripts": {
 		"lint": "bunx --bun biome lint",
 		"typecheck": "bunx --bun tsc --noEmit",
-		"gen": "bunx --bun prisma generate",
-		"migrate": "bunx --bun prisma migrate dev",
-		"migrate:deploy": "bunx --bun prisma migrate deploy",
+		"gen": "bunx --bun prisma contract emit",
+		"db:update": "bunx --bun prisma db update --yes",
+		"migrate": "bunx --bun prisma migration plan",
+		"migrate:deploy": "bunx --bun prisma db migrate",
 		"test": "bun test --concurrent",
-		"test:setup": "NODE_ENV=test bunx --bun prisma migrate deploy",
-		"test:reset": "NODE_ENV=test bunx --bun prisma migrate reset --force"
+		"test:setup": "NODE_ENV=test bunx --bun prisma db update --yes",
+		"test:reset": "NODE_ENV=test bunx --bun prisma db update --yes"
 	},
 	"devDependencies": {
 		"@cvsa/typescript-config": "workspace:*",
 		"@types/bun": "latest",
-		"prisma": "^7.6.0"
+		"prisma": "8.0.0-rc.27"
 	},
 	"dependencies": {
 		"@cvsa/env": "workspace:*",
-		"@prisma/adapter-pg": "^7.6.0",
-		"@prisma/client": "^7.6.0"
+		"@prisma/orm-postgres": "8.0.0-rc.20",
+		"temporal-polyfill": "^1.0.6"
 	}
 }

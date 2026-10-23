@@ -1,0 +1,596 @@
+{
+	"schemaVersion": "1",
+	"targetFamily": "sql",
+	"target": "postgres",
+	"profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+	"roots": {
+		"network_runtime_config": {
+			"model": "NetworkRuntimeConfig",
+			"namespace": "public"
+		},
+		"video_snapshot": {
+			"model": "VideoSnapshot",
+			"namespace": "public"
+		},
+		"video_tracking": {
+			"model": "VideoTracking",
+			"namespace": "public"
+		}
+	},
+	"domain": {
+		"namespaces": {
+			"public": {
+				"models": {
+					"NetworkRuntimeConfig": {
+						"fields": {
+							"config": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/json@1",
+									"kind": "scalar"
+								}
+							},
+							"id": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"revision": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"updatedAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							}
+						},
+						"relations": {},
+						"storage": {
+							"fields": {
+								"config": {
+									"column": "config"
+								},
+								"id": {
+									"column": "id"
+								},
+								"revision": {
+									"column": "revision"
+								},
+								"updatedAt": {
+									"column": "updated_at"
+								}
+							},
+							"namespaceId": "public",
+							"table": "network_runtime_config"
+						}
+					},
+					"VideoSnapshot": {
+						"fields": {
+							"aid": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int8@1",
+									"kind": "scalar"
+								}
+							},
+							"capturedAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"coins": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"danmakus": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"favorites": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"likes": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"replies": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"shares": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"views": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							}
+						},
+						"relations": {},
+						"storage": {
+							"fields": {
+								"aid": {
+									"column": "aid"
+								},
+								"capturedAt": {
+									"column": "captured_at"
+								},
+								"coins": {
+									"column": "coins"
+								},
+								"danmakus": {
+									"column": "danmakus"
+								},
+								"favorites": {
+									"column": "favorites"
+								},
+								"likes": {
+									"column": "likes"
+								},
+								"replies": {
+									"column": "replies"
+								},
+								"shares": {
+									"column": "shares"
+								},
+								"views": {
+									"column": "views"
+								}
+							},
+							"namespaceId": "public",
+							"table": "video_snapshot"
+						}
+					},
+					"VideoTracking": {
+						"fields": {
+							"aid": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int8@1",
+									"kind": "scalar"
+								}
+							},
+							"consecutiveFails": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"etaHours": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/float8@1",
+									"kind": "scalar"
+								}
+							},
+							"lastCapturedAt": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"lastViews": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"nextSnapshotAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"priority": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"publishedAt": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"state": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"targetMilestone": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"updatedAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"velocity": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/float8@1",
+									"kind": "scalar"
+								}
+							}
+						},
+						"relations": {},
+						"storage": {
+							"fields": {
+								"aid": {
+									"column": "aid"
+								},
+								"consecutiveFails": {
+									"column": "consecutive_fails"
+								},
+								"etaHours": {
+									"column": "eta_hours"
+								},
+								"lastCapturedAt": {
+									"column": "last_captured_at"
+								},
+								"lastViews": {
+									"column": "last_views"
+								},
+								"nextSnapshotAt": {
+									"column": "next_snapshot_at"
+								},
+								"priority": {
+									"column": "priority"
+								},
+								"publishedAt": {
+									"column": "published_at"
+								},
+								"state": {
+									"column": "state"
+								},
+								"targetMilestone": {
+									"column": "target_milestone"
+								},
+								"updatedAt": {
+									"column": "updated_at"
+								},
+								"velocity": {
+									"column": "velocity"
+								}
+							},
+							"namespaceId": "public",
+							"table": "video_tracking"
+						}
+					}
+				}
+			}
+		}
+	},
+	"storage": {
+		"namespaces": {
+			"public": {
+				"entries": {
+					"table": {
+						"network_runtime_config": {
+							"columns": {
+								"config": {
+									"codecId": "pg/json@1",
+									"dataType": "pg/json",
+									"nullable": false
+								},
+								"id": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"default": {
+										"kind": "literal",
+										"value": "default"
+									},
+									"nullable": false
+								},
+								"revision": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"default": {
+										"kind": "literal",
+										"value": 1
+									},
+									"nullable": false
+								},
+								"updated_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": false
+								}
+							},
+							"foreignKeys": [],
+							"indexes": [],
+							"primaryKey": {
+								"columns": ["id"]
+							},
+							"uniques": []
+						},
+						"video_snapshot": {
+							"columns": {
+								"aid": {
+									"codecId": "pg/int8@1",
+									"dataType": "pg/int8",
+									"nullable": false
+								},
+								"captured_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"default": {
+										"expression": "now()",
+										"kind": "function"
+									},
+									"nullable": false
+								},
+								"coins": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"danmakus": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"favorites": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"likes": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"replies": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"shares": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"views": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								}
+							},
+							"foreignKeys": [],
+							"indexes": [
+								{
+									"columns": ["captured_at"],
+									"name": "video_snapshot_captured_at_idx_d9a9e270",
+									"prefix": "video_snapshot_captured_at_idx",
+									"unique": false
+								}
+							],
+							"primaryKey": {
+								"columns": ["aid", "captured_at"]
+							},
+							"uniques": []
+						},
+						"video_tracking": {
+							"columns": {
+								"aid": {
+									"codecId": "pg/int8@1",
+									"dataType": "pg/int8",
+									"nullable": false
+								},
+								"consecutive_fails": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"default": {
+										"kind": "literal",
+										"value": 0
+									},
+									"nullable": false
+								},
+								"eta_hours": {
+									"codecId": "pg/float8@1",
+									"dataType": "pg/float8",
+									"nullable": true
+								},
+								"last_captured_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": true
+								},
+								"last_views": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"default": {
+										"kind": "literal",
+										"value": 0
+									},
+									"nullable": false
+								},
+								"next_snapshot_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": false
+								},
+								"priority": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"default": {
+										"kind": "literal",
+										"value": 2
+									},
+									"nullable": false
+								},
+								"published_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": true
+								},
+								"state": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"default": {
+										"kind": "literal",
+										"value": "regular"
+									},
+									"nullable": false
+								},
+								"target_milestone": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": true
+								},
+								"updated_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": false
+								},
+								"velocity": {
+									"codecId": "pg/float8@1",
+									"dataType": "pg/float8",
+									"default": {
+										"kind": "literal",
+										"value": 0
+									},
+									"nullable": false
+								}
+							},
+							"foreignKeys": [],
+							"indexes": [
+								{
+									"columns": ["next_snapshot_at", "priority"],
+									"name": "video_tracking_next_snapshot_at_priority_idx_9b21cea1",
+									"prefix": "video_tracking_next_snapshot_at_priority_idx",
+									"unique": false
+								}
+							],
+							"primaryKey": {
+								"columns": ["aid"]
+							},
+							"uniques": []
+						}
+					}
+				},
+				"id": "public",
+				"kind": "postgres-schema"
+			}
+		},
+		"storageHash": "ea6e5689e105ddac8d0d98e550a37b93d6656443ceb627b4cc1b7135531f78be"
+	},
+	"execution": {
+		"executionHash": "4cafa184c9cbe477e129325f6aefe648137d8be63160eefa35dde5df642b808f",
+		"mutations": {
+			"defaults": [
+				{
+					"onCreate": {
+						"id": "instantNow",
+						"kind": "generator"
+					},
+					"onUpdate": {
+						"id": "instantNow",
+						"kind": "generator"
+					},
+					"ref": {
+						"entry": "network_runtime_config",
+						"field": "updated_at",
+						"namespace": "public"
+					}
+				},
+				{
+					"onCreate": {
+						"id": "instantNow",
+						"kind": "generator"
+					},
+					"onUpdate": {
+						"id": "instantNow",
+						"kind": "generator"
+					},
+					"ref": {
+						"entry": "video_tracking",
+						"field": "updated_at",
+						"namespace": "public"
+					}
+				}
+			]
+		}
+	},
+	"capabilities": {
+		"postgres": {
+			"distinctOn": true,
+			"forKeyShare": true,
+			"forNoKeyUpdate": true,
+			"jsonAgg": true,
+			"lateral": true,
+			"limit": true,
+			"orderBy": true,
+			"returning": true
+		},
+		"sql": {
+			"checkConstraint": true,
+			"defaultInInsert": true,
+			"enums": true,
+			"forShare": true,
+			"forUpdate": true,
+			"insertOnConflictSkip": true,
+			"insertOnConflictWithoutTarget": true,
+			"lateral": true,
+			"lockNowait": true,
+			"lockOf": true,
+			"lockSkipLocked": true,
+			"returning": true,
+			"scalarList": true
+		}
+	},
+	"extensions": {},
+	"meta": {},
+	"_generated": {
+		"warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+		"message": "This file is automatically generated by \"prisma contract emit\".",
+		"regenerate": "To regenerate, run: prisma contract emit"
+	}
+}

@@ -58,14 +58,16 @@ const runtimeApi = api.v2["network-runtime"];
 const authorized = { headers: { authorization: `Bearer ${TOKEN}` } };
 
 async function storedRow() {
-	return crawlerSnapshotDb.client.networkRuntimeConfig.findUnique({
-		where: { id: "default" },
-	});
+	return crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
+		id: "default",
+	}).first();
 }
 
 describe("crawler control plane", () => {
 	beforeAll(async () => {
-		await crawlerSnapshotDb.client.networkRuntimeConfig.deleteMany({});
+		await crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
+			id: "default",
+		}).deleteAll();
 	});
 
 	afterAll(async () => {

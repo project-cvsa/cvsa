@@ -1,27 +1,29 @@
-import { PrismaPg } from "@prisma/adapter-pg";
 import { crawlerEnv } from "@cvsa/env";
-import { PrismaClient } from "../prisma/generated/client";
+import { createDatabaseClient, type DatabaseClient } from "./client";
 
-export type { Prisma, PrismaClient } from "../prisma/generated/client";
-export type { VideoSnapshotModel as VideoSnapshot } from "../prisma/generated/models/VideoSnapshot";
+export * from "./client";
+export * from "./types";
 
 export interface SnapshotDb {
-	readonly client: PrismaClient;
+	readonly client: DatabaseClient;
 	connect(): Promise<void>;
 	disconnect(): Promise<void>;
 	healthCheck(): Promise<void>;
 }
 
 export function createSnapshotDb(connectionString = crawlerEnv.SNAPSHOT_DATABASE_URL): SnapshotDb {
-	const adapter = new PrismaPg({ connectionString });
-	const client = new PrismaClient({ adapter });
+	const client = createDatabaseClient({ connectionString });
 
 	return {
 		client,
-		connect: () => client.$connect(),
-		disconnect: () => client.$disconnect(),
+		connect: async () => {
+			await client.connect({ url: connectionString });
+		},
+		disconnect: async () => {
+			await client.close();
+		},
 		healthCheck: async () => {
-			await client.$queryRaw`SELECT 1`;
+			await client.raw.sql`SELECT 1`;
 		},
 	};
 }

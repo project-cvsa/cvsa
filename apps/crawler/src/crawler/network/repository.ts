@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@cvsa/snapshot-db";
+import type { DatabaseClient, JsonValue } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { NetworkRuntimeConfig } from "@cvsa/network-scheduler";
 import type {
@@ -11,56 +11,49 @@ const CONFIG_ID = "default";
 function toRecord(record: {
 	revision: number;
 	config: unknown;
-	updatedAt: Date | string;
+	updatedAt: Date | string | { toString(): string };
 }): NetworkRuntimeConfigRecordDto {
 	return {
 		revision: record.revision,
 		config: record.config,
-		updatedAt: record.updatedAt,
+		updatedAt: record.updatedAt.toString(),
 	};
 }
 
 export class NetworkRuntimeConfigRepository implements INetworkRuntimeConfigRepository {
-	constructor(private readonly prisma: PrismaClient) {}
+	constructor(private readonly db: DatabaseClient) {}
 
 	async get(): Promise<NetworkRuntimeConfigRecordDto | null> {
 		const record = await traceTask("snapshotDb.networkRuntimeConfig.get", () =>
-			this.prisma.networkRuntimeConfig.findUnique({ where: { id: CONFIG_ID } })
+			this.db.orm.public.NetworkRuntimeConfig.where({ id: CONFIG_ID }).first()
 		);
 		return record ? toRecord(record) : null;
 	}
 
 	async create(config: NetworkRuntimeConfig): Promise<NetworkRuntimeConfigRecordDto | null> {
-		const records = await traceTask("snapshotDb.networkRuntimeConfig.create", () =>
-			this.prisma.networkRuntimeConfig.createManyAndReturn({
-				data: [
-					{
-						id: CONFIG_ID,
-						revision: 0,
-						config: config as unknown as object,
-					},
-				],
+		const record = await traceTask("snapshotDb.networkRuntimeConfig.create", () =>
+			this.db.orm.public.NetworkRuntimeConfig.create({
+				id: CONFIG_ID,
+				revision: 0,
+				config: config as unknown as JsonValue,
 			})
 		);
-		return records[0] ? toRecord(records[0]) : null;
+		return record ? toRecord(record) : null;
 	}
 
 	async replace(
 		expectedRevision: number,
 		config: NetworkRuntimeConfig
 	): Promise<NetworkRuntimeConfigRecordDto | null> {
-		const records = await traceTask("snapshotDb.networkRuntimeConfig.replace", () =>
-			this.prisma.networkRuntimeConfig.updateManyAndReturn({
-				where: {
-					id: CONFIG_ID,
-					revision: expectedRevision,
-				},
-				data: {
-					revision: { increment: 1 },
-					config: config as unknown as object,
-				},
+		const record = await traceTask("snapshotDb.networkRuntimeConfig.replace", () =>
+			this.db.orm.public.NetworkRuntimeConfig.where({
+				id: CONFIG_ID,
+				revision: expectedRevision,
+			}).update({
+				revision: expectedRevision + 1,
+				config: config as unknown as JsonValue,
 			})
 		);
-		return records[0] ? toRecord(records[0]) : null;
+		return record ? toRecord(record) : null;
 	}
 }
