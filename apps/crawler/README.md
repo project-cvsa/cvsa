@@ -1,8 +1,8 @@
 # Crawler
 
-The crawler is an independent Bun daemon. Its entrypoint only assembles the
-runtime, starts it, and handles `SIGINT`/`SIGTERM`; crawler business modules
-belong in `@cvsa/core`.
+The crawler is an independent Bun daemon. Its entrypoint assembles the
+runtime, starts it, and handles `SIGINT`/`SIGTERM`. Crawler business modules
+and runner pipelines live in `src/crawler`.
 
 Required runtime settings live in the crawler env config: `REDIS_URL`,
 `SNAPSHOT_DATABASE_URL`, `CONTROL_API_TOKEN`, and the control-plane host/port.

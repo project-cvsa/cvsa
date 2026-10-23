@@ -1,4 +1,4 @@
-import { createSessionCookie, getSessionCookieName } from "@cvsa/core";
+import { createSessionCookie, getSessionCookieName } from "@cvsa/authentication";
 import { env } from "@cvsa/env";
 import type { Context } from "elysia";
 

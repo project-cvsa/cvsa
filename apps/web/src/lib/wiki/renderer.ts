@@ -1,4 +1,4 @@
-import type { ArtistResponseDto, SongDetailsResponseDto } from "@cvsa/core";
+import type { ArtistResponseDto, SongDetailsResponseDto } from "@cvsa/contracts";
 import Parser from "wikiparser-node";
 import { OpenCC } from "opencc";
 

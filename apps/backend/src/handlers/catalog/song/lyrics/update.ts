@@ -1,10 +1,12 @@
 import { Elysia } from "elysia";
 import {
 	ErrorResponseSchema,
-	SongLyricsUpdateRequestSchema,
 	SongLyricsResponseSchema,
-	songService,
-} from "@cvsa/core";
+	SongLyricsUpdateRequestSchema,
+} from "@cvsa/contracts";
+import { songLyricsWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
+import { transformPrismaResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
@@ -13,9 +15,19 @@ export const songLyricsUpdateHandler = new Elysia({ name: "songLyricsUpdateHandl
 	.use(authMiddleware)
 	.patch(
 		"/song/:id/lyric/:lyricId",
-		async ({ body, params, status }) => {
-			const lyric = await traceTask("songService.updateLyric", async () => {
-				return await songService.updateLyric(params.id, params.lyricId, body);
+		async ({ body, params, user, status }) => {
+			const principal = createUserPrincipal({
+				userId: user.id,
+				roles: user.roleId ? [String(user.roleId)] : [],
+			});
+			const lyric = await traceTask("songLyricsWriter.update", async () => {
+				const updated = await songLyricsWriter.update(
+					principal,
+					params.id,
+					params.lyricId,
+					body
+				);
+				return SongLyricsResponseSchema.parse(transformPrismaResult(updated));
 			});
 			return status(200, lyric);
 		},

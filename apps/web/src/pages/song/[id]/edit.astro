@@ -5,7 +5,9 @@ import Header from "@layouts/Header.astro";
 import Layout from "@layouts/Layout.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import { localizedName, pickLyric } from "@lib/localize";
-import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
+import { AppError, type SongDetailsResponseDto, SongDetailsResponseSchema } from "@cvsa/contracts";
+import { songReader } from "@cvsa/catalog";
+import { transformPrismaResult } from "@cvsa/db";
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
@@ -13,7 +15,12 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 
 let data: SongDetailsResponseDto | undefined;
 try {
-	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);
+	const raw = await songReader.getDetails(Number.parseInt(id || "", 10) || 0);
+	if (raw) {
+		data = SongDetailsResponseSchema.parse(transformPrismaResult(raw));
+	} else {
+		throw new AppError("error.song.notfound", "NOT_FOUND", 404);
+	}
 } catch (e) {
 	if (AppError.isAppError(e)) {
 		return new Response(null, {

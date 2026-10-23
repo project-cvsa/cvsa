@@ -2,7 +2,9 @@
 import Layout from "@layouts/Layout.astro";
 import Header from "@layouts/Header.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
-import { AppError, songService, type SongDetailsResponseDto } from "@cvsa/core";
+import { AppError, type SongDetailsResponseDto, SongDetailsResponseSchema } from "@cvsa/contracts";
+import { songReader } from "@cvsa/catalog";
+import { transformPrismaResult } from "@cvsa/db";
 import { renderWiki } from "@lib/wiki";
 import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
 import Pencil from "lucide-solid/icons/pencil";
@@ -15,9 +17,15 @@ import SongStaffCard from "@components/pages/song/SongStaffCard.astro";
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
 const t = i18nServer.getT({ locale: language, namespace: "server" });
-let data: SongDetailsResponseDto | undefined;
+let details: SongDetailsResponseDto;
 try {
-	data = await songService.getDetails(Number.parseInt(id || "", 10) || 0);
+	const raw = await songReader.getDetails(Number.parseInt(id || "", 10) || 0);
+	if (!raw) {
+		return new Response(null, {
+			status: 404,
+		});
+	}
+	details = SongDetailsResponseSchema.parse(transformPrismaResult(raw));
 } catch (e) {
 	if (AppError.isAppError(e)) {
 		return new Response(null, {
@@ -31,11 +39,6 @@ try {
 		});
 	}
 }
-if (!data)
-	return new Response(null, {
-		status: 404,
-	});
-const details: SongDetailsResponseDto = data;
 const introduction = renderWiki(details.description ?? "", {
 	data: details,
 	entity: "song",

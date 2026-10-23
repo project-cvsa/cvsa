@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { NetworkRuntimeConfig } from "@cvsa/core/crawler";
+import type { NetworkRuntimeConfig } from "../src/crawler";
 import { crawlerEnv } from "@cvsa/env";
 import { treaty } from "@elysiajs/eden";
 import { crawlerControlPlane } from "../src/controlPlane";

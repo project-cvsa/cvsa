@@ -7,24 +7,26 @@
 		"gen": "bunx --bun prisma generate",
 		"migrate": "bunx --bun prisma migrate dev --create-only",
 		"migrate:dev": "bunx --bun prisma migrate dev",
-		"push": "bunx --bun prisma db push",
+		"push": "bunx --bun prisma db update --yes",
 		"db:deploy": "bunx --bun prisma migrate deploy",
-		"test:setup": "NODE_ENV=test bunx --bun prisma db push --accept-data-loss",
-		"test:reset": "NODE_ENV=test bunx --bun prisma db push --force-reset",
+		"test:setup": "NODE_ENV=test bunx --bun prisma db update --yes",
+		"test:reset": "NODE_ENV=test bunx --bun prisma db update --yes",
 		"studio": "bunx --bun prisma studio",
 		"reset": "bunx --bun prisma migrate reset"
 	},
 	"devDependencies": {
 		"@cvsa/prisma-zod": "^3.6.0",
 		"@cvsa/typescript-config": "workspace:*",
-		"prisma": "^7.6.0",
+		"prisma": "8.0.0-rc.27",
 		"prisma-json-types-generator": "^5.1.1"
 	},
 	"dependencies": {
 		"@cvsa/env": "workspace:*",
 		"@prisma/adapter-pg": "^7.6.0",
 		"@prisma/client": "^7.6.0",
+		"@prisma/orm-postgres": "8.0.0-rc.20",
 		"@types/pg": "^8.16.0",
+		"temporal-polyfill": "^1.0.6",
 		"zod": "^4.3.6"
 	}
 }

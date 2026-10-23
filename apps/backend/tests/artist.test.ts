@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "../src/index";
-import { prisma } from "@cvsa/db";
+import { prisma, Temporal } from "@cvsa/db";
 
 const api = treaty(app);
 
@@ -16,13 +16,11 @@ describe("Artist E2E Tests", () => {
 
 	describe("GET /v2/artist/:id - Get Artist Details", () => {
 		test("should retrieve an artist", async () => {
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Test Artist",
-					description: "Test Description",
-					language: "zh",
-					aliases: ["Alias1", "Alias2"],
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Test Artist",
+				description: "Test Description",
+				language: "zh",
+				aliases: ["Alias1", "Alias2"],
 			});
 
 			const { data, status } = await api.v2.artist({ id: artist.id }).get();
@@ -47,11 +45,10 @@ describe("Artist E2E Tests", () => {
 		});
 
 		test("should not retrieve soft-deleted artist", async () => {
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Deleted Artist",
-					deletedAt: new Date(),
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Deleted Artist",
+				aliases: [],
+				deletedAt: Temporal.Now.instant(),
 			});
 
 			const { error, status } = await api.v2.artist({ id: artist.id }).get();
@@ -164,12 +161,11 @@ describe("Artist E2E Tests", () => {
 		test("should update an artist with authentication", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Original Name",
-					description: "Original Description",
-					language: "zh",
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Original Name",
+				description: "Original Description",
+				language: "zh",
+				aliases: [],
 			});
 
 			const { data, status } = await api.v2.artist({ id: artist.id }).patch(
@@ -188,10 +184,9 @@ describe("Artist E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Test Artist",
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Test Artist",
+				aliases: [],
 			});
 
 			const { status } = await api.v2.artist({ id: artist.id }).patch({
@@ -222,11 +217,9 @@ describe("Artist E2E Tests", () => {
 		test("should update aliases array", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Artist",
-					aliases: ["Old Alias"],
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Artist",
+				aliases: ["Old Alias"],
 			});
 
 			const { data, status } = await api.v2.artist({ id: artist.id }).patch(
@@ -247,10 +240,9 @@ describe("Artist E2E Tests", () => {
 		test("should soft delete an artist with authentication", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Artist to Delete",
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Artist to Delete",
+				aliases: [],
 			});
 
 			const { status } = await api.v2.artist({ id: artist.id }).delete(
@@ -264,17 +256,16 @@ describe("Artist E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedArtist = await prisma.artist.findUnique({
-				where: { id: artist.id },
-			});
+			const deletedArtist = await prisma.orm.core.Artist.where({
+				id: artist.id,
+			}).first();
 			expect(deletedArtist?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Test Artist",
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Test Artist",
+				aliases: [],
 			});
 
 			const { status } = await api.v2.artist({ id: artist.id }).delete({}, {});
@@ -300,11 +291,10 @@ describe("Artist E2E Tests", () => {
 		test("should return 404 when trying to delete already deleted artist", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.artist.create({
-				data: {
-					name: "Already Deleted",
-					deletedAt: new Date(),
-				},
+			const artist = await prisma.orm.core.Artist.create({
+				name: "Already Deleted",
+				aliases: [],
+				deletedAt: Temporal.Now.instant(),
 			});
 
 			const { error, status } = await api.v2.artist({ id: artist.id }).delete(

@@ -1,7 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { prisma } from "@cvsa/db";
-import { songService, artistService, singerService, artistRoleService } from "@cvsa/core";
+import { songWriter, artistWriter, singerWriter, artistRoleWriter } from "@cvsa/catalog";
+import { createServicePrincipal } from "@cvsa/authentication";
+
+const systemPrincipal = createServicePrincipal("script:import");
 
 interface JsonFile {
 	type: "song" | "album" | "series" | "singer" | "artist" | "others";
@@ -34,33 +37,33 @@ const songTypeMap: Record<string, string> = {
 };
 
 async function resolveSinger(name: string) {
-	const existing = await prisma.singer.findFirst({ where: { name, deletedAt: null } });
+	const existing = await prisma.orm.core.Singer.where({ name, deletedAt: null }).first();
 	if (existing) return existing.id;
-	const created = await singerService.create({ name });
+	const created = await singerWriter.create(systemPrincipal, { name });
 	return created.id;
 }
 
 async function resolveArtist(name: string) {
-	const existing = await prisma.artist.findFirst({ where: { name, deletedAt: null } });
+	const existing = await prisma.orm.core.Artist.where({ name, deletedAt: null }).first();
 	if (existing) return existing.id;
-	const created = await artistService.create({ name });
+	const created = await artistWriter.create(systemPrincipal, { name });
 	return created.id;
 }
 
 async function resolveRole(name: string) {
-	const existing = await prisma.artistRole.findFirst({ where: { name, deletedAt: null } });
+	const existing = await prisma.orm.core.ArtistRole.where({ name, deletedAt: null }).first();
 	if (existing) return existing.id;
-	const created = await artistRoleService.create({ name });
+	const created = await artistRoleWriter.create(systemPrincipal, { name });
 	return created.id;
 }
 
 async function importSinger(data: JsonFile) {
-	const result = await singerService.create({ name: data.name });
+	const result = await singerWriter.create(systemPrincipal, { name: data.name });
 	console.log(`singer → ${result.id}`);
 }
 
 async function importArtist(data: JsonFile) {
-	const result = await artistService.create({ name: data.name });
+	const result = await artistWriter.create(systemPrincipal, { name: data.name });
 	console.log(`artist → ${result.id}`);
 }
 
@@ -102,7 +105,7 @@ async function importSong(data: JsonFile) {
 
 	const publishedAt = data.publishedAt ? new Date(data.publishedAt).toISOString() : undefined;
 
-	const song = await songService.create({
+	const song = await songWriter.create(systemPrincipal, {
 		name: data.name,
 		type: data.songType ? (songTypeMap[data.songType] as never) : undefined,
 		description: data.description,
@@ -113,32 +116,28 @@ async function importSong(data: JsonFile) {
 	});
 
 	if (data.bilibiliID) {
-		const updateData: Record<string, unknown> = {};
+		const updateData: { bilibiliBvid?: string; bilibiliAid?: bigint } = {};
 		if (/^BV/i.test(data.bilibiliID)) updateData.bilibiliBvid = data.bilibiliID;
 		else if (/^\d+$/.test(data.bilibiliID)) updateData.bilibiliAid = BigInt(data.bilibiliID);
 		if (Object.keys(updateData).length) {
-			await prisma.song.update({ where: { id: song.id }, data: updateData });
+			await prisma.orm.core.Song.where({ id: song.id }).update(updateData);
 		}
 	}
 
 	if (data.youtubeID) {
-		await prisma.externalLink.create({
-			data: {
-				songId: song.id,
-				url: `https://youtube.com/watch?v=${data.youtubeID}`,
-				platform: "YOUTUBE",
-				platformId: data.youtubeID,
-			},
+		await prisma.orm.core.SongExternalLink.create({
+			songId: song.id,
+			url: `https://youtube.com/watch?v=${data.youtubeID}`,
+			platform: "YOUTUBE",
+			platformId: data.youtubeID,
 		});
 	}
 	if (data.niconicoID) {
-		await prisma.externalLink.create({
-			data: {
-				songId: song.id,
-				url: `https://nicovideo.jp/watch/${data.niconicoID}`,
-				platform: "NICONICO",
-				platformId: data.niconicoID,
-			},
+		await prisma.orm.core.SongExternalLink.create({
+			songId: song.id,
+			url: `https://nicovideo.jp/watch/${data.niconicoID}`,
+			platform: "NICONICO",
+			platformId: data.niconicoID,
 		});
 	}
 

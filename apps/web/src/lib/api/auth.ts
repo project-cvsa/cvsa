@@ -10,7 +10,7 @@ import type {
 	LoginResponseDto,
 	SignupRequestDto,
 	SignupResponseDto,
-} from "@cvsa/core";
+} from "@cvsa/authentication";
 import type { ApiResult } from "./result";
 import { getEdenClient, settle } from "./treaty";
 

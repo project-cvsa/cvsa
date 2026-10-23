@@ -1,16 +1,24 @@
 import { Elysia } from "elysia";
-import { ErrorResponseSchema, songService } from "@cvsa/core";
+import { ErrorResponseSchema } from "@cvsa/contracts";
+import { songExternalLinkWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
 
-export const songExternalLinkDeleteHandler = new Elysia({ name: "songExternalLinkDeleteHandler" })
+export const songExternalLinkDeleteHandler = new Elysia({
+	name: "songExternalLinkDeleteHandler",
+})
 	.use(authMiddleware)
 	.delete(
 		"/song/:id/external-link/:linkId",
-		async ({ params, set }) => {
-			await traceTask("songService.deleteExternalLink", async () => {
-				return await songService.deleteExternalLink(params.id, params.linkId);
+		async ({ params, user, set }) => {
+			const principal = createUserPrincipal({
+				userId: user.id,
+				roles: user.roleId ? [String(user.roleId)] : [],
+			});
+			await traceTask("songExternalLinkWriter.delete", async () => {
+				return await songExternalLinkWriter.delete(principal, params.id, params.linkId);
 			});
 			set.status = 204;
 			return null;

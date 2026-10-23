@@ -1,0 +1,29 @@
+{
+	"name": "@cvsa/authentication",
+	"type": "module",
+	"version": "0.1.0",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"scripts": {
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*",
+		"@types/bun": "1.4.2"
+	},
+	"dependencies": {
+		"@better-auth/prisma-adapter": "^1.5.6",
+		"@cvsa/contracts": "workspace:*",
+		"@cvsa/db": "workspace:*",
+		"@cvsa/env": "workspace:*",
+		"@cvsa/logger": "workspace:*",
+		"better-auth": "^1.5.6",
+		"nanoid": "^5.1.7",
+		"zod": "^4.0.0"
+	},
+	"exports": {
+		".": "./src/index.ts"
+	}
+}

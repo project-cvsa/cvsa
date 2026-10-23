@@ -4,8 +4,8 @@ import {
 	NetworkRuntimeStatusSchema,
 	ReplaceNetworkRuntimeConfigRequestSchema,
 	redactNetworkRuntimeConfigDocument,
-} from "@cvsa/core/crawler";
-import { AppError, ErrorResponseSchema } from "@cvsa/core";
+} from "./crawler";
+import { AppError, ErrorResponseSchema } from "@cvsa/contracts";
 import { crawlerEnv } from "@cvsa/env";
 import { networkRuntime, networkRuntimeConfigService } from "./container";
 

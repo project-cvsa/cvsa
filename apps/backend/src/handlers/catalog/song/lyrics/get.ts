@@ -1,13 +1,19 @@
 import { Elysia } from "elysia";
-import { ErrorResponseSchema, SongLyricsResponseSchema, songService } from "@cvsa/core";
+import { AppError, ErrorResponseSchema, SongLyricsResponseSchema } from "@cvsa/contracts";
+import { songReader } from "@cvsa/catalog";
+import { transformPrismaResult } from "@cvsa/db";
 import z from "zod";
 import { traceTask } from "@/common/trace";
 
 export const songLyricsGetHandler = new Elysia().get(
 	"/song/:id/lyric/:lyricId",
 	async ({ params, status }) => {
-		const lyric = await traceTask("songService.getLyric", async () => {
-			return await songService.getLyric(params.id, params.lyricId);
+		const lyric = await traceTask("songReader.getLyric", async () => {
+			const found = await songReader.getLyricById(params.id, params.lyricId);
+			if (!found) {
+				throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
+			}
+			return SongLyricsResponseSchema.parse(transformPrismaResult(found));
 		});
 		return status(200, lyric);
 	},

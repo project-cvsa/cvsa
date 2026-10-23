@@ -1,9 +1,6 @@
 import { Elysia } from "elysia";
-import {
-	CurrentUserInfoSchema,
-	betterAuthToCurrentUserInfoDto,
-	ErrorResponseSchema,
-} from "@cvsa/core";
+import { ErrorResponseSchema } from "@cvsa/contracts";
+import { CurrentUserInfoSchema, betterAuthToCurrentUserInfoDto } from "@cvsa/authentication";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 

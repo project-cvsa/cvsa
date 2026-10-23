@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// The @cvsa/core mock keeps the real module (better-auth, Prisma, DB) from
+// The @cvsa/authentication mock keeps the real module (better-auth, Prisma, DB) from
 // ever loading; only the pieces @lib/auth consumes are provided.
-vi.mock("@cvsa/core", () => ({
+vi.mock("@cvsa/authentication", () => ({
 	auth: {
 		api: {
 			getSession: vi.fn(),
@@ -11,7 +11,11 @@ vi.mock("@cvsa/core", () => ({
 	betterAuthToCurrentUserInfoDto: vi.fn(),
 }));
 
-import { auth, betterAuthToCurrentUserInfoDto, type CurrentUserInfoDto } from "@cvsa/core";
+import {
+	auth,
+	betterAuthToCurrentUserInfoDto,
+	type CurrentUserInfoDto,
+} from "@cvsa/authentication";
 import { resolveCurrentAuth, resolveCurrentUser } from "@lib/auth/server";
 import { ANONYMOUS_ONLY_ROUTES, AUTH_REQUIRED_ROUTES } from "@lib/auth/routes";
 import { loginRedirectTarget } from "@lib/auth/guards";

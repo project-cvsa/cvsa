@@ -15,7 +15,7 @@
 		"@types/bun": "latest"
 	},
 	"dependencies": {
-		"@cvsa/core": "workspace:*",
+		"@cvsa/contracts": "workspace:*",
 		"@cvsa/env": "workspace:*",
 		"@cvsa/logger": "workspace:*",
 		"@cvsa/observability": "workspace:*",

@@ -7,7 +7,7 @@ import {
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
 	NetworkRuntimeConfigService,
-} from "@cvsa/core/crawler";
+} from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
 import { initOtelSdk } from "@cvsa/observability";
 import { createSnapshotDb } from "@cvsa/snapshot-db";

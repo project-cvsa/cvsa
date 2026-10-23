@@ -1,13 +1,18 @@
 import { Elysia } from "elysia";
-import { ErrorResponseSchema, ArtistDetailsResponseSchema, artistService } from "@cvsa/core";
+import { AppError, ArtistDetailsResponseSchema, ErrorResponseSchema } from "@cvsa/contracts";
+import { artistReader } from "@cvsa/catalog";
 import z from "zod";
 import { traceTask } from "@/common/trace";
 
 export const artistDetailsHandler = new Elysia().get(
 	"/artist/:id",
 	async ({ params, status }) => {
-		const artist = await traceTask("artistService.getDetails", async () => {
-			return await artistService.getDetails(params.id);
+		const artist = await traceTask("artistReader.getDetails", async () => {
+			const res = await artistReader.getDetails(params.id);
+			if (!res) {
+				throw new AppError("error.artist.notfound", "NOT_FOUND", 404);
+			}
+			return res;
 		});
 		return status(200, artist);
 	},

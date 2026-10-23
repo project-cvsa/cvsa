@@ -83,6 +83,7 @@ const EXPECTED_ERROR_CODES = [
 	"USER_NOT_FOUND",
 	"EMAIL_NOT_VERIFIED",
 	"UNAUTHORIZED",
+	"FORBIDDEN",
 	"NETWORK_ERROR",
 ] as const satisfies readonly ApiErrorCode[];
 
@@ -107,6 +108,7 @@ function errorField(code: ApiErrorCode): AuthField {
 		case "INTERNAL_SERVER_ERROR":
 		case "USER_NOT_FOUND":
 		case "EMAIL_NOT_VERIFIED":
+		case "FORBIDDEN":
 		case "NETWORK_ERROR":
 			return "form";
 	}

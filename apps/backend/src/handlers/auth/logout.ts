@@ -1,7 +1,8 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
 import { authMiddleware } from "@/middlewares";
-import { auth, ErrorResponseSchema, toBetterAuthHeaders } from "@cvsa/core";
+import { ErrorResponseSchema } from "@cvsa/contracts";
+import { auth, toBetterAuthHeaders } from "@cvsa/authentication";
 import { clearSessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
 

@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
-import { ErrorResponseSchema, engineService } from "@cvsa/core";
+import { ErrorResponseSchema } from "@cvsa/contracts";
+import { engineWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -8,9 +10,13 @@ export const engineDeleteHandler = new Elysia({ name: "engineDeleteHandler" })
 	.use(authMiddleware)
 	.delete(
 		"/engine/:id",
-		async ({ params, set }) => {
-			await traceTask("engineService.delete", async () => {
-				return await engineService.delete(params.id);
+		async ({ params, set, user }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: user.roleId ? [String(user.roleId)] : [],
+			});
+			await traceTask("engineWriter.delete", async () => {
+				await engineWriter.delete(actor, params.id);
 			});
 			set.status = 204;
 			return null;

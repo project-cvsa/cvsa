@@ -1,0 +1,30 @@
+{
+	"name": "@cvsa/catalog",
+	"type": "module",
+	"version": "0.1.0",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"scripts": {
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit",
+		"test": "bun test"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*",
+		"@types/bun": "1.4.2"
+	},
+	"dependencies": {
+		"@cvsa/authentication": "workspace:*",
+		"@cvsa/contracts": "workspace:*",
+		"@cvsa/db": "workspace:*",
+		"@cvsa/env": "workspace:*",
+		"ioredis": "5.10.1"
+	},
+	"exports": {
+		".": "./src/index.ts",
+		"./song": "./src/song/index.ts",
+		"./cache": "./src/cache/index.ts",
+		"./outbox": "./src/outbox/index.ts",
+		"./container": "./src/container.ts"
+	}
+}

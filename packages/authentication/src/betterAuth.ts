@@ -1,0 +1,79 @@
+import { APIError, betterAuth } from "better-auth";
+import { prismaAdapter } from "@better-auth/prisma-adapter";
+import { prisma } from "@cvsa/db";
+import { getRandomId } from "./randomId";
+import { env } from "@cvsa/env";
+import { username } from "better-auth/plugins";
+import { bearer } from "better-auth/plugins";
+import { appLogger } from "@cvsa/logger";
+
+const DAY = 24 * 60 * 60;
+const HOUR = 60 * 60;
+
+export const auth = betterAuth({
+	database: prismaAdapter(prisma, { provider: "postgresql" }),
+	user: {
+		additionalFields: {
+			reputation: { type: "number", defaultValue: 0 },
+			roleId: { type: "number", required: false },
+		},
+	},
+	password: {
+		hash: (password: string) =>
+			Bun.password.hash(password, {
+				algorithm: "argon2id",
+				memoryCost: 4,
+			}),
+		verify: (password: string, hash: string) => Bun.password.verify(password, hash),
+	},
+	session: {
+		expiresIn: 90 * DAY,
+		updateAge: 1 * DAY,
+		freshAge: 3 * HOUR,
+		deferSessionRefresh: true,
+	},
+	advanced: {
+		cookiePrefix: "cvsa",
+		// Pin the __Secure- cookie name prefix to NODE_ENV instead of letting
+		// better-auth infer it from the baseURL, so every process embedding this
+		// instance derives identical cookie names.
+		useSecureCookies: env.NODE_ENV === "production",
+		database: {
+			generateId: (options) => {
+				if (options.model === "user" || options.model === "users") {
+					return getRandomId(7);
+				}
+				return getRandomId(12);
+			},
+		},
+	},
+	trustedOrigins: [
+		...(env.COOKIE_DOMAIN
+			? [`https://*.${env.COOKIE_DOMAIN}`, `http://*.${env.COOKIE_DOMAIN}`]
+			: []),
+		...(env.WEB_ORIGINS?.split(",")
+			.map((origin) => origin.trim())
+			.filter(Boolean) ?? []),
+	],
+	emailAndPassword: {
+		enabled: true,
+	},
+	plugins: [
+		username({
+			minUsernameLength: 1,
+			maxUsernameLength: 100,
+			// We don't have any limitations of username
+			usernameValidator: () => true,
+		}),
+		bearer(),
+	],
+	logger: {
+		log: (level, message, ...args) => {
+			appLogger[level](message, {
+				metadata: args,
+			});
+		},
+	},
+});
+
+export { APIError as BetterAuthAPIError };

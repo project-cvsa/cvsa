@@ -1,16 +1,15 @@
 import { Elysia } from "elysia";
 import { ip } from "elysia-ip";
+import { AppError, ErrorResponseSchema } from "@cvsa/contracts";
 import {
 	betterAuthToSignupUserInfoDto,
-	ErrorResponseSchema,
 	SignupRequestSchema,
 	signupRequestToBetterAuth,
 	SignupResponseSchema,
 	toSignUpResponse,
 	toBetterAuthHeaders,
-} from "@cvsa/core";
-import { AppError } from "@cvsa/core";
-import { auth } from "@cvsa/core";
+	auth,
+} from "@cvsa/authentication";
 import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
 

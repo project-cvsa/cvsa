@@ -1,0 +1,23 @@
+{
+	"name": "@cvsa/contracts",
+	"type": "module",
+	"version": "0.1.0",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"scripts": {
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*",
+		"@types/bun": "1.4.2"
+	},
+	"dependencies": {
+		"zod": "^4.3.6"
+	},
+	"exports": {
+		".": "./src/index.ts",
+		"./errors": "./src/errors.ts",
+		"./song": "./src/song.ts"
+	}
+}

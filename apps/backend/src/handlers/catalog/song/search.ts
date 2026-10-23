@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { songSearchService } from "@cvsa/core";
+import { songSearchService } from "../../../search/container";
 import z from "zod";
 import { traceTask } from "@/common/trace";
 

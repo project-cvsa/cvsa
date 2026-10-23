@@ -24,7 +24,6 @@ jobs:
             cp .env.docker.example .env.docker
             cp packages/db/.env.example packages/db/.env
             cp packages/db/.env.example packages/db/.env.test
-            cp packages/core/.env.example packages/core/.env.test
             cp apps/backend/.env.example apps/backend/.env.test
             cp apps/crawler/.env.example apps/crawler/.env.test
 

@@ -1,5 +1,5 @@
 import type { APIContext } from "astro";
-import type { CurrentUserInfoDto } from "@cvsa/core";
+import type { CurrentUserInfoDto } from "@cvsa/authentication";
 
 /**
  * Build the /login redirect target preserving the originally requested

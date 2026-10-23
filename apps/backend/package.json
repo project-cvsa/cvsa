@@ -17,7 +17,9 @@
 	},
 	"dependencies": {
 		"@better-auth/prisma-adapter": "^1.5.4",
-		"@cvsa/core": "workspace:*",
+		"@cvsa/authentication": "workspace:*",
+		"@cvsa/catalog": "workspace:*",
+		"@cvsa/contracts": "workspace:*",
 		"@cvsa/db": "workspace:*",
 		"@cvsa/env": "workspace:*",
 		"@cvsa/logger": "workspace:*",

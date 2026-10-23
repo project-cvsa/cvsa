@@ -1,7 +1,7 @@
 import { Elysia, ElysiaCustomStatusResponse } from "elysia";
-import { AppError, BetterAuthAPIError } from "@cvsa/core";
+import { AppError, type ErrorResponseDto } from "@cvsa/contracts";
+import { APIError as BetterAuthAPIError } from "better-auth";
 import { appLogger, pinoLogger } from "@cvsa/logger";
-import type { ErrorResponseDto } from "@cvsa/core";
 import { getErrorResponse } from "@/common/error";
 import { getTraceId } from "@/common/trace";
 import { i18nMiddleware } from "@/middlewares";

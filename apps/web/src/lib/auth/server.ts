@@ -3,7 +3,7 @@ import {
 	betterAuthToCurrentUserInfoDto,
 	type AuthSessionDto,
 	type CurrentUserInfoDto,
-} from "@cvsa/core";
+} from "@cvsa/authentication";
 
 export type CurrentAuth = {
 	user: CurrentUserInfoDto | null;
@@ -12,7 +12,7 @@ export type CurrentAuth = {
 
 /**
  * Resolve the current visitor in-process through the shared better-auth
- * instance from @cvsa/core (already loaded in this process) instead of
+ * instance from @cvsa/authentication (already loaded in this process) instead of
  * round-tripping to the backend API. better-auth parses its own session
  * cookie, so the cookie name is never hardcoded here.
  *

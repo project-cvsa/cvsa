@@ -71,18 +71,11 @@
 		"@cvsa/db#test:reset": {
 			"cache": false
 		},
-		"@cvsa/core#test:reset": {
-			"cache": false
-		},
 		"@cvsa/snapshot-db#test:reset": {
 			"cache": false
 		},
 		"//test:reset": {
-			"dependsOn": [
-				"@cvsa/db#test:reset",
-				"@cvsa/core#test:reset",
-				"@cvsa/snapshot-db#test:reset"
-			]
+			"dependsOn": ["@cvsa/db#test:reset", "@cvsa/snapshot-db#test:reset"]
 		}
 	}
 }

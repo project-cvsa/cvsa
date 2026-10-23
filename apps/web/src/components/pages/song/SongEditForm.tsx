@@ -7,7 +7,7 @@ import TextField from "@components/ui/TextField";
 import { ToastContainer, toast } from "@components/ui/Toast";
 import { api, type ApiErrorInfo } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import type { UpdateSongRequestDto } from "@cvsa/core";
+import type { UpdateSongRequestDto } from "@cvsa/contracts";
 import type { SongType } from "@cvsa/db";
 import { createSignal } from "solid-js";
 

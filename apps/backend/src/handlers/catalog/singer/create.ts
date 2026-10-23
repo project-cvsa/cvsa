@@ -3,8 +3,10 @@ import {
 	CreateSingerRequestSchema,
 	ErrorResponseSchema,
 	SingerResponseSchema,
-	singerService,
-} from "@cvsa/core";
+} from "@cvsa/contracts";
+import { singerWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
+import { transformPrismaResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -12,9 +14,14 @@ export const singerCreateHandler = new Elysia({ name: "singerCreateHandler" })
 	.use(authMiddleware)
 	.post(
 		"/singer",
-		async ({ body, status }) => {
-			const singer = await traceTask("singerService.create", async () => {
-				return await singerService.create(body);
+		async ({ body, status, user }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: user.roleId ? [String(user.roleId)] : [],
+			});
+			const singer = await traceTask("singerWriter.create", async () => {
+				const row = await singerWriter.create(actor, body);
+				return SingerResponseSchema.parse(transformPrismaResult(row));
 			});
 			return status(201, singer);
 		},

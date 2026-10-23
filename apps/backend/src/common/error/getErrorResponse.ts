@@ -1,4 +1,4 @@
-import type { ErrorResponseDto } from "@cvsa/core";
+import type { ErrorResponseDto } from "@cvsa/contracts";
 import { i18nRuntime } from "@/common/i18n";
 import { getTraceId } from "@/common/trace";
 

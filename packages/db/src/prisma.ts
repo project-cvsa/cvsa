@@ -1,17 +1,13 @@
-import { PrismaClient } from "./types";
-import { PrismaPg } from "@prisma/adapter-pg";
 import { env } from "@cvsa/env";
-
-const adapter = new PrismaPg({
-	connectionString: env.DATABASE_URL,
-});
+import { Temporal } from "temporal-polyfill";
+import { createDatabaseClient } from "./client";
 
 /**
- * Convert an type to a JSON-serializable version.
+ * Convert a type to a JSON-serializable version.
  * It will convert `bigint` to `number`,
- * and `Date` to `string`
+ * and `Date` or `Temporal.Instant` to `string`
  */
-export type Serialized<T> = T extends Date
+export type Serialized<T> = T extends Date | Temporal.Instant
 	? string
 	: T extends bigint
 		? number
@@ -22,8 +18,8 @@ export type Serialized<T> = T extends Date
 				: T;
 
 export function transformPrismaResult<T>(obj: T): Serialized<T> {
-	if (obj instanceof Date) {
-		return obj.toISOString() as Serialized<T>;
+	if (obj instanceof Date || obj instanceof Temporal.Instant) {
+		return obj.toString() as Serialized<T>;
 	}
 
 	if (typeof obj === "bigint") {
@@ -47,12 +43,6 @@ export function transformPrismaResult<T>(obj: T): Serialized<T> {
 	return obj as Serialized<T>;
 }
 
-export const prisma = new PrismaClient({
-	adapter,
-	log: [
-		{ level: "query", emit: "event" },
-		{ level: "info", emit: "stdout" },
-		{ level: "warn", emit: "stdout" },
-		{ level: "error", emit: "stdout" },
-	],
+export const prisma = createDatabaseClient({
+	connectionString: env.DATABASE_URL,
 });

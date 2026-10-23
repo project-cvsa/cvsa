@@ -1,10 +1,12 @@
 import { Elysia } from "elysia";
 import {
+	ArtistRoleResponseSchema,
 	CreateArtistRoleRequestSchema,
 	ErrorResponseSchema,
-	ArtistRoleResponseSchema,
-	artistRoleService,
-} from "@cvsa/core";
+} from "@cvsa/contracts";
+import { artistRoleWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
+import { transformPrismaResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -12,9 +14,14 @@ export const artistRoleCreateHandler = new Elysia({ name: "artistRoleCreateHandl
 	.use(authMiddleware)
 	.post(
 		"/artist-role",
-		async ({ body, status }) => {
-			const role = await traceTask("artistRoleService.create", async () => {
-				return await artistRoleService.create(body);
+		async ({ body, status, user }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: user.roleId ? [String(user.roleId)] : [],
+			});
+			const role = await traceTask("artistRoleWriter.create", async () => {
+				const row = await artistRoleWriter.create(actor, body);
+				return ArtistRoleResponseSchema.parse(transformPrismaResult(row));
 			});
 			return status(201, role);
 		},

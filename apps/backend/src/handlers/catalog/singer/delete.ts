@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
-import { ErrorResponseSchema, singerService } from "@cvsa/core";
+import { ErrorResponseSchema } from "@cvsa/contracts";
+import { singerWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -8,9 +10,13 @@ export const singerDeleteHandler = new Elysia({ name: "singerDeleteHandler" })
 	.use(authMiddleware)
 	.delete(
 		"/singer/:id",
-		async ({ params, set }) => {
-			await traceTask("singerService.delete", async () => {
-				return await singerService.delete(params.id);
+		async ({ params, set, user }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: user.roleId ? [String(user.roleId)] : [],
+			});
+			await traceTask("singerWriter.delete", async () => {
+				await singerWriter.delete(actor, params.id);
 			});
 			set.status = 204;
 			return null;
