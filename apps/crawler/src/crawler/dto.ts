@@ -39,9 +39,46 @@ export const NetworkRuntimeStatusSchema = z.object({
 	adapters: z.array(NetworkAdapterRuntimeStatusSchema),
 });
 
+export const VideoTrackingDtoSchema = z.object({
+	aid: z.string(),
+	state: z.string(),
+	nextSnapshotAt: z.string(),
+	lastViews: z.number().int(),
+	lastCapturedAt: z.string().nullable(),
+	velocity: z.number(),
+	targetMilestone: z.number().int().nullable(),
+	etaHours: z.number().nullable(),
+	publishedAt: z.string().nullable(),
+	priority: z.number().int(),
+	consecutiveFails: z.number().int(),
+	updatedAt: z.string(),
+});
+
+export const RegisterTrackingVideosRequestSchema = z.object({
+	aids: z
+		.array(z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]))
+		.min(1)
+		.max(1000),
+	state: z.enum(["new", "regular", "milestone", "archive"]).optional(),
+	priority: z.number().int().min(1).max(5).optional(),
+});
+
+export const RegisterTrackingVideosResponseSchema = z.object({
+	registered: z.number().int().nonnegative(),
+});
+
+export const PromoteTrackingVideoRequestSchema = z.object({
+	targetMilestone: z.number().int().positive().optional(),
+	priority: z.number().int().min(1).max(5).optional(),
+});
+
 export type NetworkRuntimeConfigDocument = z.infer<typeof NetworkRuntimeConfigDocumentSchema>;
 export type ReplaceNetworkRuntimeConfigRequest = z.infer<
 	typeof ReplaceNetworkRuntimeConfigRequestSchema
 >;
 export type NetworkAdapterRuntimeStatusDto = z.infer<typeof NetworkAdapterRuntimeStatusSchema>;
 export type NetworkRuntimeStatus = z.infer<typeof NetworkRuntimeStatusSchema>;
+export type VideoTrackingDto = z.infer<typeof VideoTrackingDtoSchema>;
+export type RegisterTrackingVideosRequest = z.infer<typeof RegisterTrackingVideosRequestSchema>;
+export type RegisterTrackingVideosResponse = z.infer<typeof RegisterTrackingVideosResponseSchema>;
+export type PromoteTrackingVideoRequest = z.infer<typeof PromoteTrackingVideoRequestSchema>;

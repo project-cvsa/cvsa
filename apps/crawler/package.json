@@ -5,6 +5,7 @@
 	"scripts": {
 		"dev": "NODE_ENV=development bun --watch src/index.ts",
 		"start": "bun src/index.ts",
+		"seed:tracking": "bun src/scripts/seed-tracking.ts",
 		"test": "bun test --concurrent",
 		"lint": "bunx --bun biome lint",
 		"typecheck": "bunx --bun tsc --noEmit"
@@ -16,6 +17,7 @@
 	},
 	"dependencies": {
 		"@cvsa/contracts": "workspace:*",
+		"@cvsa/db": "workspace:*",
 		"@cvsa/env": "workspace:*",
 		"@cvsa/logger": "workspace:*",
 		"@cvsa/observability": "workspace:*",

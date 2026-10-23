@@ -54,6 +54,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@cvsa/contracts": "workspace:*",
+        "@cvsa/db": "workspace:*",
         "@cvsa/env": "workspace:*",
         "@cvsa/logger": "workspace:*",
         "@cvsa/observability": "workspace:*",

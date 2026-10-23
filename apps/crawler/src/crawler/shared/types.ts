@@ -57,4 +57,9 @@ export interface CrawlerRuntimeDependencies {
 		stopPolling(): void;
 		close?(): Promise<void>;
 	};
+	dispatcher?: {
+		start(): void;
+		stop(): void;
+	};
+	worker?: CrawlerWorker;
 }

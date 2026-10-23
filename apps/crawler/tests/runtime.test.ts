@@ -8,10 +8,27 @@ describe("crawler runtime", () => {
 		const snapshotDb = createFakeSnapshotDb();
 		let initialized = false;
 		let shutdown = false;
+		let dispatcherStarted = false;
+		let dispatcherStopped = false;
+		let workerClosed = false;
+
 		const runtime = createCrawlerRuntime({
 			mq,
 			snapshotDb,
 			metrics: createCrawlerMetrics(),
+			dispatcher: {
+				start() {
+					dispatcherStarted = true;
+				},
+				stop() {
+					dispatcherStopped = true;
+				},
+			},
+			worker: {
+				async close() {
+					workerClosed = true;
+				},
+			},
 			observability: {
 				async init(): Promise<void> {
 					initialized = true;
@@ -27,10 +44,13 @@ describe("crawler runtime", () => {
 		expect(snapshotDb.connected).toBe(true);
 		expect(snapshotDb.healthChecks).toBe(1);
 		expect(mq.state.connected).toBe(true);
+		expect(dispatcherStarted).toBe(true);
 
 		await runtime.shutdown();
 		expect(shutdown).toBe(true);
 		expect(snapshotDb.disconnected).toBe(true);
 		expect(mq.state.closed).toBe(true);
+		expect(dispatcherStopped).toBe(true);
+		expect(workerClosed).toBe(true);
 	});
 });

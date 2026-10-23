@@ -14,6 +14,8 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 		if (shutdownComplete) return;
 		shutdownComplete = true;
 		await traceTask("crawler.runtime.shutdown", async () => {
+			deps.dispatcher?.stop();
+			if (deps.worker) await deps.worker.close();
 			if (deps.networkRuntime?.close) await deps.networkRuntime.close();
 			else deps.networkRuntime?.stopPolling();
 			await deps.mq.close();
@@ -36,6 +38,7 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 					await deps.mq.connect();
 					await deps.networkRuntime?.load();
 					deps.networkRuntime?.startPolling();
+					deps.dispatcher?.start();
 				});
 				started = true;
 				deps.metrics?.runtimeStarts.add(1);

@@ -1,12 +1,18 @@
 import {
+	BilibiliClient,
 	createCrawlerAdapterRegistry,
 	createCrawlerMetrics,
 	createCrawlerMq,
 	createCrawlerRuntime,
 	createRedisRateLimiter,
+	createSnapshotBatchWorker,
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
 	NetworkRuntimeConfigService,
+	SnapshotRepository,
+	SnapshotService,
+	TrackingDispatcher,
+	TrackingRepository,
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
 import { initOtelSdk } from "@cvsa/observability";
@@ -27,6 +33,20 @@ export const networkRuntime = new NetworkRuntimeConfigManager(
 	createRedisRateLimiter(crawlerEnv.REDIS_URL)
 );
 
+export const bilibiliClient = new BilibiliClient({
+	networkDelegate: networkRuntime,
+});
+
+export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
+export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
+export const snapshotService = new SnapshotService(
+	bilibiliClient,
+	snapshotRepository,
+	trackingRepository
+);
+export const snapshotBatchWorker = createSnapshotBatchWorker(crawlerMq, snapshotService);
+export const trackingDispatcher = new TrackingDispatcher(trackingRepository, crawlerMq);
+
 let otelSdk: Awaited<ReturnType<typeof initOtelSdk>> | undefined;
 
 export const crawlerRuntime = createCrawlerRuntime({
@@ -34,6 +54,8 @@ export const crawlerRuntime = createCrawlerRuntime({
 	snapshotDb: crawlerSnapshotDb,
 	metrics: createCrawlerMetrics(),
 	networkRuntime,
+	dispatcher: trackingDispatcher,
+	worker: snapshotBatchWorker,
 	observability: {
 		async init(): Promise<void> {
 			otelSdk = await initOtelSdk({
