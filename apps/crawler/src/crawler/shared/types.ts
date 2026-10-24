@@ -62,4 +62,8 @@ export interface CrawlerRuntimeDependencies {
 		stop(): void;
 	};
 	worker?: CrawlerWorker;
+	discoveryWorker?: CrawlerWorker;
+	discoveryScheduler?: {
+		startScheduledSweeps(intervalMs?: number): Promise<void>;
+	};
 }

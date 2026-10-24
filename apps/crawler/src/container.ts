@@ -6,8 +6,14 @@ import {
 	createCrawlerRuntime,
 	createRedisRateLimiter,
 	createSnapshotBatchWorker,
+	DiscoveryFilterService,
+	DiscoveryPipelineProcessor,
 	DiscoveryRepository,
+	DiscoveryScheduler,
 	DiscoveryService,
+	DISCOVERY_QUEUE_NAME,
+	createDiscoveryWorker,
+	type DiscoveryJobData,
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
 	NetworkRuntimeConfigService,
@@ -42,6 +48,17 @@ export const bilibiliClient = new BilibiliClient({
 export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
 export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
 export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
+export const discoveryFilterService = new DiscoveryFilterService();
+export const discoveryQueue = crawlerMq.createQueue<DiscoveryJobData>(DISCOVERY_QUEUE_NAME);
+export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
+	bilibiliClient,
+	discoveryRepository,
+	trackingRepository,
+	discoveryQueue,
+	discoveryFilterService
+);
+export const discoveryWorker = createDiscoveryWorker(crawlerMq, discoveryPipelineProcessor);
+export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue);
 export const discoveryService = new DiscoveryService(
 	bilibiliClient,
 	discoveryRepository,
@@ -64,6 +81,8 @@ export const crawlerRuntime = createCrawlerRuntime({
 	networkRuntime,
 	dispatcher: trackingDispatcher,
 	worker: snapshotBatchWorker,
+	discoveryWorker,
+	discoveryScheduler,
 	observability: {
 		async init(): Promise<void> {
 			otelSdk = await initOtelSdk({

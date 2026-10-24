@@ -5,3 +5,4 @@ export * from "./catalog/artist";
 export * from "./catalog/artistRole";
 export * from "./catalog/singer";
 export * from "./dev";
+export * from "./crawler";

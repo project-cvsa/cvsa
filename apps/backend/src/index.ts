@@ -9,6 +9,7 @@ import {
 	artistHandler,
 	artistRoleHandler,
 	singerHandler,
+	crawlerAdminHandler,
 } from "@handlers/index";
 import { errorHandler } from "./errorHandler";
 import { openapi } from "@elysiajs/openapi";
@@ -84,7 +85,8 @@ export const app = new Elysia({
 	.use(artistHandler)
 	.use(artistRoleHandler)
 	.use(singerHandler)
-	.use(devHandler);
+	.use(devHandler)
+	.use(crawlerAdminHandler);
 
 if (process.env.NODE_ENV !== "test") {
 	app.listen(16412);

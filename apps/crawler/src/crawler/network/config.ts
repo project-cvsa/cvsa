@@ -11,6 +11,7 @@ import {
 	type NetworkRateLimiter,
 	type NetworkRequest,
 	type NetworkResponse,
+	type NetworkRuntimeConfig,
 	type NetworkSchedulerLogger,
 	type NetworkSchedulerTracer,
 } from "@cvsa/network-scheduler";
@@ -61,6 +62,32 @@ export interface NetworkRuntimeConfigManagerOptions {
 	clock?: () => number;
 }
 
+export function createDefaultDirectRuntimeConfig(): NetworkRuntimeConfig {
+	return {
+		adapters: [
+			{
+				id: "direct-default",
+				type: "direct",
+				enabled: true,
+				baseWeight: 1,
+				rateLimits: [
+					{
+						durationSeconds: 1,
+						maxRequests: 5,
+					},
+				],
+			},
+		],
+		bindings: [
+			{
+				requestType: "bilibili-api",
+				adapterIds: ["direct-default"],
+			},
+		],
+		requestTypePolicies: {},
+	};
+}
+
 export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	private scheduler: NetworkScheduler | undefined;
 	private revision: number | undefined;
@@ -102,7 +129,17 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	async load(): Promise<boolean> {
 		try {
 			const persisted = await this.repository.get();
-			if (!persisted) return false;
+			if (!persisted) {
+				appLogger.warn(
+					"No persisted network runtime config found; bootstrapping with default direct adapter",
+					{ component: "network-config" }
+				);
+				return this.apply({
+					revision: 0,
+					config: createDefaultDirectRuntimeConfig(),
+					updatedAt: new Date(),
+				});
+			}
 			return this.apply(NetworkRuntimeConfigDocumentSchema.parse(persisted));
 		} catch (error) {
 			this.logRejection(error);

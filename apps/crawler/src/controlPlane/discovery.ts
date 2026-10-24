@@ -4,13 +4,20 @@ import type { BilibiliVideoMetadata, BilibiliVideoRelation } from "@cvsa/snapsho
 import {
 	BilibiliVideoMetadataDtoSchema,
 	BilibiliVideoRelationDtoSchema,
+	DiscoveryFilterConfigDtoSchema,
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
 	ProcessRecommendationsResponseSchema,
+	UpdateDiscoveryFilterConfigRequestSchema,
 	type BilibiliVideoMetadataDto,
 	type BilibiliVideoRelationDto,
 } from "../crawler";
-import { discoveryRepository, discoveryService } from "../container";
+import {
+	discoveryFilterService,
+	discoveryRepository,
+	discoveryScheduler,
+	discoveryService,
+} from "../container";
 import { z } from "zod";
 
 function toMetadataDto(m: BilibiliVideoMetadata): BilibiliVideoMetadataDto {
@@ -44,6 +51,33 @@ function toRelationDto(r: BilibiliVideoRelation): BilibiliVideoRelationDto {
 }
 
 export const discoveryRoutes = new Elysia()
+	.get(
+		"/config",
+		() => {
+			return discoveryFilterService.getConfig();
+		},
+		{
+			response: {
+				200: DiscoveryFilterConfigDtoSchema,
+				401: ErrorResponseSchema,
+			},
+		}
+	)
+	.put(
+		"/config",
+		({ body }) => {
+			discoveryFilterService.updateConfig(body);
+			return discoveryFilterService.getConfig();
+		},
+		{
+			body: UpdateDiscoveryFilterConfigRequestSchema,
+			response: {
+				200: DiscoveryFilterConfigDtoSchema,
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
 	.post(
 		"/sweep",
 		async ({ body }) => {
@@ -76,6 +110,40 @@ export const discoveryRoutes = new Elysia()
 		{
 			response: {
 				200: ProcessRecommendationsResponseSchema,
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/detail/:aid",
+		async ({ params, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			await discoveryScheduler.triggerDetailFetch(BigInt(params.aid), "manual");
+			return { queued: true, aid: params.aid };
+		},
+		{
+			response: {
+				200: z.object({ queued: z.boolean(), aid: z.string() }),
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/active/:aid",
+		async ({ params, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			await discoveryScheduler.triggerActiveDiscovery(BigInt(params.aid));
+			return { queued: true, aid: params.aid };
+		},
+		{
+			response: {
+				200: z.object({ queued: z.boolean(), aid: z.string() }),
 				401: ErrorResponseSchema,
 				422: ErrorResponseSchema,
 			},

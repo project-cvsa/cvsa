@@ -136,3 +136,26 @@ export type DiscoverySweepResponse = z.infer<typeof DiscoverySweepResponseSchema
 export type ProcessRecommendationsResponse = z.infer<typeof ProcessRecommendationsResponseSchema>;
 export type BilibiliVideoMetadataDto = z.infer<typeof BilibiliVideoMetadataDtoSchema>;
 export type BilibiliVideoRelationDto = z.infer<typeof BilibiliVideoRelationDtoSchema>;
+
+export const DiscoveryFilterConfigDtoSchema = z.object({
+	whitelistSingers: z.array(z.string()),
+	whitelistSongIndicators: z.array(z.string()),
+	blacklistKeywords: z.array(z.string()),
+	minDurationSeconds: z.number().int().positive(),
+	maxDurationSeconds: z.number().int().positive(),
+	rejectionSampleRate: z.number().min(0).max(1),
+});
+
+export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
+	whitelistSingers: z.array(z.string()).optional(),
+	whitelistSongIndicators: z.array(z.string()).optional(),
+	blacklistKeywords: z.array(z.string()).optional(),
+	minDurationSeconds: z.number().int().positive().optional(),
+	maxDurationSeconds: z.number().int().positive().optional(),
+	rejectionSampleRate: z.number().min(0).max(1).optional(),
+});
+
+export type DiscoveryFilterConfigDto = z.infer<typeof DiscoveryFilterConfigDtoSchema>;
+export type UpdateDiscoveryFilterConfigRequest = z.infer<
+	typeof UpdateDiscoveryFilterConfigRequestSchema
+>;

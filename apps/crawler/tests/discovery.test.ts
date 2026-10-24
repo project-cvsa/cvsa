@@ -8,10 +8,14 @@ import {
 } from "@cvsa/snapshot-db";
 import {
 	BilibiliClient,
+	DiscoveryFilterService,
+	DiscoveryPipelineProcessor,
+	DiscoveryScheduler,
 	DiscoveryService,
 	RelationExtractor,
 	SearchRover,
 	type BilibiliHttpResponse,
+	type DiscoveryJobData,
 	type IDiscoveryRepository,
 	type RelationEdge,
 	type UpsertMetadataInput,
@@ -21,6 +25,7 @@ import type {
 	UpdateScheduleInput,
 	UpsertTrackingInput,
 } from "../src/crawler/tracking/repository.interface";
+import { createFakeMq } from "../src/crawler/testing/fakes";
 
 class FakeDiscoveryRepository implements IDiscoveryRepository {
 	readonly metadatas = new Map<bigint, BilibiliVideoMetadata>();
@@ -431,5 +436,203 @@ describe("DiscoveryService", () => {
 		const tracked400002 = await trackingRepo.getTracking(400002n);
 		expect(tracked400002).toBeDefined();
 		expect(tracked400002?.state).toBe("regular");
+	});
+});
+
+describe("DiscoveryFilterService", () => {
+	test("accepts whitelist singer with song indicator", () => {
+		const filter = new DiscoveryFilterService();
+		const decision = filter.evaluateVideo({
+			title: "【洛天依原创】霜雪千年",
+			tags: ["洛天依", "原创曲", "VOCALOID中文曲"],
+			duration: 220,
+		});
+
+		expect(decision.action).toBe("accept");
+		expect(decision.reason).toBe("whitelist_hit");
+		expect(decision.confidence).toBe(1.0);
+	});
+
+	test("rejects blacklist keywords even with singer", () => {
+		const filter = new DiscoveryFilterService();
+		const decision = filter.evaluateVideo({
+			title: "【原神/洛天依】直播录像切片剪辑",
+			tags: ["原神", "洛天依", "切片"],
+			duration: 180,
+		});
+
+		expect(decision.action).toBe("reject");
+	});
+
+	test("rejects duration out of bounds", () => {
+		const filter = new DiscoveryFilterService();
+		const decision = filter.evaluateVideo({
+			title: "【言和原创】超短试听",
+			tags: ["言和", "原创"],
+			duration: 15, // < 45s
+		});
+
+		expect(decision.action).toBe("reject");
+		expect(decision.reason).toBe("duration_out_of_range");
+	});
+
+	test("samples rejected candidate according to sample rate", () => {
+		// When sample rate is 100%, all rejected items are sampled
+		const filter100 = new DiscoveryFilterService({ rejectionSampleRate: 1.0 });
+		const decision1 = filter100.evaluateVideo({
+			title: "完全无关的游戏视频",
+			tags: ["游戏", "日常"],
+			duration: 300,
+		});
+		expect(decision1.action).toBe("reject");
+		expect(decision1.sampled).toBe(true);
+
+		// When sample rate is 0%, none are sampled
+		const filter0 = new DiscoveryFilterService({ rejectionSampleRate: 0.0 });
+		const decision2 = filter0.evaluateVideo({
+			title: "完全无关的游戏视频",
+			tags: ["游戏", "日常"],
+			duration: 300,
+		});
+		expect(decision2.action).toBe("reject");
+		expect(decision2.sampled).toBe(false);
+	});
+});
+
+describe("DiscoveryPipelineProcessor", () => {
+	test("fetches candidate details, applies filter, saves metadata, and enqueues recommendations", async () => {
+		const discoveryRepo = new FakeDiscoveryRepository();
+		const trackingRepo = new FakeTrackingRepository();
+		const mq = createFakeMq();
+		const queue = mq.createQueue("crawler-discovery");
+
+		const client = new BilibiliClient({
+			request: async (url, options): Promise<BilibiliHttpResponse> => {
+				const headers: Record<string, string> = {};
+				if (options?.method === "HEAD") {
+					headers["set-cookie"] = "b_nut=12345; Path=/";
+					return { status: 200, headers, body: "" };
+				}
+				if (url.includes("/x/frontend/finger/spi")) {
+					return {
+						status: 200,
+						headers,
+						body: JSON.stringify({
+							code: 0,
+							message: "0",
+							data: { b_3: "b3", b_4: "b4" },
+						}),
+					};
+				}
+				if (url.includes("Ticket/GenWebTicket")) {
+					return {
+						status: 200,
+						headers,
+						body: JSON.stringify({
+							code: 0,
+							message: "0",
+							data: {
+								ticket: "t",
+								nav: {
+									img: "7cd084481338484ba0e08a3d8beb9821",
+									sub: "435cd5968e7d4d429a39f65342bc6761",
+								},
+							},
+						}),
+					};
+				}
+				if (url.includes("/x/web-interface/wbi/view/detail")) {
+					return {
+						status: 200,
+						headers,
+						body: JSON.stringify({
+							code: 0,
+							message: "0",
+							data: {
+								View: {
+									aid: 500001,
+									bvid: "BV1500001",
+									title: "【初音未来原创】世界第一公主殿下",
+									desc: "经典初音未来曲目",
+									pic: "https://example.com/miku.jpg",
+									duration: 240,
+									pubdate: 1600000000,
+									owner: { mid: 888, name: "ryo", face: "" },
+									stat: { aid: 500001, view: 10000000 },
+								},
+								Card: { card: { name: "ryo" } },
+								Tags: [{ tag_name: "初音未来" }, { tag_name: "原创曲" }],
+								Related: [
+									{
+										aid: 500002,
+										bvid: "BV1500002",
+										title: "【初音未来原创】深海少女",
+										pic: "https://example.com/shinkai.jpg",
+										owner: { mid: 999, name: "yuuyu", face: "" },
+										stat: { aid: 500002, view: 5000000 },
+										pubdate: 1610000000,
+										duration: 210,
+									},
+								],
+							},
+						}),
+					};
+				}
+				return { status: 200, headers, body: "{}" };
+			},
+		});
+
+		const processor = new DiscoveryPipelineProcessor(
+			client,
+			discoveryRepo,
+			trackingRepo,
+			queue
+		);
+
+		await processor.processJob({
+			type: "fetch-video-details",
+			aid: "500001",
+			source: "search",
+		});
+
+		// 1. Video 500001 must be tracked now
+		const tracked = await trackingRepo.getTracking(500001n);
+		expect(tracked).toBeDefined();
+		expect(tracked?.state).toBe("new");
+
+		// 2. Video 500001 metadata must be stored
+		const meta = await discoveryRepo.getMetadata(500001n);
+		expect(meta).toBeDefined();
+		expect(meta?.title).toBe("【初音未来原创】世界第一公主殿下");
+
+		// 3. Recommendation relation edge 500001 -> 500002 must be saved with position 0
+		const relations = await discoveryRepo.getRelationsBySource(500001n);
+		expect(relations).toHaveLength(1);
+		expect(relations[0].targetAid).toBe(500002n);
+		expect(relations[0].position).toBe(0);
+
+		// 4. Related video 500002 must be queued for detail fetching
+		expect(mq.state.queuedJobs).toHaveLength(1);
+		expect(mq.state.queuedJobs[0].data).toMatchObject({
+			type: "fetch-video-details",
+			aid: "500002",
+			source: "related",
+		});
+	});
+});
+
+describe("DiscoveryScheduler", () => {
+	test("adds repeatable sweep and manual trigger jobs", async () => {
+		const mq = createFakeMq();
+		const queue = mq.createQueue<DiscoveryJobData>("crawler-discovery");
+		const scheduler = new DiscoveryScheduler(queue);
+
+		await scheduler.startScheduledSweeps(300_000);
+		expect(mq.state.queuedJobs).toHaveLength(1);
+		expect(mq.state.queuedJobs[0].name).toBe("repeatable-search-sweep");
+
+		await scheduler.triggerDetailFetch(777777n, "manual");
+		expect(mq.state.queuedJobs).toHaveLength(2);
+		expect(mq.state.queuedJobs[1].name).toBe("detail-777777");
 	});
 });

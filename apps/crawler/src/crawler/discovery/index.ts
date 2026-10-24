@@ -3,4 +3,7 @@ export * from "./repository.interface";
 export * from "./repository";
 export * from "./relationExtractor";
 export * from "./searchRover";
+export * from "./filter";
+export * from "./worker";
+export * from "./scheduler";
 export * from "./discoveryService";
