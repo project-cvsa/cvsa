@@ -23,9 +23,9 @@ import type {
 } from "@prisma/orm-postgres/contract/types";
 
 export type StorageHash =
-	StorageHashBase<"ea6e5689e105ddac8d0d98e550a37b93d6656443ceb627b4cc1b7135531f78be">;
+	StorageHashBase<"1cfafcc379f2f7c04e771acfe755573e47ad9733488e7dc4434729ee938a3c52">;
 export type ExecutionHash =
-	ExecutionHashBase<"4cafa184c9cbe477e129325f6aefe648137d8be63160eefa35dde5df642b808f">;
+	ExecutionHashBase<"b6ee404e86d424a8516e003d26af5d030dc94076041efd38fb5779ec230c13fa">;
 export type ProfileHash =
 	ProfileHashBase<"3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2">;
 
@@ -321,6 +321,33 @@ export type StorageColumnInputTypes = ColumnTypesFromStorage<
 >;
 
 export namespace Models {
+	export type public_BilibiliVideoMetadata = {
+		aid: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["aid"];
+		bvid: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["bvid"];
+		capturedAt: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["capturedAt"];
+		copyright: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["copyright"];
+		description: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["description"];
+		duration: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["duration"];
+		mid: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["mid"];
+		ownerFace: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["ownerFace"];
+		ownerName: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["ownerName"];
+		pic: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["pic"];
+		pubdate: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["pubdate"];
+		rawPayload: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["rawPayload"];
+		tags: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["tags"];
+		tid: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["tid"];
+		title: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["title"];
+		tname: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["tname"];
+		updatedAt: FieldOutputTypes["public"]["BilibiliVideoMetadata"]["updatedAt"];
+		readonly [RelationKeys]?: never;
+	};
+	export type public_BilibiliVideoRelation = {
+		capturedAt: FieldOutputTypes["public"]["BilibiliVideoRelation"]["capturedAt"];
+		position: FieldOutputTypes["public"]["BilibiliVideoRelation"]["position"];
+		sourceAid: FieldOutputTypes["public"]["BilibiliVideoRelation"]["sourceAid"];
+		targetAid: FieldOutputTypes["public"]["BilibiliVideoRelation"]["targetAid"];
+		readonly [RelationKeys]?: never;
+	};
 	export type public_NetworkRuntimeConfig = {
 		config: FieldOutputTypes["public"]["NetworkRuntimeConfig"]["config"];
 		id: FieldOutputTypes["public"]["NetworkRuntimeConfig"]["id"];
@@ -359,6 +386,8 @@ export namespace Models {
 
 export declare const models: {
 	public: {
+		BilibiliVideoMetadata: Models.public_BilibiliVideoMetadata;
+		BilibiliVideoRelation: Models.public_BilibiliVideoRelation;
 		NetworkRuntimeConfig: Models.public_NetworkRuntimeConfig;
 		VideoSnapshot: Models.public_VideoSnapshot;
 		VideoTracking: Models.public_VideoTracking;
@@ -383,6 +412,204 @@ type ContractBase = Omit<
 				readonly kind: "postgres-schema";
 				readonly entries: {
 					readonly table: {
+						readonly bilibili_video_metadata: {
+							columns: {
+								readonly aid: {
+									readonly dataType: "pg/int8";
+									readonly codecId: "pg/int8@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+								readonly bvid: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+								readonly captured_at: {
+									readonly dataType: "pg/timestamptz";
+									readonly codecId: "pg/timestamptz-temporal@1";
+									readonly nullable: false;
+									readonly default: {
+										readonly kind: "function";
+										readonly expression: "now()";
+									};
+									readonly many: false;
+								};
+								readonly copyright: {
+									readonly dataType: "pg/int4";
+									readonly codecId: "pg/int4@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly description: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly duration: {
+									readonly dataType: "pg/int4";
+									readonly codecId: "pg/int4@1";
+									readonly nullable: false;
+									readonly default: {
+										readonly kind: "literal";
+										readonly value: DefaultLiteralValue<"pg/int4@1", 0>;
+									};
+									readonly many: false;
+								};
+								readonly mid: {
+									readonly dataType: "pg/int8";
+									readonly codecId: "pg/int8@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly owner_face: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly owner_name: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly pic: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly pubdate: {
+									readonly dataType: "pg/timestamptz";
+									readonly codecId: "pg/timestamptz-temporal@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly raw_payload: {
+									readonly dataType: "pg/json";
+									readonly codecId: "pg/json@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly tags: {
+									readonly dataType: "pg/json";
+									readonly codecId: "pg/json@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly tid: {
+									readonly dataType: "pg/int4";
+									readonly codecId: "pg/int4@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly title: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+								readonly tname: {
+									readonly dataType: "pg/text";
+									readonly codecId: "pg/text@1";
+									readonly nullable: true;
+									readonly many: false;
+								};
+								readonly updated_at: {
+									readonly dataType: "pg/timestamptz";
+									readonly codecId: "pg/timestamptz-temporal@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+							};
+							primaryKey: { readonly columns: readonly ["aid"] };
+							uniques: readonly [];
+							indexes: readonly [
+								{
+									readonly name: "bilibili_video_metadata_bvid_idx_c12e1092";
+									readonly prefix: "bilibili_video_metadata_bvid_idx";
+									readonly columns: readonly ["bvid"];
+									readonly unique: false;
+								},
+								{
+									readonly name: "bilibili_video_metadata_mid_idx_f4dbf00d";
+									readonly prefix: "bilibili_video_metadata_mid_idx";
+									readonly columns: readonly ["mid"];
+									readonly unique: false;
+								},
+								{
+									readonly name: "bilibili_video_metadata_pubdate_idx_0fd30c15";
+									readonly prefix: "bilibili_video_metadata_pubdate_idx";
+									readonly columns: readonly ["pubdate"];
+									readonly unique: false;
+								},
+							];
+							foreignKeys: readonly [];
+						};
+						readonly bilibili_video_relation: {
+							columns: {
+								readonly captured_at: {
+									readonly dataType: "pg/timestamptz";
+									readonly codecId: "pg/timestamptz-temporal@1";
+									readonly nullable: false;
+									readonly default: {
+										readonly kind: "function";
+										readonly expression: "now()";
+									};
+									readonly many: false;
+								};
+								readonly position: {
+									readonly dataType: "pg/int4";
+									readonly codecId: "pg/int4@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+								readonly source_aid: {
+									readonly dataType: "pg/int8";
+									readonly codecId: "pg/int8@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+								readonly target_aid: {
+									readonly dataType: "pg/int8";
+									readonly codecId: "pg/int8@1";
+									readonly nullable: false;
+									readonly many: false;
+								};
+							};
+							primaryKey: {
+								readonly columns: readonly [
+									"source_aid",
+									"target_aid",
+									"captured_at",
+								];
+							};
+							uniques: readonly [];
+							indexes: readonly [
+								{
+									readonly name: "bilibili_video_relation_captured_at_idx_d9a9e270";
+									readonly prefix: "bilibili_video_relation_captured_at_idx";
+									readonly columns: readonly ["captured_at"];
+									readonly unique: false;
+								},
+								{
+									readonly name: "bilibili_video_relation_source_aid_captured_at_idx_ae145c84";
+									readonly prefix: "bilibili_video_relation_source_aid_captured_at_idx";
+									readonly columns: readonly ["source_aid", "captured_at"];
+									readonly unique: false;
+								},
+								{
+									readonly name: "bilibili_video_relation_target_aid_idx_89f38e54";
+									readonly prefix: "bilibili_video_relation_target_aid_idx";
+									readonly columns: readonly ["target_aid"];
+									readonly unique: false;
+								},
+							];
+							foreignKeys: readonly [];
+						};
 						readonly network_runtime_config: {
 							columns: {
 								readonly config: {
@@ -614,6 +841,14 @@ type ContractBase = Omit<
 	readonly target: "postgres";
 	readonly targetFamily: "sql";
 	readonly roots: {
+		readonly bilibili_video_metadata: {
+			readonly namespace: "public" & NamespaceId;
+			readonly model: "BilibiliVideoMetadata";
+		};
+		readonly bilibili_video_relation: {
+			readonly namespace: "public" & NamespaceId;
+			readonly model: "BilibiliVideoRelation";
+		};
 		readonly network_runtime_config: {
 			readonly namespace: "public" & NamespaceId;
 			readonly model: "NetworkRuntimeConfig";
@@ -631,6 +866,196 @@ type ContractBase = Omit<
 		readonly namespaces: {
 			readonly public: {
 				readonly models: {
+					readonly BilibiliVideoMetadata: {
+						readonly fields: {
+							readonly aid: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int8@1";
+								};
+							};
+							readonly bvid: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly capturedAt: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/timestamptz-temporal@1";
+								};
+							};
+							readonly copyright: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int4@1";
+								};
+							};
+							readonly description: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly duration: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int4@1";
+								};
+							};
+							readonly mid: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int8@1";
+								};
+							};
+							readonly ownerFace: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly ownerName: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly pic: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly pubdate: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/timestamptz-temporal@1";
+								};
+							};
+							readonly rawPayload: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/json@1";
+								};
+							};
+							readonly tags: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/json@1";
+								};
+							};
+							readonly tid: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int4@1";
+								};
+							};
+							readonly title: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly tname: {
+								readonly nullable: true;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/text@1";
+								};
+							};
+							readonly updatedAt: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/timestamptz-temporal@1";
+								};
+							};
+						};
+						readonly relations: Record<string, never>;
+						readonly storage: {
+							readonly table: "bilibili_video_metadata";
+							readonly namespaceId: "public";
+							readonly fields: {
+								readonly aid: { readonly column: "aid" };
+								readonly bvid: { readonly column: "bvid" };
+								readonly capturedAt: { readonly column: "captured_at" };
+								readonly copyright: { readonly column: "copyright" };
+								readonly description: { readonly column: "description" };
+								readonly duration: { readonly column: "duration" };
+								readonly mid: { readonly column: "mid" };
+								readonly ownerFace: { readonly column: "owner_face" };
+								readonly ownerName: { readonly column: "owner_name" };
+								readonly pic: { readonly column: "pic" };
+								readonly pubdate: { readonly column: "pubdate" };
+								readonly rawPayload: { readonly column: "raw_payload" };
+								readonly tags: { readonly column: "tags" };
+								readonly tid: { readonly column: "tid" };
+								readonly title: { readonly column: "title" };
+								readonly tname: { readonly column: "tname" };
+								readonly updatedAt: { readonly column: "updated_at" };
+							};
+						};
+					};
+					readonly BilibiliVideoRelation: {
+						readonly fields: {
+							readonly capturedAt: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/timestamptz-temporal@1";
+								};
+							};
+							readonly position: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int4@1";
+								};
+							};
+							readonly sourceAid: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int8@1";
+								};
+							};
+							readonly targetAid: {
+								readonly nullable: false;
+								readonly type: {
+									readonly kind: "scalar";
+									readonly codecId: "pg/int8@1";
+								};
+							};
+						};
+						readonly relations: Record<string, never>;
+						readonly storage: {
+							readonly table: "bilibili_video_relation";
+							readonly namespaceId: "public";
+							readonly fields: {
+								readonly capturedAt: { readonly column: "captured_at" };
+								readonly position: { readonly column: "position" };
+								readonly sourceAid: { readonly column: "source_aid" };
+								readonly targetAid: { readonly column: "target_aid" };
+							};
+						};
+					};
 					readonly NetworkRuntimeConfig: {
 						readonly fields: {
 							readonly config: {
@@ -900,6 +1325,15 @@ type ContractBase = Omit<
 		readonly executionHash: ExecutionHash;
 		readonly mutations: {
 			readonly defaults: readonly [
+				{
+					readonly onCreate: { readonly id: "instantNow"; readonly kind: "generator" };
+					readonly onUpdate: { readonly id: "instantNow"; readonly kind: "generator" };
+					readonly ref: {
+						readonly entry: "bilibili_video_metadata";
+						readonly field: "updated_at";
+						readonly namespace: "public";
+					};
+				},
 				{
 					readonly onCreate: { readonly id: "instantNow"; readonly kind: "generator" };
 					readonly onUpdate: { readonly id: "instantNow"; readonly kind: "generator" };

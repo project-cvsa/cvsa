@@ -99,6 +99,28 @@ export interface VideoDetailsData {
 	View: VideoDetailView;
 	Card: VideoDetailCard;
 	Tags: VideoDetailTag[];
+	Related?: BilibiliRelatedVideo[];
+	Reply?: unknown;
+}
+
+export interface BilibiliRelatedVideo {
+	aid: number;
+	bvid: string;
+	title: string;
+	pic: string;
+	desc?: string;
+	duration?: number;
+	pubdate?: number;
+	ctime?: number;
+	tid?: number;
+	tname?: string;
+	copyright?: number;
+	owner: VideoOwner;
+	stat: VideoStats;
+	rcmd_reason?: string;
+	cid?: number;
+	dynamic?: string;
+	[key: string]: unknown;
 }
 
 export interface VideoDetailView {

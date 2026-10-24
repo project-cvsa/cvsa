@@ -6,6 +6,8 @@ import {
 	createCrawlerRuntime,
 	createRedisRateLimiter,
 	createSnapshotBatchWorker,
+	DiscoveryRepository,
+	DiscoveryService,
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
 	NetworkRuntimeConfigService,
@@ -39,6 +41,12 @@ export const bilibiliClient = new BilibiliClient({
 
 export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
 export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
+export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
+export const discoveryService = new DiscoveryService(
+	bilibiliClient,
+	discoveryRepository,
+	trackingRepository
+);
 export const snapshotService = new SnapshotService(
 	bilibiliClient,
 	snapshotRepository,

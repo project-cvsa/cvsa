@@ -43,3 +43,42 @@ model VideoTracking {
   @@index([nextSnapshotAt, priority])
   @@map("video_tracking")
 }
+
+model BilibiliVideoMetadata {
+  aid         BigInt    @id
+  bvid        String    @map("bvid")
+  title       String
+  description String?
+  pic         String?   @map("pic")
+  pubdate     DateTime? @map("pubdate")
+  duration    Int       @default(0)
+  mid         BigInt?   @map("mid")
+  ownerName   String?   @map("owner_name")
+  ownerFace   String?   @map("owner_face")
+  tid         Int?      @map("tid")
+  tname       String?   @map("tname")
+  copyright   Int?      @map("copyright")
+  tags        Json?     @map("tags")
+  rawPayload  Json?     @map("raw_payload")
+  capturedAt  DateTime  @default(now()) @map("captured_at")
+  updatedAt   DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+
+  @@index([bvid])
+  @@index([mid])
+  @@index([pubdate])
+  @@map("bilibili_video_metadata")
+}
+
+model BilibiliVideoRelation {
+  sourceAid  BigInt   @map("source_aid")
+  targetAid  BigInt   @map("target_aid")
+  position   Int      @map("position")
+  capturedAt DateTime @default(now()) @map("captured_at")
+
+  @@id([sourceAid, targetAid, capturedAt])
+  @@index([sourceAid, capturedAt])
+  @@index([targetAid])
+  @@index([capturedAt])
+  @@map("bilibili_video_relation")
+}
+

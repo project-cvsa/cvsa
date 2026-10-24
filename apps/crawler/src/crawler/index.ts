@@ -4,6 +4,7 @@ export * from "./network";
 export * from "./bilibili";
 export * from "./tracking";
 export * from "./snapshot";
+export * from "./discovery";
 export * from "./shared/mq";
 export * from "./shared/telemetry";
 export * from "./shared/types";

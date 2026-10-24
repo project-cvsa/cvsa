@@ -6,6 +6,7 @@
 		"dev": "NODE_ENV=development bun --watch src/index.ts",
 		"start": "bun src/index.ts",
 		"seed:tracking": "bun src/scripts/seed-tracking.ts",
+		"migrate:legacy": "bun src/scripts/migrate-legacy.ts",
 		"test": "bun test --concurrent",
 		"lint": "bunx --bun biome lint",
 		"typecheck": "bunx --bun tsc --noEmit"
@@ -13,7 +14,9 @@
 	"devDependencies": {
 		"@cvsa/typescript-config": "workspace:*",
 		"@elysiajs/eden": "^1.4.9",
-		"@types/bun": "latest"
+		"@types/bun": "latest",
+		"@types/pg": "^8.11.11",
+		"pg": "^8.23.0"
 	},
 	"dependencies": {
 		"@cvsa/contracts": "workspace:*",

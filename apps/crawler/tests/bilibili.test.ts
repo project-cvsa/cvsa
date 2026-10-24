@@ -165,4 +165,43 @@ describe("BilibiliClient", () => {
 		expect(view.aid).toBe(100);
 		expect(capturedRequest?.requestType).toBe("bilibili-api");
 	});
+
+	test("fetches related recommended videos", async () => {
+		let requestedUrl = "";
+		const client = new BilibiliClient({
+			request: async (url) => {
+				requestedUrl = url;
+				return {
+					status: 200,
+					headers: {},
+					body: JSON.stringify({
+						code: 0,
+						message: "0",
+						data: [
+							{
+								aid: 88888,
+								bvid: "BV1888888888",
+								title: "Related Video 1",
+								pic: "https://example.com/pic1.jpg",
+								owner: {
+									mid: 123,
+									name: "Author 1",
+									face: "https://example.com/face1.jpg",
+								},
+								stat: { view: 500 },
+							},
+						],
+					}),
+				};
+			},
+		});
+
+		const related = await client.getRelatedVideos(100);
+		expect(related).toHaveLength(1);
+		expect(related[0].aid).toBe(88888);
+		expect(related[0].title).toBe("Related Video 1");
+		const url = new URL(requestedUrl);
+		expect(url.pathname).toBe("/x/web-interface/archive/related");
+		expect(url.searchParams.get("aid")).toBe("100");
+	});
 });

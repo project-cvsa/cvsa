@@ -4,6 +4,14 @@
 	"target": "postgres",
 	"profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
 	"roots": {
+		"bilibili_video_metadata": {
+			"model": "BilibiliVideoMetadata",
+			"namespace": "public"
+		},
+		"bilibili_video_relation": {
+			"model": "BilibiliVideoRelation",
+			"namespace": "public"
+		},
 		"network_runtime_config": {
 			"model": "NetworkRuntimeConfig",
 			"namespace": "public"
@@ -21,6 +29,238 @@
 		"namespaces": {
 			"public": {
 				"models": {
+					"BilibiliVideoMetadata": {
+						"fields": {
+							"aid": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int8@1",
+									"kind": "scalar"
+								}
+							},
+							"bvid": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"capturedAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"copyright": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"description": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"duration": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"mid": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/int8@1",
+									"kind": "scalar"
+								}
+							},
+							"ownerFace": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"ownerName": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"pic": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"pubdate": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"rawPayload": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/json@1",
+									"kind": "scalar"
+								}
+							},
+							"tags": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/json@1",
+									"kind": "scalar"
+								}
+							},
+							"tid": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"title": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"tname": {
+								"nullable": true,
+								"type": {
+									"codecId": "pg/text@1",
+									"kind": "scalar"
+								}
+							},
+							"updatedAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							}
+						},
+						"relations": {},
+						"storage": {
+							"fields": {
+								"aid": {
+									"column": "aid"
+								},
+								"bvid": {
+									"column": "bvid"
+								},
+								"capturedAt": {
+									"column": "captured_at"
+								},
+								"copyright": {
+									"column": "copyright"
+								},
+								"description": {
+									"column": "description"
+								},
+								"duration": {
+									"column": "duration"
+								},
+								"mid": {
+									"column": "mid"
+								},
+								"ownerFace": {
+									"column": "owner_face"
+								},
+								"ownerName": {
+									"column": "owner_name"
+								},
+								"pic": {
+									"column": "pic"
+								},
+								"pubdate": {
+									"column": "pubdate"
+								},
+								"rawPayload": {
+									"column": "raw_payload"
+								},
+								"tags": {
+									"column": "tags"
+								},
+								"tid": {
+									"column": "tid"
+								},
+								"title": {
+									"column": "title"
+								},
+								"tname": {
+									"column": "tname"
+								},
+								"updatedAt": {
+									"column": "updated_at"
+								}
+							},
+							"namespaceId": "public",
+							"table": "bilibili_video_metadata"
+						}
+					},
+					"BilibiliVideoRelation": {
+						"fields": {
+							"capturedAt": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"kind": "scalar"
+								}
+							},
+							"position": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int4@1",
+									"kind": "scalar"
+								}
+							},
+							"sourceAid": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int8@1",
+									"kind": "scalar"
+								}
+							},
+							"targetAid": {
+								"nullable": false,
+								"type": {
+									"codecId": "pg/int8@1",
+									"kind": "scalar"
+								}
+							}
+						},
+						"relations": {},
+						"storage": {
+							"fields": {
+								"capturedAt": {
+									"column": "captured_at"
+								},
+								"position": {
+									"column": "position"
+								},
+								"sourceAid": {
+									"column": "source_aid"
+								},
+								"targetAid": {
+									"column": "target_aid"
+								}
+							},
+							"namespaceId": "public",
+							"table": "bilibili_video_relation"
+						}
+					},
 					"NetworkRuntimeConfig": {
 						"fields": {
 							"config": {
@@ -313,6 +553,181 @@
 			"public": {
 				"entries": {
 					"table": {
+						"bilibili_video_metadata": {
+							"columns": {
+								"aid": {
+									"codecId": "pg/int8@1",
+									"dataType": "pg/int8",
+									"nullable": false
+								},
+								"bvid": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": false
+								},
+								"captured_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"default": {
+										"expression": "now()",
+										"kind": "function"
+									},
+									"nullable": false
+								},
+								"copyright": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": true
+								},
+								"description": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": true
+								},
+								"duration": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"default": {
+										"kind": "literal",
+										"value": 0
+									},
+									"nullable": false
+								},
+								"mid": {
+									"codecId": "pg/int8@1",
+									"dataType": "pg/int8",
+									"nullable": true
+								},
+								"owner_face": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": true
+								},
+								"owner_name": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": true
+								},
+								"pic": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": true
+								},
+								"pubdate": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": true
+								},
+								"raw_payload": {
+									"codecId": "pg/json@1",
+									"dataType": "pg/json",
+									"nullable": true
+								},
+								"tags": {
+									"codecId": "pg/json@1",
+									"dataType": "pg/json",
+									"nullable": true
+								},
+								"tid": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": true
+								},
+								"title": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": false
+								},
+								"tname": {
+									"codecId": "pg/text@1",
+									"dataType": "pg/text",
+									"nullable": true
+								},
+								"updated_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"nullable": false
+								}
+							},
+							"foreignKeys": [],
+							"indexes": [
+								{
+									"columns": ["bvid"],
+									"name": "bilibili_video_metadata_bvid_idx_c12e1092",
+									"prefix": "bilibili_video_metadata_bvid_idx",
+									"unique": false
+								},
+								{
+									"columns": ["mid"],
+									"name": "bilibili_video_metadata_mid_idx_f4dbf00d",
+									"prefix": "bilibili_video_metadata_mid_idx",
+									"unique": false
+								},
+								{
+									"columns": ["pubdate"],
+									"name": "bilibili_video_metadata_pubdate_idx_0fd30c15",
+									"prefix": "bilibili_video_metadata_pubdate_idx",
+									"unique": false
+								}
+							],
+							"primaryKey": {
+								"columns": ["aid"]
+							},
+							"uniques": []
+						},
+						"bilibili_video_relation": {
+							"columns": {
+								"captured_at": {
+									"codecId": "pg/timestamptz-temporal@1",
+									"dataType": "pg/timestamptz",
+									"default": {
+										"expression": "now()",
+										"kind": "function"
+									},
+									"nullable": false
+								},
+								"position": {
+									"codecId": "pg/int4@1",
+									"dataType": "pg/int4",
+									"nullable": false
+								},
+								"source_aid": {
+									"codecId": "pg/int8@1",
+									"dataType": "pg/int8",
+									"nullable": false
+								},
+								"target_aid": {
+									"codecId": "pg/int8@1",
+									"dataType": "pg/int8",
+									"nullable": false
+								}
+							},
+							"foreignKeys": [],
+							"indexes": [
+								{
+									"columns": ["captured_at"],
+									"name": "bilibili_video_relation_captured_at_idx_d9a9e270",
+									"prefix": "bilibili_video_relation_captured_at_idx",
+									"unique": false
+								},
+								{
+									"columns": ["source_aid", "captured_at"],
+									"name": "bilibili_video_relation_source_aid_captured_at_idx_ae145c84",
+									"prefix": "bilibili_video_relation_source_aid_captured_at_idx",
+									"unique": false
+								},
+								{
+									"columns": ["target_aid"],
+									"name": "bilibili_video_relation_target_aid_idx_89f38e54",
+									"prefix": "bilibili_video_relation_target_aid_idx",
+									"unique": false
+								}
+							],
+							"primaryKey": {
+								"columns": ["source_aid", "target_aid", "captured_at"]
+							},
+							"uniques": []
+						},
 						"network_runtime_config": {
 							"columns": {
 								"config": {
@@ -520,12 +935,27 @@
 				"kind": "postgres-schema"
 			}
 		},
-		"storageHash": "ea6e5689e105ddac8d0d98e550a37b93d6656443ceb627b4cc1b7135531f78be"
+		"storageHash": "1cfafcc379f2f7c04e771acfe755573e47ad9733488e7dc4434729ee938a3c52"
 	},
 	"execution": {
-		"executionHash": "4cafa184c9cbe477e129325f6aefe648137d8be63160eefa35dde5df642b808f",
+		"executionHash": "b6ee404e86d424a8516e003d26af5d030dc94076041efd38fb5779ec230c13fa",
 		"mutations": {
 			"defaults": [
+				{
+					"onCreate": {
+						"id": "instantNow",
+						"kind": "generator"
+					},
+					"onUpdate": {
+						"id": "instantNow",
+						"kind": "generator"
+					},
+					"ref": {
+						"entry": "bilibili_video_metadata",
+						"field": "updated_at",
+						"namespace": "public"
+					}
+				},
 				{
 					"onCreate": {
 						"id": "instantNow",

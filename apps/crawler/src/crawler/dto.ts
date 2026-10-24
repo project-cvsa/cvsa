@@ -82,3 +82,57 @@ export type VideoTrackingDto = z.infer<typeof VideoTrackingDtoSchema>;
 export type RegisterTrackingVideosRequest = z.infer<typeof RegisterTrackingVideosRequestSchema>;
 export type RegisterTrackingVideosResponse = z.infer<typeof RegisterTrackingVideosResponseSchema>;
 export type PromoteTrackingVideoRequest = z.infer<typeof PromoteTrackingVideoRequestSchema>;
+
+export const DiscoverySweepRequestSchema = z.object({
+	keywords: z.array(z.string().min(1)).min(1).max(50).optional(),
+	orders: z
+		.array(z.enum(["totalrank", "click", "pubdate", "dm", "stow"]))
+		.min(1)
+		.max(5)
+		.optional(),
+	pagesPerQuery: z.number().int().min(1).max(10).optional(),
+	categoryId: z.number().int().positive().optional(),
+});
+
+export const DiscoverySweepResponseSchema = z.object({
+	totalDiscovered: z.number().int().nonnegative(),
+	newTracked: z.number().int().nonnegative(),
+});
+
+export const ProcessRecommendationsResponseSchema = z.object({
+	sourceAid: z.string(),
+	relationsCount: z.number().int().nonnegative(),
+	newTracked: z.number().int().nonnegative(),
+});
+
+export const BilibiliVideoMetadataDtoSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	title: z.string(),
+	description: z.string().nullable(),
+	pic: z.string().nullable(),
+	pubdate: z.string().nullable(),
+	duration: z.number().int(),
+	mid: z.string().nullable(),
+	ownerName: z.string().nullable(),
+	ownerFace: z.string().nullable(),
+	tid: z.number().int().nullable(),
+	tname: z.string().nullable(),
+	copyright: z.number().int().nullable(),
+	tags: z.unknown().nullable(),
+	capturedAt: z.string(),
+	updatedAt: z.string(),
+});
+
+export const BilibiliVideoRelationDtoSchema = z.object({
+	sourceAid: z.string(),
+	targetAid: z.string(),
+	position: z.number().int().nonnegative(),
+	capturedAt: z.string(),
+});
+
+export type DiscoverySweepRequest = z.infer<typeof DiscoverySweepRequestSchema>;
+export type DiscoverySweepResponse = z.infer<typeof DiscoverySweepResponseSchema>;
+export type ProcessRecommendationsResponse = z.infer<typeof ProcessRecommendationsResponseSchema>;
+export type BilibiliVideoMetadataDto = z.infer<typeof BilibiliVideoMetadataDtoSchema>;
+export type BilibiliVideoRelationDto = z.infer<typeof BilibiliVideoRelationDtoSchema>;

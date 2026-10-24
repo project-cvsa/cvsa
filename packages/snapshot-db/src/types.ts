@@ -41,3 +41,5 @@ export function toJson(value: unknown): JsonValue {
 export type VideoSnapshot = FieldOutputTypes["public"]["VideoSnapshot"];
 export type NetworkRuntimeConfig = FieldOutputTypes["public"]["NetworkRuntimeConfig"];
 export type VideoTracking = FieldOutputTypes["public"]["VideoTracking"];
+export type BilibiliVideoMetadata = FieldOutputTypes["public"]["BilibiliVideoMetadata"];
+export type BilibiliVideoRelation = FieldOutputTypes["public"]["BilibiliVideoRelation"];

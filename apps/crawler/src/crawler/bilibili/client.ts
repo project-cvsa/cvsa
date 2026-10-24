@@ -3,6 +3,7 @@ import { BilibiliSession } from "./session";
 import { createQueryVerificationId, signWbiQuery, toUnixTimestamp } from "./signing";
 import type {
 	BilibiliClientOptions,
+	BilibiliRelatedVideo,
 	BilibiliRequest,
 	BilibiliResponse,
 	GetTopicFeedOptions,
@@ -153,6 +154,44 @@ export class BilibiliClient {
 				`Bilibili video details request failed: ${response.code} ${response.message}`
 			);
 			appLogger.error("Bilibili video details API error", {
+				component: "bilibili-client",
+				identifier: idStr,
+				code: response.code,
+				error,
+			});
+			throw error;
+		}
+		return response.data;
+	}
+
+	/**
+	 * Fetch related recommended videos for a video (up to 40 items).
+	 */
+	async getRelatedVideos(identifier: number | bigint | string): Promise<BilibiliRelatedVideo[]> {
+		const byAid = typeof identifier === "number" || typeof identifier === "bigint";
+		if (byAid && (!Number.isSafeInteger(Number(identifier)) || Number(identifier) <= 0)) {
+			throw new Error("aid must be a positive safe integer");
+		}
+		const idStr = String(identifier);
+		if (!byAid && !/^BV[0-9A-Za-z]{10}$/.test(idStr)) {
+			throw new Error("bvid must be a valid BV identifier");
+		}
+
+		const query = new URLSearchParams(byAid ? { aid: idStr } : { bvid: idStr });
+		const response = await this.session.request<BilibiliResponse<BilibiliRelatedVideo[]>>(
+			`${API_ORIGIN}/x/web-interface/archive/related?${query}`,
+			{
+				headers: {
+					Origin: "https://www.bilibili.com",
+					Referer: "https://www.bilibili.com/",
+				},
+			}
+		);
+		if (response.code !== 0 || !Array.isArray(response.data)) {
+			const error = new Error(
+				`Bilibili related videos request failed: ${response.code} ${response.message}`
+			);
+			appLogger.error("Bilibili related videos API error", {
 				component: "bilibili-client",
 				identifier: idStr,
 				code: response.code,
