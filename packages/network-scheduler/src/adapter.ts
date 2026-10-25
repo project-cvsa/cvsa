@@ -3,6 +3,7 @@ import type { NetworkAdapterConfig } from "./dto";
 import type {
 	NetworkApplicationErrorClassifier,
 	NetworkAdapter,
+	NetworkAttemptObserver,
 	NetworkRequest,
 	NetworkResponse,
 	NetworkTransport,
@@ -98,16 +99,30 @@ class AxiosNetworkTransport implements NetworkTransport {
 		private readonly options: AxiosNetworkTransportOptions
 	) {}
 
-	async execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkTransportResponse> {
+	async execute(
+		request: NetworkRequest,
+		proxyUrl?: string,
+		observer?: NetworkAttemptObserver
+	): Promise<NetworkTransportResponse> {
+		const config = createAxiosConfig(request, proxyUrl);
 		const startedAt = performance.now();
+		let attemptStarted = false;
+		let response: NetworkTransportResponse = {
+			status: 0,
+			headers: {},
+			body: "",
+			durationMs: 0,
+			errorCode: "NETWORK_FAILURE",
+		};
 
 		try {
-			const config = createAxiosConfig(request, proxyUrl);
+			attemptStarted = true;
+			notifyAttemptStarted(observer);
 			const result: AxiosResponse<string> = await this.axiosInstance(config);
 			const body = typeof result.data === "string" ? result.data : "";
 			const headers = responseHeaders(result.headers);
 
-			return {
+			response = {
 				status: result.status,
 				headers,
 				body,
@@ -120,14 +135,37 @@ class AxiosNetworkTransport implements NetworkTransport {
 				),
 			};
 		} catch (error) {
-			return {
+			response = {
 				status: 0,
 				headers: {},
 				body: "",
 				durationMs: performance.now() - startedAt,
 				errorCode: toTransportErrorCode(error),
 			};
+		} finally {
+			if (attemptStarted) notifyAttemptCompleted(observer, response);
 		}
+
+		return response;
+	}
+}
+
+function notifyAttemptStarted(observer: NetworkAttemptObserver | undefined): void {
+	try {
+		observer?.started();
+	} catch {
+		// Metrics must not change the HTTP request result.
+	}
+}
+
+function notifyAttemptCompleted(
+	observer: NetworkAttemptObserver | undefined,
+	response: NetworkTransportResponse
+): void {
+	try {
+		observer?.completed(response);
+	} catch {
+		// Metrics must not change the HTTP request result.
 	}
 }
 
@@ -148,10 +186,13 @@ class ConfiguredNetworkAdapter implements NetworkAdapter {
 		this.id = config.id;
 	}
 
-	async execute(request: NetworkRequest): Promise<NetworkResponse> {
+	async execute(
+		request: NetworkRequest,
+		observer?: NetworkAttemptObserver
+	): Promise<NetworkResponse> {
 		const proxyUrl = this.config.type === "direct" ? undefined : this.config.proxyUrl;
 
-		const response = await this.transport.execute(request, proxyUrl);
+		const response = await this.transport.execute(request, proxyUrl, observer);
 
 		return { ...response, adapterId: this.id };
 	}

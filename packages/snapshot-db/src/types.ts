@@ -42,4 +42,9 @@ export type VideoSnapshot = FieldOutputTypes["public"]["VideoSnapshot"];
 export type NetworkRuntimeConfig = FieldOutputTypes["public"]["NetworkRuntimeConfig"];
 export type VideoTracking = FieldOutputTypes["public"]["VideoTracking"];
 export type BilibiliVideoMetadata = FieldOutputTypes["public"]["BilibiliVideoMetadata"];
+export type BilibiliVideoMetadataHistory =
+	FieldOutputTypes["public"]["BilibiliVideoMetadataHistory"];
 export type BilibiliVideoRelation = FieldOutputTypes["public"]["BilibiliVideoRelation"];
+export type CrawlerRuntimeConfig = FieldOutputTypes["public"]["CrawlerRuntimeConfig"];
+export type DiscoverySample = FieldOutputTypes["public"]["DiscoverySample"];
+export type CrawlerStatsRollup = FieldOutputTypes["public"]["CrawlerStatsRollup"];

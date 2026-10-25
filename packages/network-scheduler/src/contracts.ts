@@ -1,3 +1,13 @@
+import type { NetworkAttemptObserver } from "./telemetry";
+
+// Re-exported so the adapter, scheduler and transport contracts can be
+// satisfied from a single import surface without leaking the telemetry module.
+export type {
+	NetworkAttemptContext,
+	NetworkAttemptObserver,
+	NetworkMetricAttributes,
+} from "./telemetry";
+
 export type NetworkErrorCode =
 	| "NO_AVAILABLE_ADAPTER"
 	| "NETWORK_FAILURE"
@@ -73,11 +83,15 @@ export interface NetworkDelegate {
 
 export interface NetworkAdapter {
 	readonly id: string;
-	execute(request: NetworkRequest): Promise<NetworkResponse>;
+	execute(request: NetworkRequest, observer?: NetworkAttemptObserver): Promise<NetworkResponse>;
 }
 
 export interface NetworkTransport {
-	execute(request: NetworkRequest, proxyUrl?: string): Promise<NetworkTransportResponse>;
+	execute(
+		request: NetworkRequest,
+		proxyUrl?: string,
+		observer?: NetworkAttemptObserver
+	): Promise<NetworkTransportResponse>;
 }
 
 export interface NetworkRateLimiter {

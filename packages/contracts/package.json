@@ -6,6 +6,7 @@
 	"module": "src/index.ts",
 	"scripts": {
 		"lint": "bunx --bun biome lint",
+		"test": "bun test",
 		"typecheck": "bunx --bun tsc --noEmit"
 	},
 	"devDependencies": {
@@ -19,6 +20,9 @@
 		".": "./src/index.ts",
 		"./errors": "./src/errors.ts",
 		"./song": "./src/song.ts",
-		"./crawler": "./src/crawler.ts"
+		"./crawler": "./src/crawler.ts",
+		"./crawler/inference": "./src/crawler/inference.ts",
+		"./crawler/policies": "./src/crawler/policies.ts",
+		"./crawler/operations": "./src/crawler/operations.ts"
 	}
 }

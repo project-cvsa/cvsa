@@ -3,7 +3,7 @@ import { Temporal, toJson } from "@cvsa/db";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
-import { CatalogOutbox } from "../outbox";
+import { recordOutboxEvent } from "../outbox";
 import {
 	assertCanCreateEngine,
 	assertCanDeleteEngine,
@@ -57,7 +57,7 @@ export class EngineWriter {
 			new: toJson(engine),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "SvsEngine",
 			aggregateId: engine.id,
 			eventType: "EngineCreated",
@@ -101,7 +101,7 @@ export class EngineWriter {
 			new: toJson(updated),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "SvsEngine",
 			aggregateId: id,
 			eventType: "EngineUpdated",
@@ -131,7 +131,7 @@ export class EngineWriter {
 			old: toJson(existing),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "SvsEngine",
 			aggregateId: id,
 			eventType: "EngineDeleted",

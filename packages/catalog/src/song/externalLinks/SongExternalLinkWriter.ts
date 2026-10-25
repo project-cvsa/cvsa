@@ -3,7 +3,7 @@ import { toJson, toInstant } from "@cvsa/db";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../../cache";
-import { CatalogOutbox } from "../../outbox";
+import { recordOutboxEvent } from "../../outbox";
 import { assertCanManageExternalLinks } from "../songPolicy";
 import type {
 	SongExternalLinkCreateInput,
@@ -76,7 +76,7 @@ export class SongExternalLinkWriter {
 			new: toJson(link),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.external_link_created",
@@ -128,7 +128,7 @@ export class SongExternalLinkWriter {
 			new: toJson(updated),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.external_link_updated",
@@ -171,7 +171,7 @@ export class SongExternalLinkWriter {
 			old: toJson(existing),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.external_link_deleted",

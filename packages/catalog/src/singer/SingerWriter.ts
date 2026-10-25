@@ -3,7 +3,7 @@ import { Temporal, toJson } from "@cvsa/db";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
-import { CatalogOutbox } from "../outbox";
+import { recordOutboxEvent } from "../outbox";
 import {
 	assertCanCreateSinger,
 	assertCanDeleteSinger,
@@ -60,7 +60,7 @@ export class SingerWriter {
 			new: toJson(singer),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "Singer",
 			aggregateId: singer.id,
 			eventType: "SingerCreated",
@@ -107,7 +107,7 @@ export class SingerWriter {
 			new: toJson(updated),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "Singer",
 			aggregateId: id,
 			eventType: "SingerUpdated",
@@ -137,7 +137,7 @@ export class SingerWriter {
 			old: toJson(existing),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "Singer",
 			aggregateId: id,
 			eventType: "SingerDeleted",

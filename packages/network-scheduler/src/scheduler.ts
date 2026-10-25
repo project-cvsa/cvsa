@@ -1,7 +1,11 @@
 import { NetworkSchedulerError } from "./errors";
 import { createNoopNetworkSchedulerLogger, type NetworkSchedulerLogger } from "./logger";
 import { createNoopNetworkSchedulerTracer, type NetworkSchedulerTracer } from "./tracer";
-import { createNoopNetworkMetrics, type NetworkMetrics } from "./telemetry";
+import {
+	createNoopNetworkMetrics,
+	type NetworkAttemptObserver,
+	type NetworkMetrics,
+} from "./telemetry";
 import type { NetworkAdapterConfig, NetworkRuntimeConfig } from "./dto";
 import {
 	HEALTH_AFFECTING_NETWORK_ERROR_CODES,
@@ -14,6 +18,7 @@ import {
 	type NetworkRateLimiter,
 	type NetworkRequest,
 	type NetworkResponse,
+	type NetworkTransportResponse,
 } from "./contracts";
 
 const SOFT_RESERVE_WINDOW_SECONDS = 1;
@@ -146,101 +151,142 @@ export class NetworkScheduler implements NetworkDelegate {
 		state: SchedulerState,
 		request: NetworkRequest
 	): Promise<NetworkResponse> {
-		const requestType = request.requestType;
-		const binding = requestType
-			? state.config.bindings?.find((item) => item.requestType === requestType)
-			: undefined;
-
-		// A caller that names a request type must hit an explicit binding. Falling
-		// back to every adapter would silently send work to exits that were never
-		// authorized for that traffic class.
-		if (requestType && !binding) {
-			throw new NetworkSchedulerError(
-				`No adapter binding for request type: ${requestType}`,
-				"NO_AVAILABLE_ADAPTER",
-				503
-			);
-		}
-
-		const adapterIds = binding
-			? binding.adapterIds
-			: state.config.adapters.map((adapter) => adapter.id);
-
-		const candidates = adapterIds
-			.map((id) => this.getCandidate(state, id))
-			.filter((candidate): candidate is Candidate => candidate !== undefined);
-
-		if (candidates.length === 0) {
-			throw new NetworkSchedulerError(
-				"No available network adapter for request type",
-				"NO_AVAILABLE_ADAPTER",
-				503
-			);
-		}
-
-		if (requestType && !(await this.admitSoftReserve(state, requestType))) {
-			return this.rateLimitedResponse();
-		}
-
-		const effectiveRequestType = requestType ?? "default";
-
-		let lastResponse: NetworkResponse | undefined;
 		let attempts = 0;
-		let budgetRefused = false;
-		while (candidates.length > 0) {
-			const candidate = this.takeWeightedCandidate(state, candidates);
+		try {
+			const requestType = request.requestType;
+			const binding = requestType
+				? state.config.bindings?.find((item) => item.requestType === requestType)
+				: undefined;
 
-			// getCandidate() is a synchronous pre-filter; the authoritative claim on
-			// a half-open probe happens here, once the candidate is actually picked.
-			if (!this.beginAttempt(state, candidate.config.id)) continue;
-
-			attempts += 1;
-
-			if (!(await this.consumeAdapterLimits(candidate.config))) {
-				this.releaseHalfOpenProbe(state, candidate.config.id);
-				budgetRefused = true;
-				continue;
+			// A caller that names a request type must hit an explicit binding. Falling
+			// back to every adapter would silently send work to exits that were never
+			// authorized for that traffic class.
+			if (requestType && !binding) {
+				throw new NetworkSchedulerError(
+					`No adapter binding for request type: ${requestType}`,
+					"NO_AVAILABLE_ADAPTER",
+					503
+				);
 			}
 
-			let response: NetworkResponse;
-			try {
-				response = await candidate.adapter.execute(request);
-			} catch (error) {
-				// Adapters are expected to translate transport failures into error
-				// codes. If one throws anyway, record the failure so a claimed
-				// half-open probe is never left dangling, then surface the error.
-				this.updateHealth(state, candidate.config.id, "NETWORK_FAILURE");
-				throw error;
+			const adapterIds = binding
+				? binding.adapterIds
+				: state.config.adapters.map((adapter) => adapter.id);
+
+			const candidates = adapterIds
+				.map((id) => this.getCandidate(state, id))
+				.filter((candidate): candidate is Candidate => candidate !== undefined);
+
+			if (candidates.length === 0) {
+				throw new NetworkSchedulerError(
+					"No available network adapter for request type",
+					"NO_AVAILABLE_ADAPTER",
+					503
+				);
 			}
 
-			this.updateHealth(state, candidate.config.id, response.errorCode);
-			this.recordRequest(response, effectiveRequestType, attempts);
-			this.logger.info("Network request completed", {
-				component: "network-scheduler",
-				adapterId: candidate.adapter.id,
-				requestType: effectiveRequestType,
-				durationMs: response.durationMs,
-				attempts,
-				errorCode: response.errorCode,
-			});
+			if (requestType && !(await this.admitSoftReserve(state, requestType))) {
+				return this.rateLimitedResponse();
+			}
 
-			if (response.errorCode === undefined) return response;
-			if (!RETRYABLE_NETWORK_ERROR_CODES.has(response.errorCode)) return response;
-			lastResponse = response;
+			const effectiveRequestType = requestType ?? "default";
+
+			let lastResponse: NetworkResponse | undefined;
+			let budgetRefused = false;
+			while (candidates.length > 0) {
+				const candidate = this.takeWeightedCandidate(state, candidates);
+
+				// getCandidate() is a synchronous pre-filter; the authoritative claim on
+				// a half-open probe happens here, once the candidate is actually picked.
+				if (!this.beginAttempt(state, candidate.config.id)) continue;
+
+				if (!(await this.consumeAdapterLimits(candidate.config))) {
+					this.releaseHalfOpenProbe(state, candidate.config.id);
+					budgetRefused = true;
+					continue;
+				}
+
+				attempts += 1;
+				const observer =
+					this.metrics.createAttemptObserver?.({
+						request,
+						adapterId: candidate.config.id,
+						adapterType: candidate.config.type,
+					}) ?? this.createDefaultAttemptObserver();
+
+				let response: NetworkResponse;
+				try {
+					response = await candidate.adapter.execute(request, observer);
+				} catch (error) {
+					// Adapters are expected to translate transport failures into error
+					// codes. If one throws anyway, record the failure so a claimed
+					// half-open probe is never left dangling, then surface the error.
+					this.updateHealth(state, candidate.config.id, "NETWORK_FAILURE");
+					throw error;
+				}
+
+				this.updateHealth(state, candidate.config.id, response.errorCode);
+				this.logger.info("Network request completed", {
+					component: "network-scheduler",
+					adapterId: candidate.adapter.id,
+					requestType: effectiveRequestType,
+					durationMs: response.durationMs,
+					attempts,
+					errorCode: response.errorCode,
+				});
+
+				if (response.errorCode === undefined) return response;
+				if (!RETRYABLE_NETWORK_ERROR_CODES.has(response.errorCode)) return response;
+				lastResponse = response;
+			}
+			if (lastResponse) return lastResponse;
+
+			// No candidate could be attempted. A refusal by an adapter's own budget is a
+			// "retry later" answer, not a missing adapter, so callers can tell the two
+			// apart: 429 with `RATE_LIMITED` when a budget turned the request away, and
+			// the original 503 when every candidate failed its circuit breaker instead.
+			if (budgetRefused) return this.rateLimitedResponse();
+
+			throw new NetworkSchedulerError(
+				"No available network adapter",
+				"NO_AVAILABLE_ADAPTER",
+				503
+			);
+		} finally {
+			this.metrics.scheduleAttempts.record(attempts, {});
 		}
-		if (lastResponse) return lastResponse;
+	}
 
-		// No candidate could be attempted. A refusal by an adapter's own budget is a
-		// "retry later" answer, not a missing adapter, so callers can tell the two
-		// apart: 429 with `RATE_LIMITED` when a budget turned the request away, and
-		// the original 503 when every candidate failed its circuit breaker instead.
-		if (budgetRefused) return this.rateLimitedResponse();
+	private createDefaultAttemptObserver(): NetworkAttemptObserver {
+		let started = false;
+		let completed = false;
+		return {
+			started: () => {
+				if (started) return;
+				started = true;
+				this.metrics.requests.add(1, {});
+				this.metrics.requestsInFlight?.add(1, {});
+			},
+			completed: (response) => {
+				if (!started || completed) return;
+				completed = true;
+				const outcome = this.requestOutcome(response);
+				try {
+					this.metrics.requestDurationMs.record(response.durationMs, { outcome });
+				} finally {
+					this.metrics.requestsInFlight?.add(-1, {});
+				}
+			},
+		};
+	}
 
-		throw new NetworkSchedulerError(
-			"No available network adapter",
-			"NO_AVAILABLE_ADAPTER",
-			503
-		);
+	private requestOutcome(response: NetworkTransportResponse): string {
+		if (response.errorCode === undefined) return "success";
+		if (response.errorCode === "REQUEST_TIMEOUT") return "timeout";
+		if (response.errorCode.startsWith("APPLICATION_")) return "business_error";
+		if (response.errorCode.startsWith("HTTP_")) return "http_error";
+		if (response.errorCode === "NETWORK_FAILURE") return "connection_error";
+		return "other_error";
 	}
 
 	/**
@@ -499,18 +545,5 @@ export class NetworkScheduler implements NetworkDelegate {
 		const selected = candidates[selectedIndex];
 		candidates.splice(selectedIndex, 1);
 		return selected;
-	}
-
-	private recordRequest(response: NetworkResponse, requestType: string, attempts: number): void {
-		this.metrics.requests.add(1, {
-			adapterId: response.adapterId,
-			requestType,
-			errorCode: response.errorCode ?? "NONE",
-		});
-		this.metrics.requestDurationMs.record(response.durationMs, {
-			adapterId: response.adapterId,
-			requestType,
-		});
-		this.metrics.scheduleAttempts.record(attempts, { requestType });
 	}
 }

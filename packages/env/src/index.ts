@@ -3,6 +3,8 @@ import { z } from "zod";
 
 export const env = createEnv({
 	server: {
+		HOST: z.string().optional(),
+		PORT: z.coerce.number().int().min(1).max(65_535).optional().default(16_412),
 		DATABASE_URL: z.url().optional(),
 		NODE_ENV: z.enum(["development", "test", "production"]).optional(),
 		MEILI_MASTER_KEY: z.string().optional().default(""),
@@ -10,10 +12,15 @@ export const env = createEnv({
 
 		OTEL_SERVICE_NAME: z.string().optional().default("cvsa-backend"),
 		OTEL_SERVICE_VERSION: z.string().optional().default("0.0.0"),
+		/** Collector endpoint. When unset, tracing is disabled entirely. */
+		OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
 
 		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).optional().default("info"),
 
 		REDIS_URL: z.string().optional().default("redis://127.0.0.1:6379"),
+
+		/** Embedding service used by search indexing. */
+		EMBEDDING_API_URL: z.url().optional().default("http://127.0.0.1:14900"),
 
 		COOKIE_DOMAIN: z.string().optional(),
 		BETTER_AUTH_SECRET: z.string().optional(),
@@ -49,7 +56,17 @@ export const crawlerEnv = createEnv({
 		OTEL_SERVICE_VERSION: z.string().default("0.0.0"),
 		CONTROL_API_HOST: z.string().default("127.0.0.1"),
 		CONTROL_API_PORT: z.coerce.number().int().min(1).max(65_535).default(16_413),
+		CONTROL_API_URL: z.url().optional(),
 		CONTROL_API_TOKEN: z.string().min(1).optional(),
+		/**
+		 * Classifier service that labels a candidate as a VOCALOID/SVS song.
+		 * In production this is the `inference` service (`apps/inference`,
+		 * ONNX Akari model on port 8544); it replaces the legacy `ml/api`
+		 * FastAPI process while keeping the same `/classify` + `/health`
+		 * contract.
+		 */
+		ML_API_URL: z.url().default("http://127.0.0.1:8544"),
+		ML_API_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
 	},
 	runtimeEnv: import.meta.env,
 	emptyStringAsUndefined: true,

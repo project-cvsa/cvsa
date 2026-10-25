@@ -3,7 +3,7 @@ import { toJson, toInstant } from "@cvsa/db";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../../cache";
-import { CatalogOutbox } from "../../outbox";
+import { recordOutboxEvent } from "../../outbox";
 import { assertCanManageLyrics } from "../songPolicy";
 import type { SongId, SongLyricsCreateInput, SongLyricsUpdateInput } from "../songTypes";
 
@@ -65,7 +65,7 @@ export class SongLyricsWriter {
 			new: toJson(lyric),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.lyric_created",
@@ -112,7 +112,7 @@ export class SongLyricsWriter {
 			new: toJson(updated),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.lyric_updated",
@@ -155,7 +155,7 @@ export class SongLyricsWriter {
 			old: toJson(existing),
 		});
 
-		await CatalogOutbox.recordEvent(tx, {
+		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.lyric_deleted",

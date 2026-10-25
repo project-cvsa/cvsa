@@ -57,7 +57,9 @@
         "@cvsa/logger": "workspace:*",
         "@cvsa/observability": "workspace:*",
         "@cvsa/snapshot-db": "workspace:*",
+        "@huggingface/transformers": "^4.0.1",
         "elysia": "^1.4.26",
+        "onnxruntime-node": "1.30.0",
       },
       "devDependencies": {
         "@cvsa/typescript-config": "workspace:*",
@@ -65,6 +67,19 @@
         "@types/bun": "latest",
         "@types/pg": "^8.11.11",
         "pg": "^8.23.0",
+      },
+    },
+    "apps/inference": {
+      "name": "@cvsa/inference",
+      "dependencies": {
+        "@cvsa/contracts": "workspace:*",
+        "@huggingface/transformers": "^4.0.1",
+        "elysia": "^1.4.30",
+        "onnxruntime-node": "1.30.0",
+      },
+      "devDependencies": {
+        "@cvsa/typescript-config": "workspace:*",
+        "@types/bun": "1.4.2",
       },
     },
     "apps/web": {
@@ -560,6 +575,8 @@
     "@cvsa/embedding": ["@cvsa/embedding@workspace:packages/embedding"],
 
     "@cvsa/env": ["@cvsa/env@workspace:packages/env"],
+
+    "@cvsa/inference": ["@cvsa/inference@workspace:apps/inference"],
 
     "@cvsa/logger": ["@cvsa/logger@workspace:packages/logger"],
 
