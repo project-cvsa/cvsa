@@ -1,0 +1,24 @@
+---
+import Layout from "@layouts/Layout.astro";
+import Header from "@layouts/Header.astro";
+import CrawlerDashboard from "@components/pages/admin/CrawlerDashboard";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+
+const user = Astro.locals.user;
+if (!user) {
+	return Astro.redirect(`/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+if (user.roleName !== "OWNER" && user.roleName !== "admin") {
+	return Astro.redirect("/403");
+}
+---
+
+<Layout title="Crawler Control Panel - CVSA">
+	<Header />
+	<main class="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+		<CrawlerDashboard client:load />
+	</main>
+</Layout>

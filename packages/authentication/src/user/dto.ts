@@ -20,6 +20,7 @@ export const SignupRequestSchema = z.object({
 	password: z.string().min(8),
 	displayName: z.string().min(1).max(100).optional().nullable(),
 	email: z.email().optional().nullable(),
+	inviteCode: z.string().optional().nullable(),
 });
 
 export const SignupUserInfoSchema = z.object({
@@ -37,6 +38,8 @@ export const CurrentUserInfoSchema = z.object({
 	email: z.email().optional().nullable(),
 	createdAt: z.iso.datetime().nullish(),
 	image: z.string().optional().nullable(),
+	roleId: z.number().nullish(),
+	roleName: z.string().nullish(),
 });
 
 export const SignupResponseSchema = z.object({
@@ -81,7 +84,10 @@ export function betterAuthToSignupUserInfoDto(
 	};
 }
 
-export function betterAuthToCurrentUserInfoDto(user: BetterAuthUser): CurrentUserInfoDto {
+export function betterAuthToCurrentUserInfoDto(
+	user: BetterAuthUser,
+	roleName?: string | null
+): CurrentUserInfoDto {
 	return {
 		id: user.id,
 		username: user.username ?? "",
@@ -89,6 +95,8 @@ export function betterAuthToCurrentUserInfoDto(user: BetterAuthUser): CurrentUse
 		email: user.email,
 		createdAt: user.createdAt.toISOString() ?? null,
 		image: user.image ?? null,
+		roleId: user.roleId ?? null,
+		roleName: roleName ?? null,
 	};
 }
 

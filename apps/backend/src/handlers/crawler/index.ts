@@ -20,6 +20,7 @@ import {
 	type RegisterTrackingVideosResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
+import { adminAuthMiddleware } from "@/middlewares";
 import { callCrawlerApi } from "./client";
 
 const ActionQueuedResponseSchema = z.object({
@@ -28,6 +29,7 @@ const ActionQueuedResponseSchema = z.object({
 });
 
 export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
+	.use(adminAuthMiddleware)
 	.get(
 		"/status",
 		async (): Promise<CrawlerStatusDto> => {

@@ -1,7 +1,11 @@
 import { defineMiddleware } from "astro:middleware";
 import { resolveCurrentAuth } from "@lib/auth/server";
-import { ANONYMOUS_ONLY_ROUTES, AUTH_REQUIRED_ROUTES } from "@lib/auth/routes";
-import { requireAnonymous, requireUser } from "@lib/auth/guards";
+import {
+	ADMIN_REQUIRED_ROUTES,
+	ANONYMOUS_ONLY_ROUTES,
+	AUTH_REQUIRED_ROUTES,
+} from "@lib/auth/routes";
+import { requireAdmin, requireAnonymous, requireUser } from "@lib/auth/guards";
 
 /**
  * Resolves the session once per request, exposes it via `Astro.locals`, then
@@ -16,9 +20,11 @@ export const authMiddleware = defineMiddleware(async (context, next) => {
 	const pathname = context.url.pathname;
 	const guard = ANONYMOUS_ONLY_ROUTES.some((route) => route.test(pathname))
 		? requireAnonymous(context, user)
-		: AUTH_REQUIRED_ROUTES.some((route) => route.test(pathname))
-			? requireUser(context, user)
-			: null;
+		: ADMIN_REQUIRED_ROUTES.some((route) => route.test(pathname))
+			? requireAdmin(context, user)
+			: AUTH_REQUIRED_ROUTES.some((route) => route.test(pathname))
+				? requireUser(context, user)
+				: null;
 	if (guard) {
 		return guard;
 	}

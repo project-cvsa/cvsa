@@ -1,6 +1,7 @@
 import {
 	auth,
 	betterAuthToCurrentUserInfoDto,
+	getRoleNameById,
 	type AuthSessionDto,
 	type CurrentUserInfoDto,
 } from "@cvsa/authentication";
@@ -31,7 +32,11 @@ export async function resolveCurrentAuth(request: Request): Promise<CurrentAuth>
 		if (!session) {
 			return { user: null, session: null };
 		}
-		return { user: betterAuthToCurrentUserInfoDto(session.user), session: session.session };
+		const roleName = session.user.roleId ? await getRoleNameById(session.user.roleId) : null;
+		return {
+			user: betterAuthToCurrentUserInfoDto(session.user, roleName),
+			session: session.session,
+		};
 	} catch (error) {
 		console.warn("[auth] failed to resolve session, treating visitor as anonymous", error);
 		return { user: null, session: null };

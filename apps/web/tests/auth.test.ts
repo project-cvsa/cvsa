@@ -9,16 +9,18 @@ vi.mock("@cvsa/authentication", () => ({
 		},
 	},
 	betterAuthToCurrentUserInfoDto: vi.fn(),
+	getRoleNameById: vi.fn(),
 }));
 
 import {
 	auth,
 	betterAuthToCurrentUserInfoDto,
+	getRoleNameById,
 	type CurrentUserInfoDto,
 } from "@cvsa/authentication";
 import { resolveCurrentAuth, resolveCurrentUser } from "@lib/auth/server";
-import { ANONYMOUS_ONLY_ROUTES, AUTH_REQUIRED_ROUTES } from "@lib/auth/routes";
-import { loginRedirectTarget } from "@lib/auth/guards";
+import { ADMIN_REQUIRED_ROUTES, ANONYMOUS_ONLY_ROUTES, AUTH_REQUIRED_ROUTES } from "@lib/auth/routes";
+import { loginRedirectTarget, requireAdmin } from "@lib/auth/guards";
 
 // Types keep resolving to the real better-auth session even though the
 // runtime module is mocked above.
@@ -56,6 +58,8 @@ const mappedUser: CurrentUserInfoDto = {
 	email: "alice@example.com",
 	createdAt: "2026-01-01T00:00:00.000Z",
 	image: null,
+	roleId: null,
+	roleName: null,
 };
 
 const createRequest = (headers: Record<string, string>): Request => {
@@ -97,7 +101,7 @@ describe("resolveCurrentAuth()", () => {
 
 		expect(result.user).toEqual(mappedUser);
 		expect(result.session).toEqual(session);
-		expect(toDtoMock).toHaveBeenCalledWith(sessionUser);
+		expect(toDtoMock).toHaveBeenCalledWith(sessionUser, null);
 		// Headers reach better-auth untouched so it resolves its own cookie name.
 		expect(getSessionMock).toHaveBeenCalledWith({ headers: request.headers });
 	});
@@ -149,6 +153,60 @@ describe("route rule tables", () => {
 		for (const path of ["/", "/login/extra", "/register/", "/song/1", "/logout"]) {
 			expect(matches(ANONYMOUS_ONLY_ROUTES, path)).toBe(false);
 		}
+	});
+
+	test("ADMIN_REQUIRED_ROUTES covers admin pages", () => {
+		expect(matches(ADMIN_REQUIRED_ROUTES, "/admin")).toBe(true);
+		expect(matches(ADMIN_REQUIRED_ROUTES, "/admin/crawler")).toBe(true);
+		expect(matches(ADMIN_REQUIRED_ROUTES, "/admin/crawler/settings")).toBe(true);
+		expect(matches(ADMIN_REQUIRED_ROUTES, "/song/12")).toBe(false);
+		expect(matches(ADMIN_REQUIRED_ROUTES, "/login")).toBe(false);
+	});
+});
+
+describe("requireAdmin()", () => {
+	const mockContext = (pathname: string) =>
+		({
+			url: new URL(`https://example.com${pathname}`),
+			redirect: vi.fn((target: string, status?: number) => new Response(null, { status: status ?? 302, headers: { Location: target } })),
+		}) as unknown as Parameters<typeof requireAdmin>[0];
+
+	test("redirects anonymous visitor to login", () => {
+		const ctx = mockContext("/admin/crawler");
+		const res = requireAdmin(ctx, null);
+		expect(res?.status).toBe(302);
+		expect(ctx.redirect).toHaveBeenCalledWith("/login?redirect=%2Fadmin%2Fcrawler", 302);
+	});
+
+	test("redirects non-admin user to 403", () => {
+		const ctx = mockContext("/admin/crawler");
+		const regularUser: CurrentUserInfoDto = {
+			...mappedUser,
+			roleName: "user",
+		};
+		const res = requireAdmin(ctx, regularUser);
+		expect(res?.status).toBe(302);
+		expect(ctx.redirect).toHaveBeenCalledWith("/403", 302);
+	});
+
+	test("allows OWNER user", () => {
+		const ctx = mockContext("/admin/crawler");
+		const ownerUser: CurrentUserInfoDto = {
+			...mappedUser,
+			roleName: "OWNER",
+		};
+		const res = requireAdmin(ctx, ownerUser);
+		expect(res).toBeNull();
+	});
+
+	test("allows admin user", () => {
+		const ctx = mockContext("/admin/crawler");
+		const adminUser: CurrentUserInfoDto = {
+			...mappedUser,
+			roleName: "admin",
+		};
+		const res = requireAdmin(ctx, adminUser);
+		expect(res).toBeNull();
 	});
 });
 

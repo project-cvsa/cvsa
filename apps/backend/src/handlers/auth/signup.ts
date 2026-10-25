@@ -9,6 +9,7 @@ import {
 	toSignUpResponse,
 	toBetterAuthHeaders,
 	auth,
+	userService,
 } from "@cvsa/authentication";
 import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
@@ -16,6 +17,8 @@ import { traceTask } from "@/common/trace";
 export const signupHandler = new Elysia().use(ip()).post(
 	"/user",
 	async ({ body, status, headers, cookie }) => {
+		await userService.assertCanRegister(body.inviteCode);
+
 		const { user, token } = await traceTask("auth.signUpEmail", async () => {
 			return await auth.api.signUpEmail({
 				body: signupRequestToBetterAuth(body),
@@ -46,6 +49,7 @@ export const signupHandler = new Elysia().use(ip()).post(
 		response: {
 			200: SignupResponseSchema,
 			400: ErrorResponseSchema,
+			403: ErrorResponseSchema,
 			422: ErrorResponseSchema,
 			429: ErrorResponseSchema,
 			500: ErrorResponseSchema,

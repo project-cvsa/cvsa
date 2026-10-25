@@ -17,6 +17,9 @@ export default defineConfig({
 				bundlePath: "../../locale",
 			}),
 		],
+		optimizeDeps: {
+			include: ["@elysiajs/eden"],
+		},
 		server: {
 			allowedHosts: [".projectcvsa.com"],
 		},

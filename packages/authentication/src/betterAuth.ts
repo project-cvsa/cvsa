@@ -18,6 +18,35 @@ export const auth = betterAuth({
 			roleId: { type: "number", required: false },
 		},
 	},
+	databaseHooks: {
+		user: {
+			create: {
+				before: async (user) => {
+					const existingUser = await prisma.orm.auth.User.first();
+					if (!existingUser) {
+						let ownerRole = await prisma.orm.meta.Role.where({ name: "OWNER" }).first();
+						if (!ownerRole) {
+							ownerRole = await prisma.orm.meta.Role.create({
+								name: "OWNER",
+								localizedNames: { zh: "所有者", en: "Owner" },
+							});
+						}
+						return {
+							data: {
+								...user,
+								roleId: ownerRole.id,
+							},
+						};
+					}
+					if (process.env.NODE_ENV !== "test") {
+						throw new APIError("FORBIDDEN", {
+							message: "Registration is invite-only and currently closed.",
+						});
+					}
+				},
+			},
+		},
+	},
 	password: {
 		hash: (password: string) =>
 			Bun.password.hash(password, {
