@@ -1,14 +1,11 @@
 import { Elysia } from "elysia";
 import { ip } from "elysia-ip";
-import { AppError, ErrorResponseSchema } from "@cvsa/contracts";
+import { ErrorResponseSchema } from "@cvsa/contracts";
 import {
-	betterAuthToSignupUserInfoDto,
 	SignupRequestSchema,
-	signupRequestToBetterAuth,
 	SignupResponseSchema,
 	toSignUpResponse,
-	toBetterAuthHeaders,
-	auth,
+	userToSignupUserInfoDto,
 	userService,
 } from "@cvsa/authentication";
 import { applySessionCookie } from "@/common/auth/sessionCookie";
@@ -16,25 +13,19 @@ import { traceTask } from "@/common/trace";
 
 export const signupHandler = new Elysia().use(ip()).post(
 	"/user",
-	async ({ body, status, headers, cookie }) => {
-		await userService.assertCanRegister(body.inviteCode);
+	async ({ body, status, headers, cookie, ip }) => {
+		const userAgent = headers["user-agent"] ?? null;
 
-		const { user, token } = await traceTask("auth.signUpEmail", async () => {
-			return await auth.api.signUpEmail({
-				body: signupRequestToBetterAuth(body),
-				headers: toBetterAuthHeaders(headers),
+		const { user, token } = await traceTask("auth.signUp", async () => {
+			return await userService.signUp(body, {
+				ipAddress: ip,
+				userAgent,
 			});
 		});
 
-		if (!token) {
-			throw new AppError("error.signup.failed", "INTERNAL_SERVER_ERROR", 500, {
-				cause: "Better Auth responded with no token",
-			});
-		}
-
 		await applySessionCookie(cookie, token);
 
-		const userInfo = betterAuthToSignupUserInfoDto(user, token);
+		const userInfo = userToSignupUserInfoDto(user, token);
 		const response = toSignUpResponse(userInfo);
 
 		return status(200, response);

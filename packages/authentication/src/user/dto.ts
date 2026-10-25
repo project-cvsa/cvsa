@@ -1,19 +1,16 @@
 import { z } from "zod";
-import { getRandomId } from "../randomId";
-import { toInstant, type User } from "@cvsa/db";
-import type { auth } from "../betterAuth";
+import type { Session, User } from "@cvsa/db";
 
-type BetterAuthUser = Exclude<Awaited<ReturnType<typeof auth.api.getSession>>, null>["user"];
-
-export type AuthSessionDto = Exclude<
-	Awaited<ReturnType<typeof auth.api.getSession>>,
-	null
->["session"];
-
-type BetterAuthSignupRequestBody = Exclude<
-	Parameters<typeof auth.api.signUpEmail>[0],
-	undefined
->["body"];
+export interface AuthSessionDto {
+	id: string;
+	token: string;
+	userId: string;
+	expiresAt: Date | string;
+	createdAt: Date | string;
+	updatedAt: Date | string;
+	ipAddress?: string | null;
+	userAgent?: string | null;
+}
 
 export const SignupRequestSchema = z.object({
 	username: z.string().min(1).max(100),
@@ -60,45 +57,54 @@ export function toBetterAuthHeaders(
 	);
 }
 
-export function signupRequestToBetterAuth(body: SignupRequestDto): BetterAuthSignupRequestBody {
-	const fakeEmail = `delegate-${getRandomId(14).toLowerCase()}@projectcvsa.com`;
-
-	return {
-		name: body.displayName || body.username,
-		email: body.email || fakeEmail,
-		password: body.password,
-		username: body.username,
-	};
+function formatIsoTimestamp(value: unknown): string {
+	if (typeof value === "string") return value;
+	if (value instanceof Date) return value.toISOString();
+	if (
+		value &&
+		typeof value === "object" &&
+		"toISOString" in value &&
+		typeof value.toISOString === "function"
+	) {
+		return value.toISOString();
+	}
+	if (
+		value &&
+		typeof value === "object" &&
+		"toString" in value &&
+		typeof value.toString === "function"
+	) {
+		return value.toString();
+	}
+	return String(value);
 }
 
-export function betterAuthToSignupUserInfoDto(
-	user: BetterAuthUser,
-	token: string
-): SignupUserInfoDto {
+export function userToSignupUserInfoDto(user: User, token: string): SignupUserInfoDto {
 	return {
 		id: user.id,
-		username: user.username ?? "",
+		username: user.username,
 		displayName: user.name,
 		email: user.email,
 		token,
 	};
 }
 
-export function betterAuthToCurrentUserInfoDto(
-	user: BetterAuthUser,
-	roleName?: string | null
-): CurrentUserInfoDto {
+export const betterAuthToSignupUserInfoDto = userToSignupUserInfoDto;
+
+export function userToCurrentUserInfoDto(user: User, roleName?: string | null): CurrentUserInfoDto {
 	return {
 		id: user.id,
-		username: user.username ?? "",
+		username: user.username,
 		displayName: user.name,
 		email: user.email,
-		createdAt: user.createdAt.toISOString() ?? null,
-		image: user.image ?? null,
-		roleId: user.roleId ?? null,
+		createdAt: formatIsoTimestamp(user.createdAt),
+		image: user.image,
+		roleId: user.roleId,
 		roleName: roleName ?? null,
 	};
 }
+
+export const betterAuthToCurrentUserInfoDto = userToCurrentUserInfoDto;
 
 export function toSignUpResponse(data: SignupUserInfoDto): SignupResponseDto {
 	return {
@@ -108,7 +114,7 @@ export function toSignUpResponse(data: SignupUserInfoDto): SignupResponseDto {
 }
 
 export const LoginRequestSchema = z.object({
-	// Username or email; the login handler routes to better-auth's username or email sign-in.
+	// Username or email
 	email: z.string().min(1).max(255),
 	password: z.string().min(1),
 });
@@ -130,23 +136,17 @@ export type LoginRequestDto = z.infer<typeof LoginRequestSchema>;
 export type LoginUserInfoDto = z.infer<typeof LoginUserInfoSchema>;
 export type LoginResponseDto = z.infer<typeof LoginResponseSchema>;
 
-type LoginAuthUser = {
-	id: string;
-	name: string;
-	email: string;
-	username?: string | null;
-	image?: string | null;
-};
-
-export function betterAuthToLoginUserInfoDto(user: LoginAuthUser, token: string): LoginUserInfoDto {
+export function userToLoginUserInfoDto(user: User, token: string): LoginUserInfoDto {
 	return {
 		id: user.id,
-		username: user.username ?? "",
+		username: user.username,
 		displayName: user.name,
 		email: user.email,
 		token,
 	};
 }
+
+export const betterAuthToLoginUserInfoDto = userToLoginUserInfoDto;
 
 export function toLoginResponse(data: LoginUserInfoDto): LoginResponseDto {
 	return {
@@ -161,15 +161,17 @@ export const LogoutResponseSchema = z.object({
 
 export type LogoutResponseDto = z.infer<typeof LogoutResponseSchema>;
 
-export const betterAuthUserToEntity = (user: BetterAuthUser): User => {
-	const { image, roleId, createdAt, updatedAt } = user;
+export const betterAuthUserToEntity = (user: User): User => user;
+
+export function sessionToDto(session: Session): AuthSessionDto {
 	return {
-		...user,
-		createdAt: toInstant(createdAt),
-		updatedAt: toInstant(updatedAt),
-		image: image ?? null,
-		roleId: roleId ?? null,
-		username: user.username ?? "",
-		displayUsername: user.displayUsername ?? "",
+		id: session.id,
+		token: session.token,
+		userId: session.userId,
+		ipAddress: session.ipAddress,
+		userAgent: session.userAgent,
+		expiresAt: formatIsoTimestamp(session.expiresAt),
+		createdAt: formatIsoTimestamp(session.createdAt),
+		updatedAt: formatIsoTimestamp(session.updatedAt),
 	};
-};
+}

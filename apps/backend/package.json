@@ -16,7 +16,6 @@
 		"@cvsa/typescript-config": "workspace:*"
 	},
 	"dependencies": {
-		"@better-auth/prisma-adapter": "^1.5.4",
 		"@cvsa/authentication": "workspace:*",
 		"@cvsa/catalog": "workspace:*",
 		"@cvsa/contracts": "workspace:*",
@@ -35,7 +34,6 @@
 		"@prisma/adapter-pg": "^7.4.1",
 		"@t3-oss/env-core": "^0.13.10",
 		"argon2": "^0.45.1",
-		"better-auth": "^1.5.4",
 		"chalk": "^6.0.0",
 		"elysia": "^1.4.30",
 		"elysia-ip": "^1.1.1",

@@ -1,7 +1,8 @@
 import {
-	auth,
-	betterAuthToCurrentUserInfoDto,
 	getRoleNameById,
+	resolveAuthFromHeaders,
+	sessionToDto,
+	userToCurrentUserInfoDto,
 	type AuthSessionDto,
 	type CurrentUserInfoDto,
 } from "@cvsa/authentication";
@@ -12,10 +13,8 @@ export type CurrentAuth = {
 };
 
 /**
- * Resolve the current visitor in-process through the shared better-auth
- * instance from @cvsa/authentication (already loaded in this process) instead of
- * round-tripping to the backend API. better-auth parses its own session
- * cookie, so the cookie name is never hardcoded here.
+ * Resolve the current visitor in-process through the shared auth
+ * service from @cvsa/authentication instead of round-tripping to the backend API.
  *
  * Fail-safe: any failure degrades to anonymous so an auth outage never
  * breaks page rendering.
@@ -28,14 +27,16 @@ export async function resolveCurrentAuth(request: Request): Promise<CurrentAuth>
 	}
 
 	try {
-		const session = await auth.api.getSession({ headers: request.headers });
-		if (!session) {
+		const authContext = await resolveAuthFromHeaders(request.headers);
+		if (!authContext) {
 			return { user: null, session: null };
 		}
-		const roleName = session.user.roleId ? await getRoleNameById(session.user.roleId) : null;
+		const roleName = authContext.user.roleId
+			? await getRoleNameById(authContext.user.roleId)
+			: null;
 		return {
-			user: betterAuthToCurrentUserInfoDto(session.user, roleName),
-			session: session.session,
+			user: userToCurrentUserInfoDto(authContext.user, roleName),
+			session: sessionToDto(authContext.session),
 		};
 	} catch (error) {
 		console.warn("[auth] failed to resolve session, treating visitor as anonymous", error);

@@ -1,35 +1,34 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-// The @cvsa/authentication mock keeps the real module (better-auth, Prisma, DB) from
+// The @cvsa/authentication mock keeps the real module (Prisma, DB) from
 // ever loading; only the pieces @lib/auth consumes are provided.
 vi.mock("@cvsa/authentication", () => ({
-	auth: {
-		api: {
-			getSession: vi.fn(),
-		},
-	},
-	betterAuthToCurrentUserInfoDto: vi.fn(),
+	resolveAuthFromHeaders: vi.fn(),
+	userToCurrentUserInfoDto: vi.fn(),
+	sessionToDto: vi.fn((s) => s),
 	getRoleNameById: vi.fn(),
 }));
 
 import {
-	auth,
-	betterAuthToCurrentUserInfoDto,
+	resolveAuthFromHeaders,
+	userToCurrentUserInfoDto,
+	sessionToDto,
 	getRoleNameById,
 	type CurrentUserInfoDto,
+	type AuthSessionDto,
 } from "@cvsa/authentication";
 import { resolveCurrentAuth, resolveCurrentUser } from "@lib/auth/server";
-import { ADMIN_REQUIRED_ROUTES, ANONYMOUS_ONLY_ROUTES, AUTH_REQUIRED_ROUTES } from "@lib/auth/routes";
+import {
+	ADMIN_REQUIRED_ROUTES,
+	ANONYMOUS_ONLY_ROUTES,
+	AUTH_REQUIRED_ROUTES,
+} from "@lib/auth/routes";
 import { loginRedirectTarget, requireAdmin } from "@lib/auth/guards";
 
-// Types keep resolving to the real better-auth session even though the
-// runtime module is mocked above.
-type GetSessionResult = Exclude<Awaited<ReturnType<typeof auth.api.getSession>>, null>;
+const resolveAuthMock = vi.mocked(resolveAuthFromHeaders);
+const toDtoMock = vi.mocked(userToCurrentUserInfoDto);
 
-const getSessionMock = vi.mocked(auth.api.getSession);
-const toDtoMock = vi.mocked(betterAuthToCurrentUserInfoDto);
-
-const sessionUser: GetSessionResult["user"] = {
+const sessionUser = {
 	id: "u123",
 	name: "Alice",
 	email: "alice@example.com",
@@ -40,9 +39,10 @@ const sessionUser: GetSessionResult["user"] = {
 	username: "alice",
 	displayUsername: "Alice",
 	reputation: 0,
+	roleId: null,
 };
 
-const session: GetSessionResult["session"] = {
+const session = {
 	id: "s123",
 	userId: "u123",
 	token: "session-token",
@@ -69,7 +69,7 @@ const createRequest = (headers: Record<string, string>): Request => {
 };
 
 beforeEach(() => {
-	getSessionMock.mockReset();
+	resolveAuthMock.mockReset();
 	toDtoMock.mockReset();
 	toDtoMock.mockReturnValue(mappedUser);
 });
@@ -81,20 +81,24 @@ describe("resolveCurrentAuth()", () => {
 		const result = await resolveCurrentAuth(request);
 
 		expect(result).toEqual({ user: null, session: null });
-		expect(getSessionMock).not.toHaveBeenCalled();
+		expect(resolveAuthMock).not.toHaveBeenCalled();
 		await expect(resolveCurrentUser(request)).resolves.toBeNull();
 	});
 
 	test("an authorization header alone still triggers the lookup", async () => {
-		getSessionMock.mockResolvedValue(null);
+		resolveAuthMock.mockResolvedValue(null);
 		const request = createRequest({ authorization: "Bearer session-token" });
 
 		await expect(resolveCurrentUser(request)).resolves.toBeNull();
-		expect(getSessionMock).toHaveBeenCalledTimes(1);
+		expect(resolveAuthMock).toHaveBeenCalledTimes(1);
 	});
 
 	test("maps an active session to the user DTO and exposes the raw session", async () => {
-		getSessionMock.mockResolvedValue({ user: sessionUser, session });
+		resolveAuthMock.mockResolvedValue({
+			user: sessionUser as unknown as Parameters<typeof toDtoMock>[0],
+			session: session as unknown as Parameters<typeof sessionToDto>[0],
+			roleName: null,
+		});
 		const request = createRequest({ cookie: "cvsa.session_token=session-token" });
 
 		const result = await resolveCurrentAuth(request);
@@ -102,12 +106,11 @@ describe("resolveCurrentAuth()", () => {
 		expect(result.user).toEqual(mappedUser);
 		expect(result.session).toEqual(session);
 		expect(toDtoMock).toHaveBeenCalledWith(sessionUser, null);
-		// Headers reach better-auth untouched so it resolves its own cookie name.
-		expect(getSessionMock).toHaveBeenCalledWith({ headers: request.headers });
+		expect(resolveAuthMock).toHaveBeenCalledWith(request.headers);
 	});
 
 	test("an unknown session cookie resolves to anonymous", async () => {
-		getSessionMock.mockResolvedValue(null);
+		resolveAuthMock.mockResolvedValue(null);
 		const request = createRequest({ cookie: "cvsa.session_token=stale-token" });
 
 		const result = await resolveCurrentAuth(request);
@@ -117,7 +120,7 @@ describe("resolveCurrentAuth()", () => {
 	});
 
 	test("degrades to anonymous when the session lookup fails", async () => {
-		getSessionMock.mockRejectedValue(new Error("database unreachable"));
+		resolveAuthMock.mockRejectedValue(new Error("database unreachable"));
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const request = createRequest({ cookie: "cvsa.session_token=session-token" });
 
@@ -168,7 +171,10 @@ describe("requireAdmin()", () => {
 	const mockContext = (pathname: string) =>
 		({
 			url: new URL(`https://example.com${pathname}`),
-			redirect: vi.fn((target: string, status?: number) => new Response(null, { status: status ?? 302, headers: { Location: target } })),
+			redirect: vi.fn(
+				(target: string, status?: number) =>
+					new Response(null, { status: status ?? 302, headers: { Location: target } })
+			),
 		}) as unknown as Parameters<typeof requireAdmin>[0];
 
 	test("redirects anonymous visitor to login", () => {

@@ -11,5 +11,6 @@
 	"error.username-taken": "This username is already taken.",
 	"error.email-taken": "This email is already registered.",
 	"error.artist.notfound": "This artist does not exist.",
-	"error.engine.notfound": "This engine does not exist."
+	"error.engine.notfound": "This engine does not exist.",
+	"error.signup.invite_required": "Registration is invite-only and currently closed."
 }

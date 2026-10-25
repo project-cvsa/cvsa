@@ -18,7 +18,10 @@ export function requireUser(context: APIContext, user: CurrentUserInfoDto | null
 }
 
 /** Page guard: require an admin or owner user; redirects anonymous to login, non-admins to /403. */
-export function requireAdmin(context: APIContext, user: CurrentUserInfoDto | null): Response | null {
+export function requireAdmin(
+	context: APIContext,
+	user: CurrentUserInfoDto | null
+): Response | null {
 	if (!user) {
 		return context.redirect(loginRedirectTarget(context.url.pathname, context.url.search), 302);
 	}

@@ -1,44 +1,31 @@
 import { Elysia } from "elysia";
 import { ip } from "elysia-ip";
-import { AppError, ErrorResponseSchema } from "@cvsa/contracts";
+import { ErrorResponseSchema } from "@cvsa/contracts";
 import {
-	auth,
 	LoginRequestSchema,
 	LoginResponseSchema,
-	betterAuthToLoginUserInfoDto,
 	toLoginResponse,
-	toBetterAuthHeaders,
+	userToLoginUserInfoDto,
+	userService,
 } from "@cvsa/authentication";
 import { applySessionCookie } from "@/common/auth/sessionCookie";
 import { traceTask } from "@/common/trace";
 
 export const loginHandler = new Elysia().use(ip()).post(
 	"/session",
-	async ({ body, status, headers, cookie }) => {
+	async ({ body, status, headers, cookie, ip }) => {
+		const userAgent = headers["user-agent"] ?? null;
+
 		const { user, token } = await traceTask("auth.signIn", async () => {
-			const authHeaders = toBetterAuthHeaders(headers);
-			// The identifier field accepts a username or an email; route to the matching endpoint.
-			if (body.email.includes("@")) {
-				return await auth.api.signInEmail({
-					body: { email: body.email, password: body.password },
-					headers: authHeaders,
-				});
-			}
-			return await auth.api.signInUsername({
-				body: { username: body.email, password: body.password },
-				headers: authHeaders,
+			return await userService.login(body, {
+				ipAddress: ip,
+				userAgent,
 			});
 		});
 
-		if (!token) {
-			throw new AppError("error.login.failed", "INTERNAL_SERVER_ERROR", 500, {
-				cause: "Better Auth responded with no token",
-			});
-		}
-
 		await applySessionCookie(cookie, token);
 
-		const userInfo = betterAuthToLoginUserInfoDto(user, token);
+		const userInfo = userToLoginUserInfoDto(user, token);
 		const response = toLoginResponse(userInfo);
 
 		return status(200, response);

@@ -2,7 +2,7 @@
  * Result contract shared by every API call in the web app.
  *
  * Hand-written rather than re-exported from `@cvsa/contracts` on purpose: the browser
- * client must not pull the backend's Prisma/better-auth module graph into its
+ * client must not pull the backend's Prisma module graph into its
  * bundle or its tests. The code list is still checked against the backend DTO,
  * so adding an error code on the backend fails `bun typecheck` here until it is
  * declared.

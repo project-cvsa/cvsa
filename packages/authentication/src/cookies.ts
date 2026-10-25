@@ -1,28 +1,57 @@
-import { auth } from "./betterAuth";
-
 export const SESSION_COOKIE_NAME = "cvsa.session_token";
+export const SESSION_MAX_AGE_SECONDS = 90 * 24 * 60 * 60; // 90 days
 
-/**
- * better-auth reads the session cookie back as a signed cookie
- * (`token.HMAC-SHA256(token, secret)` in base64), and its name gains a
- * `__Secure-` prefix in production — so both must come from the live
- * auth context instead of being hardcoded.
- */
-export async function createSessionCookie(token: string): Promise<{ name: string; value: string }> {
-	const context = await auth.$context;
-	const key = await crypto.subtle.importKey(
-		"raw",
-		new TextEncoder().encode(context.secret),
-		{ name: "HMAC", hash: "SHA-256" },
-		false,
-		["sign"]
-	);
-	const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(token));
-	const encoded = btoa(String.fromCharCode(...new Uint8Array(signature)));
-	return { name: context.authCookies.sessionToken.name, value: `${token}.${encoded}` };
+export function getSessionCookieName(): string {
+	return SESSION_COOKIE_NAME;
 }
 
-export async function getSessionCookieName(): Promise<string> {
-	const context = await auth.$context;
-	return context.authCookies.sessionToken.name;
+export function createSessionCookie(token: string) {
+	return {
+		name: SESSION_COOKIE_NAME,
+		value: token,
+		maxAge: SESSION_MAX_AGE_SECONDS,
+	};
+}
+
+export function parseTokenFromCookie(cookieHeader: string | null | undefined): string | null {
+	if (!cookieHeader) return null;
+	const match = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME.replace(".", "\\.")}=([^;]+)`).exec(
+		cookieHeader
+	);
+	if (!match) return null;
+	const raw = decodeURIComponent(match[1].trim());
+	const dotIndex = raw.indexOf(".");
+	return dotIndex > 0 ? raw.slice(0, dotIndex) : raw;
+}
+
+function hasGetHeader(headers: Headers | Record<string, string | undefined>): headers is Headers {
+	return (
+		headers instanceof Headers ||
+		(typeof headers === "object" &&
+			headers !== null &&
+			"get" in headers &&
+			typeof headers.get === "function")
+	);
+}
+
+export function parseTokenFromHeaders(
+	headers: Headers | Record<string, string | undefined>
+): string | null {
+	let authHeader: string | null | undefined;
+	let cookieHeader: string | null | undefined;
+
+	if (hasGetHeader(headers)) {
+		authHeader = headers.get("authorization");
+		cookieHeader = headers.get("cookie");
+	} else {
+		authHeader = headers.authorization;
+		cookieHeader = headers.cookie;
+	}
+
+	if (authHeader?.startsWith("Bearer ")) {
+		const token = authHeader.slice(7).trim();
+		if (token) return token;
+	}
+
+	return parseTokenFromCookie(cookieHeader);
 }

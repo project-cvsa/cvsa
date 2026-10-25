@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import { ErrorResponseSchema } from "@cvsa/contracts";
 import {
 	CurrentUserInfoSchema,
-	betterAuthToCurrentUserInfoDto,
+	userToCurrentUserInfoDto,
 	getRoleNameById,
 } from "@cvsa/authentication";
 import { authMiddleware } from "@/middlewares";
@@ -10,10 +10,10 @@ import { traceTask } from "@/common/trace";
 
 export const getCurrentUserHandler = new Elysia().use(authMiddleware).get(
 	"/me",
-	async ({ status, session, user }) => {
+	async ({ status, user }) => {
 		const userInfo = await traceTask("getCurrentUser", async () => {
 			const roleName = user.roleId ? await getRoleNameById(user.roleId) : null;
-			return betterAuthToCurrentUserInfoDto(session.user, roleName);
+			return userToCurrentUserInfoDto(user, roleName);
 		});
 		return status(200, userInfo);
 	},

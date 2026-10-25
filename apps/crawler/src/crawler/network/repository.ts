@@ -34,7 +34,7 @@ export class NetworkRuntimeConfigRepository implements INetworkRuntimeConfigRepo
 		const record = await traceTask("snapshotDb.networkRuntimeConfig.create", () =>
 			this.db.orm.public.NetworkRuntimeConfig.create({
 				id: CONFIG_ID,
-				revision: 0,
+				revision: 1,
 				config: config as unknown as JsonValue,
 			})
 		);
