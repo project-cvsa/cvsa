@@ -21,10 +21,25 @@ export interface AkariClassificationInput {
 export interface AkariPrediction {
 	readonly label: number;
 	readonly probabilities: readonly number[];
+	/** `1 - P(label = 0)`, clamped into [0, 1]. */
 	readonly songProbability: number;
+	/** `true` when the model picked a song class (any label except 0). */
+	readonly isAccepted: boolean;
 	readonly modelVersion: string;
 }
 
+/** Health of the in-process classifier, shaped for the control plane. */
+export type AkariHealthStatus = "healthy" | "degraded" | "unreachable";
+
+export interface AkariHealth {
+	readonly status: AkariHealthStatus;
+	readonly modelLoaded: boolean;
+	readonly modelVersion?: string;
+	readonly latencyMs?: number;
+	readonly error?: string;
+}
+
+/** Filesystem-level view of the artifacts, useful for diagnostics. */
 export interface AkariStatus {
 	readonly ready: boolean;
 	readonly modelVersion: string;
@@ -40,10 +55,12 @@ export interface AkariModelOptions {
 	readonly modelDir?: string;
 	readonly modelVersion?: string;
 	readonly tokenizerModel?: string;
+	/** Load the ONNX sessions eagerly instead of on the first prediction. */
 	readonly autoInit?: boolean;
 }
 
-const DEFAULT_MODEL_DIR = path.resolve(import.meta.dir, "../../../../model");
+/** Relative to the crawler's working directory unless overridden. */
+const DEFAULT_MODEL_DIR = "./model";
 
 /**
  * Canonical model label persisted next to every prediction, e.g. `akari-3.17`.
@@ -56,6 +73,33 @@ export function formatAkariModelVersion(version: string): string {
 function normalizeChannelText(value: string | null | undefined, fallback: string): string {
 	const trimmed = value?.trim();
 	return trimmed && trimmed.length > 0 ? trimmed : fallback;
+}
+
+/** Tags are sent as a single space-joined channel, matching the training data. */
+function normalizeTags(tags: AkariClassificationInput["tags"]): string {
+	if (typeof tags === "string") return normalizeChannelText(tags, "empty");
+	if (Array.isArray(tags)) return normalizeChannelText(tags.join(" "), "empty");
+	return "empty";
+}
+
+function resolveModelDir(override: string | undefined): string {
+	return path.resolve(override ?? process.env.CRAWLER_MODEL_DIR ?? DEFAULT_MODEL_DIR);
+}
+
+function elapsedMs(startedAt: number): number {
+	return Math.max(0, Math.round(performance.now() - startedAt));
+}
+
+function messageOf(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+/** ONNX tensor payloads are a union; the models we ship only emit float32. */
+function readFloat32Tensor(tensor: ort.Tensor): Float32Array {
+	if (!(tensor.data instanceof Float32Array)) {
+		throw new Error("ONNX model returned a non-float32 tensor");
+	}
+	return tensor.data;
 }
 
 export function softmax(logits: Float32Array | readonly number[]): number[] {
@@ -76,18 +120,25 @@ export function softmax(logits: Float32Array | readonly number[]): number[] {
 }
 
 /**
- * Local ONNX Runtime classifier ported from `cvsa-legacy/packages/crawler/ml/akari.ts`.
- * Loads:
- *   1. `model/embedding/model.onnx` (`alikia2x/jina-embedding-v3-m2v-1024`, 1024d)
- *   2. `model/akari/<version>.onnx` (3x1024d channel classifier)
+ * In-process ONNX Runtime classifier (ported from `cvsa-legacy/packages/crawler/ml/akari.ts`).
  *
- * Gracefully enters a pending/unloaded state when model files have not yet been uploaded,
- * allowing hot reload once files appear on disk.
+ * Loads:
+ *   1. `<modelDir>/embedding/model.onnx` (`alikia2x/jina-embedding-v3-m2v-1024`, 1024d)
+ *   2. `<modelDir>/akari/<version>.onnx` (3x1024d channel classifier)
+ *
+ * The tokenizer comes straight from HuggingFace
+ * (`alikia2x/jina-embedding-v3-m2v-1024`) — there is no local tokenizer asset
+ * and no hash verification: the crawler trusts the published model revision.
+ *
+ * `modelDir` defaults to `CRAWLER_MODEL_DIR` or `./model`. When the ONNX files
+ * have not been uploaded yet the classifier stays in a pending state and
+ * {@link classify} returns `null`, so the discovery pipeline degrades to its
+ * deterministic rules instead of failing.
  */
-export class AkariClassifier {
+export class LocalAkariClassifier {
 	private readonly modelDir: string;
-	private modelVersion: string;
 	private readonly tokenizerModel: string;
+	private modelVersion: string;
 
 	private tokenizer: PreTrainedTokenizer | null = null;
 	private embeddingSession: ort.InferenceSession | null = null;
@@ -96,14 +147,12 @@ export class AkariClassifier {
 	private lastError: string | null = null;
 
 	constructor(options: AkariModelOptions = {}) {
-		this.modelDir =
-			options.modelDir ??
-			process.env.CRAWLER_MODEL_DIR ??
-			process.env.MODEL_DIR ??
-			DEFAULT_MODEL_DIR;
-		this.modelVersion =
-			options.modelVersion ?? process.env.AKARI_MODEL_VERSION ?? AKARI_MODEL_VERSION;
+		this.modelDir = resolveModelDir(options.modelDir);
+		this.modelVersion = formatArtifactVersion(
+			options.modelVersion ?? process.env.AKARI_MODEL_VERSION ?? AKARI_MODEL_VERSION
+		);
 		this.tokenizerModel = options.tokenizerModel ?? JINA_EMBEDDING_TOKENIZER;
+		if (options.autoInit) void this.init();
 	}
 
 	get embeddingPath(): string {
@@ -124,8 +173,9 @@ export class AkariClassifier {
 	}
 
 	setVersion(version: string): void {
-		if (version !== this.modelVersion) {
-			this.modelVersion = version;
+		const artifactVersion = formatArtifactVersion(version);
+		if (artifactVersion !== this.modelVersion) {
+			this.modelVersion = artifactVersion;
 			this.classifierSession = null;
 			this.initPromise = null;
 		}
@@ -140,16 +190,14 @@ export class AkariClassifier {
 	}
 
 	getStatus(): AkariStatus {
-		const embeddingExists = fs.existsSync(this.embeddingPath);
-		const classifierExists = fs.existsSync(this.classifierPath);
 		return {
 			ready: this.isReady(),
 			modelVersion: this.modelVersion,
 			modelDir: this.modelDir,
 			embeddingPath: this.embeddingPath,
 			classifierPath: this.classifierPath,
-			embeddingExists,
-			classifierExists,
+			embeddingExists: fs.existsSync(this.embeddingPath),
+			classifierExists: fs.existsSync(this.classifierPath),
 			lastError: this.lastError,
 		};
 	}
@@ -173,25 +221,26 @@ export class AkariClassifier {
 					return false;
 				}
 
-				if (!this.tokenizer) {
-					this.tokenizer = await AutoTokenizer.from_pretrained(this.tokenizerModel);
-				}
-				if (!this.embeddingSession) {
-					this.embeddingSession = await ort.InferenceSession.create(this.embeddingPath);
-				}
-				if (!this.classifierSession) {
-					this.classifierSession = await ort.InferenceSession.create(this.classifierPath);
-				}
+				// The tokenizer is downloaded/cached by HuggingFace; no local
+				// tokenizer files are required.
+				this.tokenizer ??= await AutoTokenizer.from_pretrained(this.tokenizerModel);
+				this.embeddingSession ??= await ort.InferenceSession.create(this.embeddingPath, {
+					executionProviders: ["cpu"],
+				});
+				this.classifierSession ??= await ort.InferenceSession.create(this.classifierPath, {
+					executionProviders: ["cpu"],
+				});
 
 				this.lastError = null;
-				appLogger.info("Local ONNX Akari classifier initialized", {
+				appLogger.info("In-process ONNX Akari classifier initialized", {
 					component: "ml-akari",
 					modelVersion: this.modelVersion,
+					modelDir: this.modelDir,
 				});
 				return true;
 			} catch (error) {
-				this.lastError = error instanceof Error ? error.message : String(error);
-				appLogger.warn("Failed to initialize local ONNX Akari classifier", {
+				this.lastError = messageOf(error);
+				appLogger.warn("Failed to initialize the in-process ONNX Akari classifier", {
 					component: "ml-akari",
 					error: this.lastError,
 				});
@@ -204,15 +253,42 @@ export class AkariClassifier {
 		return this.initPromise;
 	}
 
+	/**
+	 * In-process health probe for `GET /v2/discovery/classifier`.
+	 *
+	 * The classifier is always "reachable" (it lives in this process), so the
+	 * probe distinguishes a loaded model (`healthy`) from a missing or broken
+	 * artifact set (`degraded`). `unreachable` is reserved for a probe that
+	 * cannot run at all.
+	 */
+	async checkHealth(): Promise<AkariHealth> {
+		const startedAt = performance.now();
+		const loaded = await this.init();
+		const latencyMs = elapsedMs(startedAt);
+		const modelVersion = this.getModelVersionLabel();
+
+		if (loaded) {
+			return { status: "healthy", modelLoaded: true, modelVersion, latencyMs };
+		}
+
+		return {
+			status: "degraded",
+			modelLoaded: false,
+			modelVersion,
+			latencyMs,
+			error: this.lastError ?? "ONNX classifier is not initialized",
+		};
+	}
+
 	private async getJinaEmbeddings1024(texts: [string, string, string]): Promise<Float32Array> {
 		if (!this.tokenizer || !this.embeddingSession) {
 			throw new Error("Embedding session or tokenizer is not initialized");
 		}
 
-		const encoded = (await this.tokenizer(texts, {
+		const encoded = await this.tokenizer(texts, {
 			add_special_tokens: false,
 			return_tensor: false,
-		})) as { input_ids: number[][] };
+		});
 
 		const rawIds = encoded.input_ids;
 		const tokenRows: number[][] = rawIds.map((row) =>
@@ -246,7 +322,7 @@ export class AkariClassifier {
 		if (!embeddingTensor) {
 			throw new Error("Embedding ONNX model returned no output tensor");
 		}
-		return Float32Array.from(embeddingTensor.data as Float32Array);
+		return Float32Array.from(readFloat32Tensor(embeddingTensor));
 	}
 
 	private async runClassification(embeddings: Float32Array): Promise<number[]> {
@@ -270,7 +346,7 @@ export class AkariClassifier {
 		if (!logitsTensor) {
 			throw new Error("Classifier ONNX model returned no logits tensor");
 		}
-		return softmax(logitsTensor.data as Float32Array);
+		return softmax(readFloat32Tensor(logitsTensor));
 	}
 
 	async classify(input: AkariClassificationInput): Promise<AkariPrediction | null> {
@@ -283,9 +359,7 @@ export class AkariClassifier {
 			try {
 				const title = normalizeChannelText(input.title, "untitled");
 				const description = normalizeChannelText(input.description, "N/A");
-				const tagsStr = Array.isArray(input.tags)
-					? normalizeChannelText(input.tags.join(" "), "empty")
-					: normalizeChannelText(input.tags as string | null | undefined, "empty");
+				const tagsStr = normalizeTags(input.tags);
 
 				const embeddings = await this.getJinaEmbeddings1024([title, description, tagsStr]);
 				const probabilities = await this.runClassification(embeddings);
@@ -308,11 +382,12 @@ export class AkariClassifier {
 					label: bestLabel,
 					probabilities,
 					songProbability,
+					isAccepted: bestLabel !== 0,
 					modelVersion: this.getModelVersionLabel(),
 				};
 			} catch (error) {
-				this.lastError = error instanceof Error ? error.message : String(error);
-				appLogger.warn("Local ONNX classification failed", {
+				this.lastError = messageOf(error);
+				appLogger.warn("In-process ONNX classification failed", {
 					component: "ml-akari",
 					aid: input.aid !== undefined ? String(input.aid) : undefined,
 					error: this.lastError,
@@ -321,4 +396,9 @@ export class AkariClassifier {
 			}
 		});
 	}
+}
+
+/** `akari-3.17` -> `3.17`, so the on-disk file name stays bare. */
+function formatArtifactVersion(version: string): string {
+	return version.startsWith("akari-") ? version.slice("akari-".length) : version;
 }

@@ -55,18 +55,6 @@ jobs:
       - name: Validate production compose file
         run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config --quiet
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Verify inference image builds
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          target: inference
-          push: false
-          cache-from: type=gha,scope=cvsa-inference
-          cache-to: type=gha,mode=max,scope=cvsa-inference
-
       - name: Stop backing services
         if: always()
         run: docker compose down -v

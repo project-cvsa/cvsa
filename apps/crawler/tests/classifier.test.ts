@@ -1,27 +1,16 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import type { AkariPrediction, AkariStatus } from "../src/ml/akari";
-import { VideoClassifierClient, type LocalClassifier } from "../src/crawler/discovery/classifier";
+import { describe, expect, spyOn, test } from "bun:test";
 import { DiscoveryFilterService } from "../src/crawler/discovery/filter";
-
-const originalFetch = globalThis.fetch;
-
-function stubFetch(handler: (url: string, init?: RequestInit) => Promise<Response>): void {
-	globalThis.fetch = handler as typeof fetch;
-}
-
-afterEach(() => {
-	globalThis.fetch = originalFetch;
-});
-
-function classifier(): VideoClassifierClient {
-	return new VideoClassifierClient({
-		baseUrl: "http://ml.test",
-		timeoutMs: 1_000,
-		// Keep ONNX out of the unit test: the fallback is injected.
-		localClassifier: undefined,
-		fallbackToLocal: false,
-	});
-}
+import {
+	VideoClassifierClient,
+	type ClassifierHealth,
+	type LocalClassifier,
+} from "../src/crawler/discovery/classifier";
+import {
+	LocalAkariClassifier,
+	type AkariHealth,
+	type AkariPrediction,
+	type AkariStatus,
+} from "../src/ml/akari";
 
 function localStatus(overrides: Partial<AkariStatus> = {}): AkariStatus {
 	return {
@@ -37,237 +26,202 @@ function localStatus(overrides: Partial<AkariStatus> = {}): AkariStatus {
 	};
 }
 
-/** Deterministic stand-in for `AkariClassifier`. */
+function healthy(overrides: Partial<AkariHealth> = {}): AkariHealth {
+	return {
+		status: "healthy",
+		modelLoaded: true,
+		modelVersion: "akari-3.17",
+		latencyMs: 4,
+		...overrides,
+	};
+}
+
+function prediction(overrides: Partial<AkariPrediction> = {}): AkariPrediction {
+	return {
+		label: 1,
+		probabilities: [0.1, 0.9],
+		songProbability: 0.9,
+		isAccepted: true,
+		modelVersion: "akari-3.17",
+		...overrides,
+	};
+}
+
+/** Deterministic stand-in for `LocalAkariClassifier`. */
 function fakeLocal(
-	prediction: AkariPrediction | null,
+	result: AkariPrediction | null,
+	health: AkariHealth = healthy(),
 	status: AkariStatus = localStatus()
 ): LocalClassifier & { calls: number } {
 	const fake = {
 		calls: 0,
 		getStatus: () => status,
 		getModelVersionLabel: () => "akari-3.17",
+		checkHealth: async () => health,
 		async classify(): Promise<AkariPrediction | null> {
 			fake.calls += 1;
-			return prediction;
+			return result;
 		},
 	};
 	return fake;
 }
 
-const songProbabilityFetch = (notSongProbability: number) =>
-	stubFetch(
-		async () =>
-			new Response(
-				JSON.stringify({
-					label: 1,
-					probabilities: [notSongProbability, 1 - notSongProbability],
-				}),
-				{ status: 200, headers: { "content-type": "application/json" } }
-			)
-	);
+function clientWith(local: LocalClassifier): VideoClassifierClient {
+	return new VideoClassifierClient({ localClassifier: local });
+}
 
-describe("VideoClassifierClient", () => {
-	test("derives song probability from the not-a-song class", async () => {
-		stubFetch(async (url, init) => {
-			expect(url).toBe("http://ml.test/classify");
-			const body = JSON.parse(String(init?.body));
-			expect(body).toMatchObject({ title: "song", description: "N/A", tags: "empty" });
-			return new Response(JSON.stringify({ label: 2, probabilities: [0.1, 0.2, 0.7] }), {
-				status: 200,
-				headers: { "content-type": "application/json" },
+describe("VideoClassifierClient (in-process ONNX)", () => {
+	test("classifies without any HTTP traffic", async () => {
+		const fetchSpy = spyOn(globalThis, "fetch");
+
+		try {
+			const local = fakeLocal(prediction());
+			const result = await clientWith(local).classify({
+				title: "song",
+				tags: ["洛天依"],
 			});
-		});
 
-		const prediction = await classifier().classify({ title: "song" });
-
-		expect(prediction?.label).toBe(2);
-		expect(prediction?.songProbability).toBeCloseTo(0.9, 5);
+			expect(result?.label).toBe(1);
+			expect(local.calls).toBe(1);
+			expect(fetchSpy).not.toHaveBeenCalled();
+		} finally {
+			fetchSpy.mockRestore();
+		}
 	});
 
-	test("returns null when the service answers with an error", async () => {
-		stubFetch(async () => new Response("boom", { status: 500 }));
-
-		expect(await classifier().classify({ title: "song" })).toBeNull();
-	});
-
-	test("returns null when the service is unreachable", async () => {
-		stubFetch(async () => {
-			throw new Error("ECONNREFUSED");
-		});
-
-		expect(await classifier().classify({ title: "song" })).toBeNull();
-	});
-
-	test("reports health from the models_loaded flag", async () => {
-		stubFetch(
-			async () =>
-				new Response(JSON.stringify({ status: "ok", models_loaded: true }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				})
+	test("derives song probability and acceptance from the not-a-song class", async () => {
+		const local = fakeLocal(
+			prediction({ label: 2, probabilities: [0.1, 0.2, 0.7], songProbability: 0.9 })
 		);
 
-		expect(await classifier().health()).toEqual({ reachable: true, modelsLoaded: true });
+		const result = await clientWith(local).classify({ title: "song" });
+
+		expect(result?.label).toBe(2);
+		expect(result?.songProbability).toBeCloseTo(0.9, 5);
+		expect(result?.isAccepted).toBe(true);
+		expect(result?.modelVersion).toBe("akari-3.17");
 	});
 
-	test("stamps predictions with a model version", async () => {
-		stubFetch(
-			async () =>
-				new Response(JSON.stringify({ label: 1, probabilities: [0.2, 0.8] }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				})
+	test("marks label 0 predictions as rejected", async () => {
+		const local = fakeLocal(
+			prediction({
+				label: 0,
+				probabilities: [0.85, 0.15],
+				songProbability: 0.15,
+				isAccepted: false,
+			})
 		);
 
-		const prediction = await classifier().classify({ title: "song" });
-		expect(prediction?.modelVersion).toBe("akari-3.17");
-		expect(prediction?.source).toBe("remote");
+		const result = await clientWith(local).classify({ title: "not a song" });
+
+		expect(result?.isAccepted).toBe(false);
+		expect(result?.songProbability).toBeCloseTo(0.15, 5);
 	});
 
-	test("prefers the model version echoed by the inference service", async () => {
-		stubFetch(
-			async () =>
-				new Response(
-					JSON.stringify({
-						label: 1,
-						probabilities: [0.2, 0.8],
-						model_version: "akari-3.18",
-					}),
-					{ status: 200, headers: { "content-type": "application/json" } }
-				)
-		);
+	test("returns null when the model is unavailable", async () => {
+		const local = fakeLocal(null);
 
-		expect((await classifier().classify({ title: "song" }))?.modelVersion).toBe("akari-3.18");
-	});
-
-	test("falls back to the local ONNX classifier when the service is down", async () => {
-		stubFetch(async () => {
-			throw new Error("ECONNREFUSED");
-		});
-
-		const local = fakeLocal({
-			label: 1,
-			probabilities: [0.1, 0.9],
-			songProbability: 0.9,
-			modelVersion: "akari-3.17",
-		});
-		const client = new VideoClassifierClient({
-			baseUrl: "http://ml.test",
-			timeoutMs: 1_000,
-			localClassifier: local,
-		});
-
-		const prediction = await client.classify({ title: "song" });
-		expect(prediction?.source).toBe("local");
-		expect(prediction?.songProbability).toBeCloseTo(0.9, 5);
-		expect(prediction?.modelVersion).toBe("akari-3.17");
+		expect(await clientWith(local).classify({ title: "song" })).toBeNull();
 		expect(local.calls).toBe(1);
 	});
 
-	test("prefers the remote service when it answers", async () => {
-		songProbabilityFetch(0.2);
+	test("returns null instead of throwing when the classifier fails", async () => {
+		const failing: LocalClassifier = {
+			checkHealth: async () => healthy(),
+			classify: async () => {
+				throw new Error("onnx exploded");
+			},
+		};
 
-		const local = fakeLocal({
-			label: 0,
-			probabilities: [0.9, 0.1],
-			songProbability: 0.1,
-			modelVersion: "akari-3.17",
-		});
-		const client = new VideoClassifierClient({
-			baseUrl: "http://ml.test",
-			timeoutMs: 1_000,
-			localClassifier: local,
-		});
-
-		const prediction = await client.classify({ title: "song" });
-		expect(prediction?.source).toBe("remote");
-		expect(local.calls).toBe(0);
+		expect(await clientWith(failing).classify({ title: "song" })).toBeNull();
 	});
 
-	test("never touches ONNX when the local model files are missing", async () => {
-		stubFetch(async () => {
-			throw new Error("ECONNREFUSED");
-		});
+	test("exposes the rich in-process health status", async () => {
+		const local = fakeLocal(prediction(), healthy({ latencyMs: 12 }));
 
+		expect(await clientWith(local).checkHealth()).toEqual({
+			status: "healthy",
+			modelLoaded: true,
+			modelVersion: "akari-3.17",
+			latencyMs: 12,
+		});
+	});
+
+	test("reports healthy models as reachable and loaded", async () => {
+		const local = fakeLocal(prediction());
+
+		const health: ClassifierHealth = await clientWith(local).health();
+
+		expect(health).toEqual({ reachable: true, modelsLoaded: true });
+	});
+
+	test("reports degraded models as reachable but not loaded", async () => {
 		const local = fakeLocal(
-			{
-				label: 1,
-				probabilities: [0.1, 0.9],
-				songProbability: 0.9,
-				modelVersion: "akari-3.17",
-			},
+			null,
+			healthy({ status: "degraded", modelLoaded: false, error: "files missing" }),
 			localStatus({ embeddingExists: false, classifierExists: false, ready: false })
 		);
-		const client = new VideoClassifierClient({
-			baseUrl: "http://ml.test",
-			timeoutMs: 1_000,
-			localClassifier: local,
-		});
 
-		expect(await client.classify({ title: "song" })).toBeNull();
-		expect(local.calls).toBe(0);
+		expect(await clientWith(local).health()).toEqual({
+			reachable: true,
+			modelsLoaded: false,
+		});
 	});
 
-	test("runs local-only when no inference service is configured", async () => {
-		const fetchSpy = mock(async () => new Response("{}", { status: 200 }));
-		stubFetch(fetchSpy);
+	test("reports unreachable when the health probe itself fails", async () => {
+		const failing: LocalClassifier = {
+			checkHealth: async () => {
+				throw new Error("probe failed");
+			},
+			classify: async () => null,
+		};
 
-		const local = fakeLocal({
-			label: 1,
-			probabilities: [0.05, 0.95],
-			songProbability: 0.95,
-			modelVersion: "akari-3.17",
-		});
-		const client = new VideoClassifierClient({
-			timeoutMs: 1_000,
-			localClassifier: local,
-		});
+		const client = clientWith(failing);
 
-		const prediction = await client.classify({ title: "song", tags: ["洛天依"] });
-		expect(prediction?.source).toBe("local");
-		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(await client.checkHealth()).toEqual({
+			status: "unreachable",
+			modelLoaded: false,
+			error: "probe failed",
+		});
+		expect(await client.health()).toEqual({ reachable: false, modelsLoaded: null });
 	});
 
-	test("reports local model health when the service is unreachable", async () => {
-		stubFetch(async () => {
-			throw new Error("ECONNREFUSED");
+	test("the default client wires the in-process ONNX classifier", () => {
+		const client = new VideoClassifierClient();
+
+		expect(client.local).toBeInstanceOf(LocalAkariClassifier);
+	});
+});
+
+describe("LocalAkariClassifier without ONNX artifacts", () => {
+	test("degrades gracefully instead of throwing", async () => {
+		const classifier = new LocalAkariClassifier({
+			modelDir: "/tmp/cvsa-missing-onnx-models",
 		});
 
-		const client = new VideoClassifierClient({
-			baseUrl: "http://ml.test",
-			timeoutMs: 1_000,
-			localClassifier: fakeLocal(null),
-		});
+		const status = classifier.getStatus();
+		expect(status.embeddingExists).toBe(false);
+		expect(status.classifierExists).toBe(false);
+		expect(await classifier.classify({ title: "song" })).toBeNull();
 
-		expect(await client.health()).toEqual({ reachable: true, modelsLoaded: true });
+		const health = await classifier.checkHealth();
+		expect(health.status).toBe("degraded");
+		expect(health.modelLoaded).toBe(false);
+		expect(health.modelVersion).toBe("akari-3.17");
+		expect(health.error).toContain("ONNX model files not found");
 	});
 
-	test("preferLocal classifies locally first when the model files exist", async () => {
-		const fetchSpy = mock(
-			async () =>
-				new Response(JSON.stringify({ label: 1, probabilities: [0.01, 0.99] }), {
-					status: 200,
-					headers: { "content-type": "application/json" },
-				})
-		);
-		stubFetch(fetchSpy);
-
-		const local = fakeLocal({
-			label: 0,
-			probabilities: [0.8, 0.2],
-			songProbability: 0.2,
-			modelVersion: "akari-3.17",
-		});
-		const client = new VideoClassifierClient({
-			baseUrl: "http://ml.test",
-			timeoutMs: 1_000,
-			localClassifier: local,
-			preferLocal: true,
-		});
-
-		const prediction = await client.classify({ title: "song" });
-		expect(prediction?.source).toBe("local");
-		expect(fetchSpy).not.toHaveBeenCalled();
+	test("resolves artifacts from CRAWLER_MODEL_DIR", () => {
+		const previous = process.env.CRAWLER_MODEL_DIR;
+		process.env.CRAWLER_MODEL_DIR = "/srv/cvsa/model";
+		try {
+			const classifier = new LocalAkariClassifier();
+			expect(classifier.embeddingPath).toBe("/srv/cvsa/model/embedding/model.onnx");
+			expect(classifier.classifierPath).toBe("/srv/cvsa/model/akari/3.17.onnx");
+		} finally {
+			if (previous === undefined) delete process.env.CRAWLER_MODEL_DIR;
+			else process.env.CRAWLER_MODEL_DIR = previous;
+		}
 	});
 });
 
@@ -280,10 +234,10 @@ describe("DiscoveryFilterService.evaluateCandidate with the model", () => {
 	};
 
 	test("accepts when P(song) clears the threshold", async () => {
-		songProbabilityFetch(0.2); // 0.8 song probability
+		const local = fakeLocal(prediction({ probabilities: [0.2, 0.8], songProbability: 0.8 }));
 		const service = new DiscoveryFilterService({ modelThreshold: 0.5 });
 
-		const decision = await service.evaluateCandidate(baseInput, classifier());
+		const decision = await service.evaluateCandidate(baseInput, clientWith(local));
 
 		expect(decision.action).toBe("accept");
 		expect(decision.reason).toBe("model_hit");
@@ -292,71 +246,77 @@ describe("DiscoveryFilterService.evaluateCandidate with the model", () => {
 	});
 
 	test("rejects when P(song) stays under the threshold", async () => {
-		songProbabilityFetch(0.9); // 0.1 song probability
+		const local = fakeLocal(
+			prediction({
+				label: 0,
+				probabilities: [0.9, 0.1],
+				songProbability: 0.1,
+				isAccepted: false,
+			})
+		);
 		const service = new DiscoveryFilterService({ modelThreshold: 0.5 });
 
-		const decision = await service.evaluateCandidate(baseInput, classifier());
+		const decision = await service.evaluateCandidate(baseInput, clientWith(local));
 
 		expect(decision.action).toBe("reject");
 		expect(decision.reason).toBe("model_rejected");
 	});
 
 	test("blacklist outranks the model", async () => {
-		const fetchSpy = mock(async () => new Response("{}", { status: 200 }));
-		stubFetch(fetchSpy);
+		const local = fakeLocal(prediction());
 		const service = new DiscoveryFilterService();
 
 		const decision = await service.evaluateCandidate(
 			{ ...baseInput, title: "原神 live" },
-			classifier()
+			clientWith(local)
 		);
 
 		expect(decision.action).toBe("reject");
 		expect(decision.reason).toBe("blacklist_hit");
-		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(local.calls).toBe(0);
 	});
 
 	test("strong whitelist hit skips the model entirely", async () => {
-		const fetchSpy = mock(async () => new Response("{}", { status: 200 }));
-		stubFetch(fetchSpy);
+		const local = fakeLocal(prediction());
 		const service = new DiscoveryFilterService();
 
 		const decision = await service.evaluateCandidate(
 			{ ...baseInput, title: "洛天依 原创曲", tags: ["vocaloid"] },
-			classifier()
+			clientWith(local)
 		);
 
 		expect(decision.action).toBe("accept");
 		expect(decision.reason).toBe("whitelist_hit");
-		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(local.calls).toBe(0);
 	});
 
-	test("falls back to rules and flags model_unavailable when the service is down", async () => {
-		stubFetch(async () => {
-			throw new Error("ECONNREFUSED");
-		});
+	test("falls back to rules and flags model_unavailable when the model is down", async () => {
+		const local = fakeLocal(
+			null,
+			healthy({ status: "degraded", modelLoaded: false, error: "files missing" }),
+			localStatus({ embeddingExists: false, classifierExists: false, ready: false })
+		);
 		const service = new DiscoveryFilterService();
 
 		const withSinger = await service.evaluateCandidate(
 			{ ...baseInput, title: "洛天依 live" },
-			classifier()
+			clientWith(local)
 		);
 		expect(withSinger.action).toBe("accept");
 		expect(withSinger.reason).toBe("model_unavailable");
 
-		const withoutSinger = await service.evaluateCandidate(baseInput, classifier());
+		const withoutSinger = await service.evaluateCandidate(baseInput, clientWith(local));
 		expect(withoutSinger.action).toBe("reject");
 		expect(withoutSinger.reason).toBe("model_unavailable");
 	});
 
 	test("modelEnabled=false keeps rule-only behaviour", async () => {
-		const fetchSpy = mock(async () => new Response("{}", { status: 200 }));
-		stubFetch(fetchSpy);
+		const local = fakeLocal(prediction());
 		const service = new DiscoveryFilterService({ modelEnabled: false });
 
-		const decision = await service.evaluateCandidate(baseInput, classifier());
+		const decision = await service.evaluateCandidate(baseInput, clientWith(local));
 
 		expect(decision.action).toBe("reject");
-		expect(fetchSpy).not.toHaveBeenCalled();
+		expect(local.calls).toBe(0);
 	});
 });

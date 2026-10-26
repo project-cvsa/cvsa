@@ -59,14 +59,12 @@ export const crawlerEnv = createEnv({
 		CONTROL_API_URL: z.url().optional(),
 		CONTROL_API_TOKEN: z.string().min(1).optional(),
 		/**
-		 * Classifier service that labels a candidate as a VOCALOID/SVS song.
-		 * In production this is the `inference` service (`apps/inference`,
-		 * ONNX Akari model on port 8544); it replaces the legacy `ml/api`
-		 * FastAPI process while keeping the same `/classify` + `/health`
-		 * contract.
+		 * Directory holding the in-process ONNX classifier artifacts:
+		 * `<dir>/embedding/model.onnx` and `<dir>/akari/<version>.onnx`.
+		 * Defaults to `./model` relative to the crawler's working directory.
+		 * The tokenizer is fetched from HuggingFace, not from this directory.
 		 */
-		ML_API_URL: z.url().default("http://127.0.0.1:8544"),
-		ML_API_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(30_000),
+		CRAWLER_MODEL_DIR: z.string().min(1).optional(),
 	},
 	runtimeEnv: import.meta.env,
 	emptyStringAsUndefined: true,

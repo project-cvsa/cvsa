@@ -1,3 +1,11 @@
+# ==============================================================================
+# CVSA production stack.
+#
+# Deployed by `scripts/deploy-daemon.ts`: the host-side webhook daemon rewrites
+# `IMAGE_TAG` in `.env.prod`, drains the crawler, applies database migrations
+# with `docker compose run --rm`, and only then runs
+# `docker compose up -d --wait` (every service below ships a native healthcheck).
+# ==============================================================================
 services:
   caddy:
     image: caddy:2.9-alpine
@@ -9,6 +17,10 @@ services:
       - "443:443/udp"
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    # Lets Caddy reach the host-side deploy webhook daemon (`/_deploy`) without
+    # publishing the daemon port to the internet.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -25,6 +37,10 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
+      args:
+        # Baked into the browser bundle at build time. Empty (the default) means
+        # same-origin: Caddy serves `/v2/*` and `/` from SITE_ADDRESS.
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-}
     container_name: cvsa-web
     restart: unless-stopped
     environment:
@@ -36,6 +52,10 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      # Same-origin default: empty means the browser uses `window.location.origin`
+      # and SSR calls the API over the internal Docker network.
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://backend:16412}
     depends_on:
       db:
         condition: service_healthy
@@ -69,13 +89,16 @@ services:
       BETTER_AUTH_URL: ${BETTER_AUTH_URL}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       WEB_ORIGINS: ${WEB_ORIGINS:-}
+      # Caddy's public host; allowed by CORS in addition to WEB_ORIGINS so a
+      # custom domain only has to be configured once.
+      SITE_ADDRESS: ${SITE_ADDRESS:-}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
       meili:
-        condition: service_started
+        condition: service_healthy
       embedding:
         condition: service_healthy
 
@@ -95,56 +118,20 @@ services:
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: 16413
       CONTROL_API_TOKEN: ${CONTROL_API_TOKEN}
-      # Discovery classification is delegated to the dedicated `inference`
-      # service; the crawler never loads ONNX in-process.
-      ML_API_URL: http://inference:8544
-      # Only read by the crawler's in-process fallback classifier, which points
-      # at the mounted `/app/model` copy of the same assets.
+      # Discovery classification runs in-process against the ONNX assets below.
       CRAWLER_MODEL_DIR: /app/model
+      # Keep the HuggingFace tokenizer cache on the mounted volume so it is
+      # downloaded once at first boot instead of on every container restart.
+      HF_HOME: /app/model/.cache/huggingface
     volumes:
-      # Fallback asset location for operators migrating the legacy on-disk
-      # models; the crawler itself reads them through `inference`.
-      - ${MODEL_DIR:-./model}:/app/model:ro
+      # Read-write: `HF_HOME` writes the tokenizer cache into
+      # `/app/model/.cache/huggingface` on first boot.
+      - ${MODEL_DIR:-./model}:/app/model
     depends_on:
       snapshot-db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      inference:
-        condition: service_healthy
-
-  inference:
-    image: ${IMAGE_REGISTRY:-ghcr.io/project-cvsa}/cvsa-inference:${IMAGE_TAG:-latest}
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: inference
-    container_name: cvsa-inference
-    restart: unless-stopped
-    # The HTTP server drains in-flight classifications before exiting on SIGTERM.
-    stop_grace_period: 30s
-    environment:
-      NODE_ENV: production
-      CVSA_INFERENCE_HOST: 0.0.0.0
-      CVSA_INFERENCE_PORT: 8544
-      CVSA_INFERENCE_EMBEDDING_MODEL_PATH: ${INFERENCE_EMBEDDING_MODEL_PATH:-/app/model/embedding/model.onnx}
-      CVSA_INFERENCE_CLASSIFIER_MODEL_PATH: ${INFERENCE_CLASSIFIER_MODEL_PATH:-/app/model/akari/3.17.onnx}
-      CVSA_INFERENCE_TOKENIZER_PATH: ${INFERENCE_TOKENIZER_PATH:-/app/model/embedding}
-    volumes:
-      # Read-only: the engine verifies every asset against its pinned manifest.
-      - ${MODEL_DIR:-./model}:/app/model:ro
-    # `/ready` (not `/health`) so a container that cannot load its ONNX assets
-    # never reports healthy and the crawler is not started against it.
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8544/ready || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          memory: 3G
 
   embedding:
     image: ${IMAGE_REGISTRY:-ghcr.io/project-cvsa}/cvsa-embedding:${IMAGE_TAG:-latest}
@@ -158,6 +145,8 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 14900
+      # Shares the crawler's tokenizer cache on the mounted model volume.
+      HF_HOME: /app/model/.cache/huggingface
     volumes:
       - ${MODEL_DIR:-./model}:/app/model
     deploy:
@@ -207,6 +196,18 @@ services:
       MEILI_ENV: production
     volumes:
       - meili:/meili_data
+    # Native healthcheck so `docker compose up -d --wait` blocks on Meilisearch
+    # as well, instead of letting the backend race an unready search index.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:7700/health || wget -qO- http://127.0.0.1:7700/health",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   redis:
     image: redis:7-alpine

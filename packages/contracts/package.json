@@ -21,7 +21,6 @@
 		"./errors": "./src/errors.ts",
 		"./song": "./src/song.ts",
 		"./crawler": "./src/crawler.ts",
-		"./crawler/inference": "./src/crawler/inference.ts",
 		"./crawler/policies": "./src/crawler/policies.ts",
 		"./crawler/operations": "./src/crawler/operations.ts"
 	}

@@ -32,10 +32,45 @@ const [host, port] = getBindingInfo();
 
 logStartup(host, port);
 
-const corsOriginPatterns = [
+/**
+ * Origins that are always trusted: the project's own domains in any
+ * subdomain/scheme/port, plus local development.
+ */
+const BASE_CORS_ORIGIN_PATTERNS = [
 	/^https?:\/\/([a-z0-9-]+\.)*projectcvsa\.com(?::\d+)?$/,
 	/^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/,
 ];
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Convert one deployment-configured origin into a CORS allow pattern. An entry
+ * may be a full origin (`https://cvsa.example.com`) or a bare host, which is
+ * how `SITE_ADDRESS` configures Caddy. Either scheme and an optional port are
+ * accepted because the same stack runs behind plain HTTP in staging.
+ */
+function toCorsOriginPattern(entry: string): RegExp | undefined {
+	const value = entry.trim().replace(/\/+$/, "");
+	if (value.length === 0) {
+		return undefined;
+	}
+	const host = value.replace(/^https?:\/\//, "");
+	return new RegExp(`^https?://${escapeRegExp(host)}(?::\\d+)?$`);
+}
+
+/**
+ * Every domain configured for this deployment (`WEB_ORIGINS`, comma-separated,
+ * or the single `SITE_ADDRESS` Caddy serves) is allowed automatically, so
+ * pointing the stack at a new host needs no code change.
+ */
+const CONFIGURED_CORS_ORIGIN_PATTERNS = [process.env.WEB_ORIGINS, process.env.SITE_ADDRESS]
+	.flatMap((value) => value?.split(",") ?? [])
+	.map(toCorsOriginPattern)
+	.filter((pattern) => pattern !== undefined);
+
+const corsOriginPatterns = [...BASE_CORS_ORIGIN_PATTERNS, ...CONFIGURED_CORS_ORIGIN_PATTERNS];
 
 const outboxWorker = createOutboxWorker(processOutboxEntry);
 

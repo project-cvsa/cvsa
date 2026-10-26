@@ -23,7 +23,6 @@ COPY package.json bun.lock turbo.json ./
 # package.json.
 COPY apps/backend/package.json ./apps/backend/package.json
 COPY apps/crawler/package.json ./apps/crawler/package.json
-COPY apps/inference/package.json ./apps/inference/package.json
 COPY apps/web/package.json ./apps/web/package.json
 COPY packages/authentication/package.json ./packages/authentication/package.json
 COPY packages/catalog/package.json ./packages/catalog/package.json
@@ -64,14 +63,16 @@ CMD ["bun", "run", "--cwd", "apps/backend", "start"]
 # ==============================================================================
 # Stage 5: Target - Crawler Daemon & Control Plane
 #
-# The crawler no longer runs ONNX in-process: it calls the `inference` stage
-# over HTTP (`ML_API_URL`). `/app/model` stays mounted as the fallback location
-# for operators that keep the legacy on-disk assets around.
+# Classification runs in-process against the mounted ONNX assets, and the
+# HuggingFace tokenizer is prefetched at first boot. `HF_HOME` lives under the
+# `/app/model` volume so the tokenizer cache survives container restarts instead
+# of being downloaded again on every rollout.
 # ==============================================================================
 FROM source AS crawler
 ENV NODE_ENV=production
 ENV CONTROL_API_HOST=0.0.0.0
 ENV CONTROL_API_PORT=16413
+ENV HF_HOME=/app/model/.cache/huggingface
 VOLUME ["/app/model"]
 EXPOSE 16413
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
@@ -79,32 +80,16 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
 CMD ["bun", "run", "--cwd", "apps/crawler", "start"]
 
 # ==============================================================================
-# Stage 6: Target - Akari ONNX Inference Service (classifier for the crawler)
+# Stage 6: Target - Search Embedding Service
 #
-# The ONNX assets are never baked into the image: they are mounted read-only at
-# `/app/model` and every path is supplied through `CVSA_INFERENCE_*` variables
-# (see `.env.prod.example`). `src/main.ts` is the process entrypoint behind the
-# package `start` script; `src/index.ts` only re-exports the library surface.
-# ==============================================================================
-FROM source AS inference
-ENV NODE_ENV=production
-ENV CVSA_INFERENCE_HOST=0.0.0.0
-ENV CVSA_INFERENCE_PORT=8544
-VOLUME ["/app/model"]
-EXPOSE 8544
-# Liveness only: `/health` answers as soon as the HTTP layer is up, while
-# `/ready` stays 503 until every ONNX asset is verified and loaded.
-HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=3 \
-	CMD curl -fsS http://127.0.0.1:${CVSA_INFERENCE_PORT:-8544}/health || exit 1
-CMD ["bun", "run", "--cwd", "apps/inference", "start"]
-
-# ==============================================================================
-# Stage 7: Target - Search Embedding Service
+# Same caching contract as the crawler: the HuggingFace tokenizer is downloaded
+# once into `/app/model/.cache/huggingface` and reused on every subsequent boot.
 # ==============================================================================
 FROM source AS embedding
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=14900
+ENV HF_HOME=/app/model/.cache/huggingface
 VOLUME ["/app/model"]
 EXPOSE 14900
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
@@ -112,14 +97,21 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
 CMD ["bun", "run", "--cwd", "packages/embedding", "start"]
 
 # ==============================================================================
-# Stage 8: Build - Web SSR Bundle (Astro + Solid)
+# Stage 7: Build - Web SSR Bundle (Astro + Solid)
+#
+# `PUBLIC_API_URL` is read by Vite and baked into the bundle: an empty value is
+# the supported default behind Caddy, where `/v2/*` and `/` share one origin and
+# the browser calls `window.location.origin`. Pass a full origin only when the
+# API is served from a different domain.
 # ==============================================================================
 FROM source AS web-builder
 ENV NODE_ENV=production
+ARG PUBLIC_API_URL=""
+ENV PUBLIC_API_URL=${PUBLIC_API_URL}
 RUN bun run --cwd apps/web build
 
 # ==============================================================================
-# Stage 9: Target - Web SSR (Astro + Solid under Bun Runtime)
+# Stage 8: Target - Web SSR (Astro + Solid under Bun Runtime)
 # ==============================================================================
 FROM source AS web
 ENV NODE_ENV=production

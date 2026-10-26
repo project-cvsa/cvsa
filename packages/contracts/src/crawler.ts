@@ -119,7 +119,7 @@ export const DiscoveryFilterConfigDtoSchema = z.object({
 	minDurationSeconds: z.number().int().positive(),
 	maxDurationSeconds: z.number().int().positive(),
 	rejectionSampleRate: z.number().min(0).max(1),
-	/** Run the classifier (`ml/api`) for candidates the rules cannot settle. */
+	/** Run the in-process ONNX classifier for candidates the rules cannot settle. */
 	modelEnabled: z.boolean(),
 	/** Minimum `1 - P(not a song)` required to accept. */
 	modelThreshold: z.number().min(0).max(1),

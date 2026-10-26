@@ -122,14 +122,10 @@ export const discoveryFilterService = new DiscoveryFilterService(
 );
 
 /**
- * Remote inference service (`apps/inference`) with the local ONNX Akari model as
- * an automatic fallback. `src/ml/akari.ts` is the fallback implementation.
+ * In-process ONNX Akari classifier (`src/ml/akari.ts`). Classification runs in
+ * this process; there is no separate inference service to call.
  */
-export const videoClassifierClient = new VideoClassifierClient({
-	baseUrl: crawlerEnv.ML_API_URL,
-	timeoutMs: crawlerEnv.ML_API_TIMEOUT_MS,
-	fallbackToLocal: true,
-});
+export const videoClassifierClient = new VideoClassifierClient();
 
 export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 	bilibiliClient,

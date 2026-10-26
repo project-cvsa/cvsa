@@ -14,7 +14,7 @@ env:
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
   # Every application image built from the layered Dockerfile. Keep in sync with
   # the targets in `Dockerfile` and the services in `docker-compose.prod.yml`.
-  IMAGE_TARGETS: backend crawler embedding inference web
+  IMAGE_TARGETS: backend crawler embedding web
 
 jobs:
   verify:
@@ -106,104 +106,47 @@ jobs:
               .
           done
 
-      - name: Smoke Test Built Backend & Inference Images
-        env:
-          SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
-        run: |
-          set -euo pipefail
-          docker compose up -d
-
-          # Backend answers its health endpoint against the real backing services.
-          docker run --rm -d --name smoke-backend --network host \
-            -e NODE_ENV=production \
-            -e HOST=127.0.0.1 \
-            -e PORT=16412 \
-            -e DATABASE_URL="postgres://cvsa:password@127.0.0.1:5432/cvsa" \
-            -e REDIS_URL="redis://127.0.0.1:6379" \
-            -e MEILI_API_URL="http://127.0.0.1:7700" \
-            -e MEILI_MASTER_KEY="0712041211241099" \
-            "${IMAGE_PREFIX}/cvsa-backend:${SHA_TAG}"
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:16412/v2/health; then
-              echo "Backend image verified"
-              break
-            fi
-            sleep 1
-          done
-          curl -fsS http://127.0.0.1:16412/v2/health
-          docker stop smoke-backend
-
-          # Inference boots without model assets and reports readiness honestly:
-          # `/health` is a liveness 200, `/ready` must stay 503 until the pinned
-          # ONNX assets are verified and loaded.
-          docker run --rm -d --name smoke-inference --network host \
-            -e NODE_ENV=production \
-            -e CVSA_INFERENCE_HOST=127.0.0.1 \
-            -e CVSA_INFERENCE_PORT=8544 \
-            -e CVSA_INFERENCE_EMBEDDING_MODEL_PATH=/tmp/missing/embedding/model.onnx \
-            -e CVSA_INFERENCE_CLASSIFIER_MODEL_PATH=/tmp/missing/akari/3.17.onnx \
-            -e CVSA_INFERENCE_TOKENIZER_PATH=/tmp/missing/embedding \
-            "${IMAGE_PREFIX}/cvsa-inference:${SHA_TAG}"
-          for _ in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8544/health; then
-              echo "Inference image verified"
-              break
-            fi
-            sleep 1
-          done
-          curl -fsS http://127.0.0.1:8544/health
-          test "$(curl -o /dev/null -s -w '%{http_code}' http://127.0.0.1:8544/ready)" = "503"
-          docker stop smoke-inference
-
   deploy:
-    name: Deploy to VPS with Rollback Protection
+    name: Trigger Deploy Webhook
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && vars.ENABLE_VPS_DEPLOY == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v6
+      # The host-side `scripts/deploy-daemon.ts` owns the rollout: it pins
+      # `IMAGE_TAG`, drains the crawler, applies migrations, waits on the native
+      # healthchecks, and rolls back on its own. CI only has to authenticate and
+      # hand over the tag, so no SSH key or deploy path exists in this workflow.
+      - name: Call deploy webhook
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_WEBHOOK_URL}" ] || [ -z "${DEPLOY_WEBHOOK_SECRET}" ]; then
+            echo "::error::DEPLOY_WEBHOOK_URL and DEPLOY_WEBHOOK_SECRET must be configured." >&2
+            exit 1
+          fi
 
-      # The deploy path is expected to hold a checkout of this repository at the
-      # released commit (compose file + `docker/` helpers); rollback only rewrites
-      # `IMAGE_TAG` in `.env.prod` and re-runs the same stack.
-      - name: Rollout on VPS
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          script_stop: true
-          script: |
-            set -euo pipefail
-            cd "${{ secrets.VPS_DEPLOY_PATH || '/opt/cvsa' }}"
+          PAYLOAD=$(jq -cn --arg tag "${IMAGE_TAG}" '{tag: $tag, syncGit: true}')
+          SIGNATURE=$(printf '%s' "${PAYLOAD}" \
+            | openssl dgst -sha256 -hmac "${DEPLOY_WEBHOOK_SECRET}" -hex \
+            | sed 's/^.* //')
 
-            PREV_TAG=$(grep -E '^IMAGE_TAG=' .env.prod | cut -d= -f2 || echo "latest")
-            NEW_TAG="${{ needs.build-and-push.outputs.image_tag }}"
+          HTTP_STATUS=$(curl --silent --show-error \
+            --max-time 900 \
+            --output deploy-response.json \
+            --write-out '%{http_code}' \
+            --header "Content-Type: application/json" \
+            --header "Authorization: Bearer ${DEPLOY_WEBHOOK_SECRET}" \
+            --header "X-Hub-Signature-256: sha256=${SIGNATURE}" \
+            --data "${PAYLOAD}" \
+            "${DEPLOY_WEBHOOK_URL}")
 
-            echo "${{ secrets.GHCR_PULL_TOKEN }}" | docker login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
-
-            sed -i.bak "s/^IMAGE_TAG=.*/IMAGE_TAG=${NEW_TAG}/" .env.prod || echo "IMAGE_TAG=${NEW_TAG}" >> .env.prod
-
-            docker compose --env-file .env.prod -f docker-compose.prod.yml pull backend crawler web embedding inference
-
-            # Drain the crawler before anything else: it is the only dispatcher, so
-            # no two generations may overlap during the rollout.
-            bash ./docker/verify-rollout.sh drain
-
-            # Apply database migrations before starting new application containers
-            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm backend bun run --filter @cvsa/db migrate:deploy
-            docker compose --env-file .env.prod -f docker-compose.prod.yml run --rm crawler bun run --filter @cvsa/snapshot-db migrate:deploy
-
-            # Start updated services (crawler last, once inference is ready)
-            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans
-
-            # Verify health checks (inference readiness included), rollback to PREV_TAG on failure
-            if ! bash ./docker/verify-rollout.sh; then
-              echo "Rollout verification failed, rolling back to ${PREV_TAG}"
-              sed -i.bak "s/^IMAGE_TAG=.*/IMAGE_TAG=${PREV_TAG}/" .env.prod
-              bash ./docker/verify-rollout.sh drain || true
-              docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
-              exit 1
-            fi
+          cat deploy-response.json || true
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "::error::Deploy webhook failed with HTTP ${HTTP_STATUS} for tag ${IMAGE_TAG}" >&2
+            exit 1
+          fi
+          echo "Deploy daemon accepted ${IMAGE_TAG}"
