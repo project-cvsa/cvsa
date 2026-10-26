@@ -27,12 +27,15 @@ jobs:
         run: |
           cp .env.docker.example .env.docker
           cp packages/db/.env.example packages/db/.env
-          cp packages/db/.env.example packages/db/.env.test
-          cp apps/backend/.env.example apps/backend/.env.test
+          cp packages/db/.env.test.example packages/db/.env.test
+          cp apps/backend/.env.test.example apps/backend/.env.test
           cp apps/crawler/.env.example apps/crawler/.env.test
 
       - name: Start backing services
-        run: docker compose up -d
+        # `--wait` blocks until every container reports healthy, so Postgres,
+        # TimescaleDB, Redis and Meilisearch are accepting connections before
+        # `setup:ci` runs instead of racing their first-boot initialization.
+        run: docker compose up -d --wait --wait-timeout 240
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

@@ -3,6 +3,10 @@
 	"type": "module",
 	"main": "src/index.ts",
 	"module": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./database": "./src/database.ts"
+	},
 	"version": "0.1.0",
 	"scripts": {
 		"typecheck": "bunx --bun tsc --noEmit"

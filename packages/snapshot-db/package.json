@@ -12,8 +12,8 @@
 		"migrate": "bunx --bun prisma migration plan",
 		"migrate:deploy": "bunx --bun prisma db migrate",
 		"test": "bun test --concurrent",
-		"test:setup": "NODE_ENV=test bunx --bun prisma db update --yes",
-		"test:reset": "NODE_ENV=test bunx --bun prisma db update --yes"
+		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes",
+		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes"
 	},
 	"devDependencies": {
 		"@cvsa/typescript-config": "workspace:*",
