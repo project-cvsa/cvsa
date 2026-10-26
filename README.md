@@ -8,6 +8,8 @@ CVSA is a community-driven archive that consolidates scattered information about
 
 This monorepo contains all core components of the CVSA platform, managed with [Turborepo](https://turbo.build/repo) and [Bun](https://bun.sh).
 
+See [our docs](https://docs.projectcvsa.com) for more details.
+
 ## Project Structure
 
 ```

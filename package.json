@@ -26,6 +26,7 @@
 	},
 	"packageManager": "bun@1.4.2",
 	"overrides": {
+		"mdast-util-to-markdown": "2.1.2",
 		"yuku-parser": "0.6.3"
 	}
 }

@@ -13,6 +13,9 @@
 			"cache": false,
 			"persistent": true
 		},
+		"docs#build": {
+			"outputs": ["out/**"]
+		},
 		"lint": {
 			"inputs": ["tests/**.ts", "src/**.ts", "biome.json", ".biome*"]
 		},

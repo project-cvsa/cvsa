@@ -1,0 +1,418 @@
+---
+title: 概要设计文档
+description: 了解如何参与档案馆的开发工作。
+---
+
+## 引言
+
+### 项目背景
+
+过去，关于中文虚拟歌手社区（中 V）的各类资料分散在视频平台、音乐平台、各种统计网站和网络百科中。中 V 档案馆旨在通过一个统一的网站统合关于中 V 的各种信息。
+
+### 设计目标
+
+1. 提供一个结构化与非结构化混合的数据平台:
+    1. 结构化：能够高效整理和展示结构化的元信息（如歌曲的元信息：歌姬、UP 主、创作者、类别、时长等）
+    2. 非结构化：灵活存储和渲染高度自由的富文本与媒体资产（作品赏析、创作者感言、带有特殊样式的歌词等）
+2. 支持数据的版本控制（编辑历史）
+3. 支持基于模板和 wikitext 的富文本内容渲染
+4. 支持自动化的歌曲收录
+5. 支持自动化的视频（歌曲 PV）成就追踪
+
+### 术语
+
+-   **中 V:** 中文虚拟歌手社区，由使用 VOCALOID、Synthesizer V 等歌声合成软件创作音乐作品的创作者及欣赏这些作品的听众组成。
+-   **爬虫 (Crawler):** 指本系统中的一个组件，用于从公开互联网或私有 API 中获取第三方平台和其它网站的数据。
+-   **CVSA:** Chinese Vocal Synthesizer Archive，即本项目。
+-   **DAU:** Daily Active User，日活跃用户。在一天内至少访问过一次网站的唯一用户总数。
+-   **MAU:** Monthly Active User，月活跃用户。在一个月内至少访问过一次网站的唯一用户总数。
+-   **PV:** Promotion Video，指音乐创作者发表在视频平台的音乐视频。
+-   **PV (Page View):** 网站页面被浏览的总次数。
+-   **UV:** Unique Visitor，访问网站的唯一访客数量。
+-   **SSR:** Server Side Rendering，服务端渲染。指由服务器生成完整 HTML 页面直接发送给浏览器展示的技术。
+-   **快照 (Snapshot):** 系统在特定时刻通过爬虫获取到的某个视频的统计信息（播放量等）。
+-   **RTO:** Recovery Time Objective，灾难发生后，系统从宕机状态恢复的最长容忍时间。
+
+## 系统概述
+
+### 架构简述
+
+现代全栈 TypeScript 宏服务（Macroservices）架构，PostgreSQL 作为核心存储。
+
+### 系统上下文图
+
+<picture>
+    <source srcSet="/images/System%20Context%20Diagram.png" media="(prefers-color-scheme: dark)" />
+
+    <img src="/images/System Context Diagram Light.png" alt='graph TD
+        %% Persons
+        Editor["编辑者 (PERSON)\n通过网站界面贡献/修改条目内容"]
+        Reader["读者 (PERSON)\n浏览中V歌曲及其它相关信息"]
+        ThirdPartyUser["第三方用户 (PERSON)\n通过第三方客户端或自动程序获得数据"]
+    
+        %% Software System
+        MainSystem["中V档案馆 (SOFTWARE SYSTEM)\n提供一个结构化与非结构化混合的数据平台及自动追踪模块，供读者查阅、编辑者编辑。"]
+    
+        %% External Systems
+        Maileroo["Maileroo (EXTERNAL SYSTEM)\n提供邮件收发服务"]
+        Bilibili["哔哩哔哩 (EXTERNAL SYSTEM)\n提供视频数据 (播放量等)"]
+        ExternalWiki["外部百科/统计站 (EXTERNAL SYSTEM)\nVCPedia/天钿Daily/VocaDB等历史资料参考源"]
+        ObjectStorage["对象存储 (EXTERNAL SYSTEM)\n提供AWS S3兼容的对象存储服务"]
+    
+        %% Relationships
+        Editor -- "编辑与修改" --> MainSystem
+        Reader -- "访问与查询" --> MainSystem
+        ThirdPartyUser -- "访问公开接口" --> MainSystem
+        
+        MainSystem -- "通过接口发送验证或通知邮件" --> Maileroo
+        Maileroo -- "发送邮件" --> Editor
+        
+        MainSystem -- "抓取视频数据与成就追踪" --> Bilibili
+        ExternalWiki -- "整合分散资料" --> MainSystem
+        MainSystem -- "读取与写入" --> ObjectStorage' />
+</picture>
+
+### 规模与约束
+
+-   预估用户
+    -   总注册用户预计 > 50,000
+    -   日活跃用户（DAU）> 1,000
+-   数据量
+    -   总实体数目 > 500,000
+    -   总关系数目 > 5,000,000
+    -   **成就追踪记录数 ~1,000,000–2,000,000/周**
+-   并发
+    -   高峰期 QPS 预计 > 100
+    -   日 PV > 50,000
+    -   日 UV > 1,000
+
+## 架构设计
+
+### 系统容器图
+
+<picture>
+    <source srcSet="/images/System%20Container%20Diagram.png" media="(prefers-color-scheme: dark)" />
+
+    <img src="/images/System Container Diagram Light.png" alt='graph TB
+    subgraph External_Systems [External Systems]
+        Maileroo["<b>Maileroo</b><br/>提供邮件收发服务"]
+        S3["<b>对象存储</b><br/>提供AWS S3兼容的对象存储服务"]
+        Bilibili["<b>哔哩哔哩</b><br/>提供视频内容和其它数据及<br/>元信息（播放量等）"]
+    end
+
+    Person["<b>访客 (Person)</b><br/>浏览和获取页面的信息或编辑其内容"]
+
+    subgraph Software_System [中V档案馆 - Software System]
+        %% Services
+        Frontend["<b>前端 (Service)</b><br/>基于Astro的SSR服务器，<br/>用于获取数据并渲染页面"]
+        Backend["<b>后端 (Service)</b><br/>基于Elysia的后端服务，<br/>提供RESTful API"]
+        Crawler["<b>爬虫 (Service)</b><br/>从外部平台获取数据的<br/>Bun守护服务进程"]
+
+        %% Databases
+        Redis[("<b>Redis (Database)</b><br/>用于加速查询及驱动 BullMQ 消息队列")]
+        MainDB[("<b>主数据库 (Database)</b><br/>用于存放大部分数据模型和非结构化信息<br/>的主PostgreSQL数据库")]
+        SnapshotDB[("<b>快照数据库 (Database)</b><br/>基于TimescaleDB的时序数据库，用于<br/>存放快照和爬虫抓取到的其它内容")]
+    end
+
+    %% Relationships
+    Person -->|访问| Frontend
+
+    Frontend -->|请求| Backend
+    Frontend -->|读取| Redis
+    Frontend -->|读取| MainDB
+    Frontend -->|读取| SnapshotDB
+
+    Backend -->|请求发送邮件| Maileroo
+    Backend <-->|读取与写入| S3
+    Backend -->|请求| Crawler
+    Backend <-->|读写| Redis
+    Backend <-->|读写| MainDB
+    Backend -->|读取| SnapshotDB
+
+    Crawler -->|请求| Bilibili
+    Crawler <-->|消息队列| Redis
+    Crawler <-->|读写| SnapshotDB
+
+    Maileroo -->|发送邮件| Person' />
+</picture>
+
+### 组件拆分
+
+-   前端：基于 Astro 的 SSR 服务器，用于获取数据并渲染页面，如首页、歌手页、作品页、排行榜、搜索结果页等
+-   后端：基于 Elysia 的后端服务，提供对歌曲/歌手/创作者/专辑等核心模型的 RESTful API
+-   爬虫：从外部平台（主要为哔哩哔哩）获取和监控数据的 Bun 守护服务进程
+
+### 技术栈
+
+-   前端：Astro SSR + React + TypeScript + Tailwind CSS
+-   后端：Elysia.js + TypeScript + Prisma ORM
+-   数据库：PostgreSQL + TimescaleDB
+-   可视化：自研图表引擎
+-   部署：基于 Docker + PM2 的 VPS 自部署
+-   版本管理 & 协作：GitHub + GitHub Projects
+
+### 选型决策
+
+#### 前端框架
+
+-   **方案 A：Astro SSR + React (首选)**
+    -   **理由**：在对比测试中，Astro 的 SSR 性能显著优于传统 React 框架（如 Next.js），在同等硬件条件下吞吐量提升约 2-5 倍。同时，它兼容 React 生态，确保了复杂 UI 组件的开发效率。
+    -   **结论**：满足高性能并发需求，且开发体验与生态均处于成熟阶段。
+-   **方案 B：Next.js**
+    -   **局限**：受限于 React 传统的运行时架构，在并发达到 15-30 以上时，单线程 JS 容易出现阻塞，导致在高负载场景下响应缓慢。
+-   **方案 C：Deno Fresh / Solid Start**
+    -   **局限**：虽然性能表现优秀，但生态尚不完善，部分关键库缺乏支持，会增加长期维护成本。
+
+#### 后端架构
+
+-   **方案 A：Elysia.js + TypeScript (首选)**
+    -   **理由**：Elysia.js 针对 Bun 运行时进行了深度优化，拥有极高的吞吐量。配合 Prisma ORM，可以实现从数据库到前端的全链路类型安全，大幅降低协作中的接口错误。
+-   **方案 B：NestJS**
+    -   **局限**：框架较为厚重，虽规范性强，但在轻量化部署和极致响应速度上略逊于 Elysia.js。
+
+#### 数据
+
+-   **方案 A：PostgreSQL + TimescaleDB 扩展 (首选)**
+    -   **理由**：考虑到未来数据量将向亿级甚至十亿级增长，传统的 PostgreSQL 单表在处理高频写入和范围查询时可能出现性能瓶颈。TimescaleDB 的 hypertable 结构能自动对数据进行分区，优化存储空间（压缩率高）并提升时序查询性能。
+    -   **优势**：由于其基于 Postgres，现有查询语句无需改动，迁移阻力极小。
+-   **方案 B：原生 PostgreSQL 直接承载**
+    -   **局限**：虽然短期内可通过索引优化缓解查询延迟，但随着磁盘占用日趋紧张，缺乏针对时序数据的自动压缩和分区管理，长期维护压力巨大。
+
+## 模块拆分
+
+### 系统组件图
+
+<picture>
+    <source srcSet="/images/System%20Component%20Diagram.png" media="(prefers-color-scheme: dark)" />
+
+    <img src="/images/System Component Diagram Light.png" alt='graph TD
+    %% External Entities
+    Bilibili["外部系统：哔哩哔哩<br/>提供视频内容、元信息、统计数据（播放量等）和其它信息"]
+    Admin["PERSON：管理员<br/>负责管理和调控系统运行"]
+
+    subgraph SoftwareSystem ["中V档案馆 (SOFTWARE SYSTEM)"]
+        Frontend["前端<br/>基于Astro的SSR服务器，用于获取数据并渲染页面"]
+        Backend["后端<br/>基于Elysia的后端服务，提供RESTful API"]
+
+        subgraph CrawlerContainer ["爬虫 (CONTAINER)"]
+            API["API<br/>向外部提供管理该组件的能力"]
+            NetworkDelegate["Network Delegate<br/>用于管理代理池、限制请求速率的网络调用层"]
+            PlatformAdapter["Platform Adapter<br/>将第三方平台的 API 转为统一的接口调用"]
+            Worker["Worker<br/>负责直接执行来自 MQ 的任务"]
+            Rover["Rover<br/>负责发现新曲目、定时更新信息"]
+            TaskCollector["Task Collector<br/>收集爬取任务并发往 MQ"]
+            TaskScheduler["Task Scheduler<br/>计算爬取任务时间并向数据库写入"]
+            Service["Service<br/>封装业务逻辑、聚合查询、执行 pre/post-hook、进行状态校验、记录日志等"]
+            Repository["Repository<br/>基于仓储模式的数据访问层，负责整合查询逻辑并提供统一的数据库读写接口"]
+        end
+    end
+
+    %% Databases
+    Redis[("DATABASE：Redis<br/>负责驱动 BullMQ 消息队列")]
+    SnapshotDB[("DATABASE：快照数据库<br/>基于 TimescaleDB 的时序数据库，用于存放快照、爬虫抓取到的其它内容及持久化爬取任务")]
+
+    %% Relationships
+    Admin -- "操作" --> Frontend
+    Frontend -- "请求" --> Backend
+    Backend -- "请求" --> API
+    
+    API -- "调用" --> Service
+    Service -- "分发" --> TaskCollector
+    Service -- "调度" --> TaskScheduler
+    Service -- "持久化/查询" --> Repository
+
+    TaskCollector -- "发送到 MQ" --> Redis
+    TaskScheduler -- "发送到 MQ" --> Redis
+    Redis -- "分派任务" --> Worker
+
+    Worker -- "调用业务逻辑" --> Service
+    Rover -- "调用业务逻辑" --> Service
+
+    Worker -- "请求接口" --> PlatformAdapter
+    Rover -- "请求接口" --> PlatformAdapter
+    PlatformAdapter -- "网络请求" --> NetworkDelegate
+    
+    NetworkDelegate -- "请求" --> Bilibili
+    Bilibili -- "响应" --> NetworkDelegate
+
+    Repository -- "写入数据" --> SnapshotDB
+    SnapshotDB -- "读取爬取任务" --> TaskScheduler' />
+</picture>
+
+### 后端
+
+-   **API Controller:** 负责处理 RESTful 请求，执行核心业务逻辑
+-   **Version Control Manager:** 建立在 **Model Repository** 之上，负责在主数据库中记录每次编辑的 diff，并处理版本回滚逻辑
+-   **Auth:** 负责用户鉴权及基于 RBAC 的权限控制
+
+### 前端
+
+-   **Wikitext Renderer:** 用于将 wikitext 转为 HTML
+-   **Islands Components:** 负责页面的可交互部分（通过 React）
+
+### 爬虫
+
+-   **Task Scheduler:** 计算视频的增长速度，并根据该速度来安排下一次快照时间
+-   **Platform Adapter:** 用于将第三方平台（主要是哔哩哔哩）的 API 转为统一的接口调用
+-   **Network Delegate:** 用于管理代理池、限制请求速率的网络调用层
+-   **Worker:** 负责与消息队列协调，用于执行快照和其它的爬取任务
+-   **Task Collector:** 负责收集快照任务并发往消息队列
+-   **Rover:** 负责发现新曲目、爬取和更新一些信息
+
+### 通用
+
+-   **Repository:** 基于仓储模式的数据访问层，负责整合查询逻辑并为所有其它模块提供统一的数据库读写接口
+-   **Service:** 在 Repository 之上，封装业务逻辑，负责聚合查询、整合 pre/post-hook、做状态/完整性校验、记录日志等。
+-   **Auth:** 负责统一管理鉴权校验和基于 RBAC 的访问权控制逻辑
+
+## 实体关系图
+
+### 图解
+
+<picture>
+    <source srcSet="/images/E-R%20Legend.png" media="(prefers-color-scheme: dark)" />
+
+    <img src="/images/E-R Legend Light.png" />
+</picture>
+
+### 核心实体
+
+<picture>
+    <source srcSet="/images/E-R%20Diagram%20for%20core.png" media="(prefers-color-scheme: dark)" />
+
+    <img src="/images/E-R Diagram for core Light.png" alt='erDiagram
+    ARTIST ||--o{ ARTIST_ROLE : ""
+    SONG ||--o{ ARTIST_ROLE : ""
+    SONG }o--o| SERIES : ""
+    SONG }o--o| ALBUM : ""
+    SONG ||--o{ LYRICS : ""
+    SONG ||--o{ SINGER : ""
+    SONG ||--o{ TAG : ""
+    TAG ||--o| TAG : "parent"
+
+    ARTIST {
+        int ID
+        text NAME
+    }
+
+    ARTIST_ROLE {
+        int ID
+        text ROLE
+        int ARTIST_ID
+        int SONG_ID
+    }
+
+    SERIES {
+        int ID
+        text NAME
+    }
+
+    ALBUM {
+        int ID
+        text NAME
+    }
+
+    SONG {
+        int ID
+        text NAME
+    }
+
+    LYRICS {
+        int ID
+        text CONTENT
+    }
+
+    SINGER {
+        int ID
+        int NAME
+    }
+
+    TAG {
+        int ID
+        text NAME
+        int PARENT_ID
+    }' />
+</picture>
+
+
+### 歌曲、歌姬与引擎
+
+<picture>
+    <source srcSet="/images/E-R%20for%20singers.png" media="(prefers-color-scheme: dark)" />
+
+    <img src="/images/E-R for singers Light.png" alt='erDiagram
+    SINGER ||--o{ PERFORMANCE : ""
+    SINGER ||--o{ VOICEBANK : ""
+    SONG ||--o{ PERFORMANCE : ""
+    SONG |o--o| SONG : "original"
+    VOICEBANK ||--o{ PERFORMANCE : ""
+    SVS_ENGINE ||--o{ PERFORMANCE : ""
+    SVS_ENGINE ||--o{ SVS_ENGINE_VERSION : ""
+    SVS_ENGINE_VERSION ||--o{ PERFORMANCE : ""
+    SVS_ENGINE_VERSION ||--o{ VOICEBANK : ""
+
+    SINGER {
+        int ID
+        int NAME
+    }
+
+    SONG {
+        int ID
+        text NAME
+        int ORIGINAL_SONG_ID
+    }
+
+    VOICEBANK {
+        int ID
+        int SVS_ENGINE_VERSION_ID
+        int SINGER_ID
+    }
+
+    PERFORMANCE {
+        int ID
+        int SINGER_ID
+        int SONG_ID
+        int VOICEBANK_ID
+        int SVS_ENGINE_ID
+        int SVS_ENGINE_VERSION_ID
+    }
+
+    SVS_ENGINE {
+        int ID
+        int NAME
+    }
+
+    SVS_ENGINE_VERSION {
+        int ID
+        int SVS_ENGINE_ID
+        text VERSION_STRING
+    }' />
+</picture>
+
+### 说明
+
+-   `svs_engine` 指某个特定的歌声合成引擎，例如 VOCALOID, Synthesizer V, ACE Studio 等
+-   `svs_engine_version` 指某个歌声合成引擎的特定版本，例如 VOCALOID **4**, Synthesizer V **Studio 2**, ACE Studio **2.0**
+-   `voicebank` 指某个特定的**歌姬**和某个特定的**引擎版本**的组合
+-   `performance` 用于记录参与演唱某一首歌曲的歌姬情况。从其它项目的实践中我们发现，有时只能得知参与演唱歌曲的歌姬，而无法确定背后使用的声库或引擎，因此 `voicebank_id` , `svs_engine_id` , `svs_engine_version_id` 均可为 `NULL`
+
+## 非功能性设计
+
+### 性能
+
+-   **SSR 响应优化**：将页面包含的 wikitext 等内容的渲染结果缓存，结合 HTTP 侧的缓存以加速访问。
+-   **时序数据处理**：快照数据库基于 TimescaleDB，通过内置的行级压缩和超表结构来控制表大小，避免表膨胀。
+-   **缓存策略**：在 Repository 和 Service 层分别进行不同层面（查询层面、业务层面）的缓存，以提高网站页面和主要 API 的响应速度。
+
+### 数据安全与可靠性
+
+-   **版本回溯可靠性**：所有非结构化内容的编辑必须记录在编辑历史中，确保在发生恶意编辑时可随时回滚。
+-   **数据持久化**：数据库通过 pgBackRest 进行实时备份，以减少 RTO。
+-   **访问权限控制 (RBAC)**：在 Auth 模块实施基于 Role 的访问控制，以区分不同权限的用户并防止关键内容被恶意篡改。
+-   **接口保护**：使用 PoW 和其它 CAPTCHA 混合的策略来保护关键接口，并对不同接口实施不同的速率限制策略。
+
+### 维护与可观测性
+
+-   **全链路类型安全**：基于 TypeScript 和 Prisma ORM 实现从数据库到前端的类型同步，降低代码维护成本。
+-   **容器化部署**：系统整体基于 Docker 部署，支持各组件的独立升级与维护。
+-   **监控与告警**：使用 OpenTelemetry + Prometheus + Grafana 来实现系统指标的收集、观测、可视化与预警。

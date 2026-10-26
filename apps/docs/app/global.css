@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+.prose blockquote {
+	font-style: normal;
+	@apply text-fd-muted-foreground;
+}
+
+.prose
+	:where(blockquote p:first-of-type):not(
+		:where([class~="not-prose"], [class~="not-prose"] *)
+	):before {
+	content: none;
+}
+
+.prose
+	:where(blockquote p:last-of-type):not(
+		:where([class~="not-prose"], [class~="not-prose"] *)
+	)::after {
+	content: none;
+}
