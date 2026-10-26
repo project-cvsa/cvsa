@@ -1,30 +1,41 @@
+import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
 import { snapshotDb, toInstant } from "@cvsa/snapshot-db";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
+import { Pool } from "pg";
 import { DiscoveryRepository } from "../crawler/discovery/repository";
 import type { UpsertMetadataInput } from "../crawler/discovery/types";
 import { TrackingRepository } from "../crawler/tracking/repository";
+import {
+	SNAPSHOT_BATCH_SIZE,
+	type SnapshotInsertRow,
+	insertSnapshotBatch,
+} from "./legacy-snapshots";
 
 interface ImportOptions {
 	file: string;
 	batchSize: number;
+	includeSnapshots: boolean;
 }
 
 function parseCliArgs(): ImportOptions {
 	const args = process.argv.slice(2);
 	let file = "legacy-tracking-dump.jsonl";
 	let batchSize = 1000;
+	let includeSnapshots = true;
 
 	for (const arg of args) {
 		if (arg.startsWith("--file=")) {
 			file = arg.slice("--file=".length);
 		} else if (arg.startsWith("--batch-size=")) {
 			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 1000;
+		} else if (arg === "--no-snapshots") {
+			includeSnapshots = false;
 		}
 	}
 
-	return { file, batchSize };
+	return { file, batchSize, includeSnapshots };
 }
 
 async function runImport(): Promise<void> {
@@ -32,11 +43,17 @@ async function runImport(): Promise<void> {
 	appLogger.info("Starting legacy data import from dump file...", {
 		file: opts.file,
 		batchSize: opts.batchSize,
+		includeSnapshots: opts.includeSnapshots,
 	});
 
 	await snapshotDb.connect();
 	const trackingRepo = new TrackingRepository(snapshotDb.client);
 	const discoveryRepo = new DiscoveryRepository(snapshotDb.client);
+	// Snapshots go through `pg` so a batch is one multi-row INSERT instead of
+	// one ORM call per row.
+	const snapshotPool = new Pool({
+		connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL,
+	});
 
 	const fileStream = createReadStream(opts.file, { encoding: "utf8" });
 	const rl = createInterface({
@@ -46,7 +63,10 @@ async function runImport(): Promise<void> {
 
 	let importedTracking = 0;
 	let importedMeta = 0;
+	let importedSnapshots = 0;
 	let metadataBatch: UpsertMetadataInput[] = [];
+	let snapshotBatch: SnapshotInsertRow[] = [];
+	const snapshotBatchSize = Math.min(opts.batchSize, SNAPSHOT_BATCH_SIZE);
 
 	const now = new Date();
 
@@ -130,6 +150,25 @@ async function runImport(): Promise<void> {
 					metadataBatch = [];
 					appLogger.info(`Imported ${importedMeta} metadata records...`);
 				}
+			} else if (record._type === "snapshot" && opts.includeSnapshots) {
+				snapshotBatch.push({
+					aid: record.aid,
+					capturedAt: record.created_at,
+					views: record.views ?? 0,
+					coins: record.coins ?? 0,
+					likes: record.likes ?? 0,
+					favorites: record.favorites ?? 0,
+					shares: record.shares ?? 0,
+					danmakus: record.danmakus ?? 0,
+					replies: record.replies ?? 0,
+				});
+
+				if (snapshotBatch.length >= snapshotBatchSize) {
+					await insertSnapshotBatch(snapshotPool, snapshotBatch);
+					importedSnapshots += snapshotBatch.length;
+					snapshotBatch = [];
+					appLogger.info(`Imported ${importedSnapshots} snapshot records...`);
+				}
 			}
 		}
 
@@ -138,11 +177,18 @@ async function runImport(): Promise<void> {
 			importedMeta += metadataBatch.length;
 		}
 
+		if (snapshotBatch.length > 0) {
+			await insertSnapshotBatch(snapshotPool, snapshotBatch);
+			importedSnapshots += snapshotBatch.length;
+		}
+
 		appLogger.info("Legacy dump import successfully finished!", {
 			importedTracking,
 			importedMeta,
+			importedSnapshots,
 		});
 	} finally {
+		await snapshotPool.end();
 		await snapshotDb.disconnect();
 	}
 }
