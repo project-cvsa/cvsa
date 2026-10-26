@@ -1,4 +1,4 @@
-import type { SongLyricsResponseDto } from "@cvsa/core";
+import type { SongLyricsResponseDto } from "@cvsa/contracts";
 
 export interface Localizable {
 	name?: string | null;

@@ -1,0 +1,529 @@
+// use prisma-8
+
+enum SongType {
+  @@type("pg/text@1")
+  ORIGINAL     = "ORIGINAL"
+  COVER        = "COVER"
+  RETUNE       = "RETUNE"
+  CONTRAFACTUM = "CONTRAFACTUM"
+  TRANSLYRICS  = "TRANSLYRICS"
+  REMIX        = "REMIX"
+  REMASTER     = "REMASTER"
+  MASHUP       = "MASHUP"
+  INSTRUMENTAL = "INSTRUMENTAL"
+  OTHERS       = "OTHERS"
+}
+
+enum Platform {
+  @@type("pg/text@1")
+  YOUTUBE              = "YOUTUBE"
+  NICONICO             = "NICONICO"
+  BILIBILI             = "BILIBILI"
+  VOCALOID_WIKI        = "VOCALOID_WIKI"
+  VOCALOID_LYRICS_WIKI = "VOCALOID_LYRICS_WIKI"
+  SOUNDCLOUD           = "SOUNDCLOUD"
+  NETEASE_MUSIC        = "NETEASE_MUSIC"
+  QQ_MUSIC             = "QQ_MUSIC"
+  FIVE_SING            = "FIVE_SING"
+  KUGOU                = "KUGOU"
+  SPOTIFY              = "SPOTIFY"
+  APPLE_MUSIC          = "APPLE_MUSIC"
+  YOUTUBE_MUSIC        = "YOUTUBE_MUSIC"
+  WIKIPEDIA            = "WIKIPEDIA"
+  BAIDU_BAIKE          = "BAIDU_BAIKE"
+  PIXIV                = "PIXIV"
+  WEIBO                = "WEIBO"
+  TWITTER              = "TWITTER"
+  VOCADB               = "VOCADB"
+  MOEGIRLPEDIA         = "MOEGIRLPEDIA"
+  MUSICBRAINZ          = "MUSICBRAINZ"
+  VCPEDIA              = "VCPEDIA"
+  XIAOHONGSHU          = "XIAOHONGSHU"
+}
+
+enum ChangeType {
+  @@type("pg/text@1")
+  CREATE  = "CREATE"
+  UPDATE  = "UPDATE"
+  DELETE  = "DELETE"
+  RESTORE = "RESTORE"
+}
+
+enum OutboxStatus {
+  @@type("pg/text@1")
+  PENDING    = "PENDING"
+  PROCESSING = "PROCESSING"
+  PROCESSED  = "PROCESSED"
+  FAILED     = "FAILED"
+}
+
+namespace core {
+  model Song {
+    id                    Int                @id @default(autoincrement())
+    type                  SongType?
+    originalVersion       Song?              @relation(name: "originalSong", fields: [originalSongId], references: [id])
+    originalSongId        Int?               @map("original_song_id")
+    derivations           Song[]             @relation(name: "originalSong")
+    language              String             @default("zh")
+    name                  String?
+    localizedNames        Json?              @map("localized_names")
+    duration              Int?
+    lyrics                Lyrics[]
+    songTags              SongTag[]
+    description           String?
+    localizedDescriptions Json?              @map("localized_descriptions")
+    songInAlbums          SongInAlbum[]
+    bilibiliAid           BigInt?            @map("bilibili_aid")
+    bilibiliBvid          String?            @map("bilibili_bvid")
+    vocadbId              Int?               @map("vocadb_id")
+    vcpediaId             Int?               @map("vcpedia_id")
+    moegirlId             Int?               @map("moegirl_id")
+    externalLinks         SongExternalLink[]
+    coverUrl              String?            @map("cover_url")
+    creations             Creation[]
+    performances          Performance[]
+    songInSeries          SongInSeries[]
+    publishedAt           DateTime?          @map("published_at")
+    createdAt             DateTime           @default(now()) @map("created_at")
+    updatedAt             DateTime           @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt             DateTime?          @map("deleted_at")
+
+    @@map("song")
+  }
+
+  model Singer {
+    id                    Int           @id @default(autoincrement())
+    name                  String?
+    avatarUrl             String?       @map("avatar_url")
+    language              String        @default("zh")
+    localizedNames        Json?         @map("localized_names")
+    description           String?
+    localizedDescriptions Json?         @map("localized_descriptions")
+    voicebanks            Voicebank[]
+    performances          Performance[]
+    createdAt             DateTime      @default(now()) @map("created_at")
+    updatedAt             DateTime      @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt             DateTime?     @map("deleted_at")
+
+    @@map("singer")
+  }
+
+  model Artist {
+    id                    Int        @id @default(autoincrement())
+    name                  String?
+    localizedNames        Json?      @map("localized_names")
+    language              String     @default("zh")
+    aliases               String[]
+    description           String?
+    localizedDescriptions Json?      @map("localized_descriptions")
+    creations             Creation[]
+    createdAt             DateTime   @default(now()) @map("created_at")
+    updatedAt             DateTime   @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    user                  auth.User? @relation(fields: [userId], references: [id])
+    userId                String?    @unique @map("user_id")
+    deletedAt             DateTime?  @map("deleted_at")
+
+    @@map("artist")
+  }
+
+  model ArtistRole {
+    id             Int        @id @default(autoincrement())
+    name           String
+    localizedNames Json?      @map("localized_names")
+    language       String     @default("zh")
+    creations      Creation[]
+    createdAt      DateTime   @default(now()) @map("created_at")
+    updatedAt      DateTime   @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt      DateTime?  @map("deleted_at")
+
+    @@map("artist_role")
+  }
+
+  model Album {
+    id                    Int           @id @default(autoincrement())
+    name                  String?
+    localizedNames        Json?         @map("localized_names")
+    description           String?
+    localizedDescriptions Json?         @map("localized_descriptions")
+    language              String        @default("zh")
+    songInAlbums          SongInAlbum[]
+    coverUrl              String?       @map("cover_url")
+    createdAt             DateTime      @default(now()) @map("created_at")
+    updatedAt             DateTime      @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt             DateTime?     @map("deleted_at")
+
+    @@map("album")
+  }
+
+  model SvsEngine {
+    id                    Int                @id @default(autoincrement())
+    name                  String
+    description           String?
+    localizedDescriptions Json?              @map("localized_descriptions")
+    svsEngineVersions     SvsEngineVersion[]
+    createdAt             DateTime           @default(now()) @map("created_at")
+    updatedAt             DateTime           @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt             DateTime?          @map("deleted_at")
+    performances          Performance[]
+
+    @@map("svs_engine")
+  }
+
+  model SvsEngineVersion {
+    id            Int           @id @default(autoincrement())
+    versionString String        @map("version_string")
+    svsEngine     SvsEngine     @relation(fields: [svsEngineId], references: [id])
+    svsEngineId   Int           @map("svs_engine_id")
+    voicebanks    Voicebank[]
+    createdAt     DateTime      @default(now()) @map("created_at")
+    updatedAt     DateTime      @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt     DateTime?     @map("deleted_at")
+    performances  Performance[]
+
+    @@map("svs_engine_version")
+  }
+
+  model Voicebank {
+    id                    Int              @id @default(autoincrement())
+    singer                Singer           @relation(fields: [singerId], references: [id])
+    description           String?
+    localizedDescriptions Json?            @map("localized_descriptions")
+    singerId              Int              @map("singer_id")
+    language              String
+    svsEngineVersion      SvsEngineVersion @relation(fields: [svsEngineVersionId], references: [id])
+    svsEngineVersionId    Int              @map("svs_engine_version_id")
+    performances          Performance[]
+    createdAt             DateTime         @default(now()) @map("created_at")
+    updatedAt             DateTime         @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt             DateTime?        @map("deleted_at")
+
+    @@map("voicebank")
+  }
+
+  model Lyrics {
+    id           Int       @id @default(autoincrement())
+    song         Song      @relation(fields: [songId], references: [id])
+    songId       Int       @map("song_id")
+    language     String    @default("zh")
+    isTranslated Boolean   @default(false) @map("is_translated")
+    plainText    String?   @map("plain_text")
+    ttml         String?
+    lrc          String?
+    createdAt    DateTime  @default(now()) @map("created_at")
+    updatedAt    DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt    DateTime? @map("deleted_at")
+
+    @@map("lyrics")
+  }
+
+  model SongExternalLink {
+    id         Int       @id @default(autoincrement())
+    label      String?
+    url        String
+    platform   Platform?
+    platformId String?   @map("platform_id")
+    song       Song      @relation(fields: [songId], references: [id])
+    songId     Int       @map("song_id")
+    createdAt  DateTime  @default(now()) @map("created_at")
+    updatedAt  DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt  DateTime? @map("deleted_at")
+
+    @@map("song_external_link")
+  }
+
+  model Group {
+    id          Int       @id @default(autoincrement())
+    name        String
+    description String?
+    createdAt   DateTime  @default(now()) @map("created_at")
+    updatedAt   DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt   DateTime? @map("deleted_at")
+
+    @@map("group")
+  }
+
+  model Tag {
+    id             Int       @id @default(autoincrement())
+    name           String
+    localizedNames Json?     @map("localized_names")
+    songTags       SongTag[]
+    parent         Tag?      @relation(name: "tagTree", fields: [parentId], references: [id])
+    parentId       Int?      @map("parent_id")
+    children       Tag[]     @relation(name: "tagTree")
+    createdAt      DateTime  @default(now()) @map("created_at")
+    updatedAt      DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt      DateTime? @map("deleted_at")
+
+    @@map("tag")
+  }
+
+  model SongSeries {
+    id                    Int            @id @default(autoincrement())
+    name                  String?
+    localizedNames        Json?          @map("localized_names")
+    description           String?
+    localizedDescriptions Json?          @map("localized_descriptions")
+    language              String         @default("zh")
+    songInSeries          SongInSeries[]
+    createdAt             DateTime       @default(now()) @map("created_at")
+    updatedAt             DateTime       @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt             DateTime?      @map("deleted_at")
+
+    @@map("song_series")
+  }
+
+  model Creation {
+    id           Int        @id @default(autoincrement())
+    song         Song       @relation(fields: [songId], references: [id])
+    songId       Int        @map("song_id")
+    artist       Artist     @relation(fields: [artistId], references: [id])
+    artistId     Int        @map("artist_id")
+    role         ArtistRole @relation(fields: [artistRoleId], references: [id])
+    artistRoleId Int        @map("artist_role_id")
+    createdAt    DateTime   @default(now()) @map("created_at")
+    updatedAt    DateTime   @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt    DateTime?  @map("deleted_at")
+
+    @@map("creation")
+  }
+
+  model Performance {
+    id                 Int               @id @default(autoincrement())
+    song               Song              @relation(fields: [songId], references: [id])
+    songId             Int               @map("song_id")
+    singer             Singer            @relation(fields: [singerId], references: [id])
+    singerId           Int               @map("singer_id")
+    voicebank          Voicebank?        @relation(fields: [voicebankId], references: [id])
+    voicebankId        Int?              @map("voicebank_id")
+    svsEngine          SvsEngine?        @relation(fields: [svsEngineId], references: [id])
+    svsEngineId        Int?              @map("svs_engine_id")
+    svsEngineVersion   SvsEngineVersion? @relation(fields: [svsEngineVersionId], references: [id])
+    svsEngineVersionId Int?              @map("svs_engine_version_id")
+    createdAt          DateTime          @default(now()) @map("created_at")
+    updatedAt          DateTime          @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt          DateTime?         @map("deleted_at")
+
+    @@map("performance")
+  }
+
+  model SongInAlbum {
+    id          Int       @id @default(autoincrement())
+    song        Song      @relation(fields: [songId], references: [id])
+    songId      Int       @map("song_id")
+    album       Album     @relation(fields: [albumId], references: [id])
+    albumId     Int       @map("album_id")
+    trackNumber Int       @map("track_number")
+    discNumber  Int       @default(1) @map("disc_number")
+    createdAt   DateTime  @default(now()) @map("created_at")
+    updatedAt   DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt   DateTime? @map("deleted_at")
+
+    @@map("song_in_album")
+  }
+
+  model SongInSeries {
+    id        Int        @id @default(autoincrement())
+    song      Song       @relation(fields: [songId], references: [id])
+    songId    Int        @map("song_id")
+    series    SongSeries @relation(fields: [seriesId], references: [id])
+    seriesId  Int        @map("series_id")
+    order     Int
+    createdAt DateTime   @default(now()) @map("created_at")
+    updatedAt DateTime   @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt DateTime?  @map("deleted_at")
+
+    @@map("song_in_series")
+  }
+
+  model SongTag {
+    id        Int       @id @default(autoincrement())
+    song      Song      @relation(fields: [songId], references: [id])
+    songId    Int       @map("song_id")
+    tag       Tag       @relation(fields: [tagId], references: [id])
+    tagId     Int       @map("tag_id")
+    createdAt DateTime  @default(now()) @map("created_at")
+    updatedAt DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt DateTime? @map("deleted_at")
+
+    @@map("song_tag")
+  }
+}
+
+namespace auth {
+  model User {
+    id                  String                        @id
+    name                String?
+    username            String                        @unique
+    displayUsername     String                        @unique @map("display_username")
+    email               String?                       @unique
+    emailVerified       Boolean                       @default(false) @map("email_verified")
+    image               String?
+    changesMade         meta.History[]
+    role                meta.Role?                    @relation(fields: [roleId], references: [id])
+    roleId              Int?                          @map("role_id")
+    sessions            Session[]
+    accounts            Account[]
+    artist              core.Artist?
+    reputation          Int                           @default(0)
+    reputationHistories platform.ReputationHistory[]
+    posts               platform.Post[]
+    files               platform.File[]
+    createdAt           DateTime                      @default(now()) @map("created_at")
+    updatedAt           DateTime                      @onCreate(now()) @onUpdate(now()) @map("updated_at")
+
+    @@map("user")
+  }
+
+  model Account {
+    id                    String    @id
+    accountId             String
+    providerId            String
+    userId                String
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    password              String?
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @onCreate(now()) @onUpdate(now())
+
+    @@index([userId])
+    @@map("account")
+  }
+
+  model Session {
+    id        String   @id
+    token     String   @unique
+    user      User     @relation(fields: [userId], references: [id])
+    userId    String   @map("user_id")
+    ipAddress String?  @map("ip_address")
+    userAgent String?  @map("user_agent")
+    expiresAt DateTime
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @onCreate(now()) @onUpdate(now()) @map("updated_at")
+
+    @@index([userId])
+    @@map("session")
+  }
+
+  model Verification {
+    id         String   @id
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @onCreate(now()) @onUpdate(now())
+
+    @@index([identifier])
+    @@map("verification")
+  }
+}
+
+namespace platform {
+  model File {
+    id           String    @id
+    originalName String?   @map("original_name")
+    path         String?
+    user         auth.User @relation(fields: [userId], references: [id])
+    userId       String    @map("user_id")
+    createdAt    DateTime  @default(now()) @map("created_at")
+
+    @@map("file")
+  }
+
+  model Post {
+    id        String    @id
+    text      String?
+    user      auth.User @relation(fields: [userId], references: [id])
+    userId    String    @map("user_id")
+    createdAt DateTime  @default(now()) @map("created_at")
+    updatedAt DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt DateTime? @map("deleted_at")
+
+    @@map("post")
+  }
+
+  model ReputationHistory {
+    id         Int       @id @default(autoincrement())
+    user       auth.User @relation(fields: [userId], references: [id])
+    userId     String    @map("user_id")
+    actionType String    @map("action_type")
+    points     Int
+    sourceType Int       @map("source_type")
+    sourceId   Int       @map("source_id")
+    createdAt  DateTime  @default(now()) @map("created_at")
+
+    @@map("reputation_history")
+  }
+}
+
+namespace meta {
+  model History {
+    id        Int        @id @default(autoincrement())
+    user      auth.User  @relation(fields: [userId], references: [id])
+    userId    String     @map("user_id")
+    table     String
+    objectId  Int        @map("object_id")
+    type      ChangeType
+    comment   String?
+    old       Json?
+    new       Json?
+    createdAt DateTime   @default(now()) @map("created_at")
+
+    @@map("history")
+  }
+
+  model Outbox {
+    id            Int          @id @default(autoincrement())
+    aggregateType String       @map("aggregate_type")
+    aggregateId   Int          @map("aggregate_id")
+    eventType     String       @map("event_type")
+    payload       Json?
+    status        OutboxStatus @default(PENDING)
+    retryCount    Int          @default(0) @map("retry_count")
+    lastError     String?      @map("last_error")
+    nextRetryAt   DateTime?    @map("next_retry_at")
+    createdAt     DateTime     @default(now()) @map("created_at")
+    processedAt   DateTime?    @map("processed_at")
+
+    @@index([status, nextRetryAt])
+    @@map("outbox")
+  }
+
+  model Permission {
+    id        Int              @id @default(autoincrement())
+    action    String
+    roles     RolePermission[]
+    createdAt DateTime         @default(now()) @map("created_at")
+    updatedAt DateTime         @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt DateTime?        @map("deleted_at")
+
+    @@map("permission")
+  }
+
+  model Role {
+    id             Int              @id @default(autoincrement())
+    name           String           @unique
+    localizedNames Json?            @map("localized_names")
+    permissions    RolePermission[]
+    users          auth.User[]
+    createdAt      DateTime         @default(now()) @map("created_at")
+    updatedAt      DateTime         @onCreate(now()) @onUpdate(now()) @map("updated_at")
+    deletedAt      DateTime?        @map("deleted_at")
+
+    @@map("role")
+  }
+
+  model RolePermission {
+    id           Int        @id @default(autoincrement())
+    role         Role       @relation(fields: [roleId], references: [id])
+    roleId       Int        @map("role_id")
+    permission   Permission @relation(fields: [permissionId], references: [id])
+    permissionId Int        @map("permission_id")
+
+    @@map("role_permission")
+  }
+}

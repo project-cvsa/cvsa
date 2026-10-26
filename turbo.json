@@ -17,6 +17,7 @@
 			"inputs": ["tests/**.ts", "src/**.ts", "biome.json", ".biome*"]
 		},
 		"test": {
+			"dependsOn": ["^build"],
 			"inputs": [
 				"src/**.ts",
 				"tests/**.ts",
@@ -27,11 +28,22 @@
 		"test:coverage": {},
 		"setup": {
 			"cache": false,
-			"dependsOn": ["@cvsa/db#push", "@cvsa/db#test:setup", "@cvsa/db#gen"]
+			"dependsOn": [
+				"@cvsa/db#push",
+				"@cvsa/db#test:setup",
+				"@cvsa/db#gen",
+				"@cvsa/snapshot-db#gen",
+				"@cvsa/snapshot-db#test:setup"
+			]
 		},
 		"setup:ci": {
 			"cache": false,
-			"dependsOn": ["@cvsa/db#test:setup", "@cvsa/db#gen"]
+			"dependsOn": [
+				"@cvsa/db#test:setup",
+				"@cvsa/db#gen",
+				"@cvsa/snapshot-db#gen",
+				"@cvsa/snapshot-db#test:setup"
+			]
 		},
 		"@cvsa/db#test:setup": {
 			"cache": false
@@ -42,7 +54,14 @@
 		"@cvsa/db#gen": {
 			"cache": false
 		},
+		"@cvsa/snapshot-db#gen": {
+			"cache": false
+		},
+		"@cvsa/snapshot-db#test:setup": {
+			"cache": false
+		},
 		"typecheck": {
+			"dependsOn": ["^build"],
 			"inputs": [
 				"src/**.ts",
 				"tsconfig.json",
@@ -52,11 +71,11 @@
 		"@cvsa/db#test:reset": {
 			"cache": false
 		},
-		"@cvsa/core#test:reset": {
+		"@cvsa/snapshot-db#test:reset": {
 			"cache": false
 		},
 		"//test:reset": {
-			"dependsOn": ["@cvsa/db#test:reset", "@cvsa/core#test:reset"]
+			"dependsOn": ["@cvsa/db#test:reset", "@cvsa/snapshot-db#test:reset"]
 		}
 	}
 }

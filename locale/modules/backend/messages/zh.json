@@ -1,5 +1,6 @@
 {
 	"error.unauthorized": "未登录",
+	"error.forbidden": "无权访问此资源",
 	"error.song.notfound": "此歌曲不存在",
 	"error.lyric.notfound": "此歌词不存在",
 	"error.signup.failed": "很抱歉，暂时无法注册",
@@ -11,5 +12,6 @@
 	"error.username-taken": "此用户名已被注册",
 	"error.email-taken": "此邮箱已被注册",
 	"error.artist.notfound": "该创作者不存在",
-	"error.engine.notfound": "该引擎不存在"
+	"error.engine.notfound": "该引擎不存在",
+	"error.signup.invite_required": "注册目前仅限受邀用户，暂未对外开放"
 }

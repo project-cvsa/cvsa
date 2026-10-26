@@ -1,11 +1,13 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
 import {
-	UpdateArtistRequestSchema,
-	ErrorResponseSchema,
-	artistService,
 	ArtistResponseSchema,
-} from "@cvsa/core";
+	ErrorResponseSchema,
+	UpdateArtistRequestSchema,
+} from "@cvsa/contracts";
+import { artistWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
+import { transformPrismaResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -13,9 +15,14 @@ export const artistUpdateHandler = new Elysia({ name: "artistUpdateHandler" })
 	.use(authMiddleware)
 	.patch(
 		"/artist/:id",
-		async ({ params, body, status }) => {
-			const artist = await traceTask("artistService.update", async () => {
-				return await artistService.update(params.id, body);
+		async ({ params, body, status, user, roleName }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: roleName ? [roleName] : [],
+			});
+			const artist = await traceTask("artistWriter.update", async () => {
+				const row = await artistWriter.update(actor, params.id, body);
+				return ArtistResponseSchema.parse(transformPrismaResult(row));
 			});
 			return status(200, artist);
 		},

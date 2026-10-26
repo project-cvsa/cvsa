@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma } from "@cvsa/db";
+import { prisma, Temporal } from "@cvsa/db";
 
 const api = treaty(app);
 
@@ -16,11 +16,9 @@ describe("Artist Role E2E Tests", () => {
 
 	describe("GET /v2/artist-role/:id - Get Artist Role Details", () => {
 		test("should retrieve an artist role", async () => {
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Producer",
-					localizedNames: { zh: "制作人", en: "Producer" },
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Producer",
+				localizedNames: { zh: "制作人", en: "Producer" },
 			});
 
 			const { data, status } = await api.v2["artist-role"]({ id: role.id }).get();
@@ -43,11 +41,9 @@ describe("Artist Role E2E Tests", () => {
 		});
 
 		test("should not retrieve soft-deleted role", async () => {
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Deleted Role",
-					deletedAt: new Date(),
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Deleted Role",
+				deletedAt: Temporal.Now.instant(),
 			});
 
 			const { error, status } = await api.v2["artist-role"]({ id: role.id }).get();
@@ -119,10 +115,8 @@ describe("Artist Role E2E Tests", () => {
 		test("should update a role with authentication", async () => {
 			const token = await getAuthToken();
 
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Original Name",
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Original Name",
 			});
 
 			const { data, status } = await api.v2["artist-role"]({ id: role.id }).patch(
@@ -143,10 +137,8 @@ describe("Artist Role E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Test Role",
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Test Role",
 			});
 
 			const { status } = await api.v2["artist-role"]({ id: role.id }).patch({
@@ -179,10 +171,8 @@ describe("Artist Role E2E Tests", () => {
 		test("should soft delete a role with authentication", async () => {
 			const token = await getAuthToken();
 
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Role to Delete",
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Role to Delete",
 			});
 
 			const { status } = await api.v2["artist-role"]({ id: role.id }).delete(
@@ -196,17 +186,15 @@ describe("Artist Role E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedRole = await prisma.artistRole.findUnique({
-				where: { id: role.id },
-			});
+			const deletedRole = await prisma.orm.core.ArtistRole.where({
+				id: role.id,
+			}).first();
 			expect(deletedRole?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Test Role",
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Test Role",
 			});
 
 			const { status } = await api.v2["artist-role"]({ id: role.id }).delete({}, {});
@@ -232,11 +220,9 @@ describe("Artist Role E2E Tests", () => {
 		test("should return 404 when trying to delete already deleted role", async () => {
 			const token = await getAuthToken();
 
-			const role = await prisma.artistRole.create({
-				data: {
-					name: "Already Deleted",
-					deletedAt: new Date(),
-				},
+			const role = await prisma.orm.core.ArtistRole.create({
+				name: "Already Deleted",
+				deletedAt: Temporal.Now.instant(),
 			});
 
 			const { error, status } = await api.v2["artist-role"]({ id: role.id }).delete(

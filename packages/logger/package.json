@@ -5,6 +5,8 @@
 	"module": "src/index.ts",
 	"version": "0.1.0",
 	"scripts": {
+		"lint": "bunx --bun biome lint",
+		"test": "bun test --concurrent",
 		"typecheck": "bunx --bun tsc --noEmit"
 	},
 	"devDependencies": {

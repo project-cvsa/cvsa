@@ -43,18 +43,18 @@ const { title, logoVariant, description, links } = Astro.props;
 			<Paragraph set:html={description}></Paragraph>
 
 			{links.map((link, i) => (
-				<a
-					class={`${i === 0 ? "mt-10" : "mt-3"} group flex items-center gap-4 cursor-pointer`}
-					href={link.href}
-				>
-					<div
-						class={`h-[2px] ${i === 0 ? "w-12 lg:w-16" : "w-30 lg:w-34"} bg-current opacity-50 transition-all ${i === 0 ? "group-hover:w-20" : "group-hover:w-40"} group-hover:opacity-100`}
-					/>
-					<span class="text-base sm:text-base lg:text-lg tracking-widest uppercase font-bold opacity-75 group-hover:opacity-100">
-						{link.text}
-					</span>
-				</a>
-			))}
+	<a
+		class={`${i === 0 ? "mt-10" : "mt-3"} group flex items-center gap-4 cursor-pointer`}
+		href={link.href}
+	>
+		<div
+			class={`h-[2px] ${i === 0 ? "w-12 lg:w-16" : "w-30 lg:w-34"} bg-current opacity-50 transition-all ${i === 0 ? "group-hover:w-20" : "group-hover:w-40"} group-hover:opacity-100`}
+		/>
+		<span class="text-base sm:text-base lg:text-lg tracking-widest uppercase font-bold opacity-75 group-hover:opacity-100">
+			{link.text}
+		</span>
+	</a>
+))}
 		</div>
 
 		<div class="absolute bottom-10 right-5 md:right-20 text-right font-[IBM_Plex_Mono]">

@@ -10,7 +10,7 @@ import type {
 	SongLyricsUpdateRequestDto,
 	SongResponseDto,
 	UpdateSongRequestDto,
-} from "@cvsa/core";
+} from "@cvsa/contracts";
 import type { ApiResult } from "./result";
 import { getEdenClient, settle } from "./treaty";
 

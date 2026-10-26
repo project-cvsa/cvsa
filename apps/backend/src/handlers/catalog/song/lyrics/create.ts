@@ -3,8 +3,10 @@ import {
 	ErrorResponseSchema,
 	SongLyricsCreateRequestSchema,
 	SongLyricsResponseSchema,
-	songService,
-} from "@cvsa/core";
+} from "@cvsa/contracts";
+import { songLyricsWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
+import { transformPrismaResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
@@ -13,9 +15,14 @@ export const songLyricsCreateHandler = new Elysia({ name: "songLyricsCreateHandl
 	.use(authMiddleware)
 	.post(
 		"/song/:id/lyric",
-		async ({ body, params, status }) => {
-			const lyric = await traceTask("songService.createLyric", async () => {
-				return await songService.createLyric(params.id, body);
+		async ({ body, params, user, roleName, status }) => {
+			const principal = createUserPrincipal({
+				userId: user.id,
+				roles: roleName ? [roleName] : [],
+			});
+			const lyric = await traceTask("songLyricsWriter.create", async () => {
+				const created = await songLyricsWriter.create(principal, params.id, body);
+				return SongLyricsResponseSchema.parse(transformPrismaResult(created));
 			});
 			return status(201, lyric);
 		},

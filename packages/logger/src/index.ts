@@ -1,5 +1,12 @@
-export { pinoLogger } from "./pinoSetup";
-export { appLogger } from "./appLogger";
+export { LOG_REDACT_PATHS, pinoLogger } from "./pinoSetup";
+export { createPinoLogger } from "./pinoSetup";
+export { appLogger, createApplicationLogger } from "./appLogger";
+export {
+	REDACTED_LOG_VALUE,
+	isCredentialKey,
+	sanitizeLogAttributes,
+	sanitizeLogMessage,
+} from "./sanitize";
 
 export type {
 	Severity,
@@ -9,3 +16,5 @@ export type {
 	RequestLogger,
 	OtelSdkInitResult,
 } from "./types";
+
+export type { PinoLoggerOptions } from "./pinoSetup";

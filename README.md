@@ -63,7 +63,7 @@ cvsa/
     cp apps/frontend/.env.example apps/frontend/.env
     cp apps/frontend/.env.example apps/frontend/.env.test
     cp packages/db/.env.example packages/db/.env
-    cp packages/core/.env.example packages/core/.env.test
+    cp packages/db/.env.example packages/db/.env.test
     ```
 
 4. **Initialize the database**

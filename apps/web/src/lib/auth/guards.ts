@@ -1,5 +1,5 @@
 import type { APIContext } from "astro";
-import type { CurrentUserInfoDto } from "@cvsa/core";
+import type { CurrentUserInfoDto } from "@cvsa/authentication";
 
 /**
  * Build the /login redirect target preserving the originally requested
@@ -15,6 +15,20 @@ export function requireUser(context: APIContext, user: CurrentUserInfoDto | null
 		return null;
 	}
 	return context.redirect(loginRedirectTarget(context.url.pathname, context.url.search), 302);
+}
+
+/** Page guard: require an admin or owner user; redirects anonymous to login, non-admins to /403. */
+export function requireAdmin(
+	context: APIContext,
+	user: CurrentUserInfoDto | null
+): Response | null {
+	if (!user) {
+		return context.redirect(loginRedirectTarget(context.url.pathname, context.url.search), 302);
+	}
+	if (user.roleName !== "OWNER" && user.roleName !== "admin") {
+		return context.redirect("/403", 302);
+	}
+	return null;
 }
 
 /** Page guard: redirect logged-in visitors away (for login/register pages). */

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma } from "@cvsa/db";
+import { prisma, Temporal } from "@cvsa/db";
 
 const api = treaty(app);
 
@@ -16,12 +16,10 @@ describe("Singer E2E Tests", () => {
 
 	describe("GET /v2/singer/:id - Get Singer", () => {
 		test("should retrieve a singer", async () => {
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Test Singer",
-					description: "Test Description",
-					language: "zh",
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Test Singer",
+				description: "Test Description",
+				language: "zh",
 			});
 
 			const { data, status } = await api.v2.singer({ id: singer.id }).get();
@@ -45,11 +43,9 @@ describe("Singer E2E Tests", () => {
 		});
 
 		test("should not retrieve soft-deleted singer", async () => {
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Deleted Singer",
-					deletedAt: new Date(),
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Deleted Singer",
+				deletedAt: Temporal.Now.instant(),
 			});
 
 			const { error, status } = await api.v2.singer({ id: singer.id }).get();
@@ -160,12 +156,10 @@ describe("Singer E2E Tests", () => {
 		test("should update a singer with authentication", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Original Name",
-					description: "Original Description",
-					language: "zh",
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Original Name",
+				description: "Original Description",
+				language: "zh",
 			});
 
 			const { data, status } = await api.v2.singer({ id: singer.id }).patch(
@@ -184,10 +178,8 @@ describe("Singer E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Test Singer",
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Test Singer",
 			});
 
 			const { status } = await api.v2.singer({ id: singer.id }).patch({
@@ -218,11 +210,9 @@ describe("Singer E2E Tests", () => {
 		test("should update localized names", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Singer",
-					localizedNames: { zh: "旧名" },
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Singer",
+				localizedNames: { zh: "旧名" },
 			});
 
 			const { data, status } = await api.v2.singer({ id: singer.id }).patch(
@@ -243,10 +233,8 @@ describe("Singer E2E Tests", () => {
 		test("should soft delete a singer with authentication", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Singer to Delete",
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Singer to Delete",
 			});
 
 			const { status } = await api.v2.singer({ id: singer.id }).delete(
@@ -260,17 +248,15 @@ describe("Singer E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedSinger = await prisma.singer.findUnique({
-				where: { id: singer.id },
-			});
+			const deletedSinger = await prisma.orm.core.Singer.where({
+				id: singer.id,
+			}).first();
 			expect(deletedSinger?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Test Singer",
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Test Singer",
 			});
 
 			const { status } = await api.v2.singer({ id: singer.id }).delete({}, {});
@@ -296,11 +282,9 @@ describe("Singer E2E Tests", () => {
 		test("should return 404 when trying to delete already deleted singer", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.singer.create({
-				data: {
-					name: "Already Deleted",
-					deletedAt: new Date(),
-				},
+			const singer = await prisma.orm.core.Singer.create({
+				name: "Already Deleted",
+				deletedAt: Temporal.Now.instant(),
 			});
 
 			const { error, status } = await api.v2.singer({ id: singer.id }).delete(

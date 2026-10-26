@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
-import { ErrorResponseSchema, artistRoleService } from "@cvsa/core";
+import { ErrorResponseSchema } from "@cvsa/contracts";
+import { artistRoleWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -8,9 +10,13 @@ export const artistRoleDeleteHandler = new Elysia({ name: "artistRoleDeleteHandl
 	.use(authMiddleware)
 	.delete(
 		"/artist-role/:id",
-		async ({ params, set }) => {
-			await traceTask("artistRoleService.delete", async () => {
-				return await artistRoleService.delete(params.id);
+		async ({ params, set, user, roleName }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: roleName ? [roleName] : [],
+			});
+			await traceTask("artistRoleWriter.delete", async () => {
+				await artistRoleWriter.delete(actor, params.id);
 			});
 			set.status = 204;
 			return null;

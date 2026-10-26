@@ -8,11 +8,13 @@
  * failing in the browser.
  */
 import { authApi } from "./auth";
+import { crawlerApi } from "./crawler";
 import { songApi } from "./song";
 
-/** Module tree components call: `api.auth.login(...)`, `api.song.update(...)`. */
+/** Module tree components call: `api.auth.login(...)`, `api.song.update(...)`, `api.crawler.getStatus()`. */
 export const api = {
 	auth: authApi,
+	crawler: crawlerApi,
 	song: songApi,
 };
 

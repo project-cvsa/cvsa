@@ -1,13 +1,13 @@
 /**
  * Result contract shared by every API call in the web app.
  *
- * Hand-written rather than re-exported from `@cvsa/core` on purpose: the browser
- * client must not pull the backend's Prisma/better-auth module graph into its
+ * Hand-written rather than re-exported from `@cvsa/contracts` on purpose: the browser
+ * client must not pull the backend's Prisma module graph into its
  * bundle or its tests. The code list is still checked against the backend DTO,
  * so adding an error code on the backend fails `bun typecheck` here until it is
  * declared.
  */
-import type { ErrorResponseDto } from "@cvsa/core";
+import type { ErrorResponseDto } from "@cvsa/contracts";
 
 export type BackendErrorCode = ErrorResponseDto["code"];
 
@@ -60,6 +60,7 @@ export const ERROR_CODES = [
 	"USER_NOT_FOUND",
 	"EMAIL_NOT_VERIFIED",
 	"UNAUTHORIZED",
+	"FORBIDDEN",
 	"NETWORK_ERROR",
 ] as const satisfies readonly ApiErrorCode[];
 
@@ -79,7 +80,7 @@ export function isApiErrorCode(value: string): value is ApiErrorCode {
 /**
  * Narrow an unknown response body to the error envelope.
  *
- * Mirrors `ErrorResponseSchema` in `packages/core/src/error/schema.ts`: a
+ * Mirrors `ErrorResponseSchema` in `@cvsa/contracts`: a
  * recognized `code` is what makes the body an error envelope, while the other
  * members stay optional.
  */

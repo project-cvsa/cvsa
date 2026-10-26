@@ -10,6 +10,5 @@ coveragePathIgnorePatterns = [
   "src/utils/randomId.ts",
   "src/types/**",
   "**/observability/src/**",
-  "**/packages/core/**",
   "src/*.ts"
 ]

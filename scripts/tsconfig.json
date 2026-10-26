@@ -4,8 +4,9 @@
 		"noEmit": true,
 		"paths": {
 			"@cvsa/db": ["../packages/db/src"],
-			"@cvsa/core": ["../packages/core/src"],
-			"@cvsa/core/internal": ["../packages/core/src/internal"],
+			"@cvsa/catalog": ["../packages/catalog/src"],
+			"@cvsa/contracts": ["../packages/contracts/src"],
+			"@cvsa/authentication": ["../packages/authentication/src"],
 			"@cvsa/env": ["../packages/env/src"],
 			"@cvsa/logger": ["../packages/logger/src"],
 			"@cvsa/observability": ["../packages/observability/src"],

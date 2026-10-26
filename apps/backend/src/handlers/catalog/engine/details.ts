@@ -1,13 +1,18 @@
 import { Elysia } from "elysia";
-import { ErrorResponseSchema, EngineDetailsResponseSchema, engineService } from "@cvsa/core";
+import { AppError, EngineDetailsResponseSchema, ErrorResponseSchema } from "@cvsa/contracts";
+import { engineReader } from "@cvsa/catalog";
 import z from "zod";
 import { traceTask } from "@/common/trace";
 
 export const engineDetailsHandler = new Elysia().get(
 	"/engine/:id/details",
 	async ({ params, status }) => {
-		const engine = await traceTask("engineService.getDetails", async () => {
-			return await engineService.getDetails(params.id);
+		const engine = await traceTask("engineReader.getDetails", async () => {
+			const res = await engineReader.getDetails(params.id);
+			if (!res) {
+				throw new AppError("error.engine.notfound", "NOT_FOUND", 404);
+			}
+			return res;
 		});
 		return status(200, engine);
 	},

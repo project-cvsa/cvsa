@@ -1,5 +1,6 @@
 {
 	"error.unauthorized": "Unauthorized",
+	"error.forbidden": "You do not have permission to access this resource.",
 	"error.song.notfound": "This song does not exist.",
 	"error.lyric.notfound": "This lyric does not exist.",
 	"error.signup.failed": "Unable to sign up. Please try again in a moment.",
@@ -11,5 +12,6 @@
 	"error.username-taken": "This username is already taken.",
 	"error.email-taken": "This email is already registered.",
 	"error.artist.notfound": "This artist does not exist.",
-	"error.engine.notfound": "This engine does not exist."
+	"error.engine.notfound": "This engine does not exist.",
+	"error.signup.invite_required": "Registration is invite-only and currently closed."
 }

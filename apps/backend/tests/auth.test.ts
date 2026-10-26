@@ -4,12 +4,14 @@ import { app } from "@/index";
 
 const api = treaty(app);
 
+const rand = () => Math.random().toString(36).slice(2, 8);
+
 describe("Registration E2E Tests - POST /v2/user", () => {
 	test("should register a new user", async () => {
 		const payload = {
-			username: "new_user",
+			username: `new_user_${rand()}`,
 			password: "password123",
-			email: `${Math.random()}@example.com`,
+			email: `${rand()}@example.com`,
 		};
 
 		const { data, error, status } = await api.v2.user.post(payload);
@@ -41,9 +43,9 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 
 	test("should fail when username already exists", async () => {
 		const payload = {
-			username: "duplicate_user",
+			username: `duplicate_user_${rand()}`,
 			password: "password123",
-			email: "01_first@example.com",
+			email: `${rand()}_first@example.com`,
 		};
 
 		// Create the first user
@@ -52,7 +54,7 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 		// Attempt to register with the same username
 		const { error, status } = await api.v2.user.post({
 			...payload,
-			email: "01_second@example.com",
+			email: `${rand()}_second@example.com`,
 		});
 
 		// Should return 409 Conflict
@@ -64,9 +66,9 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 
 	test("should fail when email already exists", async () => {
 		const payload = {
-			username: "first_user",
+			username: `first_user_${rand()}`,
 			password: "password123",
-			email: "duplicated@example.com",
+			email: `${rand()}_duplicated@example.com`,
 		};
 
 		// Create the first user
@@ -75,7 +77,7 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 		// Attempt to register with the same username
 		const { error, status } = await api.v2.user.post({
 			...payload,
-			username: "another_user",
+			username: `another_user_${rand()}`,
 		});
 
 		// Should return 409 Conflict
@@ -87,7 +89,7 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 
 	test("should fail with invalid email format", async () => {
 		const { status, error } = await api.v2.user.post({
-			username: "valid_user",
+			username: `valid_user_${rand()}`,
 			password: "password123",
 			email: "invalid-email-format", // Invalid email
 		});
@@ -102,11 +104,13 @@ describe("Registration E2E Tests - POST /v2/user", () => {
 
 describe("Profile E2E Tests - GET /v2/me", () => {
 	test("should return user profile with valid token", async () => {
+		const username = `profile_user_${rand()}`;
+		const email = `${rand()}@example.com`;
 		// 1. Register to get a token
 		const signup = await api.v2.user.post({
-			username: "profile_user",
+			username,
 			password: "password123",
-			email: "first@example.com",
+			email,
 			displayName: "John Doe",
 		});
 
@@ -122,8 +126,8 @@ describe("Profile E2E Tests - GET /v2/me", () => {
 
 		expect(status).toBe(200);
 		expect(data).toMatchObject({
-			username: "profile_user",
-			email: "first@example.com",
+			username,
+			email,
 			displayName: "John Doe",
 		});
 		expect(data?.id).toBeString();
@@ -167,9 +171,9 @@ describe("Profile E2E Tests - GET /v2/me", () => {
 describe("Login E2E Tests - POST /v2/session", () => {
 	test("should login with valid credentials", async () => {
 		const signupPayload = {
-			username: "login_user",
+			username: `login_user_${rand()}`,
 			password: "password123",
-			email: "login@example.com",
+			email: `login_${rand()}@example.com`,
 		};
 
 		await api.v2.user.post(signupPayload);
@@ -197,9 +201,9 @@ describe("Login E2E Tests - POST /v2/session", () => {
 
 	test("should login with username instead of email", async () => {
 		const signupPayload = {
-			username: "login_by_username",
+			username: `login_by_username_${rand()}`,
 			password: "password123",
-			email: "login_by_username@example.com",
+			email: `login_by_username_${rand()}@example.com`,
 		};
 
 		await api.v2.user.post(signupPayload);
@@ -221,9 +225,9 @@ describe("Login E2E Tests - POST /v2/session", () => {
 
 	test("should accept session cookie set by login on /v2/me", async () => {
 		const signupPayload = {
-			username: "login_cookie_me",
+			username: `login_cookie_me_${rand()}`,
 			password: "password123",
-			email: "login_cookie_me@example.com",
+			email: `login_cookie_me_${rand()}@example.com`,
 		};
 
 		await api.v2.user.post(signupPayload);
@@ -252,9 +256,9 @@ describe("Login E2E Tests - POST /v2/session", () => {
 
 	test("should return 401 on invalid email", async () => {
 		const signupPayload = {
-			username: "user_invalid_email",
+			username: `user_invalid_email_${rand()}`,
 			password: "password123",
-			email: "invalid@example.com",
+			email: `invalid_${rand()}@example.com`,
 		};
 
 		await api.v2.user.post(signupPayload);
@@ -272,9 +276,9 @@ describe("Login E2E Tests - POST /v2/session", () => {
 
 	test("should return 401 on invalid password", async () => {
 		const signupPayload = {
-			username: "user_invalid_pass",
+			username: `user_invalid_pass_${rand()}`,
 			password: "password123",
-			email: "wrongpass@example.com",
+			email: `wrongpass_${rand()}@example.com`,
 		};
 
 		await api.v2.user.post(signupPayload);
@@ -304,9 +308,9 @@ describe("Login E2E Tests - POST /v2/session", () => {
 describe("Logout E2E Tests - DELETE /v2/session", () => {
 	test("should logout with valid token", async () => {
 		const signupPayload = {
-			username: "logout_user",
+			username: `logout_user_${rand()}`,
 			password: "password123",
-			email: "logout@example.com",
+			email: `logout_${rand()}@example.com`,
 		};
 
 		const { data: signUpData } = await api.v2.user.post(signupPayload);

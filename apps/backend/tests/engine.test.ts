@@ -16,11 +16,9 @@ describe("Engine E2E Tests", () => {
 
 	describe("GET /v2/engine/:id/details - Get Engine Details", () => {
 		test("should retrieve an engine", async () => {
-			const engine = await prisma.svsEngine.create({
-				data: {
-					name: "Test Engine",
-					description: "Test Description",
-				},
+			const engine = await prisma.orm.core.SvsEngine.create({
+				name: "Test Engine",
+				description: "Test Description",
 			});
 
 			const { data, status } = await api.v2.engine({ id: engine.id }).details.get();
@@ -113,11 +111,9 @@ describe("Engine E2E Tests", () => {
 		test("should update an engine with authentication", async () => {
 			const token = await getAuthToken();
 
-			const engine = await prisma.svsEngine.create({
-				data: {
-					name: "Original Name",
-					description: "Original Description",
-				},
+			const engine = await prisma.orm.core.SvsEngine.create({
+				name: "Original Name",
+				description: "Original Description",
 			});
 
 			const { data, status } = await api.v2.engine({ id: engine.id }).patch(
@@ -135,10 +131,8 @@ describe("Engine E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const engine = await prisma.svsEngine.create({
-				data: {
-					name: "Test Engine",
-				},
+			const engine = await prisma.orm.core.SvsEngine.create({
+				name: "Test Engine",
 			});
 
 			const { status } = await api.v2.engine({ id: engine.id }).patch({
@@ -171,10 +165,8 @@ describe("Engine E2E Tests", () => {
 		test("should soft delete an engine with authentication", async () => {
 			const token = await getAuthToken();
 
-			const engine = await prisma.svsEngine.create({
-				data: {
-					name: "Engine to Delete",
-				},
+			const engine = await prisma.orm.core.SvsEngine.create({
+				name: "Engine to Delete",
 			});
 
 			const { status } = await api.v2.engine({ id: engine.id }).delete(
@@ -188,17 +180,15 @@ describe("Engine E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedEngine = await prisma.svsEngine.findUnique({
-				where: { id: engine.id },
-			});
+			const deletedEngine = await prisma.orm.core.SvsEngine.where({
+				id: engine.id,
+			}).first();
 			expect(deletedEngine?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const engine = await prisma.svsEngine.create({
-				data: {
-					name: "Test Engine",
-				},
+			const engine = await prisma.orm.core.SvsEngine.create({
+				name: "Test Engine",
 			});
 
 			const { status } = await api.v2.engine({ id: engine.id }).delete({}, {});

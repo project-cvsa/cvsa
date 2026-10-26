@@ -51,13 +51,13 @@ const clientI18nJson = clientI18n ? serializeClientI18nPayload(clientI18n) : und
 		<meta charset="UTF-8">
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		{clientI18nJson ? (
-			<script
-				id={CLIENT_I18N_SCRIPT_ID}
-				type="application/json"
-				is:inline
-				set:html={clientI18nJson}
-			></script>
-		) : null}
+	<script
+		id={CLIENT_I18N_SCRIPT_ID}
+		type="application/json"
+		is:inline
+		set:html={clientI18nJson}
+	></script>
+) : null}
 
 		<title>{title}</title>
 		<meta name="description" content={description}>

@@ -1,11 +1,13 @@
 import { Elysia } from "elysia";
 import { z } from "zod";
 import {
-	UpdateSingerRequestSchema,
 	ErrorResponseSchema,
-	singerService,
 	SingerResponseSchema,
-} from "@cvsa/core";
+	UpdateSingerRequestSchema,
+} from "@cvsa/contracts";
+import { singerWriter } from "@cvsa/catalog";
+import { createUserPrincipal } from "@cvsa/authentication";
+import { transformPrismaResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -13,9 +15,14 @@ export const singerUpdateHandler = new Elysia({ name: "singerUpdateHandler" })
 	.use(authMiddleware)
 	.patch(
 		"/singer/:id",
-		async ({ params, body, status }) => {
-			const singer = await traceTask("singerService.update", async () => {
-				return await singerService.update(params.id, body);
+		async ({ params, body, status, user, roleName }) => {
+			const actor = createUserPrincipal({
+				userId: user.id,
+				roles: roleName ? [roleName] : [],
+			});
+			const singer = await traceTask("singerWriter.update", async () => {
+				const row = await singerWriter.update(actor, params.id, body);
+				return SingerResponseSchema.parse(transformPrismaResult(row));
 			});
 			return status(200, singer);
 		},

@@ -16,12 +16,10 @@ describe("Song E2E Tests", () => {
 
 	describe("GET /v2/song/:id/details - Get Song Details", async () => {
 		test("should retrieve a song", async () => {
-			const song = await prisma.song.create({
-				data: {
-					name: "Test Song",
-					type: "ORIGINAL",
-					duration: 180,
-				},
+			const song = await prisma.orm.core.Song.create({
+				name: "Test Song",
+				type: "ORIGINAL",
+				duration: 180,
 			});
 
 			const { data, status } = await api.v2.song({ id: song.id }).details.get();
@@ -112,9 +110,9 @@ describe("Song E2E Tests", () => {
 			});
 
 			// Verify lyrics were persisted to DB
-			const lyrics = await prisma.lyrics.findMany({
-				where: { songId: data?.id },
-			});
+			const lyrics = await prisma.orm.core.Lyrics.where({
+				songId: data?.id ?? 0,
+			}).all();
 			expect(lyrics).toHaveLength(1);
 			expect(lyrics[0]).toMatchObject({
 				language: "zh",
@@ -130,10 +128,8 @@ describe("Song E2E Tests", () => {
 		test("should update a song with authentication", async () => {
 			const token = await getAuthToken();
 
-			const song = await prisma.song.create({
-				data: {
-					name: "Original Name",
-				},
+			const song = await prisma.orm.core.Song.create({
+				name: "Original Name",
 			});
 
 			const { data, status } = await api.v2.song({ id: song.id }).patch(
@@ -150,10 +146,8 @@ describe("Song E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.song.create({
-				data: {
-					name: "Test Song",
-				},
+			const song = await prisma.orm.core.Song.create({
+				name: "Test Song",
 			});
 
 			const { status } = await api.v2.song({ id: song.id }).patch({
@@ -186,10 +180,8 @@ describe("Song E2E Tests", () => {
 		test("should soft delete a song with authentication", async () => {
 			const token = await getAuthToken();
 
-			const song = await prisma.song.create({
-				data: {
-					name: "Song to Delete",
-				},
+			const song = await prisma.orm.core.Song.create({
+				name: "Song to Delete",
 			});
 
 			const { status } = await api.v2.song({ id: song.id }).delete(
@@ -203,17 +195,15 @@ describe("Song E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedSong = await prisma.song.findUnique({
-				where: { id: song.id },
-			});
+			const deletedSong = await prisma.orm.core.Song.where({
+				id: song.id,
+			}).first();
 			expect(deletedSong?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.song.create({
-				data: {
-					name: "Test Song",
-				},
+			const song = await prisma.orm.core.Song.create({
+				name: "Test Song",
 			});
 
 			const { status } = await api.v2.song({ id: song.id }).delete({}, {});

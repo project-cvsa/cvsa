@@ -2,7 +2,7 @@
 import Condition from "@components/Condition.astro";
 import Field from "@layouts/Field.astro";
 import Card from "@layouts/Card.astro";
-import type { SongDetailsResponseDto } from "@cvsa/core";
+import type { SongDetailsResponseDto } from "@cvsa/contracts";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import { localizedName } from "@lib/localize";
 
@@ -32,9 +32,7 @@ const staff = [...staffByRole.values()];
 		<Fragment slot="title-en">Staff</Fragment>
 		<Fragment slot="body">
 			<div class="grid grid-cols-2 gap-x-6 gap-y-6">
-				{staff.map((entry) => (
-					<Field label={entry.role}>{entry.artists.join("、")}</Field>
-				))}
+				{staff.map((entry) => <Field label={entry.role}>{entry.artists.join("、")}</Field>)}
 			</div>
 		</Fragment>
 	</Card>

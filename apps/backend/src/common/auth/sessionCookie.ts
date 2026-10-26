@@ -1,4 +1,4 @@
-import { createSessionCookie, getSessionCookieName } from "@cvsa/core";
+import { createSessionCookie, getSessionCookieName } from "@cvsa/authentication";
 import { env } from "@cvsa/env";
 import type { Context } from "elysia";
 
@@ -6,9 +6,9 @@ type CookieJar = Context["cookie"];
 
 const DAY = 86400;
 
-/** Set the signed better-auth session cookie on the response. */
+/** Set the session cookie on the response. */
 export async function applySessionCookie(cookie: CookieJar, token: string): Promise<void> {
-	const sessionCookie = await createSessionCookie(token);
+	const sessionCookie = createSessionCookie(token);
 	const tokenCookie = cookie[sessionCookie.name];
 	tokenCookie.value = sessionCookie.value;
 	tokenCookie.httpOnly = true;
@@ -20,7 +20,7 @@ export async function applySessionCookie(cookie: CookieJar, token: string): Prom
 
 /** Expire the session cookie on the response. */
 export async function clearSessionCookie(cookie: CookieJar): Promise<void> {
-	const tokenCookie = cookie[await getSessionCookieName()];
+	const tokenCookie = cookie[getSessionCookieName()];
 	tokenCookie.value = "";
 	tokenCookie.expires = new Date(0);
 	tokenCookie.maxAge = 0;
