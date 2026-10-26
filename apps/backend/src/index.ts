@@ -26,6 +26,7 @@ import {
 	outboxService,
 } from "./outbox";
 import { appLogger } from "@cvsa/logger";
+import { env } from "@cvsa/env";
 
 const [host, port] = getBindingInfo();
 
@@ -56,21 +57,30 @@ process.on("SIGINT", async () => {
 	process.exit(0);
 });
 
+/**
+ * Request tracing is always installed because it produces the span — and the
+ * trace id — that logging and error reporting key on. Only the OTLP exporter is
+ * opt-in: without a configured collector, exporting would just buffer and retry
+ * against 127.0.0.1:4317.
+ */
+const telemetry = opentelemetry({
+	spanProcessors:
+		env.OTEL_EXPORTER_OTLP_ENDPOINT !== undefined
+			? [new BatchSpanProcessor(new OTLPTraceExporter())]
+			: [],
+});
+
 export const app = new Elysia({
 	serve: {
 		hostname: host,
 	},
 	prefix: "/v2",
 })
-	.use(
-		opentelemetry({
-			spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
-		})
-	)
+	.use(telemetry)
 	.use(
 		cors({
 			origin: corsOriginPatterns,
-			methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+			methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 			allowedHeaders: ["content-type", "x-locale", "authorization"],
 			credentials: true,
 		})
@@ -79,6 +89,7 @@ export const app = new Elysia({
 	.use(requestLoggerMiddleware)
 	.use(errorHandler)
 	.use(openapi())
+	.get("/health", () => ({ status: "ok", version: pkg.version }))
 	.use(authHandler)
 	.use(songHandler)
 	.use(engineHandler)
@@ -89,7 +100,7 @@ export const app = new Elysia({
 	.use(crawlerAdminHandler);
 
 if (process.env.NODE_ENV !== "test") {
-	app.listen(16412);
+	app.listen({ hostname: host, port });
 }
 
 export const VERSION = pkg.version;

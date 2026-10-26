@@ -8,10 +8,10 @@ import { traceTask } from "@/common/trace";
 
 export const songCreateHandler = new Elysia({ name: "songCreateHandler" }).use(authMiddleware).post(
 	"/song",
-	async ({ body, user, status }) => {
+	async ({ body, user, roleName, status }) => {
 		const principal = createUserPrincipal({
 			userId: user.id,
-			roles: user.roleId ? [String(user.roleId)] : [],
+			roles: roleName ? [roleName] : [],
 		});
 		const song = await traceTask("songWriter.create", async () => {
 			const created = await songWriter.create(principal, body);

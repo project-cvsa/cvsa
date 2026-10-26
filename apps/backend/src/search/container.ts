@@ -3,6 +3,7 @@ import type { EmbeddingApp } from "@cvsa/embedding";
 import { artistReader, artistRoleReader, singerReader, songReader } from "@cvsa/catalog";
 import { SongDetailsResponseSchema } from "@cvsa/contracts";
 import { transformPrismaResult } from "@cvsa/db";
+import { env } from "@cvsa/env";
 import {
 	ArtistRoleSearchService,
 	ArtistSearchService,
@@ -11,7 +12,12 @@ import {
 } from "./catalog";
 import { SearchManager } from "./manager";
 
-const embeddingManager = treaty<EmbeddingApp>("localhost:14900");
+/**
+ * The embedding service runs beside the API. Its address is configurable so the
+ * same build works when it is reached over a container network or another host
+ * instead of the loopback interface.
+ */
+const embeddingManager = treaty<EmbeddingApp>(env.EMBEDDING_API_URL);
 
 export const searchManager = await SearchManager.create();
 

@@ -32,9 +32,7 @@ const staff = [...staffByRole.values()];
 		<Fragment slot="title-en">Staff</Fragment>
 		<Fragment slot="body">
 			<div class="grid grid-cols-2 gap-x-6 gap-y-6">
-				{staff.map((entry) => (
-					<Field label={entry.role}>{entry.artists.join("、")}</Field>
-				))}
+				{staff.map((entry) => <Field label={entry.role}>{entry.artists.join("、")}</Field>)}
 			</div>
 		</Fragment>
 	</Card>

@@ -10,10 +10,10 @@ export const artistDeleteHandler = new Elysia({ name: "artistDeleteHandler" })
 	.use(authMiddleware)
 	.delete(
 		"/artist/:id",
-		async ({ params, set, user }) => {
+		async ({ params, set, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			await traceTask("artistWriter.delete", async () => {
 				await artistWriter.delete(actor, params.id);

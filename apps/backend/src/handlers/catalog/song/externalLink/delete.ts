@@ -12,10 +12,10 @@ export const songExternalLinkDeleteHandler = new Elysia({
 	.use(authMiddleware)
 	.delete(
 		"/song/:id/external-link/:linkId",
-		async ({ params, user, set }) => {
+		async ({ params, user, roleName, set }) => {
 			const principal = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			await traceTask("songExternalLinkWriter.delete", async () => {
 				return await songExternalLinkWriter.delete(principal, params.id, params.linkId);

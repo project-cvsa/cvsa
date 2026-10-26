@@ -15,10 +15,10 @@ export const singerUpdateHandler = new Elysia({ name: "singerUpdateHandler" })
 	.use(authMiddleware)
 	.patch(
 		"/singer/:id",
-		async ({ params, body, status, user }) => {
+		async ({ params, body, status, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const singer = await traceTask("singerWriter.update", async () => {
 				const row = await singerWriter.update(actor, params.id, body);

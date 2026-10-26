@@ -16,7 +16,7 @@ export interface CreateUserPrincipalOptions {
 
 export function createUserPrincipal(options: CreateUserPrincipalOptions): Principal {
 	const roles: string[] = options.roles ? [...options.roles] : [];
-	if (roles.includes("1") || roles.includes("OWNER") || roles.includes("admin")) {
+	if (roles.includes("OWNER") || roles.includes("admin")) {
 		if (!roles.includes("admin")) roles.push("admin");
 		if (!roles.includes("editor")) roles.push("editor");
 		if (!roles.includes("OWNER")) roles.push("OWNER");

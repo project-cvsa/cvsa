@@ -14,10 +14,10 @@ export const artistRoleCreateHandler = new Elysia({ name: "artistRoleCreateHandl
 	.use(authMiddleware)
 	.post(
 		"/artist-role",
-		async ({ body, status, user }) => {
+		async ({ body, status, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const role = await traceTask("artistRoleWriter.create", async () => {
 				const row = await artistRoleWriter.create(actor, body);

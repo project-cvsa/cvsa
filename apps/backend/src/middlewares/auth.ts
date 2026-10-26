@@ -14,6 +14,7 @@ export const authMiddleware = new Elysia({ name: "authMiddleware" }).derive(
 		return {
 			session: authContext.session,
 			user: authContext.user,
+			roleName: authContext.roleName,
 		};
 	}
 );

@@ -14,10 +14,10 @@ export const singerCreateHandler = new Elysia({ name: "singerCreateHandler" })
 	.use(authMiddleware)
 	.post(
 		"/singer",
-		async ({ body, status, user }) => {
+		async ({ body, status, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const singer = await traceTask("singerWriter.create", async () => {
 				const row = await singerWriter.create(actor, body);

@@ -15,10 +15,10 @@ export const songLyricsCreateHandler = new Elysia({ name: "songLyricsCreateHandl
 	.use(authMiddleware)
 	.post(
 		"/song/:id/lyric",
-		async ({ body, params, user, status }) => {
+		async ({ body, params, user, roleName, status }) => {
 			const principal = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const lyric = await traceTask("songLyricsWriter.create", async () => {
 				const created = await songLyricsWriter.create(principal, params.id, body);

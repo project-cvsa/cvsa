@@ -15,10 +15,10 @@ export const engineUpdateHandler = new Elysia({ name: "engineUpdateHandler" })
 	.use(authMiddleware)
 	.patch(
 		"/engine/:id",
-		async ({ params, body, status, user }) => {
+		async ({ params, body, status, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const engine = await traceTask("engineWriter.update", async () => {
 				const row = await engineWriter.update(actor, params.id, body);

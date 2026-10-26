@@ -14,10 +14,10 @@ export const engineCreateHandler = new Elysia({ name: "engineCreateHandler" })
 	.use(authMiddleware)
 	.post(
 		"/engine",
-		async ({ body, status, user }) => {
+		async ({ body, status, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const engine = await traceTask("engineWriter.create", async () => {
 				const row = await engineWriter.create(actor, body);

@@ -13,8 +13,12 @@ export const getErrorResponse = <T extends StatusFunc>(
 ): ReturnType<T> => {
 	const traceId = getTraceId();
 	const { message } = data;
-	const translatedMessages = message ? i18nRuntime.tAll(message) : undefined;
-	const translatedMessage = message ? i18nRuntime.getT({ locale })(message) : undefined;
+	const translatedMessages = message
+		? i18nRuntime.tAll(message, { namespace: "backend" })
+		: undefined;
+	const translatedMessage = message
+		? i18nRuntime.getT({ locale, namespace: "backend" })(message)
+		: undefined;
 	return statusFunc(statusCode, {
 		...data,
 		message: translatedMessage,

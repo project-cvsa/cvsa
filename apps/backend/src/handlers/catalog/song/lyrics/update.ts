@@ -15,10 +15,10 @@ export const songLyricsUpdateHandler = new Elysia({ name: "songLyricsUpdateHandl
 	.use(authMiddleware)
 	.patch(
 		"/song/:id/lyric/:lyricId",
-		async ({ body, params, user, status }) => {
+		async ({ body, params, user, roleName, status }) => {
 			const principal = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const lyric = await traceTask("songLyricsWriter.update", async () => {
 				const updated = await songLyricsWriter.update(

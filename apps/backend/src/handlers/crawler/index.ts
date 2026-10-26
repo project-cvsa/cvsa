@@ -1,32 +1,48 @@
 import { Elysia } from "elysia";
-import { z } from "zod";
 import {
+	ActionQueuedResponseSchema,
 	BilibiliVideoMetadataDtoSchema,
 	BilibiliVideoRelationDtoSchema,
+	ClassifierHealthDtoSchema,
+	CrawlerOverviewStatsSchema,
+	CrawlerStatsQuerySchema,
 	CrawlerStatusDtoSchema,
 	DiscoveryFilterConfigDtoSchema,
+	DiscoverySampleItemSchema,
+	DiscoverySampleListQuerySchema,
+	DiscoverySampleListResponseSchema,
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
+	LabelDiscoverySampleRequestSchema,
+	NetworkRuntimeConfigDocumentSchema,
 	PromoteTrackingVideoRequestSchema,
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
+	ReplaceNetworkRuntimeConfigRequestSchema,
+	TrackingVideoListQuerySchema,
+	TrackingVideoListResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
+	VideoMetadataHistoryListQuerySchema,
+	VideoMetadataHistoryListResponseSchema,
 	VideoTrackingDtoSchema,
+	type ActionQueuedResponse,
 	type BilibiliVideoMetadataDto,
+	type ClassifierHealthDto,
 	type BilibiliVideoRelationDto,
+	type CrawlerOverviewStats,
 	type CrawlerStatusDto,
 	type DiscoveryFilterConfigDto,
+	type DiscoverySampleItem,
+	type DiscoverySampleListResponse,
 	type DiscoverySweepResponse,
+	type NetworkRuntimeConfigDocument,
 	type RegisterTrackingVideosResponse,
+	type TrackingVideoListResponse,
+	type VideoMetadataHistoryListResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
 import { adminAuthMiddleware } from "@/middlewares";
 import { callCrawlerApi } from "./client";
-
-const ActionQueuedResponseSchema = z.object({
-	queued: z.boolean(),
-	aid: z.string(),
-});
 
 export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	.use(adminAuthMiddleware)
@@ -42,6 +58,29 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		}
 	)
 	.get(
+		"/stats",
+		async ({ query }): Promise<CrawlerOverviewStats> => {
+			return callCrawlerApi<CrawlerOverviewStats>("/stats/overview", "GET", undefined, query);
+		},
+		{
+			query: CrawlerStatsQuerySchema,
+			response: {
+				200: CrawlerOverviewStatsSchema,
+			},
+		}
+	)
+	.get(
+		"/classifier",
+		async (): Promise<ClassifierHealthDto> => {
+			return callCrawlerApi<ClassifierHealthDto>("/discovery/classifier");
+		},
+		{
+			response: {
+				200: ClassifierHealthDtoSchema,
+			},
+		}
+	)
+	.get(
 		"/config/discovery",
 		async (): Promise<DiscoveryFilterConfigDto> => {
 			return callCrawlerApi<DiscoveryFilterConfigDto>("/discovery/config");
@@ -49,6 +88,33 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		{
 			response: {
 				200: DiscoveryFilterConfigDtoSchema,
+			},
+		}
+	)
+	.get(
+		"/config/network",
+		async (): Promise<NetworkRuntimeConfigDocument> => {
+			return callCrawlerApi<NetworkRuntimeConfigDocument>("/network-runtime/config");
+		},
+		{
+			response: {
+				200: NetworkRuntimeConfigDocumentSchema,
+			},
+		}
+	)
+	.put(
+		"/config/network",
+		async ({ body }): Promise<NetworkRuntimeConfigDocument> => {
+			return callCrawlerApi<NetworkRuntimeConfigDocument>(
+				"/network-runtime/config",
+				"PUT",
+				body
+			);
+		},
+		{
+			body: ReplaceNetworkRuntimeConfigRequestSchema,
+			response: {
+				200: NetworkRuntimeConfigDocumentSchema,
 			},
 		}
 	)
@@ -78,11 +144,8 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/detail/:aid",
-		async ({ params }): Promise<z.infer<typeof ActionQueuedResponseSchema>> => {
-			return callCrawlerApi<z.infer<typeof ActionQueuedResponseSchema>>(
-				`/discovery/detail/${params.aid}`,
-				"POST"
-			);
+		async ({ params }): Promise<ActionQueuedResponse> => {
+			return callCrawlerApi<ActionQueuedResponse>(`/discovery/detail/${params.aid}`, "POST");
 		},
 		{
 			response: {
@@ -92,15 +155,29 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/active/:aid",
-		async ({ params }): Promise<z.infer<typeof ActionQueuedResponseSchema>> => {
-			return callCrawlerApi<z.infer<typeof ActionQueuedResponseSchema>>(
-				`/discovery/active/${params.aid}`,
-				"POST"
-			);
+		async ({ params }): Promise<ActionQueuedResponse> => {
+			return callCrawlerApi<ActionQueuedResponse>(`/discovery/active/${params.aid}`, "POST");
 		},
 		{
 			response: {
 				200: ActionQueuedResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/tracking/videos",
+		async ({ query }): Promise<TrackingVideoListResponse> => {
+			return callCrawlerApi<TrackingVideoListResponse>(
+				"/tracking/videos",
+				"GET",
+				undefined,
+				query
+			);
+		},
+		{
+			query: TrackingVideoListQuerySchema,
+			response: {
+				200: TrackingVideoListResponseSchema,
 			},
 		}
 	)
@@ -150,7 +227,24 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		},
 		{
 			response: {
-				200: z.array(BilibiliVideoRelationDtoSchema),
+				200: BilibiliVideoRelationDtoSchema.array(),
+			},
+		}
+	)
+	.get(
+		"/metadata/:aid/history",
+		async ({ params, query }): Promise<VideoMetadataHistoryListResponse> => {
+			return callCrawlerApi<VideoMetadataHistoryListResponse>(
+				`/discovery/metadata/${params.aid}/history`,
+				"GET",
+				undefined,
+				query
+			);
+		},
+		{
+			query: VideoMetadataHistoryListQuerySchema,
+			response: {
+				200: VideoMetadataHistoryListResponseSchema,
 			},
 		}
 	)
@@ -162,6 +256,39 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		{
 			response: {
 				200: BilibiliVideoMetadataDtoSchema,
+			},
+		}
+	)
+	.get(
+		"/discovery/samples",
+		async ({ query }): Promise<DiscoverySampleListResponse> => {
+			return callCrawlerApi<DiscoverySampleListResponse>(
+				"/discovery/samples",
+				"GET",
+				undefined,
+				query
+			);
+		},
+		{
+			query: DiscoverySampleListQuerySchema,
+			response: {
+				200: DiscoverySampleListResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/discovery/samples/:aid/label",
+		async ({ params, body }): Promise<DiscoverySampleItem> => {
+			return callCrawlerApi<DiscoverySampleItem>(
+				`/discovery/samples/${params.aid}/label`,
+				"POST",
+				body
+			);
+		},
+		{
+			body: LabelDiscoverySampleRequestSchema,
+			response: {
+				200: DiscoverySampleItemSchema,
 			},
 		}
 	);

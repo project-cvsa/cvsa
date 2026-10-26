@@ -17,10 +17,10 @@ export const songExternalLinkUpdateHandler = new Elysia({
 	.use(authMiddleware)
 	.patch(
 		"/song/:id/external-link/:linkId",
-		async ({ body, params, user, status }) => {
+		async ({ body, params, user, roleName, status }) => {
 			const principal = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			const link = await traceTask("songExternalLinkWriter.update", async () => {
 				const updated = await songExternalLinkWriter.update(

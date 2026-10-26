@@ -10,10 +10,10 @@ export const engineDeleteHandler = new Elysia({ name: "engineDeleteHandler" })
 	.use(authMiddleware)
 	.delete(
 		"/engine/:id",
-		async ({ params, set, user }) => {
+		async ({ params, set, user, roleName }) => {
 			const actor = createUserPrincipal({
 				userId: user.id,
-				roles: user.roleId ? [String(user.roleId)] : [],
+				roles: roleName ? [roleName] : [],
 			});
 			await traceTask("engineWriter.delete", async () => {
 				await engineWriter.delete(actor, params.id);

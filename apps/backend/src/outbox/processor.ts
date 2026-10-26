@@ -18,6 +18,10 @@ export interface OutboxProcessorDeps {
 export function createOutboxProcessor(
 	deps: OutboxProcessorDeps
 ): (job: Job<OutboxEntryDto>) => Promise<void> {
+	// Aggregates without a search index are recorded by the catalog on purpose;
+	// they are not an error and must not burn the job's retry budget.
+	const reportedUnindexed = new Set<string>();
+
 	return async function processOutboxEntry(job: Job<OutboxEntryDto>): Promise<void> {
 		const entry = job.data;
 
@@ -35,8 +39,14 @@ export function createOutboxProcessor(
 
 				const searchService = deps.searchServices[aggregateType];
 				if (!searchService) {
-					appLogger.warn(`Unknown aggregate type: ${aggregateType}`);
-					throw new Error(`Unknown aggregate type: ${aggregateType}`);
+					if (!reportedUnindexed.has(aggregateType)) {
+						reportedUnindexed.add(aggregateType);
+						appLogger.info(
+							`Aggregate type ${aggregateType} has no search index; its outbox events are acknowledged without indexing`,
+							{ aggregateType }
+						);
+					}
+					return;
 				}
 
 				await searchService.sync(aggregateId);

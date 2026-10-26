@@ -18,33 +18,47 @@ interface ErrorStoreData {
 
 type ErrorStore = Record<string, ErrorStoreData>;
 
+/**
+ * The trace id normally comes from the active OpenTelemetry span. When tracing
+ * is unavailable (no span, exporter disabled, test harness) a request-scoped id
+ * is generated so error reporting, logging and the `X-Trace-ID` header still
+ * line up instead of collapsing to an empty key.
+ */
+function resolveTraceId(store: { traceId?: string }): string {
+	const active = getTraceId();
+	if (active) {
+		return active;
+	}
+	if (!store.traceId) {
+		store.traceId = crypto.randomUUID().replaceAll("-", "");
+	}
+	return store.traceId;
+}
+
 export const errorHandler = new Elysia()
 	.error({
 		AppError,
 	})
 	.state("error", {} as ErrorStore)
 	.state("startTime", {} as Record<string, number>)
+	.state("traceId", undefined as string | undefined)
 	.use(ip())
 	.onRequest(function setRequestMeta({ store }) {
 		store.startTime = {};
 		store.error = {};
-		const traceId = getTraceId() ?? "";
-		if (traceId) {
-			store.startTime[traceId] = Bun.nanoseconds() / 1_000_000;
-		}
+		store.traceId = resolveTraceId(store);
+		store.startTime[store.traceId] = Bun.nanoseconds() / 1_000_000;
 	})
 	.use(i18nMiddleware)
 	.onError({ as: "global" }, ({ code, error, set, store, request }) => {
-		const traceId = getTraceId() ?? "";
-		if (traceId) {
-			set.headers["X-Trace-ID"] = traceId;
-		}
+		const traceId = resolveTraceId(store);
+		set.headers["X-Trace-ID"] = traceId;
 
 		const setErrorResponse = (status: number, data: ErrorResponseDto) => {
 			store.error[traceId] = {
 				data,
 				status,
-				locale: store.locale[traceId],
+				locale: store.locale?.[traceId],
 				request,
 				rawError: error,
 				known: true,
@@ -84,7 +98,7 @@ export const errorHandler = new Elysia()
 		}
 	})
 	.onError({ as: "global" }, function logErrorResponse({ store, status: statusFunc, ip }) {
-		const traceId = getTraceId() ?? "";
+		const traceId = resolveTraceId(store);
 		const { request, locale, data, status, rawError, known } = store.error[traceId];
 		const startTime = store.startTime[traceId];
 		const requestPath = new URL(request.url).pathname;

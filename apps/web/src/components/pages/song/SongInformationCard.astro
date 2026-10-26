@@ -47,15 +47,15 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 				<Field label={t("song.info.field.links")}>
 					<div class="flex flex-wrap gap-x-3 gap-y-1">
 						{links.map((link) => (
-							<a
-								href={link.url}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="underline underline-offset-4 decoration-border hover:decoration-primary transition-colors"
-							>
-								{link.label ?? link.platform ?? "link"}
-							</a>
-						))}
+	<a
+		href={link.url}
+		target="_blank"
+		rel="noopener noreferrer"
+		class="underline underline-offset-4 decoration-border hover:decoration-primary transition-colors"
+	>
+		{link.label ?? link.platform ?? "link"}
+	</a>
+))}
 					</div>
 				</Field>
 			</Condition>

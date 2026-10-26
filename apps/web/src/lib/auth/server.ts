@@ -1,5 +1,4 @@
 import {
-	getRoleNameById,
 	resolveAuthFromHeaders,
 	sessionToDto,
 	userToCurrentUserInfoDto,
@@ -31,11 +30,8 @@ export async function resolveCurrentAuth(request: Request): Promise<CurrentAuth>
 		if (!authContext) {
 			return { user: null, session: null };
 		}
-		const roleName = authContext.user.roleId
-			? await getRoleNameById(authContext.user.roleId)
-			: null;
 		return {
-			user: userToCurrentUserInfoDto(authContext.user, roleName),
+			user: userToCurrentUserInfoDto(authContext.user, authContext.roleName),
 			session: sessionToDto(authContext.session),
 		};
 	} catch (error) {

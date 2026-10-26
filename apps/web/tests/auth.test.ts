@@ -11,12 +11,10 @@ vi.mock("@cvsa/authentication", () => ({
 
 import {
 	resolveAuthFromHeaders,
+	type sessionToDto,
 	userToCurrentUserInfoDto,
-	sessionToDto,
-	getRoleNameById,
-	type CurrentUserInfoDto,
-	type AuthSessionDto,
 } from "@cvsa/authentication";
+import type { CurrentUserInfoDto } from "@cvsa/authentication";
 import { resolveCurrentAuth, resolveCurrentUser } from "@lib/auth/server";
 import {
 	ADMIN_REQUIRED_ROUTES,

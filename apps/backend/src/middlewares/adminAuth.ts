@@ -1,19 +1,22 @@
 import { Elysia } from "elysia";
 import { AppError } from "@cvsa/contracts";
-import { getRoleNameById } from "@cvsa/authentication";
-import { authMiddleware } from "./auth";
+import { resolveAuthFromHeaders } from "@cvsa/authentication";
 
-export const adminAuthMiddleware = new Elysia({ name: "adminAuthMiddleware" })
-	.use(authMiddleware)
-	.derive({ as: "scoped" }, async ({ user }) => {
-		if (!user?.roleId) {
-			throw new AppError("error.forbidden", "FORBIDDEN", 403);
+export const adminAuthMiddleware = new Elysia({ name: "adminAuthMiddleware" }).derive(
+	{ as: "scoped" },
+	async ({ headers }) => {
+		const authContext = await resolveAuthFromHeaders(headers);
+		if (!authContext) {
+			throw new AppError("error.unauthorized", "UNAUTHORIZED", 401);
 		}
-		const roleName = await getRoleNameById(user.roleId);
+		const { session, user, roleName } = authContext;
 		if (roleName !== "OWNER" && roleName !== "admin") {
 			throw new AppError("error.forbidden", "FORBIDDEN", 403);
 		}
 		return {
+			session,
+			user,
 			roleName,
 		};
-	});
+	}
+);

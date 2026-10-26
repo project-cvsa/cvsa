@@ -1,5 +1,6 @@
 {
 	"error.unauthorized": "未登录",
+	"error.forbidden": "无权访问此资源",
 	"error.song.notfound": "此歌曲不存在",
 	"error.lyric.notfound": "此歌词不存在",
 	"error.signup.failed": "很抱歉，暂时无法注册",
