@@ -1,0 +1,22 @@
+{
+	"name": "@cvsa/env",
+	"type": "module",
+	"main": "src/index.ts",
+	"module": "src/index.ts",
+	"exports": {
+		".": "./src/index.ts",
+		"./database": "./src/database.ts"
+	},
+	"version": "0.1.0",
+	"scripts": {
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@types/bun": "1.4.2",
+		"@cvsa/typescript-config": "workspace:*"
+	},
+	"dependencies": {
+		"@t3-oss/env-core": "^0.13.11",
+		"zod": "^4.3.6"
+	}
+}

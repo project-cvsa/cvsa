@@ -1,0 +1,7 @@
+---
+const { ...attrs } = Astro.props;
+---
+
+<p class="ts-body color-primary pt-3.5" class:list={[attrs.class]} {...attrs}>
+	<slot />
+</p>

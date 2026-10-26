@@ -1,0 +1,97 @@
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: cvsa-db
+    restart: always
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+        - PGDATA=/var/lib/postgresql/18/docker
+    env_file:
+      - .env.docker
+    volumes:
+      - data:/var/lib/postgresql
+      # Seeds `cvsa_test` the first time the volume is created. The healthcheck
+      # below then guarantees `docker compose up -d --wait` returns only once
+      # the server accepts connections, not while the entrypoint is still
+      # initializing the cluster.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    command: postgres
+    healthcheck:
+      # Probe over TCP: `pg_isready` already succeeds against the temporary
+      # socket-only server the entrypoint uses while running init scripts.
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  snapshot-db:
+    image: timescale/timescaledb:latest-pg17
+    container_name: cvsa-snapshot-db
+    restart: always
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_DB: cvsa_snapshot
+      POSTGRES_USER: cvsa
+      POSTGRES_PASSWORD: password
+    volumes:
+      - snapshot_data:/var/lib/postgresql/data
+      # Seeds `cvsa_snapshot_test` plus the TimescaleDB extension on first boot.
+      - ./docker/timescale/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\"",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  meili:
+    image: getmeili/meilisearch:v1.40
+    container_name: cvsa-meili
+    restart: always
+    ports:
+      - "127.0.0.1:7700:7700"
+    env_file:
+      - .env.docker
+    volumes:
+      - meili:/meili_data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:7700/health || wget -qO- http://127.0.0.1:7700/health",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: cvsa-redis
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  data:
+  snapshot_data:
+  meili:
+  redis:

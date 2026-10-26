@@ -1,9 +1,12 @@
 {
-    "$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
-    "extends": "//",
-    "css": {
-        "parser": {
-            "tailwindDirectives": true
-        }
-    }
+	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+	"extends": "//",
+	"files": {
+		"includes": ["**/*", "!public/**"]
+	},
+	"css": {
+		"parser": {
+			"tailwindDirectives": true
+		}
+	}
 }

@@ -1,0 +1,39 @@
+{
+	"name": "@cvsa/crawler",
+	"type": "module",
+	"version": "0.1.0",
+	"scripts": {
+		"dev": "NODE_ENV=development bun --watch src/index.ts",
+		"start": "bun src/index.ts",
+		"seed:tracking": "bun src/scripts/seed-tracking.ts",
+		"migrate:legacy": "bun src/scripts/migrate-legacy.ts",
+		"dump:legacy": "bun src/scripts/dump-legacy.ts",
+		"import:legacy": "bun src/scripts/import-legacy.ts",
+		"test": "bun test --concurrent",
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*",
+		"@elysiajs/eden": "^1.4.9",
+		"@types/bun": "latest",
+		"@types/pg": "^8.11.11",
+		"pg": "^8.23.0"
+	},
+	"dependencies": {
+		"@cvsa/contracts": "workspace:*",
+		"@cvsa/db": "workspace:*",
+		"@cvsa/env": "workspace:*",
+		"@cvsa/logger": "workspace:*",
+		"@cvsa/network-scheduler": "workspace:*",
+		"@cvsa/observability": "workspace:*",
+		"@cvsa/snapshot-db": "workspace:*",
+		"@huggingface/transformers": "^4.0.1",
+		"@opentelemetry/api": "^1.9.0",
+		"bullmq": "5.80.2",
+		"elysia": "^1.4.26",
+		"ioredis": "5.10.1",
+		"onnxruntime-node": "1.30.0",
+		"zod": "^4.3.6"
+	}
+}

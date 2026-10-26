@@ -6,6 +6,7 @@ model Album {
     description           String?
     /// [LocalizedField]
     localizedDescriptions Json?         @map("localized_descriptions")
+    language              String       @default("zh")
     songInAlbums          SongInAlbum[]
     coverUrl              String?       @map("cover_url")
     createdAt             DateTime      @default(now()) @map("created_at")

@@ -1,13 +1,16 @@
 model User {
     id                  String              @id
+    name                String?
     username            String              @unique
-    displayName         String?             @map("display_name")
+    displayUsername     String              @unique @map("display_username")
     email               String?             @unique
-    password            String
+    emailVerified       Boolean             @default(false) @map("email_verified")
+    image               String?
     changesMade         History[]
     role                Role?               @relation(fields: [roleId], references: [id])
     roleId              Int?                @map("role_id")
     sessions            Session[]
+    accounts            Account[]
     artist              Artist?
     reputation          Int                 @default(0)
     reputationHistories ReputationHistory[]
@@ -15,7 +18,6 @@ model User {
     files               File[]
     createdAt           DateTime            @default(now()) @map("created_at")
     updatedAt           DateTime            @updatedAt @map("updated_at")
-    deletedAt           DateTime?           @map("deleted_at")
 
     @@map("user")
     @@schema("auth")

@@ -1,0 +1,20 @@
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	# Deploy webhook: the host-side `scripts/deploy-daemon.ts` listens on
+	# 127.0.0.1:9420, so Caddy is the only public entrypoint and no extra
+	# firewall port has to be opened. `handle_path` strips the `/_deploy` prefix,
+	# so `POST https://<SITE_ADDRESS>/_deploy/deploy` hits `/deploy` on the
+	# daemon.
+	handle_path /_deploy* {
+		reverse_proxy host.docker.internal:9420
+	}
+
+	handle /v2/* {
+		reverse_proxy backend:16412
+	}
+
+	handle {
+		reverse_proxy web:10199
+	}
+}

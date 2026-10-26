@@ -1,0 +1,19 @@
+---
+import DisplayL from "@components/typography/DisplayL.astro";
+import Paragraph from "@components/typography/Paragraph.astro";
+import Layout from "@layouts/Layout.astro";
+---
+
+<Layout>
+	<main class="w-screen h-screen flex items-center justify-center">
+		<div class="w-11/12 sm:w-120">
+			<DisplayL>403</DisplayL>
+			<div class="h-0.25 bg-split-lines" />
+			<Paragraph>
+				You don't have permission to access this page. <br>
+				您没有权限访问此页面。 <br>
+				このページへのアクセス権限がありません。<br>
+			</Paragraph>
+		</div>
+	</main>
+</Layout>

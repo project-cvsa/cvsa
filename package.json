@@ -1,20 +1,32 @@
 {
-    "name": "cvsa",
-    "private": true,
-    "workspaces": [
-        "apps/*",
-        "packages/*"
-    ],
-    "scripts": {
-        "dev": "bunx --bun turbo run dev",
-        "build": "bunx --bun turbo run build",
-        "lint": "biome check .",
-        "lint:fix": "biome check --write --unsafe .",
-        "format": "biome format --write .",
-        "test": "bunx --bun turbo run test"
-    },
-    "devDependencies": {
-        "turbo": "latest"
-    },
-    "packageManager": "bun@1.3.10"
+	"name": "cvsa",
+	"private": true,
+	"workspaces": [
+		"apps/*",
+		"packages/*"
+	],
+	"scripts": {
+		"dev": "bunx --bun turbo run dev",
+		"build": "bunx --bun turbo run build",
+		"lint": "bunx --bun turbo run lint",
+		"lint:fix": "bunx --bun biome check --write --unsafe .",
+		"format": "bunx --bun biome format --write .",
+		"ci": "bunx --bun biome ci .",
+		"test": "bunx --bun turbo run test:reset && bunx --bun turbo run test",
+		"test:coverage": "bunx --bun turbo run test:reset && bunx --bun turbo run test:coverage",
+		"typecheck": "bunx --bun turbo typecheck",
+		"setup": "bunx --bun turbo setup",
+		"setup:ci": "bunx --bun turbo setup:ci"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.10",
+		"@types/bun": "^1.4.2",
+		"turbo": "^2.11.2",
+		"typescript": "^7.0.2"
+	},
+	"packageManager": "bun@1.4.2",
+	"overrides": {
+		"mdast-util-to-markdown": "2.1.2",
+		"yuku-parser": "0.6.3"
+	}
 }

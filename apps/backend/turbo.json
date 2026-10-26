@@ -1,0 +1,25 @@
+{
+	"extends": ["//"],
+	"tasks": {
+		"lint": {
+			"inputs": ["tests/**.ts", "src/**.ts", "biome.json", ".biome*"]
+		},
+		"test": {
+			"dependsOn": ["typecheck"],
+			"inputs": [
+				"tests/**.ts",
+				"src/**.ts",
+				"$TURBO_ROOT$/packages/db/**/*.ts",
+				"$TURBO_ROOT$/packages/db/**/*.prisma"
+			]
+		},
+		"typecheck": {
+			"inputs": [
+				"tests/**.ts",
+				"src/**.ts",
+				"tsconfig.json",
+				"$TURBO_ROOT$/packages/typescript-config/base.json"
+			]
+		}
+	}
+}

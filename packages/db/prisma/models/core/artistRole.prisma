@@ -1,15 +1,13 @@
 model ArtistRole {
-    id             Int       @id @default(autoincrement())
-    role           String
+    id             Int        @id @default(autoincrement())
+    name           String
     /// [LocalizedField]
-    localizedRoles Json?     @map("localized_roles")
-    song           Song      @relation(fields: [songId], references: [id])
-    songId         Int       @map("song_id")
-    artist         Artist    @relation(fields: [artistId], references: [id])
-    artistId       Int       @map("artist_id")
-    createdAt      DateTime  @default(now()) @map("created_at")
-    updatedAt      DateTime  @updatedAt @map("updated_at")
-    deletedAt      DateTime? @map("deleted_at")
+    localizedNames Json?      @map("localized_names")
+    language       String     @default("zh")
+    creations      Creation[]
+    createdAt      DateTime   @default(now()) @map("created_at")
+    updatedAt      DateTime   @updatedAt @map("updated_at")
+    deletedAt      DateTime?  @map("deleted_at")
 
     @@map("artist_role")
     @@schema("core")

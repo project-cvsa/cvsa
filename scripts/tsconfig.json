@@ -1,0 +1,17 @@
+{
+	"extends": "../packages/typescript-config/base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": {
+			"@cvsa/db": ["../packages/db/src"],
+			"@cvsa/catalog": ["../packages/catalog/src"],
+			"@cvsa/contracts": ["../packages/contracts/src"],
+			"@cvsa/authentication": ["../packages/authentication/src"],
+			"@cvsa/env": ["../packages/env/src"],
+			"@cvsa/logger": ["../packages/logger/src"],
+			"@cvsa/observability": ["../packages/observability/src"],
+			"@cvsa/embedding": ["../packages/embedding/src"]
+		}
+	},
+	"include": ["./**/*.ts"]
+}

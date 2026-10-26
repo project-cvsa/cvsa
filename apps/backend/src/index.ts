@@ -1,51 +1,109 @@
-import { Elysia, type ErrorHandler } from "elysia";
+import { Elysia } from "elysia";
 import { onAfterHandler } from "./onAfterHandle";
 import { getBindingInfo, logStartup } from "./startMessage";
 import pkg from "../package.json";
-import { authHandler } from "@routes/auth";
-import { AppError } from "@lib/error";
-import { ZodError } from "zod";
+import {
+	authHandler,
+	songHandler,
+	engineHandler,
+	artistHandler,
+	artistRoleHandler,
+	singerHandler,
+	crawlerAdminHandler,
+} from "@handlers/index";
+import { errorHandler } from "./errorHandler";
+import { openapi } from "@elysiajs/openapi";
+import { cors } from "@elysiajs/cors";
+import { requestLoggerMiddleware } from "@/middlewares";
+import { opentelemetry } from "@elysiajs/opentelemetry";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
+import { devHandler } from "./handlers";
+import {
+	createOutboxWorker,
+	closeOutboxInfrastructure,
+	processOutboxEntry,
+	outboxService,
+} from "./outbox";
+import { appLogger } from "@cvsa/logger";
+import { env } from "@cvsa/env";
 
 const [host, port] = getBindingInfo();
+
 logStartup(host, port);
 
-const errorHandler: ErrorHandler<{
-	readonly AppError: AppError;
-}> = ({ code, status, error }) => {
-	if (code === "NOT_FOUND")
-		return status(404, {
-			message: "The requested resource was not found.",
-		});
-	if (code === "VALIDATION") {
-		const detail = error.detail(error.message);
-		if (typeof detail === "string") {
-			return status(422, {
-				code: "VALIDATION_ERROR",
-				message: detail,
-			});
-		}
-		return status(422, {
-			code: "VALIDATION_ERROR",
-			message: detail.summary,
-		});
+/**
+ * Origins that are always trusted: the project's own domains in any
+ * subdomain/scheme/port, plus local development.
+ */
+const BASE_CORS_ORIGIN_PATTERNS = [
+	/^https?:\/\/([a-z0-9-]+\.)*projectcvsa\.com(?::\d+)?$/,
+	/^https?:\/\/(localhost|127\.0\.0\.1)(?::\d+)?$/,
+];
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Convert one deployment-configured origin into a CORS allow pattern. An entry
+ * may be a full origin (`https://cvsa.example.com`) or a bare host, which is
+ * how `SITE_ADDRESS` configures Caddy. Either scheme and an optional port are
+ * accepted because the same stack runs behind plain HTTP in staging.
+ */
+function toCorsOriginPattern(entry: string): RegExp | undefined {
+	const value = entry.trim().replace(/\/+$/, "");
+	if (value.length === 0) {
+		return undefined;
 	}
-	if (error instanceof AppError) {
-		return status(error.statusCode, {
-			code: error.code,
-			message: error.message,
-		});
-	}
-	if (error instanceof ZodError) {
-		return status(422, {
-			code: "VALIDATION_ERROR",
-			message: error.message,
-		});
-	}
-	return status(500, {
-		code: "SERVER_ERROR",
-		message: "Internal server error",
-	});
-};
+	const host = value.replace(/^https?:\/\//, "");
+	return new RegExp(`^https?://${escapeRegExp(host)}(?::\\d+)?$`);
+}
+
+/**
+ * Every domain configured for this deployment (`WEB_ORIGINS`, comma-separated,
+ * or the single `SITE_ADDRESS` Caddy serves) is allowed automatically, so
+ * pointing the stack at a new host needs no code change.
+ */
+const CONFIGURED_CORS_ORIGIN_PATTERNS = [process.env.WEB_ORIGINS, process.env.SITE_ADDRESS]
+	.flatMap((value) => value?.split(",") ?? [])
+	.map(toCorsOriginPattern)
+	.filter((pattern) => pattern !== undefined);
+
+const corsOriginPatterns = [...BASE_CORS_ORIGIN_PATTERNS, ...CONFIGURED_CORS_ORIGIN_PATTERNS];
+
+const outboxWorker = createOutboxWorker(processOutboxEntry);
+
+outboxService.recoverStaleEntries().catch((e) => {
+	appLogger.warn(`Failed to recover stale outbox entries: ${e.message}`);
+});
+
+process.on("SIGTERM", async () => {
+	appLogger.info("Received SIGTERM, shutting down gracefully...");
+	await outboxWorker.close();
+	await closeOutboxInfrastructure();
+	process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+	appLogger.info("Received SIGINT, shutting down gracefully...");
+	await outboxWorker.close();
+	await closeOutboxInfrastructure();
+	process.exit(0);
+});
+
+/**
+ * Request tracing is always installed because it produces the span — and the
+ * trace id — that logging and error reporting key on. Only the OTLP exporter is
+ * opt-in: without a configured collector, exporting would just buffer and retry
+ * against 127.0.0.1:4317.
+ */
+const telemetry = opentelemetry({
+	spanProcessors:
+		env.OTEL_EXPORTER_OTLP_ENDPOINT !== undefined
+			? [new BatchSpanProcessor(new OTLPTraceExporter())]
+			: [],
+});
 
 export const app = new Elysia({
 	serve: {
@@ -53,13 +111,32 @@ export const app = new Elysia({
 	},
 	prefix: "/v2",
 })
-	.error({
-		AppError,
-	})
-	.onError(errorHandler)
-	.use(authHandler)
+	.use(telemetry)
+	.use(
+		cors({
+			origin: corsOriginPatterns,
+			methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+			allowedHeaders: ["content-type", "x-locale", "authorization"],
+			credentials: true,
+		})
+	)
 	.use(onAfterHandler)
-	.listen(16412);
+	.use(requestLoggerMiddleware)
+	.use(errorHandler)
+	.use(openapi())
+	.get("/health", () => ({ status: "ok", version: pkg.version }))
+	.use(authHandler)
+	.use(songHandler)
+	.use(engineHandler)
+	.use(artistHandler)
+	.use(artistRoleHandler)
+	.use(singerHandler)
+	.use(devHandler)
+	.use(crawlerAdminHandler);
+
+if (process.env.NODE_ENV !== "test") {
+	app.listen({ hostname: host, port });
+}
 
 export const VERSION = pkg.version;
 

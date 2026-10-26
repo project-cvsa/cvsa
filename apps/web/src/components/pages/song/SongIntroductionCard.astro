@@ -1,0 +1,21 @@
+---
+import Card from "@layouts/Card.astro";
+import "@components/typography/Article.css";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+
+interface Props {
+	html: string;
+}
+
+const { html } = Astro.props;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+---
+
+<Card>
+	<Fragment slot="title">{t("song.intro.title")}</Fragment>
+	<Fragment slot="title-en">Introduction</Fragment>
+	<Fragment slot="body">
+		<article class="ts-article" set:html={html} />
+	</Fragment>
+</Card>

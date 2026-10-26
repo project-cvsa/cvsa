@@ -7,5 +7,5 @@ export function UpdateLanguage() {
 		const lang = navigator.language.includes("zh") ? "zh" : "en";
 		document.documentElement.lang = lang;
 	}, []);
-	return <></>;
+	return null;
 }

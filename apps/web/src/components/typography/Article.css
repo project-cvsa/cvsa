@@ -1,0 +1,294 @@
+/**
+ * Article content styles — typography adaptation for wiki-rendered HTML.
+ *
+ * Apply `.ts-article` to the element that receives `set:html` wiki output
+ * (e.g. the song introduction). The rules stay global because rendered nodes
+ * never carry an Astro scope attribute.
+ *
+ * Everything mirrors the design system instead of inventing a new scale:
+ *   type scale ......... `uno.config.ts` (heading-2 24/34 · 600, heading-3 20/30 · 600,
+ *                        subhead 18/28 · 500, body 16/25 · 400, label 14/21 · 600,
+ *                        caption 12/17 · 400)
+ *   vertical rhythm .... Paragraph `pt-3.5` (14px), Heading2 `pt-7.5` (30px),
+ *                        Heading3 `pt-4` (16px)
+ *   colors ............. semantic variables from `@lib/theme`, so light/dark follow the
+ *                        `prefers-color-scheme` variables automatically
+ */
+
+.ts-article {
+	font-family: inherit;
+	font-size: 16px;
+	font-weight: 400;
+	line-height: 25px;
+	letter-spacing: 0;
+	color: var(--primary);
+	overflow-wrap: break-word;
+}
+
+/* Top margins live on the blocks themselves so nested containers (list items,
+   quotes, definitions) inherit the same rhythm without repeating selectors.
+   No margin is ever added above the first block: leading space belongs to the
+   Card body padding. */
+
+.ts-article :is(p, ul, ol, dl, blockquote, pre, table, figure, hr) {
+	margin-top: 14px;
+}
+
+.ts-article :is(h1, h2) {
+	margin-top: 30px;
+}
+
+.ts-article :is(h3, h4, h5, h6) {
+	margin-top: 16px;
+}
+
+/* No block ever opens a container with a gap; a nested list is often the first
+   element of its item but not the first content, so `ul`/`ol` are exempt and
+   keep the gap declared in the list rules below. */
+.ts-article > :first-child,
+.ts-article blockquote > :first-child,
+.ts-article dd > :first-child,
+.ts-article li > :first-child:not(ul):not(ol) {
+	margin-top: 0;
+}
+
+/* A MediaWiki heading arrives wrapped in `.mw-heading`; the wrapper counts as
+   the first child, so the inner heading must be reset as well — otherwise its
+   margin would collapse out of the wrapper and reopen the top gap. */
+.ts-article > :first-child :is(h1, h2, h3, h4, h5, h6),
+.ts-article li > :first-child :is(h1, h2, h3, h4, h5, h6),
+.ts-article blockquote > :first-child :is(h1, h2, h3, h4, h5, h6),
+.ts-article dd > :first-child :is(h1, h2, h3, h4, h5, h6) {
+	margin-top: 0;
+}
+
+/* Content headings are capped at heading-2 so wiki sections never compete with
+   the Card's own Heading1 title. */
+
+.ts-article :is(h1, h2) {
+	font-size: 24px;
+	font-weight: 600;
+	line-height: 34px;
+	letter-spacing: 0;
+	color: var(--display);
+}
+
+.ts-article :is(h3, h4) {
+	font-size: 20px;
+	font-weight: 600;
+	line-height: 30px;
+	letter-spacing: 0;
+	color: var(--display);
+}
+
+.ts-article :is(h5, h6) {
+	font-size: 18px;
+	font-weight: 500;
+	line-height: 28px;
+	letter-spacing: 0;
+	color: var(--display);
+}
+
+.ts-article a {
+	color: var(--primary);
+	text-decoration-line: underline;
+	text-decoration-color: var(--border);
+	text-underline-offset: 4px;
+	transition: text-decoration-color 150ms ease;
+}
+
+.ts-article a:hover {
+	text-decoration-color: var(--primary);
+}
+
+.ts-article a:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+.ts-article :is(b, strong) {
+	font-weight: 600;
+	color: var(--display);
+}
+
+.ts-article :is(i, em, cite) {
+	font-style: italic;
+}
+
+.ts-article small {
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 17px;
+	letter-spacing: 0.4px;
+	color: var(--tertiary);
+}
+
+.ts-article :is(sup, sub) {
+	font-size: 11px;
+	line-height: 0;
+}
+
+.ts-article mark {
+	background-color: var(--highlight);
+	color: inherit;
+	text-shadow: 0 2px 4px var(--highlight-shadow-color);
+}
+
+.ts-article abbr[title] {
+	text-decoration-line: underline;
+	text-decoration-style: dotted;
+	text-decoration-color: var(--tertiary);
+	text-underline-offset: 4px;
+}
+
+.ts-article :is(code, kbd, samp) {
+	padding: 1px 5px;
+	border: 1px solid var(--border);
+	background-color: var(--surface-container-medium);
+	color: var(--primary);
+	font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 14px;
+	line-height: 21px;
+	letter-spacing: 0.1px;
+}
+
+.ts-article :is(ul, ol) {
+	padding-left: 20px;
+}
+
+.ts-article ul {
+	list-style-type: disc;
+}
+
+.ts-article ol {
+	list-style-type: decimal;
+}
+
+.ts-article :is(ul, ol) :is(ul, ol) {
+	margin-top: 6px;
+}
+
+.ts-article li {
+	padding-left: 2px;
+	color: var(--primary);
+}
+
+.ts-article li + li {
+	margin-top: 6px;
+}
+
+.ts-article li::marker {
+	color: var(--tertiary);
+}
+
+.ts-article dt {
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 21px;
+	letter-spacing: 0.1px;
+	color: var(--display);
+}
+
+.ts-article dd {
+	padding-left: 16px;
+	color: var(--primary);
+}
+
+.ts-article blockquote {
+	padding: 2px 0 2px 16px;
+	border-left: 2px solid var(--border);
+	color: var(--secondary);
+}
+
+.ts-article blockquote cite {
+	font-size: 12px;
+	font-style: normal;
+	font-weight: 400;
+	line-height: 17px;
+	letter-spacing: 0.4px;
+	color: var(--tertiary);
+}
+
+.ts-article hr {
+	border: 0;
+	border-top: 1px solid var(--split-lines);
+}
+
+.ts-article pre {
+	padding: 12px 16px;
+	border: 1px solid var(--border);
+	background-color: var(--surface-container-medium);
+	color: var(--primary);
+	overflow-x: auto;
+	font-size: 14px;
+	line-height: 21px;
+	letter-spacing: 0.1px;
+}
+
+.ts-article pre code {
+	padding: 0;
+	border: 0;
+	background-color: transparent;
+	font-size: inherit;
+	line-height: inherit;
+}
+
+.ts-article :is(img, video) {
+	max-width: 100%;
+	height: auto;
+}
+
+.ts-article figure {
+	margin: 0;
+}
+
+.ts-article figcaption {
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 17px;
+	letter-spacing: 0.4px;
+	color: var(--tertiary);
+}
+
+/* `display: block` keeps wide wiki tables scrollable inside the Card instead of
+   stretching the grid column. */
+
+.ts-article table {
+	display: block;
+	width: fit-content;
+	max-width: 100%;
+	overflow-x: auto;
+	border-collapse: collapse;
+	font-size: 14px;
+	line-height: 21px;
+	letter-spacing: 0.1px;
+}
+
+.ts-article :is(th, td) {
+	padding: 6px 12px;
+	border: 1px solid var(--border);
+	text-align: left;
+	vertical-align: top;
+	color: var(--primary);
+}
+
+.ts-article :is(th, td) > * + * {
+	margin-top: 6px;
+}
+
+.ts-article th {
+	background-color: var(--surface-container-medium);
+	font-weight: 600;
+	color: var(--display);
+}
+
+.ts-article caption {
+	margin-top: 8px;
+	caption-side: bottom;
+	text-align: left;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 17px;
+	letter-spacing: 0.4px;
+	color: var(--tertiary);
+}

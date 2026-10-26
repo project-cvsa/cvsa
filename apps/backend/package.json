@@ -1,36 +1,51 @@
 {
-    "name": "@project-cvsa/backend",
-    "type": "module",
-    "version": "0.0.1",
-    "scripts": {
-        "lint": "bunx --bun biome lint",
-        "dev": "bun --hot src/index.ts",
-        "start": "bun src/index.ts",
-        "test": "bun test",
-        "test:coverage": "bun test --coverage",
-        "test:unit": "bun test tests/unit",
-        "test:e2e": "bun test tests/e2e",
-        "test:integration": "bun test tests/integration"
-    },
-    "devDependencies": {
-        "@biomejs/biome": "^2.4.4",
-        "@types/bun": "latest"
-    },
-    "peerDependencies": {
-        "typescript": "^5"
-    },
-    "dependencies": {
-        "@elysiajs/eden": "^1.0.5",
-        "@prisma/adapter-pg": "^7.4.1",
-        "@t3-oss/env-core": "^0.13.10",
-        "argon2": "^0.44.0",
-        "chalk": "^5.6.2",
-        "elysia": "^1.4.26",
-        "elysia-ip": "^1.0.10",
-        "elysia-rate-limit": "^4.5.0",
-        "nanoid": "^5.1.6",
-        "zod": "^4.3.6",
-        "@project-cvsa/db": "workspace:*",
-        "@project-cvsa/configs": "workspace:*"
-    }
+	"name": "@cvsa/backend",
+	"type": "module",
+	"version": "2.1.0",
+	"scripts": {
+		"lint": "bunx --bun biome lint",
+		"dev": "NODE_ENV=development bun --watch src/index.ts",
+		"start": "bun src/index.ts",
+		"test": "bun test --concurrent",
+		"test:coverage": "bun test --coverage --concurrent",
+		"typecheck": "bunx --bun tsc --noEmit"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.4.4",
+		"@types/bun": "1.4.2",
+		"@cvsa/typescript-config": "workspace:*"
+	},
+	"dependencies": {
+		"@cvsa/authentication": "workspace:*",
+		"@cvsa/catalog": "workspace:*",
+		"@cvsa/contracts": "workspace:*",
+		"@cvsa/db": "workspace:*",
+		"@cvsa/embedding": "workspace:*",
+		"@cvsa/env": "workspace:*",
+		"@cvsa/logger": "workspace:*",
+		"@cvsa/observability": "workspace:*",
+		"@elysiajs/cors": "^1.4.2",
+		"@elysiajs/eden": "^1.4.9",
+		"@elysiajs/openapi": "^1.4.16",
+		"@elysiajs/opentelemetry": "^1.4.11",
+		"@fanee/core": "^0.8.1",
+		"@fanee/node": "^0.8.1",
+		"@opentelemetry/api": "^1.9.1",
+		"@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
+		"@opentelemetry/sdk-trace-node": "^2.6.1",
+		"@prisma/adapter-pg": "^7.4.1",
+		"@t3-oss/env-core": "^0.13.10",
+		"argon2": "^0.45.1",
+		"bullmq": "5.80.2",
+		"chalk": "^6.0.0",
+		"elysia": "^1.4.30",
+		"elysia-ip": "^1.1.1",
+		"elysia-rate-limit": "^4.6.2",
+		"ioredis": "5.10.1",
+		"meilisearch": "^0.56.0",
+		"nanoid": "^6.0.1",
+		"pino": "^10.3.1",
+		"remeda": "^2.39.0",
+		"zod": "^4.3.6"
+	}
 }

@@ -1,0 +1,155 @@
+name: Release & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
+  # Every application image built from the layered Dockerfile. Keep in sync with
+  # the targets in `Dockerfile` and the services in `docker-compose.prod.yml`.
+  IMAGE_TARGETS: backend crawler embedding web
+
+jobs:
+  verify:
+    name: Contract Tests, Typecheck & Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Prepare .env files
+        run: |
+          cp .env.docker.example .env.docker
+          cp packages/db/.env.example packages/db/.env
+          cp packages/db/.env.test.example packages/db/.env.test
+          cp apps/backend/.env.test.example apps/backend/.env.test
+          cp apps/crawler/.env.example apps/crawler/.env.test
+
+      - name: Start backing services
+        # `--wait` blocks until every container reports healthy, so Postgres,
+        # TimescaleDB, Redis and Meilisearch are accepting connections before
+        # `setup:ci` runs instead of racing their first-boot initialization.
+        run: docker compose up -d --wait --wait-timeout 240
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Setup test databases & emit contracts
+        run: bun run setup:ci
+
+      - name: Lint & Format Check
+        run: bun run ci
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Run Contract & Integration Tests
+        run: bun run test
+
+      - name: Verify Production Web Build
+        run: bun run --cwd apps/web build
+
+      - name: Validate production compose file
+        run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config --quiet
+
+      - name: Stop backing services
+        if: always()
+        run: docker compose down -v
+
+  build-and-push:
+    name: Build & Push Layered Images
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.sha_tag }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute Image Tag
+        id: meta
+        run: echo "sha_tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and Push Service Images
+        env:
+          SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
+        run: |
+          set -euo pipefail
+          for target in ${IMAGE_TARGETS}; do
+            docker buildx build \
+              --target "$target" \
+              --cache-from type=gha,scope="cvsa-$target" \
+              --cache-to type=gha,mode=max,scope="cvsa-$target" \
+              --tag "${IMAGE_PREFIX}/cvsa-${target}:${SHA_TAG}" \
+              --tag "${IMAGE_PREFIX}/cvsa-${target}:latest" \
+              --push \
+              .
+          done
+
+  deploy:
+    name: Trigger Deploy Webhook
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && vars.ENABLE_VPS_DEPLOY == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      # The host-side `scripts/deploy-daemon.ts` owns the rollout: it pins
+      # `IMAGE_TAG`, drains the crawler, applies migrations, waits on the native
+      # healthchecks, and rolls back on its own. CI only has to authenticate and
+      # hand over the tag, so no SSH key or deploy path exists in this workflow.
+      - name: Call deploy webhook
+        env:
+          DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
+          DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
+          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DEPLOY_WEBHOOK_URL}" ] || [ -z "${DEPLOY_WEBHOOK_SECRET}" ]; then
+            echo "::error::DEPLOY_WEBHOOK_URL and DEPLOY_WEBHOOK_SECRET must be configured." >&2
+            exit 1
+          fi
+
+          PAYLOAD=$(jq -cn --arg tag "${IMAGE_TAG}" '{tag: $tag, syncGit: true}')
+          SIGNATURE=$(printf '%s' "${PAYLOAD}" \
+            | openssl dgst -sha256 -hmac "${DEPLOY_WEBHOOK_SECRET}" -hex \
+            | sed 's/^.* //')
+
+          HTTP_STATUS=$(curl --silent --show-error \
+            --max-time 900 \
+            --output deploy-response.json \
+            --write-out '%{http_code}' \
+            --header "Content-Type: application/json" \
+            --header "Authorization: Bearer ${DEPLOY_WEBHOOK_SECRET}" \
+            --header "X-Hub-Signature-256: sha256=${SIGNATURE}" \
+            --data "${PAYLOAD}" \
+            "${DEPLOY_WEBHOOK_URL}")
+
+          cat deploy-response.json || true
+          if [ "${HTTP_STATUS}" != "200" ]; then
+            echo "::error::Deploy webhook failed with HTTP ${HTTP_STATUS} for tag ${IMAGE_TAG}" >&2
+            exit 1
+          fi
+          echo "Deploy daemon accepted ${IMAGE_TAG}"

@@ -1,7 +1,7 @@
 import { defineConfig, defineDocs } from "fumadocs-mdx/config";
 import { metaSchema, pageSchema } from "fumadocs-core/source/schema";
 import { visit } from "unist-util-visit";
-import { remarkMdxMermaid } from 'fumadocs-core/mdx-plugins';
+import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -33,6 +33,6 @@ export default defineConfig({
 	mdxOptions: {
 		// MDX options
 		rehypePlugins: (v) => [rehypeFootnote, ...v],
-		remarkPlugins: [remarkMdxMermaid]
+		remarkPlugins: [remarkMdxMermaid],
 	},
 });

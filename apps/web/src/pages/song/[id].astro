@@ -1,0 +1,165 @@
+---
+import Layout from "@layouts/Layout.astro";
+import Header from "@layouts/Header.astro";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+import { AppError, type SongDetailsResponseDto, SongDetailsResponseSchema } from "@cvsa/contracts";
+import { songReader } from "@cvsa/catalog";
+import { transformPrismaResult } from "@cvsa/db";
+import { renderWiki } from "@lib/wiki";
+import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
+import Pencil from "lucide-solid/icons/pencil";
+import SongCover from "@components/pages/song/SongCover.astro";
+import SongInformationCard from "@components/pages/song/SongInformationCard.astro";
+import SongIntroductionCard from "@components/pages/song/SongIntroductionCard.astro";
+import SongLyricsCard from "@components/pages/song/SongLyricsCard.astro";
+import SongStaffCard from "@components/pages/song/SongStaffCard.astro";
+
+const { id } = Astro.params;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+let details: SongDetailsResponseDto;
+try {
+	const raw = await songReader.getDetails(Number.parseInt(id || "", 10) || 0);
+	if (!raw) {
+		return new Response(null, {
+			status: 404,
+		});
+	}
+	details = SongDetailsResponseSchema.parse(transformPrismaResult(raw));
+} catch (e) {
+	if (AppError.isAppError(e)) {
+		return new Response(null, {
+			status: e.statusCode,
+			statusText: e.code,
+		});
+	} else {
+		return new Response(null, {
+			status: 500,
+			statusText: "Internal Server Error",
+		});
+	}
+}
+const introduction = renderWiki(details.description ?? "", {
+	data: details,
+	entity: "song",
+	language,
+});
+
+const songName = localizedName(details, language) || details.name || "";
+const singers = details.singers.map((singer) => localizedName(singer, language));
+const duration = formatDuration(details.duration);
+const publishedAt = formatDateTime(details.publishedAt);
+
+const lyric = pickLyric(details.lyrics, language);
+const lyricText = lyric?.plainText ?? lyric?.lrc ?? "";
+const lyricBaseLanguage = lyric?.language?.split("-")[0] ?? "";
+const lyricLanguage =
+	lyricBaseLanguage === "zh"
+		? t("song.lang.zh.name")
+		: lyricBaseLanguage === "ja" || lyricBaseLanguage === "jp"
+			? t("song.lang.jp.name")
+			: lyricBaseLanguage;
+
+const uploaderRoleNames = new Set(["uploader", "投稿", "投稿者", "post", "contributor"]);
+const uploaderNames = details.artists
+	.filter((a) => uploaderRoleNames.has(a.role.name.toLowerCase()))
+	.map((a) => localizedName(a, language))
+	.filter(Boolean);
+---
+
+<Layout title={`${songName} - 中V档案馆`}>
+	<style is:global>
+	.wireframe {
+		background: repeating-linear-gradient(
+			-45deg,
+			var(--background),
+			var(--background) 13px,
+			var(--wireframe-line) 13px,
+			var(--wireframe-line) 14px
+		);
+		border: var(--wireframe-line) 1px solid;
+	}
+	</style>
+	<Header />
+
+	<div class="flex mx-auto max-w-[110rem]">
+		<aside class="relative hidden lg:flex md:w-60 lg:w-64 xl:w-80 items-center min-h-screen">
+			<div
+				class="fixed top-24 w-[inherit] h-[calc(100vh-10rem)] overflow-y-auto py-3 px-4 wireframe"
+			>
+				<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Left Sidebar</span>
+			</div>
+		</aside>
+
+		<main class="flex-1 py-6 px-4 max-lg:max-w-2xl mx-auto min-w-0">
+			<!-- 
+				To make the layout work properly and universally,
+				we deliberately prepared duplicated content.
+			 	One set for mobile, one set for desktop, switched by breakpoints.
+			 -->
+			<!-- Mobile -->
+			<div class="flex flex-col gap-6 lg:hidden">
+				<SongCover src={details.coverUrl} />
+				<SongInformationCard
+					songName={songName}
+					singers={singers}
+					duration={duration}
+					uploaderNames={uploaderNames}
+					links={details.externalLinks}
+					publishedAt={publishedAt}
+				/>
+				<SongStaffCard artists={details.artists} />
+				<SongIntroductionCard html={introduction} />
+				<SongLyricsCard
+					text={lyricText}
+					languageLabel={lyricLanguage}
+					isTranslated={lyric?.isTranslated ?? false}
+				/>
+			</div>
+
+			<!-- Desktop -->
+			<div class="hidden lg:grid lg:grid-cols-2 lg:gap-8 xl:gap-12">
+				<div class="flex flex-col gap-6">
+					<SongCover src={details.coverUrl} />
+					<SongIntroductionCard html={introduction} />
+				</div>
+
+				<div class="flex flex-col gap-6">
+					<SongInformationCard
+						songName={songName}
+						singers={singers}
+						duration={duration}
+						uploaderNames={uploaderNames}
+						links={details.externalLinks}
+						publishedAt={publishedAt}
+					/>
+					<SongStaffCard artists={details.artists} />
+					<SongLyricsCard
+						text={lyricText}
+						languageLabel={lyricLanguage}
+						isTranslated={lyric?.isTranslated ?? false}
+					/>
+				</div>
+			</div>
+		</main>
+
+		<aside class="relative hidden md:w-60 lg:w-64 xl:w-80 2xl:flex items-center min-h-screen">
+			<div
+				class="fixed top-24 w-[inherit] h-[calc(100vh-10rem)] overflow-y-auto py-3 px-4 wireframe"
+			>
+				<div class="w-full flex flex-col gap-3">
+					<a
+						href={`/song/${details.id}/edit`}
+						class="inline-flex w-full h-11 items-center justify-center gap-2 border border-border bg-transparent px-4 ts-label color-primary transition-colors hover:bg-surface-container-medium focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+					>
+						<Pencil size={18} />
+						{t("song.edit.action")}
+					</a>
+					<div class="w-full flex justify-end">
+						<span class="font-[IBM_Plex_Mono] opacity-50 uppercase">Right Sidebar</span>
+					</div>
+				</div>
+			</div>
+		</aside>
+	</div>
+</Layout>

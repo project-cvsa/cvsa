@@ -17,6 +17,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # dotenv environment variable files
 .env
+.env.docker
 .env.development.local
 .env.test.local
 .env.test
@@ -38,4 +39,14 @@ data
 
 .turbo
 
+# ML models
+
 model
+
+.omo
+
+# docs (apps/docs)
+.source
+.next
+.vercel
+next-env.d.ts

@@ -1,0 +1,18 @@
+---
+import Condition from "@components/Condition.astro";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+
+interface Props {
+	src?: string | null;
+}
+
+const { src } = Astro.props;
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+---
+
+<Condition condition={src}>
+	<div class="w-full">
+		<img alt={t("song.cover.alt")} src={src ?? ""} referrerpolicy="no-referrer">
+	</div>
+</Condition>

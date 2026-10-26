@@ -1,0 +1,27 @@
+model Outbox {
+    id            Int           @id @default(autoincrement())
+    aggregateType String        @map("aggregate_type")
+    aggregateId   Int           @map("aggregate_id")
+    eventType     String        @map("event_type")
+    payload       Json?
+    status        OutboxStatus  @default(PENDING)
+    retryCount    Int           @default(0) @map("retry_count")
+    lastError     String?       @map("last_error")
+    nextRetryAt   DateTime?     @map("next_retry_at")
+    createdAt     DateTime      @default(now()) @map("created_at")
+    processedAt   DateTime?     @map("processed_at")
+
+    @@index([status, nextRetryAt])
+    @@map("outbox")
+    @@schema("meta")
+}
+
+enum OutboxStatus {
+    PENDING
+    PROCESSING
+    PROCESSED
+    FAILED
+
+    @@map("outbox_status")
+    @@schema("meta")
+}

@@ -39,7 +39,7 @@ cvsa/
 
 ### Prerequisites
 
--   [Bun](https://bun.sh) >= 1.3.10
+-   [Bun](https://bun.sh) >= 1.4.2
 -   [PostgreSQL](https://www.postgresql.org) >= 18
 
 ### Initial Setup
@@ -59,11 +59,13 @@ cvsa/
 
 3. **Set up environment variables**
 
-    Create `.env` files in each service directory following their `.env.example` templates:
+    Create `.env` and `.env.test` files in each service directory following their `.env.example` templates:
 
     ```bash
     cp apps/frontend/.env.example apps/frontend/.env
+    cp apps/frontend/.env.example apps/frontend/.env.test
     cp packages/db/.env.example packages/db/.env
+    cp packages/db/.env.example packages/db/.env.test
     ```
 
 4. **Initialize the database**
@@ -88,14 +90,16 @@ bun dev
 
 ## Available Scripts
 
-| Command        | Description                            |
-| -------------- | -------------------------------------- |
-| `bun dev`      | Start all services in development mode |
-| `bun build`    | Build all applications                 |
-| `bun lint`     | Run Biome linter across the codebase   |
-| `bun lint:fix` | Fix linting issues automatically       |
-| `bun format`   | Format code with Biome                 |
-| `bun test`     | Run tests across all packages          |
+| Command                 | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `bun run dev`           | Start all services in development mode           |
+| `bun run build`         | Build all applications                           |
+| `bun run lint`          | Run Biome linter across the codebase             |
+| `bun run lint:fix`      | Fix linting issues automatically                 |
+| `bun run format`        | Format code with Biome                           |
+| `bun run test`          | Run tests across all packages                    |
+| `bun run test:coverage` | Run tests with coverage across all packages      |
+| `bun run typecheck`     | Run TypeScript type checking across all packages |
 
 ### Package-Specific Scripts
 

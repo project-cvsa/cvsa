@@ -1,0 +1,21 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+	"root": false,
+	"extends": "//",
+	"grit": {
+		"formatter": {
+			"enabled": false
+		},
+		"assist": {
+			"enabled": false
+		},
+		"linter": {
+			"enabled": false
+		}
+	},
+	"plugins": [
+		"./config/no-elysia-typebox.grit",
+		"./config/no-try-in-handler.grit",
+		"./config/no-zod-any.grit"
+	]
+}

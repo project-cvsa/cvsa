@@ -1,0 +1,339 @@
+import { describe, expect, test } from "bun:test";
+import { treaty } from "@elysiajs/eden";
+import { app } from "@/index";
+
+const api = treaty(app);
+
+const rand = () => Math.random().toString(36).slice(2, 8);
+
+describe("Registration E2E Tests - POST /v2/user", () => {
+	test("should register a new user", async () => {
+		const payload = {
+			username: `new_user_${rand()}`,
+			password: "password123",
+			email: `${rand()}@example.com`,
+		};
+
+		const { data, error, status } = await api.v2.user.post(payload);
+
+		if (status !== 200) console.log("REGISTER ERROR BODY:", error?.value);
+		expect(status).toBe(200);
+		expect(data).toMatchObject({
+			message: expect.any(String),
+			data: {
+				id: expect.any(String),
+				username: payload.username,
+				displayName: expect.any(String),
+				email: payload.email,
+				token: expect.any(String),
+			},
+		});
+	});
+
+	test("should fail when nothing is provided", async () => {
+		// Create the first user
+		// @ts-expect-error it's intended
+		const { error, status } = await api.v2.user.post({});
+
+		expect(status).toBe(422);
+		expect(error?.value).toMatchObject({
+			code: "VALIDATION_ERROR",
+		});
+	});
+
+	test("should fail when username already exists", async () => {
+		const payload = {
+			username: `duplicate_user_${rand()}`,
+			password: "password123",
+			email: `${rand()}_first@example.com`,
+		};
+
+		// Create the first user
+		await api.v2.user.post(payload);
+
+		// Attempt to register with the same username
+		const { error, status } = await api.v2.user.post({
+			...payload,
+			email: `${rand()}_second@example.com`,
+		});
+
+		// Should return 409 Conflict
+		expect(status).toBe(409);
+		expect(error?.value).toMatchObject({
+			code: "USERNAME_IS_ALREADY_TAKEN",
+		});
+	});
+
+	test("should fail when email already exists", async () => {
+		const payload = {
+			username: `first_user_${rand()}`,
+			password: "password123",
+			email: `${rand()}_duplicated@example.com`,
+		};
+
+		// Create the first user
+		await api.v2.user.post(payload);
+
+		// Attempt to register with the same username
+		const { error, status } = await api.v2.user.post({
+			...payload,
+			username: `another_user_${rand()}`,
+		});
+
+		// Should return 409 Conflict
+		expect(status).toBe(409);
+		expect(error?.value).toMatchObject({
+			code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+		});
+	});
+
+	test("should fail with invalid email format", async () => {
+		const { status, error } = await api.v2.user.post({
+			username: `valid_user_${rand()}`,
+			password: "password123",
+			email: "invalid-email-format", // Invalid email
+		});
+
+		// Malformed token should be seen as unauthorized
+		expect(status).toBe(422);
+		expect(error?.value).toMatchObject({
+			code: "VALIDATION_ERROR",
+		});
+	});
+});
+
+describe("Profile E2E Tests - GET /v2/me", () => {
+	test("should return user profile with valid token", async () => {
+		const username = `profile_user_${rand()}`;
+		const email = `${rand()}@example.com`;
+		// 1. Register to get a token
+		const signup = await api.v2.user.post({
+			username,
+			password: "password123",
+			email,
+			displayName: "John Doe",
+		});
+
+		const token = signup.data?.data.token;
+		expect(token).toBeDefined();
+
+		// 2. Fetch profile using the token in Authorization header
+		const { data, status } = await api.v2.me.get({
+			headers: {
+				authorization: `Bearer ${token}`,
+			},
+		});
+
+		expect(status).toBe(200);
+		expect(data).toMatchObject({
+			username,
+			email,
+			displayName: "John Doe",
+		});
+		expect(data?.id).toBeString();
+	});
+
+	test("should return 401 for malformed token", async () => {
+		const { status, error } = await api.v2.me.get({
+			headers: {
+				authorization: "Bearer invalid.token.format",
+			},
+		});
+
+		// Malformed token should be seen as unauthorized
+		expect(status).toBe(401);
+		expect(error?.value).toMatchObject({
+			code: "UNAUTHORIZED",
+		});
+	});
+
+	test("should return 401 for non-existent session", async () => {
+		// Manually craft a token that looks valid but doesn't exist in DB
+		// Format: hex(30).hex(30)
+		const fakeToken = "0123456789abcdef0123456789abcd.0123456789abcdef0123456789abcd";
+
+		const { status } = await api.v2.me.get({
+			headers: {
+				authorization: `Bearer ${fakeToken}`,
+			},
+		});
+
+		expect(status).toBe(401);
+	});
+
+	test("should return 401 when Authorization header is missing", async () => {
+		const { status } = await api.v2.me.get();
+
+		expect(status).toBe(401);
+	});
+});
+
+describe("Login E2E Tests - POST /v2/session", () => {
+	test("should login with valid credentials", async () => {
+		const signupPayload = {
+			username: `login_user_${rand()}`,
+			password: "password123",
+			email: `login_${rand()}@example.com`,
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const { data, status, response } = await api.v2.session.post({
+			email: signupPayload.email,
+			password: signupPayload.password,
+		});
+
+		expect(status).toBe(200);
+		expect(data).toMatchObject({
+			message: "Successfully logged in",
+			data: {
+				id: expect.any(String),
+				username: signupPayload.username,
+				email: signupPayload.email,
+				token: expect.any(String),
+			},
+		});
+
+		const setCookie = response?.headers.getSetCookie().join("; ") ?? "";
+		expect(setCookie).toContain("cvsa.session_token=");
+		expect(setCookie).toContain("HttpOnly");
+	});
+
+	test("should login with username instead of email", async () => {
+		const signupPayload = {
+			username: `login_by_username_${rand()}`,
+			password: "password123",
+			email: `login_by_username_${rand()}@example.com`,
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const { data, status } = await api.v2.session.post({
+			email: signupPayload.username,
+			password: signupPayload.password,
+		});
+
+		expect(status).toBe(200);
+		expect(data).toMatchObject({
+			message: "Successfully logged in",
+			data: {
+				username: signupPayload.username,
+				token: expect.any(String),
+			},
+		});
+	});
+
+	test("should accept session cookie set by login on /v2/me", async () => {
+		const signupPayload = {
+			username: `login_cookie_me_${rand()}`,
+			password: "password123",
+			email: `login_cookie_me_${rand()}@example.com`,
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const login = await api.v2.session.post({
+			email: signupPayload.username,
+			password: signupPayload.password,
+		});
+		expect(login.status).toBe(200);
+
+		const setCookie = login.response?.headers.getSetCookie().join("; ") ?? "";
+		const token = /cvsa\.session_token=([^;]+)/.exec(setCookie)?.[1];
+		expect(token).toBeDefined();
+
+		const me = await api.v2.me.get({
+			headers: {
+				cookie: `cvsa.session_token=${token}`,
+			},
+		});
+
+		expect(me.status).toBe(200);
+		expect(me.data).toMatchObject({
+			username: signupPayload.username,
+		});
+	});
+
+	test("should return 401 on invalid email", async () => {
+		const signupPayload = {
+			username: `user_invalid_email_${rand()}`,
+			password: "password123",
+			email: `invalid_${rand()}@example.com`,
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const { error, status } = await api.v2.session.post({
+			email: "nonexistent@example.com",
+			password: signupPayload.password,
+		});
+
+		expect(status).toBe(401);
+		expect(error?.value).toMatchObject({
+			code: "INVALID_CREDENTIALS",
+		});
+	});
+
+	test("should return 401 on invalid password", async () => {
+		const signupPayload = {
+			username: `user_invalid_pass_${rand()}`,
+			password: "password123",
+			email: `wrongpass_${rand()}@example.com`,
+		};
+
+		await api.v2.user.post(signupPayload);
+
+		const { error, status } = await api.v2.session.post({
+			email: signupPayload.email,
+			password: "wrongpassword",
+		});
+
+		expect(status).toBe(401);
+		expect(error?.value).toMatchObject({
+			code: "INVALID_CREDENTIALS",
+		});
+	});
+
+	test("should return 422 on missing fields", async () => {
+		// @ts-expect-error it's intended
+		const { error, status } = await api.v2.session.post({});
+
+		expect(status).toBe(422);
+		expect(error?.value).toMatchObject({
+			code: "VALIDATION_ERROR",
+		});
+	});
+});
+
+describe("Logout E2E Tests - DELETE /v2/session", () => {
+	test("should logout with valid token", async () => {
+		const signupPayload = {
+			username: `logout_user_${rand()}`,
+			password: "password123",
+			email: `logout_${rand()}@example.com`,
+		};
+
+		const { data: signUpData } = await api.v2.user.post(signupPayload);
+
+		const { status } = await api.v2.session.delete(null, {
+			headers: {
+				authorization: `Bearer ${signUpData?.data.token}`,
+			},
+		});
+
+		expect(status).toBe(204);
+	});
+
+	test("should return 401 on invalid/expired token", async () => {
+		const { error, status } = await api.v2.session.delete(null, {
+			headers: {
+				authorization: "Bearer invalid.token.format",
+			},
+		});
+
+		expect(status).toBe(401);
+		expect(error?.value).toMatchObject({
+			code: "UNAUTHORIZED",
+		});
+	});
+});

@@ -1,0 +1,36 @@
+engine biome(1.0)
+language js(typescript)
+
+pattern from_module($name) {
+	JsModuleSource() as $m where {
+		$m <: `$name`
+	}
+}
+
+pattern disallowed_identifier($name) {
+	JsIdentifierBinding() as $ib where {
+		$ib <: `$name`,
+		register_diagnostic(
+			span=$ib,
+			message="Avoid using Elysia TypeBox. Use Zod schema instead."
+		)
+	}
+}
+
+pattern disallowed_literal_export($name) {
+	JsLiteralExportName() as $en where {
+		$en <: $name,
+		register_diagnostic(
+			span=$en,
+			message="Avoid using Elysia TypeBox. Use Zod schema instead."
+		)
+	}
+}
+
+JsImport() as $i where {
+	$i <: or {
+		contains disallowed_identifier(name = `t`),
+		contains disallowed_literal_export(name = "t")
+	},
+	$i <: contains from_module(name = `"elysia"`)
+}

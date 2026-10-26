@@ -1,0 +1,25 @@
+---
+import Condition from "@components/Condition.astro";
+import { getLocale } from "@lib/i18n/server";
+
+const { language: locale } = getLocale(Astro.request);
+---
+
+<div class="w-full bg-surface shadow-xl">
+	<div
+		class="h-11 sm:h-13 bg-primary text-display-inverted text-lg sm:text-xl 
+		flex items-center justify-between px-4"
+	>
+		<span class="font-[Outfit,system-ui] uppercase">
+			<slot name="title" />
+		</span>
+		<Condition condition={locale !== "en-US"}>
+			<span class="opacity-60 font-[Outfit] uppercase select-none">
+				<slot name="title-en" />
+			</span>
+		</Condition>
+	</div>
+	<div class="px-4 py-5">
+		<slot name="body" />
+	</div>
+</div>

@@ -8,7 +8,7 @@ model Voicebank {
     language              String
     svsEngineVersion      SvsEngineVersion @relation(fields: [svsEngineVersionId], references: [id])
     svsEngineVersionId    Int              @map("svs_engine_version_id")
-    singerOfSongs         SingerOfSong[]
+    performances          Performance[]
     createdAt             DateTime         @default(now()) @map("created_at")
     updatedAt             DateTime         @updatedAt @map("updated_at")
     deletedAt             DateTime?        @map("deleted_at")

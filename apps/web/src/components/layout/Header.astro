@@ -1,0 +1,55 @@
+---
+import GraphicLogo from "@components/icon/GraphicLogo.astro";
+import HeaderMenu from "@components/layout/HeaderMenu";
+import { getLocale, i18nServer } from "@lib/i18n/server";
+import Search from "lucide-solid/icons/search";
+import X from "lucide-solid/icons/x";
+
+const { language } = getLocale(Astro.request);
+const t = i18nServer.getT({ locale: language, namespace: "server" });
+const user = Astro.locals.user;
+---
+
+<header class="relative top-0 z-30">
+	<div class="mx-auto max-w-[110rem] px-4 md:px-8 h-16 md:h-20 flex items-center gap-3 md:gap-4">
+		<a href="/" class="shrink-0 text-display" aria-label={t("song.nav.home")}>
+			<span class="block text-[27px] md:text-[32px] leading-none">
+				<GraphicLogo />
+			</span>
+		</a>
+
+		<div class="relative flex-1 max-w-2xl mx-auto w-full">
+			<span
+				class="absolute left-4 top-1/2 -translate-y-1/2 text-quaternary pointer-events-none flex"
+				aria-hidden="true"
+			>
+				<Search size={18} />
+			</span>
+			<input
+				type="search"
+				name="q"
+				placeholder={t("song.search.placeholder")}
+				aria-label={t("song.search.placeholder")}
+				class="w-full h-10 md:h-11 bg-surface text-display placeholder:text-tertiary border border-border pl-11 pr-11 outline-none focus:border-primary transition-colors"
+			>
+			<button
+				type="button"
+				class="absolute right-3.5 top-1/2 -translate-y-1/2 text-quaternary hover:text-primary transition-colors"
+				aria-label={t("song.search.clear")}
+			>
+				<X size={18} />
+			</button>
+		</div>
+
+		<HeaderMenu
+			client:load
+			label={t("song.menu.label")}
+			homeLabel={t("song.nav.home")}
+			loginLabel={t("auth.action.login")}
+			registerLabel={t("auth.action.register")}
+			logoutLabel={t("auth.action.logout")}
+			userName={user ? user.displayName || user.username : null}
+			userAvatarUrl={user?.image ?? null}
+		/>
+	</div>
+</header>

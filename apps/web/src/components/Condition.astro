@@ -1,0 +1,9 @@
+---
+interface Props {
+	condition: unknown;
+}
+
+const { condition } = Astro.props;
+---
+
+{condition ? <slot /> : <slot name="else" />}
