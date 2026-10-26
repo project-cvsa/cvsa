@@ -1,14 +1,69 @@
 import { getClosetMilestone, getMilestoneEtaFactor } from "./milestone";
-import type { NextScheduleResult, SnapshotSample, VideoTrackingContext } from "./types";
+import { getNextInitialSampleAt, resolveTrackingPolicy } from "./policy";
+import type {
+	NextScheduleResult,
+	SnapshotSample,
+	TrackingPolicyConfig,
+	TrackingScheduleReason,
+	TrackingState,
+	VideoTrackingContext,
+} from "./types";
+import { METADATA_REFRESH_INTERVAL_MS } from "./types";
 
 const SECOND = 1_000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+function getRegularNextSnapshotAt(
+	now: number,
+	intervalHours: number,
+	minimumIntervalHours: number
+): Date {
+	return new Date(now + Math.max(intervalHours, minimumIntervalHours) * HOUR);
+}
+
+export {
+	DEFAULT_INITIAL_SAMPLING_MINUTES,
+	DEFAULT_REGULAR_DAILY_TIERS,
+	DEFAULT_TRACKING_POLICY,
+} from "./policy";
+
 function toEpochMs(value: Date | number | null | undefined): number | undefined {
 	if (value === null || value === undefined) return undefined;
 	return value instanceof Date ? value.getTime() : value;
+}
+
+/**
+ * Maps a scheduler outcome onto the persisted `schedule_reason` column.
+ *
+ * The scheduler reasons are deliberately more granular than the column (they
+ * explain *which* branch fired); the column only needs to answer "why is this
+ * row due next?", which the admin console groups by.
+ */
+export function toScheduleReason(
+	result: Pick<NextScheduleResult, "nextState" | "consecutiveFails">
+): TrackingScheduleReason {
+	if (result.consecutiveFails > 0) return "retry";
+	switch (result.nextState) {
+		case "milestone":
+			return "milestone";
+		case "archive":
+			return "archive_recheck";
+		case "new":
+			return "initial";
+		default:
+			return "regular";
+	}
+}
+
+/**
+ * Next full-metadata refresh deadline for a freshly sampled video.
+ * New/milestone videos refresh daily, regular ones weekly, archive monthly.
+ */
+export function computeNextMetadataAt(nextState: TrackingState, now: Date | number): Date {
+	const nowMs = now instanceof Date ? now.getTime() : now;
+	return new Date(nowMs + METADATA_REFRESH_INTERVAL_MS[nextState]);
 }
 
 /**
@@ -24,6 +79,11 @@ export function calculateVelocity(
 		previousViews === undefined ||
 		previousTimeMs === null ||
 		previousTimeMs === undefined ||
+		!Number.isFinite(currentViews) ||
+		!Number.isFinite(previousViews) ||
+		!Number.isFinite(currentTimeMs) ||
+		!Number.isFinite(previousTimeMs) ||
+		currentViews < previousViews ||
 		currentTimeMs <= previousTimeMs
 	) {
 		return 0;
@@ -34,6 +94,76 @@ export function calculateVelocity(
 
 	const viewDelta = Math.max(0, currentViews - previousViews);
 	return viewDelta / hoursDiff;
+}
+
+/** Converts a historical view delta into a normalized daily gain. */
+export function calculateDailyViewsGain(
+	currentViews: number,
+	currentTimeMs: number,
+	previousViews?: number,
+	previousTimeMs?: number | null
+): number | null {
+	if (
+		previousViews === undefined ||
+		previousTimeMs === null ||
+		previousTimeMs === undefined ||
+		!Number.isFinite(currentViews) ||
+		!Number.isFinite(previousViews) ||
+		!Number.isFinite(currentTimeMs) ||
+		!Number.isFinite(previousTimeMs) ||
+		currentViews < previousViews ||
+		currentTimeMs <= previousTimeMs
+	) {
+		return null;
+	}
+
+	const elapsedMs = currentTimeMs - previousTimeMs;
+	const viewDelta = Math.max(0, currentViews - previousViews);
+	const dailyViewsGain = (viewDelta * DAY) / elapsedMs;
+	return Number.isFinite(dailyViewsGain) ? dailyViewsGain : null;
+}
+
+/**
+ * Evaluates regular snapshot interval in hours from daily view gain, aligned with cvsa-legacy
+ * but with aggressive minimum 1.5h tiers:
+ * 0 -> 48h, <6 -> 24h, <24 -> 12h, <96 -> 4h, <192 -> 2h, >=192 -> 1.5h
+ */
+export function getRegularSnapshotIntervalHours(
+	dailyViewsGain: number,
+	policy?: TrackingPolicyConfig
+): { intervalHours: number; priority: number } {
+	const resolvedPolicy = resolveTrackingPolicy(policy);
+	const minHours = resolvedPolicy.minRegularIntervalHours;
+	const tiers = resolvedPolicy.regularDailyTiers;
+
+	if (dailyViewsGain <= 0) {
+		const zeroTier = tiers.find((t) => t.maxDailyViews === 0);
+		return {
+			intervalHours: Math.max(minHours, zeroTier?.intervalHours ?? 48),
+			priority: zeroTier?.priority ?? 3,
+		};
+	}
+
+	for (const tier of tiers) {
+		if (tier.maxDailyViews === 0) continue;
+		if (tier.maxDailyViews === null || tier.maxDailyViews === undefined) {
+			return {
+				intervalHours: Math.max(minHours, tier.intervalHours),
+				priority: tier.priority ?? 2,
+			};
+		}
+		if (dailyViewsGain < tier.maxDailyViews) {
+			return {
+				intervalHours: Math.max(minHours, tier.intervalHours),
+				priority: tier.priority ?? (tier.intervalHours <= 4 ? 2 : 3),
+			};
+		}
+	}
+
+	return {
+		intervalHours: Math.max(minHours, 1.5),
+		priority: 2,
+	};
 }
 
 /**
@@ -70,7 +200,6 @@ export function calculateMilestoneEta(
 
 	for (const windowMs of windows) {
 		const targetTime = currentTimeMs - windowMs;
-		// Find closest snapshot near targetTime
 		let closest: (typeof sortedSnapshots)[0] | undefined;
 		let minDiff = Infinity;
 		for (const snapshot of sortedSnapshots) {
@@ -118,29 +247,55 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 	const now = toEpochMs(context.currentTime) ?? Date.now();
 	const lastCapturedAt = toEpochMs(context.lastCapturedAt);
 	const publishedAt = toEpochMs(context.publishedAt);
+	const acceptedAt = toEpochMs(context.acceptedAt);
 	const consecutiveFails = context.consecutiveFails ?? 0;
+	const policy = resolveTrackingPolicy(context.policy);
+	const milestoneMaxEtaHours = policy.milestoneMaxEtaHours;
+	const archiveIntervalDays = policy.archiveIntervalDays;
 
 	// Handle error backoff
 	if (consecutiveFails > 0) {
+		if (context.failureKind === "unavailable") {
+			return {
+				nextState: "archive",
+				nextSnapshotAt: new Date(now + archiveIntervalDays * DAY),
+				velocity: 0,
+				priority: 4,
+				consecutiveFails,
+				reason: "video_unavailable_archived",
+			};
+		}
+
+		// Retry cadence is an error-policy exception to the regular-state interval floor.
 		const backoffMs = Math.min(DAY, 5 * MINUTE * 2 ** Math.min(consecutiveFails - 1, 6));
 		return {
-			nextState: consecutiveFails >= 10 ? "archive" : context.currentState,
+			nextState: context.currentState,
 			nextSnapshotAt: new Date(now + backoffMs),
 			velocity: 0,
 			priority: 3,
 			consecutiveFails,
 			reason:
-				consecutiveFails >= 10 ? "max_retries_exceeded_archived" : "error_retry_backoff",
+				consecutiveFails >= 10
+					? "transient_error_retry_backoff_capped"
+					: "error_retry_backoff",
 		};
 	}
 
-	// Calculate velocity
+	// Calculate velocity (views per hour)
 	let velocity = calculateVelocity(
 		context.currentViews,
 		now,
 		context.previousViews,
 		lastCapturedAt
 	);
+
+	// Fallback to velocity since publishedAt for newly discovered videos (legacy behavior)
+	if (velocity === 0 && context.currentState === "new" && publishedAt && now > publishedAt) {
+		const hoursSincePublished = (now - publishedAt) / HOUR;
+		if (hoursSincePublished > 0 && context.currentViews > 0) {
+			velocity = context.currentViews / hoursSincePublished;
+		}
+	}
 
 	// Multi-window milestone calculation
 	const milestoneInfo =
@@ -160,10 +315,9 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 			getClosetMilestone(context.currentViews);
 
 		if (context.currentViews >= targetMilestone) {
-			// Targeted milestone achieved! Transition back to regular
 			return {
 				nextState: "regular",
-				nextSnapshotAt: new Date(now + 1 * HOUR),
+				nextSnapshotAt: getRegularNextSnapshotAt(now, 1, policy.minRegularIntervalHours),
 				velocity,
 				targetMilestone: null,
 				etaHours: 0,
@@ -175,13 +329,12 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 
 		if (
 			!milestoneInfo ||
-			milestoneInfo.adjustedEtaHours > 144 ||
+			milestoneInfo.adjustedEtaHours > milestoneMaxEtaHours ||
 			milestoneInfo.maxVelocity <= 0
 		) {
-			// ETA too far away or decelerated -> demote to regular
 			return {
 				nextState: "regular",
-				nextSnapshotAt: new Date(now + 3 * HOUR),
+				nextSnapshotAt: getRegularNextSnapshotAt(now, 3, policy.minRegularIntervalHours),
 				velocity,
 				targetMilestone: null,
 				etaHours: milestoneInfo?.etaHours ?? null,
@@ -191,7 +344,6 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 			};
 		}
 
-		// Milestone sprint: interval bounded between 2 seconds and 1 hour
 		const sprintDelayMs = Math.max(
 			2 * SECOND,
 			Math.min(HOUR, Math.round(milestoneInfo.adjustedEtaHours * HOUR))
@@ -208,24 +360,62 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 		};
 	}
 
-	// 2. STATE: NEW
+	// 2. STATE: NEW (matches cvsa-legacy initial rapid sampling + new-video velocity curve)
 	if (context.currentState === "new") {
+		const newMaxAgeHours = policy.newMaxAgeHours;
+		const newMinVelocity = policy.newMinVelocityAfter2h;
+		const initialMinutes = policy.initialSamplingMinutes;
+
+		// Keep the early-sampling cadence anchored to acceptance time, not publication time.
+		const acceptedSampleAt = getNextInitialSampleAt(now, acceptedAt, initialMinutes);
+		if (acceptedSampleAt !== undefined) {
+			return {
+				nextState: "new",
+				nextSnapshotAt: new Date(acceptedSampleAt),
+				velocity,
+				priority: 1,
+				consecutiveFails: 0,
+				reason: "new_video_initial_sample",
+			};
+		}
+
+		// Existing callers without acceptedAt keep the original first-sample behavior.
+		if (acceptedAt === undefined && lastCapturedAt === undefined && initialMinutes.length > 0) {
+			const firstMinutes = initialMinutes[0] ?? 1.5;
+			return {
+				nextState: "new",
+				nextSnapshotAt: new Date(now + firstMinutes * MINUTE),
+				velocity,
+				priority: 1,
+				consecutiveFails: 0,
+				reason: "new_video_initial_sample",
+			};
+		}
+
 		if (publishedAt) {
 			const timeSincePublished = now - publishedAt;
-			if (timeSincePublished > 48 * HOUR) {
+			if (timeSincePublished > newMaxAgeHours * HOUR) {
 				return {
 					nextState: "regular",
-					nextSnapshotAt: new Date(now + 2 * HOUR),
+					nextSnapshotAt: getRegularNextSnapshotAt(
+						now,
+						1.5,
+						policy.minRegularIntervalHours
+					),
 					velocity,
 					priority: 2,
 					consecutiveFails: 0,
 					reason: "new_period_expired_48h",
 				};
 			}
-			if (timeSincePublished > 2 * HOUR && velocity < 10) {
+			if (timeSincePublished > 2 * HOUR && velocity < newMinVelocity) {
 				return {
 					nextState: "regular",
-					nextSnapshotAt: new Date(now + 6 * HOUR),
+					nextSnapshotAt: getRegularNextSnapshotAt(
+						now,
+						4,
+						policy.minRegularIntervalHours
+					),
 					velocity,
 					priority: 3,
 					consecutiveFails: 0,
@@ -259,11 +449,10 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 
 	// 3. STATE: ARCHIVE
 	if (context.currentState === "archive") {
-		// If video gained notable velocity, revive back to regular
 		if (velocity > 10) {
 			return {
 				nextState: "regular",
-				nextSnapshotAt: new Date(now + 2 * HOUR),
+				nextSnapshotAt: getRegularNextSnapshotAt(now, 1.5, policy.minRegularIntervalHours),
 				velocity,
 				priority: 2,
 				consecutiveFails: 0,
@@ -273,7 +462,7 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 
 		return {
 			nextState: "archive",
-			nextSnapshotAt: new Date(now + 7 * DAY),
+			nextSnapshotAt: new Date(now + archiveIntervalDays * DAY),
 			velocity,
 			priority: 4,
 			consecutiveFails: 0,
@@ -282,8 +471,11 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 	}
 
 	// 4. STATE: REGULAR
-	// Check if video should promote to milestone
-	if (milestoneInfo && milestoneInfo.adjustedEtaHours <= 144 && milestoneInfo.maxVelocity > 0) {
+	if (
+		milestoneInfo &&
+		milestoneInfo.adjustedEtaHours <= milestoneMaxEtaHours &&
+		milestoneInfo.maxVelocity > 0
+	) {
 		const sprintDelayMs = Math.max(
 			2 * SECOND,
 			Math.min(HOUR, Math.round(milestoneInfo.adjustedEtaHours * HOUR))
@@ -300,45 +492,47 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 		};
 	}
 
-	// Normal regular speed tiers
-	let intervalMs: number;
-	let priority: number;
+	const dailyViewsGain = calculateDailyViewsGain(
+		context.currentViews,
+		now,
+		context.previousViews,
+		lastCapturedAt
+	);
 
-	if (velocity > 1000) {
-		intervalMs = 1 * HOUR;
-		priority = 2;
-	} else if (velocity > 200) {
-		intervalMs = 3 * HOUR;
-		priority = 2;
-	} else if (velocity > 50) {
-		intervalMs = 6 * HOUR;
-		priority = 2;
-	} else if (velocity > 10) {
-		intervalMs = 12 * HOUR;
-		priority = 3;
-	} else if (velocity > 1) {
-		intervalMs = 24 * HOUR;
-		priority = 3;
-	} else {
-		// Low activity
+	if (dailyViewsGain === null) {
+		return {
+			nextState: "regular",
+			nextSnapshotAt: getRegularNextSnapshotAt(now, 0, policy.minRegularIntervalHours),
+			velocity,
+			priority: 2,
+			consecutiveFails: 0,
+			reason: "regular_baseline_sample",
+		};
+	}
+
+	if (dailyViewsGain <= 0) {
 		const isOld = publishedAt ? now - publishedAt > 30 * DAY : false;
-		if (isOld && velocity <= 0.2) {
+		if (isOld) {
 			return {
 				nextState: "archive",
-				nextSnapshotAt: new Date(now + 7 * DAY),
+				nextSnapshotAt: new Date(now + archiveIntervalDays * DAY),
 				velocity,
 				priority: 4,
 				consecutiveFails: 0,
 				reason: "regular_demoted_to_archive",
 			};
 		}
-		intervalMs = 48 * HOUR;
-		priority = 3;
 	}
+
+	const { intervalHours, priority } = getRegularSnapshotIntervalHours(dailyViewsGain, policy);
 
 	return {
 		nextState: "regular",
-		nextSnapshotAt: new Date(now + intervalMs),
+		nextSnapshotAt: getRegularNextSnapshotAt(
+			now,
+			intervalHours,
+			policy.minRegularIntervalHours
+		),
 		velocity,
 		priority,
 		consecutiveFails: 0,

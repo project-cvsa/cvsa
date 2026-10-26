@@ -1,0 +1,7 @@
+torch>=2.2.0
+numpy>=1.26.0
+onnx>=1.16.0
+onnxruntime>=1.18.0
+transformers>=4.40.0
+scikit-learn>=1.4.0
+psycopg[binary]>=3.1.0

@@ -119,7 +119,30 @@ export const BilibiliVideoMetadataDtoSchema = z.object({
 	tid: z.number().int().nullable(),
 	tname: z.string().nullable(),
 	copyright: z.number().int().nullable(),
+	/** First-page CID, as a decimal string (BigInt on the wire). */
+	cid: z.string().nullable().optional(),
+	/** Number of parts on a multi-part video. */
+	videos: z.number().int().optional(),
+	tidV2: z.number().int().nullable().optional(),
+	tnameV2: z.string().nullable().optional(),
+	/** Creation time, ISO-8601. */
+	ctime: z.string().nullable().optional(),
+	/** Structured description blocks (`desc_v2`). */
+	descV2: z.unknown().nullable().optional(),
+	state: z.number().int().optional(),
+	/** Bilibili's `dynamic` blurb. */
+	dynamic: z.string().nullable().optional(),
+	dimension: z.unknown().nullable().optional(),
+	pages: z.unknown().nullable().optional(),
+	staff: z.unknown().nullable().optional(),
+	rights: z.unknown().nullable().optional(),
+	honorReply: z.unknown().nullable().optional(),
 	tags: z.unknown().nullable(),
+	videoStatus: z.string().optional(),
+	filterDecision: z.string().optional(),
+	modelScore: z.number().nullable().optional(),
+	modelVersion: z.string().nullable().optional(),
+	discoverySource: z.string().nullable().optional(),
 	capturedAt: z.string(),
 	updatedAt: z.string(),
 });
@@ -144,6 +167,13 @@ export const DiscoveryFilterConfigDtoSchema = z.object({
 	minDurationSeconds: z.number().int().positive(),
 	maxDurationSeconds: z.number().int().positive(),
 	rejectionSampleRate: z.number().min(0).max(1),
+	modelEnabled: z.boolean(),
+	modelThreshold: z.number().min(0).max(1),
+});
+
+export const ClassifierHealthDtoSchema = z.object({
+	reachable: z.boolean(),
+	modelsLoaded: z.boolean().nullable(),
 });
 
 export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
@@ -153,9 +183,12 @@ export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
 	minDurationSeconds: z.number().int().positive().optional(),
 	maxDurationSeconds: z.number().int().positive().optional(),
 	rejectionSampleRate: z.number().min(0).max(1).optional(),
+	modelEnabled: z.boolean().optional(),
+	modelThreshold: z.number().min(0).max(1).optional(),
 });
 
 export type DiscoveryFilterConfigDto = z.infer<typeof DiscoveryFilterConfigDtoSchema>;
+export type ClassifierHealthDto = z.infer<typeof ClassifierHealthDtoSchema>;
 export type UpdateDiscoveryFilterConfigRequest = z.infer<
 	typeof UpdateDiscoveryFilterConfigRequestSchema
 >;

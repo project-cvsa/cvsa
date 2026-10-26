@@ -1,9 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { NetworkRuntimeConfig } from "../src/crawler";
+import { toInstant } from "@cvsa/snapshot-db";
 import { crawlerEnv } from "@cvsa/env";
 import { treaty } from "@elysiajs/eden";
 import { crawlerControlPlane } from "../src/controlPlane";
-import { crawlerMq, crawlerSnapshotDb, networkRuntime } from "../src/container";
+import {
+	crawlerMq,
+	crawlerSnapshotDb,
+	discoveryRepository,
+	networkRuntime,
+	trackingRepository,
+} from "../src/container";
 
 const TOKEN = crawlerEnv.CONTROL_API_TOKEN;
 
@@ -15,6 +22,40 @@ if (!TOKEN) {
 
 const PROXY_CREDENTIAL = "bob:hunter2@proxy.example.com:8080";
 const PROXY_URL = `http://${PROXY_CREDENTIAL}`;
+
+const TRACKING_AID = 9_100_000_000_000_001n;
+const SAMPLE_AID = 9_100_000_000_000_002n;
+const METADATA_AID = 9_100_000_000_000_003n;
+const TOUCHED_AIDS = [TRACKING_AID, SAMPLE_AID, METADATA_AID];
+
+async function cleanupSeededRows(): Promise<void> {
+	const client = crawlerSnapshotDb.client;
+	for await (const _ of client.orm.public.BilibiliVideoMetadataHistory.where((row) =>
+		row.aid.in(TOUCHED_AIDS)
+	).deleteAll()) {
+		// drained
+	}
+	for await (const _ of client.orm.public.BilibiliVideoMetadata.where((row) =>
+		row.aid.in(TOUCHED_AIDS)
+	).deleteAll()) {
+		// drained
+	}
+	for await (const _ of client.orm.public.DiscoverySample.where((row) =>
+		row.aid.in(TOUCHED_AIDS)
+	).deleteAll()) {
+		// drained
+	}
+	for await (const _ of client.orm.public.VideoTracking.where((row) =>
+		row.aid.in(TOUCHED_AIDS)
+	).deleteAll()) {
+		// drained
+	}
+	for await (const _ of client.orm.public.CrawlerRuntimeConfig.where({
+		key: "discovery",
+	}).deleteAll()) {
+		// drained
+	}
+}
 
 function proxyConfig(baseWeight = 1, proxyUrl = PROXY_URL): NetworkRuntimeConfig {
 	return {
@@ -68,9 +109,11 @@ describe("crawler control plane", () => {
 		await crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
 			id: "default",
 		}).deleteAll();
+		await cleanupSeededRows();
 	});
 
 	afterAll(async () => {
+		await cleanupSeededRows();
 		await networkRuntime.close();
 		await crawlerMq.close();
 		await crawlerSnapshotDb.disconnect();
@@ -201,5 +244,110 @@ describe("crawler control plane", () => {
 		expect(data?.ready).toBe(true);
 		expect(data?.revision).toBe(4);
 		expect(data?.adapters.map((adapter) => adapter.id)).toEqual(["proxy-a", "direct-a"]);
+	});
+
+	test.serial("serves the stats overview for a window", async () => {
+		const { data, status } = await api.v2.stats.overview.get({
+			query: { window: "5m" },
+			...authorized,
+		});
+
+		expect(status).toBe(200);
+		expect(data?.window).toBe("5m");
+		expect(data?.queues).toBeDefined();
+		expect(data?.latencyMs).toMatchObject({
+			taskP95: expect.any(Number),
+			apiP95: expect.any(Number),
+			inferenceP95: expect.any(Number),
+		});
+		expect(Array.isArray(data?.series)).toBe(true);
+	});
+
+	test.serial("persists a discovery config update through the repository", async () => {
+		const { data, status } = await api.v2.discovery.config.put(
+			{ modelThreshold: 0.42 },
+			authorized
+		);
+
+		expect(status).toBe(200);
+		expect(data?.modelThreshold).toBe(0.42);
+
+		const stored = await crawlerSnapshotDb.client.orm.public.CrawlerRuntimeConfig.where({
+			key: "discovery",
+		}).first();
+		expect(stored?.config).toMatchObject({ modelThreshold: 0.42 });
+	});
+
+	test.serial("lists tracking videos with lease and metadata scheduling fields", async () => {
+		await trackingRepository.upsertTracking({
+			aid: TRACKING_AID,
+			state: "new",
+			nextSnapshotAt: toInstant(new Date()),
+			nextMetadataAt: toInstant(new Date(Date.now() + 60 * 60 * 1_000)),
+			lastError: "seed-error",
+		});
+
+		const { data, status } = await api.v2.tracking.videos.get({
+			query: { limit: 5, offset: 0, search: TRACKING_AID.toString() },
+			...authorized,
+		});
+
+		expect(status).toBe(200);
+		const item = data?.items.find((row) => row.aid === TRACKING_AID.toString());
+		expect(item).toBeDefined();
+		expect(item?.leaseUntil).toBeNull();
+		expect(item?.scheduleReason).toBe("initial");
+		expect(item?.nextMetadataAt).not.toBeNull();
+		expect(item?.lastError).toBe("seed-error");
+	});
+
+	test.serial("returns the metadata change history for a video", async () => {
+		await discoveryRepository.upsertMetadata({
+			aid: METADATA_AID,
+			bvid: `BV${METADATA_AID}`,
+			title: "history seed",
+		});
+
+		const { data, status } = await api.v2.discovery
+			.metadata({ aid: METADATA_AID.toString() })
+			.history.get({ query: { limit: 10, offset: 0 }, ...authorized });
+
+		expect(status).toBe(200);
+		expect(data?.total).toBeGreaterThanOrEqual(1);
+		expect(data?.items[0]).toMatchObject({
+			aid: METADATA_AID.toString(),
+			changeType: "created",
+		});
+	});
+
+	test.serial("lists discovery samples and applies a human label", async () => {
+		await discoveryRepository.upsertSample({
+			aid: SAMPLE_AID,
+			bvid: `BV${SAMPLE_AID}`,
+			title: "sample seed",
+			decision: "model_rejected",
+			modelVersion: "test-model",
+			probabilities: [0.1, 0.9],
+			songProbability: 0.9,
+		});
+
+		const list = await api.v2.discovery.samples.get({
+			query: { limit: 5, offset: 0, decision: "model_rejected" },
+			...authorized,
+		});
+
+		expect(list.status).toBe(200);
+		const item = list.data?.items.find((row) => row.aid === SAMPLE_AID.toString());
+		expect(item).toBeDefined();
+		expect(item?.probabilities).toEqual({ class_0: 0.1, class_1: 0.9 });
+		expect(item?.capturedAt).not.toBeNull();
+
+		const labeled = await api.v2.discovery
+			.samples({ aid: SAMPLE_AID.toString() })
+			.label.post({ humanLabel: 1 }, authorized);
+
+		expect(labeled.status).toBe(200);
+		expect(labeled.data?.humanLabel).toBe(1);
+		expect(labeled.data?.labeledAt).not.toBeNull();
 	});
 });

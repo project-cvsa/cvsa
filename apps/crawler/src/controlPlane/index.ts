@@ -4,6 +4,7 @@ import { crawlerEnv } from "@cvsa/env";
 import { networkRuntimeRoutes } from "./networkRuntime";
 import { trackingRoutes } from "./tracking";
 import { discoveryRoutes } from "./discovery";
+import { statsRoutes } from "./stats";
 
 function errorResponse(error: AppError): {
 	code: "ENTITY_CONFLICT" | "VALIDATION_ERROR" | "INTERNAL_SERVER_ERROR" | "NOT_FOUND";
@@ -41,4 +42,5 @@ export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", pre
 	})
 	.group("/network-runtime", (app) => app.use(networkRuntimeRoutes))
 	.group("/tracking", (app) => app.use(trackingRoutes))
-	.group("/discovery", (app) => app.use(discoveryRoutes));
+	.group("/discovery", (app) => app.use(discoveryRoutes))
+	.group("/stats", (app) => app.use(statsRoutes));

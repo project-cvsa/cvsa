@@ -2,7 +2,14 @@ import { Queue, Worker, type JobsOptions, type WorkerOptions } from "bullmq";
 import IORedis from "ioredis";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
-import type { CrawlerJob, CrawlerMq, CrawlerProcessor, CrawlerQueue, CrawlerWorker } from "./types";
+import type {
+	CrawlerJob,
+	CrawlerJobCounts,
+	CrawlerMq,
+	CrawlerProcessor,
+	CrawlerQueue,
+	CrawlerWorker,
+} from "./types";
 
 const DEFAULT_JOB_OPTIONS: JobsOptions = {
 	attempts: 3,
@@ -31,6 +38,22 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 			return {
 				add: async (jobName: string, data: T, jobOptions?: JobsOptions): Promise<void> => {
 					await queue.add(jobName, data, jobOptions);
+				},
+				getJobCounts: async (): Promise<CrawlerJobCounts> => {
+					const counts = await queue.getJobCounts(
+						"waiting",
+						"active",
+						"delayed",
+						"failed",
+						"completed"
+					);
+					return {
+						waiting: counts.waiting ?? 0,
+						active: counts.active ?? 0,
+						delayed: counts.delayed ?? 0,
+						failed: counts.failed ?? 0,
+						completed: counts.completed ?? 0,
+					};
 				},
 				close: () => queue.close(),
 			};

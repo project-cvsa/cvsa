@@ -5,5 +5,6 @@ export * from "./redaction";
 export * from "./registry";
 export * from "./repository";
 export * from "./repository.interface";
+export * from "./requestMetrics";
 export * from "./service";
 export * from "./telemetry";

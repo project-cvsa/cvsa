@@ -1,108 +1,126 @@
 import { describe, expect, test } from "bun:test";
-import { type Temporal, toInstant, type VideoTracking } from "@cvsa/snapshot-db";
-import { createFakeMq } from "../src/crawler/testing/fakes";
+import { toInstant } from "@cvsa/snapshot-db";
+import {
+	createFakeMq,
+	createTrackingRow,
+	InMemoryTrackingRepository,
+} from "../src/crawler/testing/fakes";
 import { TrackingDispatcher } from "../src/crawler/tracking/dispatcher";
-import type {
-	ITrackingRepository,
-	UpdateScheduleInput,
-	UpsertTrackingInput,
-} from "../src/crawler/tracking/repository.interface";
 
-class FakeDispatcherTrackingRepository implements ITrackingRepository {
-	public dueVideos: VideoTracking[] = [];
-	public postponedAids: Array<{ aids: bigint[]; nextSnapshotAt: Temporal.Instant }> = [];
+const LEASE_DURATION_MS = 5 * 60 * 1_000;
 
-	async findDueVideos(_limit: number, _beforeTime?: Temporal.Instant): Promise<VideoTracking[]> {
-		return this.dueVideos;
-	}
-
-	async getTracking(_aid: bigint): Promise<VideoTracking | null> {
-		return null;
-	}
-
-	async getTrackings(_aids: bigint[]): Promise<VideoTracking[]> {
-		return [];
-	}
-
-	async upsertTracking(input: UpsertTrackingInput): Promise<VideoTracking> {
-		return {
-			aid: input.aid,
-			state: input.state ?? "regular",
-			nextSnapshotAt: input.nextSnapshotAt,
-			lastViews: input.lastViews ?? 0,
-			lastCapturedAt: input.lastCapturedAt ?? null,
-			velocity: input.velocity ?? 0,
-			targetMilestone: input.targetMilestone ?? null,
-			etaHours: input.etaHours ?? null,
-			publishedAt: input.publishedAt ?? null,
-			priority: input.priority ?? 2,
-			consecutiveFails: input.consecutiveFails ?? 0,
-			updatedAt: input.nextSnapshotAt,
-		};
-	}
-
-	async updateSchedule(_aid: bigint, _update: UpdateScheduleInput): Promise<void> {}
-
-	async postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void> {
-		this.postponedAids.push({ aids, nextSnapshotAt });
-	}
+function dueRow(aid: number, overrides: Parameters<typeof createTrackingRow>[1] = {}) {
+	return createTrackingRow(BigInt(aid), {
+		nextSnapshotAt: toInstant(new Date(Date.now() - 60_000)),
+		...overrides,
+	});
 }
 
 describe("TrackingDispatcher", () => {
-	test("dispatches due videos in chunks of 30 and leases them forward", async () => {
-		const fakeRepo = new FakeDispatcherTrackingRepository();
-		const fakeMq = createFakeMq();
-
-		// Create 35 due videos (should produce 2 batches: 30 and 5)
-		const nowInstant = toInstant(new Date());
+	test("claims due videos with a lease and never rewrites nextSnapshotAt", async () => {
+		const repo = new InMemoryTrackingRepository();
 		for (let i = 1; i <= 35; i++) {
-			fakeRepo.dueVideos.push({
-				aid: BigInt(i),
-				state: "regular",
-				nextSnapshotAt: nowInstant,
-				lastViews: 100 * i,
-				lastCapturedAt: nowInstant,
-				velocity: 10,
-				targetMilestone: null,
-				etaHours: null,
-				publishedAt: null,
-				priority: i === 1 ? 1 : 2,
-				consecutiveFails: 0,
-				updatedAt: nowInstant,
-			});
+			repo.trackings.set(BigInt(i), dueRow(i, { priority: i === 1 ? 1 : 2 }));
 		}
+		const originalSchedule = new Map(
+			[...repo.trackings].map(([aid, row]) => [aid, row.nextSnapshotAt.toString()])
+		);
 
-		const dispatcher = new TrackingDispatcher(fakeRepo, fakeMq, {
-			maxPerTick: 100,
-		});
+		const fakeMq = createFakeMq();
+		const dispatcher = new TrackingDispatcher(repo, fakeMq, { maxPerTick: 100 });
 
-		const count = await dispatcher.tick(new Date());
+		const now = new Date();
+		const count = await dispatcher.tick(now);
 		expect(count).toBe(35);
 
-		// Postponed aids should include all 35 videos
-		expect(fakeRepo.postponedAids).toHaveLength(1);
-		expect(fakeRepo.postponedAids[0]?.aids).toHaveLength(35);
-
-		// Queued jobs should be 2 batches
+		// Two chunks: 30 + 5
 		expect(fakeMq.state.queuedJobs).toHaveLength(2);
 		expect(fakeMq.state.queuedJobs[0]?.queue).toBe("snapshot-batch");
 		const batch1 = fakeMq.state.queuedJobs[0]?.data as { aids: string[] };
 		const batch2 = fakeMq.state.queuedJobs[1]?.data as { aids: string[] };
-
 		expect(batch1.aids).toHaveLength(30);
 		expect(batch2.aids).toHaveLength(5);
+
+		// The schedule is untouched; only the lease moved forward.
+		for (const [aid, row] of repo.trackings) {
+			expect(row.nextSnapshotAt.toString()).toBe(originalSchedule.get(aid) ?? "");
+			expect(row.leaseUntil).not.toBeNull();
+			expect(row.leaseUntil?.epochMilliseconds).toBe(now.getTime() + LEASE_DURATION_MS);
+		}
+	});
+
+	test("does not re-dispatch videos whose lease is still in flight", async () => {
+		const repo = new InMemoryTrackingRepository();
+		repo.trackings.set(1n, dueRow(1));
+
+		const fakeMq = createFakeMq();
+		const dispatcher = new TrackingDispatcher(repo, fakeMq);
+
+		expect(await dispatcher.tick(new Date())).toBe(1);
+		// Second tick one second later: the lease from the first tick still holds.
+		expect(await dispatcher.tick(new Date())).toBe(0);
+		expect(fakeMq.state.queuedJobs).toHaveLength(1);
+	});
+
+	test("re-claims a video once its lease expires", async () => {
+		const repo = new InMemoryTrackingRepository();
+		const dueAt = toInstant(new Date(Date.now() - 60_000));
+		repo.trackings.set(
+			1n,
+			createTrackingRow(1n, {
+				nextSnapshotAt: dueAt,
+				// Expired five seconds ago.
+				leaseUntil: toInstant(new Date(Date.now() - 5_000)),
+			})
+		);
+
+		const fakeMq = createFakeMq();
+		const dispatcher = new TrackingDispatcher(repo, fakeMq);
+
+		expect(await dispatcher.tick(new Date())).toBe(1);
+	});
+
+	test("stops pulling from the database when the queue is at its cap", async () => {
+		const repo = new InMemoryTrackingRepository();
+		for (let i = 1; i <= 10; i++) repo.trackings.set(BigInt(i), dueRow(i));
+
+		const fakeMq = createFakeMq();
+		// queueCap defaults to 200: active + waiting already sit at the ceiling.
+		fakeMq.state.jobCounts = { waiting: 150, active: 50, delayed: 0, failed: 0, completed: 0 };
+
+		const dispatcher = new TrackingDispatcher(repo, fakeMq, { queueCap: 200 });
+		expect(dispatcher.queueCap).toBe(200);
+
+		expect(await dispatcher.tick(new Date())).toBe(0);
+		expect(fakeMq.state.queuedJobs).toHaveLength(0);
+		// Nothing was leased either, so the videos stay visible in the backlog.
+		for (const row of repo.trackings.values()) expect(row.leaseUntil).toBeNull();
+	});
+
+	test("dispatches only the capacity the queue can absorb", async () => {
+		const repo = new InMemoryTrackingRepository();
+		for (let i = 1; i <= 10; i++) repo.trackings.set(BigInt(i), dueRow(i));
+
+		const fakeMq = createFakeMq();
+		fakeMq.state.jobCounts = { waiting: 190, active: 5, delayed: 0, failed: 0, completed: 0 };
+
+		const dispatcher = new TrackingDispatcher(repo, fakeMq, { queueCap: 200 });
+		expect(await dispatcher.tick(new Date())).toBe(5);
+		expect(fakeMq.state.queuedJobs).toHaveLength(1);
+		const batch = fakeMq.state.queuedJobs[0]?.data as { aids: string[] };
+		expect(batch.aids).toHaveLength(5);
 	});
 
 	test("does nothing when no videos are due", async () => {
-		const fakeRepo = new FakeDispatcherTrackingRepository();
+		const repo = new InMemoryTrackingRepository();
 		const fakeMq = createFakeMq();
-		fakeRepo.dueVideos = [];
+		repo.trackings.set(
+			1n,
+			createTrackingRow(1n, { nextSnapshotAt: toInstant(new Date(Date.now() + 60_000)) })
+		);
 
-		const dispatcher = new TrackingDispatcher(fakeRepo, fakeMq);
-		const count = await dispatcher.tick(new Date());
-
-		expect(count).toBe(0);
-		expect(fakeRepo.postponedAids).toHaveLength(0);
+		const dispatcher = new TrackingDispatcher(repo, fakeMq);
+		expect(await dispatcher.tick(new Date())).toBe(0);
 		expect(fakeMq.state.queuedJobs).toHaveLength(0);
 	});
 });

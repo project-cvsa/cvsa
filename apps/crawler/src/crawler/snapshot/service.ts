@@ -2,8 +2,13 @@ import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliClient } from "../bilibili";
+import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { ITrackingRepository } from "../tracking/repository.interface";
-import { evaluateNextSchedule } from "../tracking/scheduler";
+import {
+	computeNextMetadataAt,
+	evaluateNextSchedule,
+	toScheduleReason,
+} from "../tracking/scheduler";
 import type { TrackingState } from "../tracking/types";
 import type { ISnapshotRepository } from "./repository.interface";
 
@@ -21,11 +26,27 @@ export interface BatchProcessApiError {
 export type BatchProcessResult = BatchProcessSuccess | BatchProcessApiError;
 
 export class SnapshotService {
+	private readonly stats: StatsRecorder;
+
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
 		private readonly snapshotRepo: ISnapshotRepository,
-		private readonly trackingRepo: ITrackingRepository
-	) {}
+		private readonly trackingRepo: ITrackingRepository,
+		stats: StatsRecorder = createNoopStatsRecorder()
+	) {
+		this.stats = stats;
+	}
+
+	/**
+	 * Hand a batch's leases back to the pool.
+	 *
+	 * A job that threw before writing any schedule must not leave its videos
+	 * invisible until the 5-minute lease expires.
+	 */
+	async releaseLeases(aids: Array<number | bigint | string>): Promise<void> {
+		const unique = [...new Set(aids.map((aid) => BigInt(aid)))];
+		await this.trackingRepo.releaseLeases(unique);
+	}
 
 	async processBatch(aids: Array<number | bigint | string>): Promise<BatchProcessResult> {
 		return traceTask("snapshot.processBatch", async () => {
@@ -46,9 +67,15 @@ export class SnapshotService {
 					code: response,
 					batchSize: uniqueBigIntAids.length,
 				});
+				this.stats.recordError(
+					response === -412 || response === -429
+						? "rateLimited412Or429"
+						: "bilibiliBusinessError"
+				);
 
 				const trackings = await this.trackingRepo.getTrackings(uniqueBigIntAids);
 				const trackingMap = new Map(trackings.map((t) => [t.aid, t]));
+				const lastError = `bilibili_api_error:${response}`;
 
 				for (const aid of uniqueBigIntAids) {
 					const tracking = trackingMap.get(aid);
@@ -66,6 +93,9 @@ export class SnapshotService {
 						nextSnapshotAt: toInstant(next.nextSnapshotAt),
 						consecutiveFails: fails,
 						priority: next.priority,
+						leaseUntil: null,
+						lastError,
+						scheduleReason: toScheduleReason(next),
 					});
 				}
 
@@ -91,6 +121,7 @@ export class SnapshotService {
 						replies: stat.replies,
 					}))
 				);
+				this.stats.recordSnapshotsSaved(receivedStats.length);
 			}
 
 			// Retrieve tracking state for all requested videos
@@ -157,6 +188,12 @@ export class SnapshotService {
 					etaHours: next.etaHours,
 					priority: next.priority,
 					consecutiveFails: 0,
+					// A committed sample fully settles the job: release the in-flight
+					// lease, clear the failure, and book the next metadata refresh.
+					leaseUntil: null,
+					lastError: null,
+					scheduleReason: toScheduleReason(next),
+					nextMetadataAt: toInstant(computeNextMetadataAt(next.nextState, response.time)),
 				});
 			}
 
@@ -178,6 +215,9 @@ export class SnapshotService {
 					nextSnapshotAt: toInstant(next.nextSnapshotAt),
 					consecutiveFails: fails,
 					priority: next.priority,
+					leaseUntil: null,
+					lastError: "video_missing_from_stats_response",
+					scheduleReason: toScheduleReason(next),
 				});
 			}
 

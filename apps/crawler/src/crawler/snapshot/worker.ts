@@ -1,4 +1,5 @@
 import { appLogger } from "@cvsa/logger";
+import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { CrawlerMq, CrawlerWorker } from "../shared/types";
 import type { SnapshotService } from "./service";
 
@@ -10,7 +11,8 @@ export interface SnapshotBatchJobData {
 
 export function createSnapshotBatchWorker(
 	mq: CrawlerMq,
-	snapshotService: SnapshotService
+	snapshotService: SnapshotService,
+	stats: StatsRecorder = createNoopStatsRecorder()
 ): CrawlerWorker {
 	return mq.createWorker<SnapshotBatchJobData>(
 		SNAPSHOT_BATCH_QUEUE,
@@ -24,20 +26,39 @@ export function createSnapshotBatchWorker(
 				count: aids.length,
 			});
 
-			const result = await snapshotService.processBatch(aids);
-			if (result.status === "api_error") {
-				appLogger.warn("Snapshot batch encountered API error", {
-					component: "snapshot-worker",
-					jobId: job.id,
-					code: result.code,
-				});
-			} else {
+			const startedAt = performance.now();
+			try {
+				const result = await snapshotService.processBatch(aids);
+				if (result.status === "api_error") {
+					appLogger.warn("Snapshot batch encountered API error", {
+						component: "snapshot-worker",
+						jobId: job.id,
+						code: result.code,
+					});
+					return;
+				}
+
 				appLogger.info("Snapshot batch completed successfully", {
 					component: "snapshot-worker",
 					jobId: job.id,
 					inserted: result.inserted,
 					missing: result.missingCount,
 				});
+			} catch (error) {
+				// Nothing was scheduled, so the lease has to go back immediately
+				// instead of blackholing these videos until it expires.
+				await snapshotService.releaseLeases(aids).catch((leaseError) => {
+					appLogger.warn("Failed to release snapshot batch leases", {
+						component: "snapshot-worker",
+						jobId: job.id,
+						error: leaseError,
+					});
+				});
+				stats.recordError("other");
+				throw error;
+			} finally {
+				stats.recordJobCompleted();
+				stats.recordTask(performance.now() - startedAt);
 			}
 		},
 		{

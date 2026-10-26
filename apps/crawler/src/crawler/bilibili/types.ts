@@ -137,7 +137,8 @@ export interface VideoDetailView {
 	pubdate: number;
 	ctime: number;
 	desc: string;
-	desc_v2: string;
+	/** Structured description segments (mentions are `type: 2`). */
+	desc_v2: VideoDescV2Item[] | null;
 	state: number;
 	duration: number;
 	mission_id: number;
@@ -150,7 +151,36 @@ export interface VideoDetailView {
 	dimension: VideoDimension;
 	pages: VideoPage[];
 	subtitle: VideoSubtitle;
-	staff: VideoStaff[];
+	staff?: VideoStaff[];
+	/** Empty object on ordinary uploads, populated for awarded/featured videos. */
+	honor_reply?: VideoHonorReply | null;
+	is_upower_exclusive?: boolean;
+	is_upower_play?: boolean;
+	is_upower_preview?: boolean;
+	is_chargeable_season?: boolean;
+	enable_vt?: number;
+	vt_display?: string;
+	[key: string]: unknown;
+}
+
+/** One segment of `View.desc_v2`. `type` 1 is text, 2 is an @-mention. */
+export interface VideoDescV2Item {
+	raw_text: string;
+	type: number;
+	biz_id: number;
+	[key: string]: unknown;
+}
+
+/** `View.honor_reply`, persisted verbatim as JSON. */
+export interface VideoHonorReply {
+	honor?: VideoHonorReplyItem[];
+	[key: string]: unknown;
+}
+
+export interface VideoHonorReplyItem {
+	type?: number;
+	desc?: string;
+	[key: string]: unknown;
 }
 
 export interface VideoDetailCard {
@@ -184,6 +214,7 @@ export interface VideoDetailTag {
 	music_id: string;
 	tag_type: string;
 	jump_url: string;
+	[key: string]: unknown;
 }
 
 export interface VideoStats {
@@ -219,7 +250,13 @@ export interface VideoRights {
 	ugc_pay_preview: number;
 	no_background: number;
 	arc_pay: number;
-	pay_free_watch: number;
+	clean_mode?: number;
+	is_stein_gate?: number;
+	is_360?: number;
+	no_share?: number;
+	free_watch?: number;
+	/** Older payloads used `pay_free_watch` for the same flag as `free_watch`. */
+	pay_free_watch?: number;
 }
 
 export interface VideoDimension {
@@ -238,6 +275,8 @@ export interface VideoPage {
 	weblink: string;
 	dimension: VideoDimension;
 	first_frame: string;
+	ctime?: number;
+	[key: string]: unknown;
 }
 
 export interface VideoSubtitle {
@@ -263,6 +302,13 @@ export interface VideoStaff {
 	name: string;
 	face: string;
 	follower: number;
+	vip?: {
+		type: number;
+		status: number;
+		due_date?: number;
+		[key: string]: unknown;
+	};
+	[key: string]: unknown;
 }
 
 export interface DeviceCookies {

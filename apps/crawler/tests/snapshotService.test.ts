@@ -1,21 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import {
-	type Temporal,
-	toInstant,
-	type VideoSnapshot,
-	type VideoTracking,
-} from "@cvsa/snapshot-db";
+import { toInstant, type VideoSnapshot } from "@cvsa/snapshot-db";
 import { BilibiliClient } from "../src/crawler/bilibili";
 import type {
 	CreateSnapshotInput,
 	ISnapshotRepository,
 } from "../src/crawler/snapshot/repository.interface";
 import { SnapshotService } from "../src/crawler/snapshot/service";
-import type {
-	ITrackingRepository,
-	UpdateScheduleInput,
-	UpsertTrackingInput,
-} from "../src/crawler/tracking/repository.interface";
+import { createTrackingRow, InMemoryTrackingRepository } from "../src/crawler/testing/fakes";
 
 class FakeSnapshotRepository implements ISnapshotRepository {
 	public createdSnapshots: CreateSnapshotInput[] = [];
@@ -30,120 +21,57 @@ class FakeSnapshotRepository implements ISnapshotRepository {
 	}
 }
 
-class FakeTrackingRepository implements ITrackingRepository {
-	public trackings: Map<bigint, VideoTracking> = new Map();
-	public updatedSchedules: Array<{ aid: bigint; update: UpdateScheduleInput }> = [];
+/** Seeds the tracking row the way the dispatcher would before a batch runs. */
+async function seedDue(repo: InMemoryTrackingRepository, aid: bigint, views: number) {
+	repo.trackings.set(
+		aid,
+		createTrackingRow(aid, {
+			nextSnapshotAt: toInstant(new Date(Date.now() - 60_000)),
+			// Claimed by the dispatcher a moment ago.
+			leaseUntil: toInstant(new Date(Date.now() + 60_000)),
+			lastViews: views,
+		})
+	);
+}
 
-	async findDueVideos(_limit: number, _beforeTime?: Temporal.Instant): Promise<VideoTracking[]> {
-		return Array.from(this.trackings.values());
-	}
-
-	async getTracking(aid: bigint): Promise<VideoTracking | null> {
-		return this.trackings.get(aid) ?? null;
-	}
-
-	async getTrackings(aids: bigint[]): Promise<VideoTracking[]> {
-		return aids
-			.map((a) => this.trackings.get(a))
-			.filter((t): t is VideoTracking => t !== undefined);
-	}
-
-	async upsertTracking(input: UpsertTrackingInput): Promise<VideoTracking> {
-		const record: VideoTracking = {
-			aid: input.aid,
-			state: input.state ?? "regular",
-			nextSnapshotAt: input.nextSnapshotAt,
-			lastViews: input.lastViews ?? 0,
-			lastCapturedAt: input.lastCapturedAt ?? null,
-			velocity: input.velocity ?? 0,
-			targetMilestone: input.targetMilestone ?? null,
-			etaHours: input.etaHours ?? null,
-			publishedAt: input.publishedAt ?? null,
-			priority: input.priority ?? 2,
-			consecutiveFails: input.consecutiveFails ?? 0,
-			updatedAt: input.nextSnapshotAt,
-		};
-		this.trackings.set(input.aid, record);
-		return record;
-	}
-
-	async updateSchedule(aid: bigint, update: UpdateScheduleInput): Promise<void> {
-		this.updatedSchedules.push({ aid, update });
-		const existing = this.trackings.get(aid);
-		if (existing) {
-			this.trackings.set(aid, {
-				...existing,
-				...(update.state ? { state: update.state } : {}),
-				nextSnapshotAt: update.nextSnapshotAt,
-				...(update.lastViews !== undefined ? { lastViews: update.lastViews } : {}),
-				...(update.lastCapturedAt !== undefined
-					? { lastCapturedAt: update.lastCapturedAt }
-					: {}),
-				...(update.velocity !== undefined ? { velocity: update.velocity } : {}),
-				...(update.targetMilestone !== undefined
-					? { targetMilestone: update.targetMilestone }
-					: {}),
-				...(update.etaHours !== undefined ? { etaHours: update.etaHours } : {}),
-				...(update.priority !== undefined ? { priority: update.priority } : {}),
-				...(update.consecutiveFails !== undefined
-					? { consecutiveFails: update.consecutiveFails }
-					: {}),
-			});
-		}
-	}
-
-	async postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void> {
-		for (const aid of aids) {
-			const existing = this.trackings.get(aid);
-			if (existing) {
-				this.trackings.set(aid, {
-					...existing,
-					nextSnapshotAt,
-				});
-			}
-		}
-	}
+function statsClient(payload: unknown): BilibiliClient {
+	return new BilibiliClient({
+		request: async () => ({
+			status: 200,
+			headers: {},
+			body: JSON.stringify(payload),
+		}),
+	});
 }
 
 describe("SnapshotService", () => {
-	test("successfully processes a batch, writes snapshots, and updates tracking", async () => {
-		const fakeSnapshotRepo = new FakeSnapshotRepository();
-		const fakeTrackingRepo = new FakeTrackingRepository();
+	test("successfully processes a batch, writes snapshots, and settles the lease", async () => {
+		const snapshotRepo = new FakeSnapshotRepository();
+		const trackingRepo = new InMemoryTrackingRepository();
 
 		const aid = 12345n;
-		await fakeTrackingRepo.upsertTracking({
-			aid,
-			state: "regular",
-			nextSnapshotAt: toInstant(new Date()),
-			lastViews: 1000,
+		await seedDue(trackingRepo, aid, 1_000);
+
+		const client = statsClient({
+			code: 0,
+			message: "0",
+			data: [
+				{
+					id: 12345,
+					cnt_info: {
+						play: 1200,
+						danmaku: 10,
+						reply: 5,
+						thumb_up: 50,
+						coin: 20,
+						share: 2,
+						collect: 15,
+					},
+				},
+			],
 		});
 
-		const bilibiliClient = new BilibiliClient({
-			request: async () => ({
-				status: 200,
-				headers: {},
-				body: JSON.stringify({
-					code: 0,
-					message: "0",
-					data: [
-						{
-							id: 12345,
-							cnt_info: {
-								play: 1200,
-								danmaku: 10,
-								reply: 5,
-								thumb_up: 50,
-								coin: 20,
-								share: 2,
-								collect: 15,
-							},
-						},
-					],
-				}),
-			}),
-		});
-
-		const service = new SnapshotService(bilibiliClient, fakeSnapshotRepo, fakeTrackingRepo);
+		const service = new SnapshotService(client, snapshotRepo, trackingRepo);
 		const result = await service.processBatch([aid]);
 
 		expect(result.status).toBe("success");
@@ -152,43 +80,63 @@ describe("SnapshotService", () => {
 			expect(result.missingCount).toBe(0);
 		}
 
-		expect(fakeSnapshotRepo.createdSnapshots).toHaveLength(1);
-		expect(fakeSnapshotRepo.createdSnapshots[0]?.views).toBe(1200);
+		expect(snapshotRepo.createdSnapshots).toHaveLength(1);
+		expect(snapshotRepo.createdSnapshots[0]?.views).toBe(1200);
 
-		expect(fakeTrackingRepo.updatedSchedules).toHaveLength(1);
-		const updated = fakeTrackingRepo.updatedSchedules[0];
-		expect(updated).toBeDefined();
-		expect(updated?.aid).toBe(aid);
-		expect(updated?.update.lastViews).toBe(1200);
-		expect(updated?.update.consecutiveFails).toBe(0);
+		const tracking = trackingRepo.trackings.get(aid);
+		expect(tracking?.lastViews).toBe(1200);
+		expect(tracking?.consecutiveFails).toBe(0);
+		// A committed sample releases the lease, clears the error and books the
+		// next metadata refresh.
+		expect(tracking?.leaseUntil).toBeNull();
+		expect(tracking?.lastError).toBeNull();
+		expect(tracking?.scheduleReason).toBeDefined();
+		expect(tracking?.nextMetadataAt).not.toBeNull();
+	});
+
+	test("computes a 24h metadata refresh for a still-new video", async () => {
+		const snapshotRepo = new FakeSnapshotRepository();
+		const trackingRepo = new InMemoryTrackingRepository();
+		const aid = 4242n;
+		await seedDue(trackingRepo, aid, 10);
+		const seeded = trackingRepo.trackings.get(aid);
+		trackingRepo.trackings.set(aid, {
+			...(seeded ?? createTrackingRow(aid)),
+			state: "new",
+		});
+
+		const client = statsClient({
+			code: 0,
+			message: "0",
+			data: [{ id: 4242, cnt_info: { play: 12 } }],
+		});
+		const before = Date.now();
+		const service = new SnapshotService(client, snapshotRepo, trackingRepo);
+		await service.processBatch([aid]);
+
+		const tracking = trackingRepo.trackings.get(aid);
+		expect(tracking?.scheduleReason).toBe("initial");
+		const expected = before + 24 * 60 * 60 * 1_000;
+		expect(
+			Math.abs((tracking?.nextMetadataAt?.epochMilliseconds ?? 0) - expected)
+		).toBeLessThan(5_000);
 	});
 
 	test("handles Bilibili API failure by incrementing consecutive fails and backing off", async () => {
-		const fakeSnapshotRepo = new FakeSnapshotRepository();
-		const fakeTrackingRepo = new FakeTrackingRepository();
+		const snapshotRepo = new FakeSnapshotRepository();
+		const trackingRepo = new InMemoryTrackingRepository();
 
 		const aid = 67890n;
-		await fakeTrackingRepo.upsertTracking({
-			aid,
-			state: "regular",
-			nextSnapshotAt: toInstant(new Date()),
-			lastViews: 500,
+		await seedDue(trackingRepo, aid, 500);
+		const seeded = trackingRepo.trackings.get(aid);
+		trackingRepo.trackings.set(aid, {
+			...(seeded ?? createTrackingRow(aid)),
 			consecutiveFails: 1,
 		});
 
-		const bilibiliClient = new BilibiliClient({
-			request: async () => ({
-				status: 200,
-				headers: {},
-				body: JSON.stringify({
-					code: -412,
-					message: "Blocked",
-					data: null,
-				}),
-			}),
-		});
+		const client = statsClient({ code: -412, message: "Blocked", data: null });
 
-		const service = new SnapshotService(bilibiliClient, fakeSnapshotRepo, fakeTrackingRepo);
+		const service = new SnapshotService(client, snapshotRepo, trackingRepo);
 		const result = await service.processBatch([aid]);
 
 		expect(result.status).toBe("api_error");
@@ -196,50 +144,30 @@ describe("SnapshotService", () => {
 			expect(result.code).toBe(-412);
 		}
 
-		expect(fakeSnapshotRepo.createdSnapshots).toHaveLength(0);
-		expect(fakeTrackingRepo.updatedSchedules).toHaveLength(1);
-		const updated = fakeTrackingRepo.updatedSchedules[0];
-		expect(updated).toBeDefined();
-		expect(updated?.update.consecutiveFails).toBe(2);
+		expect(snapshotRepo.createdSnapshots).toHaveLength(0);
+		const tracking = trackingRepo.trackings.get(aid);
+		expect(tracking?.consecutiveFails).toBe(2);
+		expect(tracking?.lastError).toBe("bilibili_api_error:-412");
+		expect(tracking?.scheduleReason).toBe("retry");
+		expect(tracking?.leaseUntil).toBeNull();
 	});
 
 	test("handles videos missing from API response gracefully", async () => {
-		const fakeSnapshotRepo = new FakeSnapshotRepository();
-		const fakeTrackingRepo = new FakeTrackingRepository();
+		const snapshotRepo = new FakeSnapshotRepository();
+		const trackingRepo = new InMemoryTrackingRepository();
 
 		const requestedAid1 = 101n;
 		const requestedAid2 = 102n;
+		await seedDue(trackingRepo, requestedAid1, 200);
+		await seedDue(trackingRepo, requestedAid2, 400);
 
-		await fakeTrackingRepo.upsertTracking({
-			aid: requestedAid1,
-			nextSnapshotAt: toInstant(new Date()),
-			lastViews: 200,
-		});
-		await fakeTrackingRepo.upsertTracking({
-			aid: requestedAid2,
-			nextSnapshotAt: toInstant(new Date()),
-			lastViews: 400,
+		const client = statsClient({
+			code: 0,
+			message: "0",
+			data: [{ id: 101, cnt_info: { play: 250 } }],
 		});
 
-		// Only returns data for 101, 102 is omitted
-		const bilibiliClient = new BilibiliClient({
-			request: async () => ({
-				status: 200,
-				headers: {},
-				body: JSON.stringify({
-					code: 0,
-					message: "0",
-					data: [
-						{
-							id: 101,
-							cnt_info: { play: 250 },
-						},
-					],
-				}),
-			}),
-		});
-
-		const service = new SnapshotService(bilibiliClient, fakeSnapshotRepo, fakeTrackingRepo);
+		const service = new SnapshotService(client, snapshotRepo, trackingRepo);
 		const result = await service.processBatch([requestedAid1, requestedAid2]);
 
 		expect(result.status).toBe("success");
@@ -248,9 +176,9 @@ describe("SnapshotService", () => {
 			expect(result.missingCount).toBe(1);
 		}
 
-		// Aid 102 should have failure incremented
-		const update102 = fakeTrackingRepo.updatedSchedules.find((u) => u.aid === requestedAid2);
-		expect(update102).toBeDefined();
-		expect(update102?.update.consecutiveFails).toBe(1);
+		const missing = trackingRepo.trackings.get(requestedAid2);
+		expect(missing?.consecutiveFails).toBe(1);
+		expect(missing?.lastError).toBe("video_missing_from_stats_response");
+		expect(missing?.scheduleReason).toBe("retry");
 	});
 });

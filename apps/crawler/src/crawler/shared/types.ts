@@ -7,8 +7,18 @@ export interface CrawlerJob<T> {
 
 export type CrawlerProcessor<T> = (job: CrawlerJob<T>) => Promise<void>;
 
+/** BullMQ job-state counts, normalized so callers never deal with partial maps. */
+export interface CrawlerJobCounts {
+	waiting: number;
+	active: number;
+	delayed: number;
+	failed: number;
+	completed: number;
+}
+
 export interface CrawlerQueue<T> {
 	add(name: string, data: T, options?: JobsOptions): Promise<void>;
+	getJobCounts(): Promise<CrawlerJobCounts>;
 	close(): Promise<void>;
 }
 
@@ -65,5 +75,13 @@ export interface CrawlerRuntimeDependencies {
 	discoveryWorker?: CrawlerWorker;
 	discoveryScheduler?: {
 		startScheduledSweeps(intervalMs?: number): Promise<void>;
+	};
+	/** Loads persisted runtime configuration (discovery filter) before polling starts. */
+	discoveryFilter?: {
+		initialize(): Promise<void>;
+	};
+	statsCollector?: {
+		startPeriodicFlush(intervalMs?: number): void;
+		stopPeriodicFlush(): void;
 	};
 }

@@ -15,6 +15,7 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 		shutdownComplete = true;
 		await traceTask("crawler.runtime.shutdown", async () => {
 			deps.dispatcher?.stop();
+			deps.statsCollector?.stopPeriodicFlush();
 			if (deps.discoveryWorker) await deps.discoveryWorker.close();
 			if (deps.worker) await deps.worker.close();
 			if (deps.networkRuntime?.close) await deps.networkRuntime.close();
@@ -37,8 +38,12 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 					await deps.snapshotDb.connect();
 					await deps.snapshotDb.healthCheck();
 					await deps.mq.connect();
+					// Operator-tuned filter config lives in the database, so it must be
+					// restored before the first discovery job is consumed.
+					await deps.discoveryFilter?.initialize();
 					await deps.networkRuntime?.load();
 					deps.networkRuntime?.startPolling();
+					deps.statsCollector?.startPeriodicFlush();
 					deps.dispatcher?.start();
 					if (deps.discoveryScheduler) {
 						await deps.discoveryScheduler.startScheduledSweeps();

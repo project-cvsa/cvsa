@@ -55,7 +55,9 @@ export class RelationExtractor {
 					tid: item.tid ?? null,
 					tname: item.tname ?? null,
 					copyright: item.copyright ?? null,
-					rawPayload: item,
+					cid: item.cid ? BigInt(item.cid) : null,
+					Dynamic: item.dynamic ?? null,
+					discoverySource: "recommendation",
 					capturedAt,
 				});
 

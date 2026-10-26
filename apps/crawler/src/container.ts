@@ -1,9 +1,12 @@
 import {
 	BilibiliClient,
+	CrawlerStatsCollector,
+	CrawlerStatsRepository,
 	createCrawlerAdapterRegistry,
 	createCrawlerMetrics,
 	createCrawlerMq,
 	createCrawlerRuntime,
+	createNetworkMetrics,
 	createRedisRateLimiter,
 	createSnapshotBatchWorker,
 	DiscoveryFilterService,
@@ -11,9 +14,12 @@ import {
 	DiscoveryRepository,
 	DiscoveryScheduler,
 	DiscoveryService,
+	VideoClassifierClient,
 	DISCOVERY_QUEUE_NAME,
+	SNAPSHOT_BATCH_QUEUE,
 	createDiscoveryWorker,
 	type DiscoveryJobData,
+	type SnapshotBatchJobData,
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
 	NetworkRuntimeConfigService,
@@ -24,10 +30,41 @@ import {
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
 import { initOtelSdk } from "@cvsa/observability";
-import { createSnapshotDb } from "@cvsa/snapshot-db";
+import { and, createSnapshotDb, type VideoTracking } from "@cvsa/snapshot-db";
+import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
 
 export const crawlerSnapshotDb = createSnapshotDb();
 export const crawlerMq = createCrawlerMq(crawlerEnv.REDIS_URL);
+
+export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
+export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
+export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
+
+export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
+export const discoveryQueue = crawlerMq.createQueue<DiscoveryJobData>(DISCOVERY_QUEUE_NAME);
+
+/**
+ * Sliding-window stats + the `crawler_stats_rollup` history.
+ *
+ * Queue depth and the tracking backlog are pulled lazily by the overview
+ * endpoint, so the collector itself stays a pure in-memory counter.
+ */
+export const statsCollector = new CrawlerStatsCollector({
+	overview: {
+		async queueCounts() {
+			const [snapshot, discovery] = await Promise.all([
+				snapshotQueue.getJobCounts(),
+				discoveryQueue.getJobCounts(),
+			]);
+			return [snapshot, discovery];
+		},
+		countOverdue(now) {
+			return trackingRepository.countOverdueVideos(now);
+		},
+	},
+	rollup: new CrawlerStatsRepository(crawlerSnapshotDb.client),
+});
+
 export const networkRuntimeConfigRepository = new NetworkRuntimeConfigRepository(
 	crawlerSnapshotDb.client
 );
@@ -38,43 +75,105 @@ export const networkRuntime = new NetworkRuntimeConfigManager(
 	networkRuntimeConfigRepository,
 	// Bilibili application-error semantics are injected here, not in the scheduler.
 	createCrawlerAdapterRegistry(),
-	createRedisRateLimiter(crawlerEnv.REDIS_URL)
+	createRedisRateLimiter(crawlerEnv.REDIS_URL),
+	{
+		// Every HTTP attempt lands in both OTel and the sliding-window counters.
+		metrics: createNetworkMetrics({
+			onRequestFinished(latencyMs, outcome) {
+				statsCollector.recordNetworkRequest(latencyMs, outcome);
+			},
+		}),
+	}
 );
 
 export const bilibiliClient = new BilibiliClient({
 	networkDelegate: networkRuntime,
 });
 
-export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
-export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
-export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
-export const discoveryFilterService = new DiscoveryFilterService();
-export const discoveryQueue = crawlerMq.createQueue<DiscoveryJobData>(DISCOVERY_QUEUE_NAME);
+/**
+ * Consumes `video_tracking.next_metadata_at`.
+ *
+ * The snapshot pipeline books the next refresh after every successful sample;
+ * this scheduler is what actually performs it, one row at a time, so metadata
+ * stays current without an extra Redis queue.
+ */
+export const metadataRefreshScheduler = new MetadataRefreshScheduler({
+	async listDueMetadata(now, limit) {
+		const rows: VideoTracking[] = [];
+		for await (const row of crawlerSnapshotDb.client.orm.public.VideoTracking.where(
+			(tracking) => and(tracking.nextMetadataAt.isNotNull(), tracking.nextMetadataAt.lte(now))
+		)
+			.orderBy((tracking) => tracking.nextMetadataAt.asc())
+			.limit(limit)
+			.all()) {
+			rows.push(row);
+		}
+		return rows;
+	},
+	trackingRepository,
+	discoveryRepository,
+	bilibiliClient,
+});
+
+export const discoveryFilterService = new DiscoveryFilterService(
+	{},
+	// Persisting through the repository means operator edits survive restarts.
+	discoveryRepository
+);
+
+/**
+ * Remote inference service (`apps/inference`) with the local ONNX Akari model as
+ * an automatic fallback. `src/ml/akari.ts` is the fallback implementation.
+ */
+export const videoClassifierClient = new VideoClassifierClient({
+	baseUrl: crawlerEnv.ML_API_URL,
+	timeoutMs: crawlerEnv.ML_API_TIMEOUT_MS,
+	fallbackToLocal: true,
+});
+
 export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 	bilibiliClient,
 	discoveryRepository,
 	trackingRepository,
 	discoveryQueue,
-	discoveryFilterService
+	discoveryFilterService,
+	videoClassifierClient,
+	statsCollector
 );
-export const discoveryWorker = createDiscoveryWorker(crawlerMq, discoveryPipelineProcessor);
+export const discoveryWorker = createDiscoveryWorker(
+	crawlerMq,
+	discoveryPipelineProcessor,
+	3,
+	statsCollector
+);
 export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue);
 export const discoveryService = new DiscoveryService(
 	bilibiliClient,
 	discoveryRepository,
-	trackingRepository
+	trackingRepository,
+	discoveryFilterService,
+	videoClassifierClient,
+	statsCollector
 );
 export const snapshotService = new SnapshotService(
 	bilibiliClient,
 	snapshotRepository,
-	trackingRepository
+	trackingRepository,
+	statsCollector
 );
-export const snapshotBatchWorker = createSnapshotBatchWorker(crawlerMq, snapshotService);
-export const trackingDispatcher = new TrackingDispatcher(trackingRepository, crawlerMq);
+export const snapshotBatchWorker = createSnapshotBatchWorker(
+	crawlerMq,
+	snapshotService,
+	statsCollector
+);
+export const trackingDispatcher = new TrackingDispatcher(trackingRepository, crawlerMq, {
+	queueCap: 200,
+	leaseDurationMs: 5 * 60 * 1_000,
+});
 
 let otelSdk: Awaited<ReturnType<typeof initOtelSdk>> | undefined;
 
-export const crawlerRuntime = createCrawlerRuntime({
+const baseCrawlerRuntime = createCrawlerRuntime({
 	mq: crawlerMq,
 	snapshotDb: crawlerSnapshotDb,
 	metrics: createCrawlerMetrics(),
@@ -83,6 +182,8 @@ export const crawlerRuntime = createCrawlerRuntime({
 	worker: snapshotBatchWorker,
 	discoveryWorker,
 	discoveryScheduler,
+	discoveryFilter: discoveryFilterService,
+	statsCollector,
 	observability: {
 		async init(): Promise<void> {
 			otelSdk = await initOtelSdk({
@@ -96,3 +197,20 @@ export const crawlerRuntime = createCrawlerRuntime({
 		},
 	},
 });
+
+/**
+ * Adds the metadata-refresh loop to the shared crawler lifecycle.
+ *
+ * The loop is intentionally started after the runtime is fully connected and
+ * stopped before the database/queue handles are torn down.
+ */
+export const crawlerRuntime = {
+	async start(): Promise<void> {
+		await baseCrawlerRuntime.start();
+		metadataRefreshScheduler.start();
+	},
+	async shutdown(): Promise<void> {
+		metadataRefreshScheduler.stop();
+		await baseCrawlerRuntime.shutdown();
+	},
+};

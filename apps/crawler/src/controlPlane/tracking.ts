@@ -1,13 +1,16 @@
 import { Elysia } from "elysia";
-import { ErrorResponseSchema } from "@cvsa/contracts";
-import { toInstant, type VideoTracking } from "@cvsa/snapshot-db";
 import {
+	ErrorResponseSchema,
 	PromoteTrackingVideoRequestSchema,
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
+	TrackingVideoListQuerySchema,
+	TrackingVideoListResponseSchema,
 	VideoTrackingDtoSchema,
+	type TrackingVideoListResponse,
 	type VideoTrackingDto,
-} from "../crawler";
+} from "@cvsa/contracts";
+import { toInstant, type VideoTracking } from "@cvsa/snapshot-db";
 import { trackingRepository } from "../container";
 
 function toTrackingDto(t: VideoTracking): VideoTrackingDto {
@@ -24,6 +27,10 @@ function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 		priority: t.priority,
 		consecutiveFails: t.consecutiveFails,
 		updatedAt: t.updatedAt.toString(),
+		leaseUntil: t.leaseUntil ? t.leaseUntil.toString() : null,
+		scheduleReason: t.scheduleReason,
+		nextMetadataAt: t.nextMetadataAt ? t.nextMetadataAt.toString() : null,
+		lastError: t.lastError,
 	};
 }
 
@@ -46,6 +53,29 @@ export const trackingRoutes = new Elysia()
 			body: RegisterTrackingVideosRequestSchema,
 			response: {
 				200: RegisterTrackingVideosResponseSchema,
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/videos",
+		async ({ query }): Promise<TrackingVideoListResponse> => {
+			const result = await trackingRepository.listTrackingVideos({
+				limit: query.limit,
+				offset: query.offset,
+				state: query.state,
+				search: query.search,
+			});
+			return {
+				items: result.items.map(toTrackingDto),
+				total: result.total,
+			};
+		},
+		{
+			query: TrackingVideoListQuerySchema,
+			response: {
+				200: TrackingVideoListResponseSchema,
 				401: ErrorResponseSchema,
 				422: ErrorResponseSchema,
 			},

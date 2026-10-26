@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+	calculateDailyViewsGain,
 	calculateVelocity,
 	evaluateNextSchedule,
 	getClosetMilestone,
 	getMilestoneEtaFactor,
+	getRegularSnapshotIntervalHours,
 } from "../src/crawler/tracking";
 
 const MINUTE = 60 * 1000;
@@ -50,6 +52,21 @@ describe("calculateVelocity", () => {
 		expect(calculateVelocity(1000, now, 1000, now - HOUR)).toBe(0);
 		expect(calculateVelocity(900, now, 1000, now - HOUR)).toBe(0);
 		expect(calculateVelocity(1000, now, 500, now)).toBe(0);
+		expect(calculateVelocity(1000, now, 500, Number.NaN)).toBe(0);
+	});
+});
+
+describe("calculateDailyViewsGain", () => {
+	test("distinguishes measured zero growth from a missing or invalid baseline", () => {
+		const now = 1700000000000;
+
+		expect(calculateDailyViewsGain(100, now, 100, now - HOUR)).toBe(0);
+		expect(calculateDailyViewsGain(100, now)).toBeNull();
+		expect(calculateDailyViewsGain(100, now, 100)).toBeNull();
+		expect(calculateDailyViewsGain(100, now, 100, now)).toBeNull();
+		expect(calculateDailyViewsGain(100, now, 100, now + HOUR)).toBeNull();
+		expect(calculateDailyViewsGain(100, now, 100, Number.NaN)).toBeNull();
+		expect(calculateDailyViewsGain(99, now, 100, now - HOUR)).toBeNull();
 	});
 });
 
@@ -63,6 +80,7 @@ describe("evaluateNextSchedule", () => {
 			currentViews: 1000,
 			currentTime: baseNow,
 			consecutiveFails: 1,
+			policy: { minRegularIntervalHours: 6 },
 		});
 		expect(res1.reason).toBe("error_retry_backoff");
 		expect(res1.nextSnapshotAt.getTime() - baseNow).toBe(5 * MINUTE);
@@ -83,11 +101,61 @@ describe("evaluateNextSchedule", () => {
 			currentTime: baseNow,
 			consecutiveFails: 10,
 		});
-		expect(res10.nextState).toBe("archive");
-		expect(res10.reason).toBe("max_retries_exceeded_archived");
+		expect(res10.nextState).toBe("regular");
+		expect(res10.reason).toBe("transient_error_retry_backoff_capped");
+	});
+
+	test("archives only explicit unavailable failures", () => {
+		const result = evaluateNextSchedule({
+			aid: 1,
+			currentState: "regular",
+			currentViews: 1000,
+			currentTime: baseNow,
+			consecutiveFails: 1,
+			failureKind: "unavailable",
+		});
+
+		expect(result.nextState).toBe("archive");
+		expect(result.reason).toBe("video_unavailable_archived");
+		expect(result.nextSnapshotAt.getTime() - baseNow).toBe(7 * DAY);
 	});
 
 	describe("state: new", () => {
+		test("schedules each early sample relative to acceptance time", () => {
+			const offsets = [0, 1.5, 3, 5];
+			const expectedNextOffsets = [1.5, 3, 5, 10];
+
+			for (const [index, offsetMinutes] of offsets.entries()) {
+				const currentTime = baseNow + offsetMinutes * MINUTE;
+				const expectedNextOffset = expectedNextOffsets[index] ?? 0;
+				const result = evaluateNextSchedule({
+					aid: 10,
+					currentState: "new",
+					currentViews: 100,
+					currentTime,
+					acceptedAt: baseNow,
+					lastCapturedAt: index === 0 ? null : currentTime,
+				});
+
+				expect(result.nextState).toBe("new");
+				expect(result.reason).toBe("new_video_initial_sample");
+				expect(result.nextSnapshotAt.getTime() - baseNow).toBe(expectedNextOffset * MINUTE);
+			}
+		});
+
+		test("keeps legacy first-sample scheduling when acceptance time is unavailable", () => {
+			const result = evaluateNextSchedule({
+				aid: 10,
+				currentState: "new",
+				currentViews: 100,
+				currentTime: baseNow,
+				publishedAt: baseNow - HOUR,
+			});
+
+			expect(result.reason).toBe("new_video_initial_sample");
+			expect(result.nextSnapshotAt.getTime() - baseNow).toBe(1.5 * MINUTE);
+		});
+
 		test("schedules frequent intervals for fast new videos", () => {
 			const res = evaluateNextSchedule({
 				aid: 10,
@@ -113,9 +181,11 @@ describe("evaluateNextSchedule", () => {
 				lastCapturedAt: baseNow - HOUR,
 				currentTime: baseNow,
 				publishedAt: baseNow - 49 * HOUR,
+				policy: { minRegularIntervalHours: 6 },
 			});
 			expect(res.nextState).toBe("regular");
 			expect(res.reason).toBe("new_period_expired_48h");
+			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(6 * HOUR);
 		});
 
 		test("transitions cold new video to regular after 2 hours", () => {
@@ -127,26 +197,65 @@ describe("evaluateNextSchedule", () => {
 				lastCapturedAt: baseNow - HOUR,
 				currentTime: baseNow,
 				publishedAt: baseNow - 3 * HOUR,
+				policy: { minRegularIntervalHours: 6 },
 			});
 			// velocity = 5 / h (< 10)
 			expect(res.nextState).toBe("regular");
 			expect(res.reason).toBe("new_video_low_velocity_regularized");
+			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(6 * HOUR);
 		});
 	});
 
 	describe("state: regular", () => {
-		test("schedules according to velocity tiers", () => {
-			// velocity = 300 / h
+		test("schedules a baseline when historical growth cannot be calculated", () => {
+			const incompleteBaselines = [
+				{ previousViews: undefined, lastCapturedAt: undefined },
+				{ previousViews: 500, lastCapturedAt: null },
+				{ previousViews: 500, lastCapturedAt: baseNow },
+				{ previousViews: 500, lastCapturedAt: baseNow + HOUR },
+				{ previousViews: 500, lastCapturedAt: Number.NaN },
+			];
+
+			for (const baseline of incompleteBaselines) {
+				const result = evaluateNextSchedule({
+					aid: 20,
+					currentState: "regular",
+					currentViews: 500,
+					previousViews: baseline.previousViews,
+					lastCapturedAt: baseline.lastCapturedAt,
+					currentTime: baseNow,
+					publishedAt: baseNow - 60 * DAY,
+					policy: { minRegularIntervalHours: 6 },
+				});
+
+				expect(result.nextState).toBe("regular");
+				expect(result.reason).toBe("regular_baseline_sample");
+				expect(result.nextSnapshotAt.getTime() - baseNow).toBe(6 * HOUR);
+			}
+		});
+
+		test("normalizes historical view gain to a daily rate", () => {
+			// 2 views in 6 hours is 8 views per day, which selects the 12-hour tier.
 			const res = evaluateNextSchedule({
 				aid: 20,
 				currentState: "regular",
-				currentViews: 1300,
+				currentViews: 1002,
 				previousViews: 1000,
-				lastCapturedAt: baseNow - HOUR,
+				lastCapturedAt: baseNow - 6 * HOUR,
 				currentTime: baseNow,
 			});
-			expect(res.velocity).toBe(300);
-			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(3 * HOUR);
+			expect(res.velocity).toBeCloseTo(1 / 3);
+			expect(calculateDailyViewsGain(1002, baseNow, 1000, baseNow - 6 * HOUR)).toBe(8);
+			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(12 * HOUR);
+		});
+
+		test("uses the configured daily tier boundaries", () => {
+			expect(getRegularSnapshotIntervalHours(0).intervalHours).toBe(48);
+			expect(getRegularSnapshotIntervalHours(5.99).intervalHours).toBe(24);
+			expect(getRegularSnapshotIntervalHours(6).intervalHours).toBe(12);
+			expect(getRegularSnapshotIntervalHours(24).intervalHours).toBe(4);
+			expect(getRegularSnapshotIntervalHours(96).intervalHours).toBe(2);
+			expect(getRegularSnapshotIntervalHours(192).intervalHours).toBe(1.5);
 		});
 
 		test("promotes to milestone when ETA <= 144 hours", () => {
@@ -194,10 +303,11 @@ describe("evaluateNextSchedule", () => {
 				currentViews: 100_005, // exceeded 100,000 milestone!
 				targetMilestone: 100_000,
 				currentTime: baseNow,
+				policy: { minRegularIntervalHours: 6 },
 			});
 			expect(res.nextState).toBe("regular");
 			expect(res.reason).toBe("milestone_achieved");
-			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(1 * HOUR);
+			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(6 * HOUR);
 		});
 
 		test("continues high-frequency milestone sprint while approaching", () => {
@@ -223,9 +333,11 @@ describe("evaluateNextSchedule", () => {
 				currentViews: 90_000,
 				currentTime: baseNow,
 				recentSnapshots: [{ capturedAt: baseNow - HOUR, views: 89_999 }],
+				policy: { minRegularIntervalHours: 6 },
 			});
 			expect(res.nextState).toBe("regular");
 			expect(res.reason).toBe("milestone_eta_exceeded_144h");
+			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(6 * HOUR);
 		});
 	});
 
@@ -251,11 +363,13 @@ describe("evaluateNextSchedule", () => {
 				previousViews: 1000,
 				lastCapturedAt: baseNow - HOUR,
 				currentTime: baseNow,
+				policy: { minRegularIntervalHours: 6 },
 			});
 			// velocity = 500 / h (> 10)
 			expect(res.velocity).toBe(500);
 			expect(res.nextState).toBe("regular");
 			expect(res.reason).toBe("archive_revived_due_to_velocity");
+			expect(res.nextSnapshotAt.getTime() - baseNow).toBe(6 * HOUR);
 		});
 	});
 });

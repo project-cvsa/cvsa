@@ -1,12 +1,15 @@
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
-import { toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliClient, BilibiliRelatedVideo } from "../bilibili";
+import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { ITrackingRepository } from "../tracking/repository.interface";
+import type { VideoClassifierClient } from "./classifier";
+import { DiscoveryCandidateEvaluator } from "./evaluator";
+import { DiscoveryFilterService } from "./filter";
 import { RelationExtractor } from "./relationExtractor";
 import type { IDiscoveryRepository } from "./repository.interface";
 import { SearchRover } from "./searchRover";
-import type { SearchRoverConfig } from "./types";
+import type { DiscoveredCandidate, SearchRoverConfig } from "./types";
 
 export interface ProcessRecommendationsResult {
 	sourceAid: bigint;
@@ -19,17 +22,67 @@ export interface SearchSweepResult {
 	newTracked: number;
 }
 
+/** Detail fetches per manual call, bounded so the control-plane request stays sane. */
+const MAX_MANUAL_EVALUATIONS = 50;
+const MANUAL_EVALUATION_CONCURRENCY = 4;
+
+/**
+ * Map with a fixed concurrency ceiling, preserving input order in the output.
+ * Detail fetches are network-bound, so a handful in flight is much faster than a
+ * sequential loop without turning a manual trigger into a burst.
+ */
+async function mapWithConcurrency<T, R>(
+	items: readonly T[],
+	concurrency: number,
+	fn: (item: T) => Promise<R>
+): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let cursor = 0;
+	const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+		while (cursor < items.length) {
+			const index = cursor++;
+			const item = items[index];
+			if (item === undefined) continue;
+			results[index] = await fn(item);
+		}
+	});
+	await Promise.all(workers);
+	return results;
+}
+
+/**
+ * Manual discovery entry points used by the control plane.
+ *
+ * Both paths used to insert every discovered aid straight into `video_tracking`,
+ * which meant a manual sweep could poison tracking with unrelated videos. They
+ * now run each candidate through {@link DiscoveryCandidateEvaluator} — the same
+ * detail-fetch + filter + sample gate the queued worker uses.
+ */
 export class DiscoveryService {
 	readonly relationExtractor: RelationExtractor;
 	readonly searchRover: SearchRover;
+	readonly evaluator: DiscoveryCandidateEvaluator;
 
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
 		readonly discoveryRepo: IDiscoveryRepository,
-		private readonly trackingRepo: ITrackingRepository
+		private readonly trackingRepo: ITrackingRepository,
+		filterService?: DiscoveryFilterService,
+		classifier?: VideoClassifierClient,
+		stats: StatsRecorder = createNoopStatsRecorder()
 	) {
 		this.relationExtractor = new RelationExtractor(discoveryRepo);
 		this.searchRover = new SearchRover(bilibiliClient, discoveryRepo);
+		this.evaluator = new DiscoveryCandidateEvaluator(
+			bilibiliClient,
+			discoveryRepo,
+			trackingRepo,
+			// A rules-only filter is still a filter: without a service instance the
+			// evaluator must not silently accept everything.
+			filterService ?? new DiscoveryFilterService(),
+			classifier,
+			stats
+		);
 	}
 
 	async processVideoRecommendations(
@@ -56,34 +109,19 @@ export class DiscoveryService {
 				return { sourceAid, relationsCount: 0, newTracked: 0 };
 			}
 
-			const candidateAids = extraction.candidates.map((c) => c.aid);
-			const existingTrackings = await this.trackingRepo.getTrackings(candidateAids);
-			const trackedSet = new Set(existingTrackings.map((t) => t.aid));
-
-			const newCandidates = extraction.candidates.filter((c) => !trackedSet.has(c.aid));
-			const now = toInstant(new Date());
-
-			for (const cand of newCandidates) {
-				await this.trackingRepo.upsertTracking({
-					aid: cand.aid,
-					state: "regular",
-					nextSnapshotAt: now,
-					publishedAt: cand.pubdate ?? null,
-					priority: 2,
-				});
-			}
+			const newTracked = await this.evaluateAll(extraction.candidates, "related");
 
 			appLogger.info("Processed video recommendations", {
 				component: "discovery-service",
 				sourceAid: sourceAid.toString(),
 				relationsCount: extraction.relationsCount,
-				newTracked: newCandidates.length,
+				newTracked,
 			});
 
 			return {
 				sourceAid,
 				relationsCount: extraction.relationsCount,
-				newTracked: newCandidates.length,
+				newTracked,
 			};
 		});
 	}
@@ -95,33 +133,49 @@ export class DiscoveryService {
 				return { totalDiscovered: 0, newTracked: 0 };
 			}
 
-			const candidateAids = candidates.map((c) => c.aid);
-			const existingTrackings = await this.trackingRepo.getTrackings(candidateAids);
-			const trackedSet = new Set(existingTrackings.map((t) => t.aid));
-
-			const newCandidates = candidates.filter((c) => !trackedSet.has(c.aid));
-			const now = toInstant(new Date());
-
-			for (const cand of newCandidates) {
-				await this.trackingRepo.upsertTracking({
-					aid: cand.aid,
-					state: "regular",
-					nextSnapshotAt: now,
-					publishedAt: cand.pubdate ?? null,
-					priority: 2,
-				});
-			}
+			const newTracked = await this.evaluateAll(candidates, "search");
 
 			appLogger.info("Search sweep discovery finished", {
 				component: "discovery-service",
 				totalDiscovered: candidates.length,
-				newTracked: newCandidates.length,
+				newTracked,
 			});
 
-			return {
-				totalDiscovered: candidates.length,
-				newTracked: newCandidates.length,
-			};
+			return { totalDiscovered: candidates.length, newTracked };
 		});
+	}
+
+	private async evaluateAll(
+		candidates: readonly DiscoveredCandidate[],
+		source: "search" | "related"
+	): Promise<number> {
+		const candidateAids = candidates.map((c) => c.aid);
+		const existing = await this.trackingRepo.getTrackings(candidateAids);
+		const trackedSet = new Set(existing.map((t) => t.aid));
+
+		const pending = candidates
+			.filter((candidate) => !trackedSet.has(candidate.aid))
+			.slice(0, MAX_MANUAL_EVALUATIONS);
+		if (pending.length === 0) return 0;
+
+		const untrackedCount = new Set(
+			candidates.filter((candidate) => !trackedSet.has(candidate.aid)).map((c) => c.aid)
+		).size;
+		if (pending.length < untrackedCount) {
+			appLogger.warn("Manual discovery evaluation truncated", {
+				component: "discovery-service",
+				requested: untrackedCount,
+				evaluated: pending.length,
+				limit: MAX_MANUAL_EVALUATIONS,
+			});
+		}
+
+		const evaluations = await mapWithConcurrency(
+			pending,
+			MANUAL_EVALUATION_CONCURRENCY,
+			(candidate) => this.evaluator.evaluate({ aid: candidate.aid, source })
+		);
+
+		return evaluations.filter((evaluation) => evaluation.status === "accepted").length;
 	}
 }

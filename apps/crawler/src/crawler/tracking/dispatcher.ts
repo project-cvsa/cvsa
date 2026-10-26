@@ -2,15 +2,20 @@ import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
 import { SNAPSHOT_BATCH_QUEUE, type SnapshotBatchJobData } from "../snapshot/worker";
-import type { CrawlerMq, CrawlerQueue } from "../shared/types";
+import type { CrawlerJobCounts, CrawlerMq, CrawlerQueue } from "../shared/types";
+import { resolveTrackingPolicy } from "./policy";
 import type { ITrackingRepository } from "./repository.interface";
+import type { TrackingPolicyConfig } from "./types";
 
 const CHUNK_SIZE = 30; // Max aids per Bilibili medialist API request
-const LEASE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in-flight lease
+const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in-flight lease
 
-export interface TrackingDispatcherOptions {
+export interface TrackingDispatcherOptions extends TrackingPolicyConfig {
 	intervalMs?: number;
 	maxPerTick?: number;
+	leaseDurationMs?: number;
+	/** Backpressure ceiling: `active + waiting` jobs the queue may already hold. */
+	queueCap?: number;
 }
 
 export class TrackingDispatcher {
@@ -20,6 +25,8 @@ export class TrackingDispatcher {
 	private readonly queue: CrawlerQueue<SnapshotBatchJobData>;
 	private readonly intervalMs: number;
 	private readonly maxPerTick: number;
+	private readonly leaseDurationMs: number;
+	private readonly policy: Required<TrackingPolicyConfig>;
 
 	constructor(
 		private readonly trackingRepo: ITrackingRepository,
@@ -29,6 +36,13 @@ export class TrackingDispatcher {
 		this.queue = mq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
 		this.intervalMs = options.intervalMs ?? 1_000;
 		this.maxPerTick = options.maxPerTick ?? 300;
+		this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
+		this.policy = resolveTrackingPolicy(options);
+	}
+
+	/** Effective `active + waiting` cap; exposed for operators/tests. */
+	get queueCap(): number {
+		return this.policy.queueCap;
 	}
 
 	start(): void {
@@ -45,6 +59,7 @@ export class TrackingDispatcher {
 		appLogger.info("TrackingDispatcher started", {
 			component: "tracking-dispatcher",
 			intervalMs: this.intervalMs,
+			queueCap: this.queueCap,
 		});
 	}
 
@@ -52,8 +67,7 @@ export class TrackingDispatcher {
 		if (!this.isRunning) return;
 		this.isRunning = false;
 		if (this.timer) {
-			clearInterval(this.timer);
-			this.timer = undefined;
+			this.clearTimer();
 		}
 		appLogger.info("TrackingDispatcher stopped", { component: "tracking-dispatcher" });
 	}
@@ -63,48 +77,82 @@ export class TrackingDispatcher {
 		this.isTicking = true;
 		try {
 			return await traceTask("tracking.dispatcher.tick", async () => {
-				const nowInstant = toInstant(now);
-				const dueVideos = await this.trackingRepo.findDueVideos(
-					this.maxPerTick,
-					nowInstant
-				);
-				if (dueVideos.length === 0) return 0;
-
-				const allAids = dueVideos.map((v) => v.aid);
-				// Lease videos forward to prevent re-dispatching before worker finishes
-				const leaseInstant = toInstant(new Date(now.getTime() + LEASE_DURATION_MS));
-				await this.trackingRepo.postponeSchedule(allAids, leaseInstant);
-
-				// Group into chunks of up to 30
-				const chunks: bigint[][] = [];
-				for (let i = 0; i < allAids.length; i += CHUNK_SIZE) {
-					chunks.push(allAids.slice(i, i + CHUNK_SIZE));
+				// Backpressure first: pulling from the DB only to sit in Redis would
+				// turn a Bilibili hiccup into unbounded queue growth.
+				const counts = await this.queue.getJobCounts();
+				const inFlight = counts.active + counts.waiting;
+				const capacity = this.queueCap - inFlight;
+				if (capacity <= 0) {
+					appLogger.warn("TrackingDispatcher is backpressured by the queue cap", {
+						component: "tracking-dispatcher",
+						queueCap: this.queueCap,
+						active: counts.active,
+						waiting: counts.waiting,
+					});
+					return 0;
 				}
 
-				for (const chunk of chunks) {
-					// Use highest priority in chunk (min number)
-					const chunkAids = new Set(chunk);
-					const minPriority = dueVideos
-						.filter((v) => chunkAids.has(v.aid))
-						.reduce((min, v) => Math.min(min, v.priority), 3);
+				const claimLimit = Math.min(this.maxPerTick, capacity);
+				const claimed = await this.trackingRepo.claimDueVideos(
+					toInstant(now),
+					claimLimit,
+					this.leaseDurationMs
+				);
+				if (claimed.length === 0) return 0;
 
-					await this.queue.add(
-						"process-batch",
-						{ aids: chunk.map((a) => a.toString()) },
-						{ priority: minPriority }
-					);
+				// Group into chunks of up to 30 (one Bilibili medialist request each).
+				const chunks: Array<{ aids: bigint[]; priority: number }> = [];
+				for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
+					const slice = claimed.slice(i, i + CHUNK_SIZE);
+					chunks.push({
+						aids: slice.map((video) => video.aid),
+						priority: slice.reduce((min, video) => Math.min(min, video.priority), 5),
+					});
+				}
+
+				let dispatched = 0;
+				try {
+					for (const chunk of chunks) {
+						await this.queue.add(
+							"process-batch",
+							{ aids: chunk.aids.map((aid) => aid.toString()) },
+							{ priority: chunk.priority }
+						);
+						dispatched += chunk.aids.length;
+					}
+				} catch (error) {
+					// Anything that never made it onto the queue must not keep its
+					// lease, or it would be invisible until the lease expires.
+					const undispatched = claimed.slice(dispatched).map((video) => video.aid);
+					await this.trackingRepo.releaseLeases(undispatched);
+					throw error;
 				}
 
 				appLogger.info("Dispatched snapshot batch jobs", {
 					component: "tracking-dispatcher",
-					videosCount: allAids.length,
+					videosCount: dispatched,
 					chunksCount: chunks.length,
+					queueActive: counts.active,
+					queueWaiting: counts.waiting,
+					queueCap: this.queueCap,
 				});
 
-				return allAids.length;
+				return dispatched;
 			});
 		} finally {
 			this.isTicking = false;
+		}
+	}
+
+	/** Queue depth snapshot, used by the stats collector. */
+	async inspectQueue(): Promise<CrawlerJobCounts> {
+		return this.queue.getJobCounts();
+	}
+
+	private clearTimer(): void {
+		if (this.timer) {
+			clearInterval(this.timer);
+			this.timer = undefined;
 		}
 	}
 }

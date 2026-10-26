@@ -3,6 +3,7 @@ import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliClient, SearchVideo } from "../bilibili";
 import type { IDiscoveryRepository } from "./repository.interface";
+import { fromSearchTagString } from "./tags";
 import type { DiscoveredCandidate, SearchRoverConfig, UpsertMetadataInput } from "./types";
 
 const DEFAULT_KEYWORDS = [
@@ -102,8 +103,8 @@ export class SearchRover {
 						: null,
 					tid: video.typeid ? Number(video.typeid) : null,
 					tname: video.typename ?? null,
-					tags: video.tag ? video.tag.split(",") : null,
-					rawPayload: video,
+					tags: fromSearchTagString(video.tag),
+					discoverySource: "search",
 					capturedAt: now,
 				};
 

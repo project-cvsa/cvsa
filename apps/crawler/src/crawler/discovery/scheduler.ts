@@ -3,13 +3,31 @@ import type { CrawlerQueue } from "../shared/types";
 import type { SearchRoverConfig } from "./types";
 import type { DiscoveryJobData } from "./worker";
 
+/** Search sweeps are expensive; five minutes keeps the queue busy without thrash. */
+export const DEFAULT_SEARCH_SWEEP_INTERVAL_MS = 5 * 60 * 1_000;
+/** Recommendation expansion of hot videos, paired with the sweep cadence. */
+export const HOT_SAMPLE_INTERVAL_MS = 5 * 60 * 1_000;
+/** Seeded videos per hot-sample round. */
+export const DEFAULT_HOT_SAMPLE_LIMIT = 10;
+
 export class DiscoveryScheduler {
 	constructor(private readonly discoveryQueue: CrawlerQueue<DiscoveryJobData>) {}
 
-	async startScheduledSweeps(intervalMs = 300_000): Promise<void> {
-		appLogger.info("Starting repeatable discovery search sweeps in BullMQ", {
+	/**
+	 * Register the repeatable discovery jobs.
+	 *
+	 * Two loops run side by side: the keyword search sweep discovers fresh
+	 * uploads, and hot sampling expands the recommendation graph around the
+	 * fastest-moving videos already in tracking.
+	 */
+	async startScheduledSweeps(
+		intervalMs = DEFAULT_SEARCH_SWEEP_INTERVAL_MS,
+		hotSampleIntervalMs = HOT_SAMPLE_INTERVAL_MS
+	): Promise<void> {
+		appLogger.info("Starting repeatable discovery jobs in BullMQ", {
 			component: "discovery-scheduler",
 			intervalMs,
+			hotSampleIntervalMs,
 		});
 
 		await this.discoveryQueue.add(
@@ -23,12 +41,32 @@ export class DiscoveryScheduler {
 				removeOnComplete: true,
 			}
 		);
+
+		await this.discoveryQueue.add(
+			"repeatable-hot-sample",
+			{ type: "hot-sample", limit: DEFAULT_HOT_SAMPLE_LIMIT },
+			{
+				jobId: "repeatable-hot-sample",
+				repeat: {
+					every: hotSampleIntervalMs,
+				},
+				removeOnComplete: true,
+			}
+		);
 	}
 
 	async triggerSearchSweep(config?: Partial<SearchRoverConfig>): Promise<void> {
 		await this.discoveryQueue.add(
 			`sweep-manual-${Date.now()}`,
 			{ type: "search-sweep", config },
+			{ removeOnComplete: true }
+		);
+	}
+
+	async triggerHotSample(limit = DEFAULT_HOT_SAMPLE_LIMIT): Promise<void> {
+		await this.discoveryQueue.add(
+			`hot-sample-${Date.now()}`,
+			{ type: "hot-sample", limit },
 			{ removeOnComplete: true }
 		);
 	}
