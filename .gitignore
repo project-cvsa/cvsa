@@ -44,3 +44,9 @@ data
 model
 
 .omo
+
+# docs (apps/docs)
+.source
+.next
+.vercel
+next-env.d.ts

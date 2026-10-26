@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+/* Fade in animation for logo and buttons */
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* Word-by-word blur-to-clear animation for title */
+@keyframes blurIn {
+	from {
+		opacity: 0;
+		filter: blur(10px);
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		filter: blur(0);
+		transform: translateY(0);
+	}
+}
+
+.animate-fade-in {
+	animation: fadeIn 0.6s ease-out forwards;
+}
+
+.animate-blur-in {
+	animation: blurIn 0.6s ease-out forwards;
+	opacity: 0;
+}
+
+/* Staggered delays */
+.delay-100 {
+	animation-delay: 100ms;
+}
+.delay-200 {
+	animation-delay: 200ms;
+}
+.delay-300 {
+	animation-delay: 300ms;
+}
+.delay-400 {
+	animation-delay: 400ms;
+}
+.delay-500 {
+	animation-delay: 500ms;
+}
+.delay-600 {
+	animation-delay: 600ms;
+}
+.delay-700 {
+	animation-delay: 700ms;
+}
+.delay-800 {
+	animation-delay: 800ms;
+}
+.delay-900 {
+	animation-delay: 900ms;
+}
+.delay-1000 {
+	animation-delay: 1000ms;
+}
+.delay-1100 {
+	animation-delay: 1100ms;
+}
+.delay-1200 {
+	animation-delay: 1200ms;
+}

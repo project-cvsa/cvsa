@@ -1,0 +1,14 @@
+{
+	"title": "旧版爬虫文档",
+	"pages": [
+		"architecture-overview",
+		"crawling-lifecycle",
+		"video-discovery-pipeline",
+		"song-collection-pipeline",
+		"snapshot-scheduling",
+		"snapshot-execution",
+		"message-queue-reference",
+		"database-schema-reference",
+		"network-proxy-architecture"
+	]
+}
