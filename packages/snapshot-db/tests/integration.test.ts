@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { crawlerEnv } from "@cvsa/env";
+import { SQL } from "bun";
 import { snapshotDb } from "../src";
 
 /**
@@ -46,5 +47,21 @@ describe("SnapshotDB", () => {
 
 	test("runs against the test database, never the development one", () => {
 		expect(crawlerEnv.SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot_test");
+	});
+
+	test("keeps video_snapshot a compressed hypertable", async () => {
+		const sql = new SQL({ max: 1, url: crawlerEnv.SNAPSHOT_DATABASE_URL });
+
+		try {
+			const [state] = await sql<{ compression_enabled: boolean }[]>`
+				SELECT compression_enabled
+				FROM timescaledb_information.hypertables
+				WHERE hypertable_schema = 'public'
+					AND hypertable_name = 'video_snapshot'
+			`;
+			expect(state?.compression_enabled).toBe(true);
+		} finally {
+			await sql.close();
+		}
 	});
 });

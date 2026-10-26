@@ -1,11 +1,13 @@
 import { appLogger } from "@cvsa/logger";
 import { createWriteStream } from "node:fs";
 import { Pool } from "pg";
+import { type LegacySnapshotRow, SNAPSHOT_BATCH_SIZE } from "./legacy-snapshots";
 
 interface DumpOptions {
 	legacyDbUrl: string;
 	outFile: string;
 	batchSize: number;
+	includeSnapshots: boolean;
 	limit?: number;
 }
 
@@ -16,6 +18,7 @@ function parseCliArgs(): DumpOptions {
 		"postgres://postgres:KfXtLJgu4oettqmDC4@localhost:5432/cvsa_main";
 	let outFile = "legacy-tracking-dump.jsonl";
 	let batchSize = 2000;
+	let includeSnapshots = true;
 	let limit: number | undefined;
 
 	for (const arg of args) {
@@ -25,12 +28,14 @@ function parseCliArgs(): DumpOptions {
 			outFile = arg.slice("--out=".length);
 		} else if (arg.startsWith("--batch-size=")) {
 			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 2000;
+		} else if (arg === "--no-snapshots") {
+			includeSnapshots = false;
 		} else if (arg.startsWith("--limit=")) {
 			limit = Number.parseInt(arg.slice("--limit=".length), 10);
 		}
 	}
 
-	return { legacyDbUrl, outFile, batchSize, limit };
+	return { legacyDbUrl, outFile, batchSize, includeSnapshots, limit };
 }
 
 async function runDump(): Promise<void> {
@@ -38,6 +43,7 @@ async function runDump(): Promise<void> {
 	appLogger.info("Starting legacy data export dump...", {
 		outFile: opts.outFile,
 		batchSize: opts.batchSize,
+		includeSnapshots: opts.includeSnapshots,
 		limit: opts.limit,
 	});
 
@@ -169,6 +175,62 @@ async function runDump(): Promise<void> {
 			appLogger.info(`Dumped ${dumpedMeta} / ${targetMeta} metadata records`);
 		}
 
+		// 3. Export Video Snapshots with keyset pagination. `id` is the legacy
+		// sequence, so a million-row table streams batch by batch instead of
+		// holding every offset-scanned page or the whole result set in memory.
+		let dumpedSnapshots = 0;
+		if (opts.includeSnapshots) {
+			const snapshotCount = await pool.query<{ count: string }>(
+				"SELECT COUNT(*)::text AS count FROM video_snapshot"
+			);
+			const totalSnapshots = Number.parseInt(snapshotCount.rows[0]?.count ?? "0", 10);
+			const targetSnapshots = opts.limit
+				? Math.min(totalSnapshots, opts.limit)
+				: totalSnapshots;
+			appLogger.info(`Found ${totalSnapshots} snapshot records to dump`);
+
+			const snapshotBatchSize = Math.min(opts.batchSize, SNAPSHOT_BATCH_SIZE);
+			let lastSnapshotId = 0;
+
+			while (dumpedSnapshots < targetSnapshots) {
+				const batchLimit = Math.min(snapshotBatchSize, targetSnapshots - dumpedSnapshots);
+				const rows = await pool.query<LegacySnapshotRow>(
+					`
+					SELECT
+						id,
+						aid::text,
+						created_at,
+						views,
+						coins,
+						likes,
+						favorites,
+						shares,
+						danmakus,
+						replies
+					FROM video_snapshot
+					WHERE id > $1
+					ORDER BY id ASC
+					LIMIT $2
+					`,
+					[lastSnapshotId, batchLimit]
+				);
+
+				if (rows.rows.length === 0) break;
+
+				for (const row of rows.rows) {
+					const record = {
+						_type: "snapshot",
+						...row,
+					};
+					outStream.write(`${JSON.stringify(record)}\n`);
+					dumpedSnapshots++;
+				}
+
+				lastSnapshotId = rows.rows[rows.rows.length - 1].id;
+				appLogger.info(`Dumped ${dumpedSnapshots} / ${targetSnapshots} snapshot records`);
+			}
+		}
+
 		await new Promise<void>((resolve, reject) => {
 			outStream.end((err?: Error | null) => (err ? reject(err) : resolve()));
 		});
@@ -177,6 +239,7 @@ async function runDump(): Promise<void> {
 			outFile: opts.outFile,
 			dumpedTracking,
 			dumpedMeta,
+			dumpedSnapshots,
 		});
 	} finally {
 		await pool.end();

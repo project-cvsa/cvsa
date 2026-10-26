@@ -8,12 +8,12 @@
 		"lint": "bunx --bun biome lint",
 		"typecheck": "bunx --bun tsc --noEmit",
 		"gen": "bunx --bun prisma contract emit",
-		"db:update": "bunx --bun prisma db update --yes",
+		"db:update": "bunx --bun prisma db update --yes && bun scripts/ensure-timescale.ts",
 		"migrate": "bunx --bun prisma migration plan",
-		"migrate:deploy": "bunx --bun prisma db migrate",
+		"migrate:deploy": "bunx --bun prisma db migrate && bun scripts/ensure-timescale.ts",
 		"test": "bun test --concurrent",
-		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes",
-		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes"
+		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes && NODE_ENV=test bun scripts/ensure-timescale.ts",
+		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes && NODE_ENV=test bun scripts/ensure-timescale.ts"
 	},
 	"devDependencies": {
 		"@cvsa/typescript-config": "workspace:*",

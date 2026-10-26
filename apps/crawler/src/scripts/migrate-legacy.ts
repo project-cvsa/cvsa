@@ -1,15 +1,23 @@
+import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
 import { snapshotDb, toInstant } from "@cvsa/snapshot-db";
 import { Pool } from "pg";
 import { TrackingRepository } from "../crawler/tracking/repository";
 import { DiscoveryRepository } from "../crawler/discovery/repository";
 import type { UpsertMetadataInput } from "../crawler/discovery/types";
+import {
+	insertSnapshotBatch,
+	type LegacySnapshotRow,
+	SNAPSHOT_BATCH_SIZE,
+	toSnapshotInsertRow,
+} from "./legacy-snapshots";
 
 interface MigrationOptions {
 	legacyDbUrl: string;
 	batchSize: number;
 	dryRun: boolean;
 	includeMetadata: boolean;
+	includeSnapshots: boolean;
 	limit?: number;
 }
 
@@ -21,6 +29,7 @@ function parseCliArgs(): MigrationOptions {
 	let batchSize = 1000;
 	let dryRun = false;
 	let includeMetadata = true;
+	let includeSnapshots = true;
 	let limit: number | undefined;
 
 	for (const arg of args) {
@@ -32,6 +41,8 @@ function parseCliArgs(): MigrationOptions {
 			dryRun = true;
 		} else if (arg === "--no-metadata") {
 			includeMetadata = false;
+		} else if (arg === "--no-snapshots") {
+			includeSnapshots = false;
 		} else if (arg.startsWith("--limit=")) {
 			limit = Number.parseInt(arg.slice("--limit=".length), 10);
 		}
@@ -42,6 +53,7 @@ function parseCliArgs(): MigrationOptions {
 		batchSize,
 		dryRun,
 		includeMetadata,
+		includeSnapshots,
 		limit,
 	};
 }
@@ -76,11 +88,18 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 		batchSize: options.batchSize,
 		dryRun: options.dryRun,
 		includeMetadata: options.includeMetadata,
+		includeSnapshots: options.includeSnapshots,
 		limit: options.limit,
 	});
 
 	const legacyPool = new Pool({
 		connectionString: options.legacyDbUrl,
+	});
+	// Snapshots stream through `pg` directly: millions of rows are faster as
+	// multi-row inserts than as one ORM call per batch, and the keyset cursor
+	// keeps the source read memory-bounded.
+	const snapshotPool = new Pool({
+		connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL,
 	});
 
 	try {
@@ -125,6 +144,16 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 				);
 				const totalMeta = Number.parseInt(metaCountResult.rows[0]?.count ?? "0", 10);
 				appLogger.info(`[DRY-RUN] Would migrate ${totalMeta} metadata records.`);
+			}
+			if (options.includeSnapshots) {
+				const snapshotCountResult = await legacyPool.query<{ count: string }>(
+					"SELECT COUNT(*)::text AS count FROM video_snapshot"
+				);
+				const totalSnapshots = Number.parseInt(
+					snapshotCountResult.rows[0]?.count ?? "0",
+					10
+				);
+				appLogger.info(`[DRY-RUN] Would migrate ${totalSnapshots} snapshot records.`);
 			}
 			return;
 		}
@@ -288,11 +317,68 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 			}
 		}
 
+		// 4. Migrate Video Snapshots. `id` is the legacy sequence and the only
+		// stable cursor, so keyset pagination stays fast while million-row tables
+		// stream in batches instead of loading into memory.
+		let migratedSnapshots = 0;
+		if (options.includeSnapshots) {
+			const snapshotCountResult = await legacyPool.query<{ count: string }>(
+				"SELECT COUNT(*)::text AS count FROM video_snapshot"
+			);
+			const totalSnapshots = Number.parseInt(snapshotCountResult.rows[0]?.count ?? "0", 10);
+			const targetSnapshotTotal = options.limit
+				? Math.min(totalSnapshots, options.limit)
+				: totalSnapshots;
+			appLogger.info(`Found ${totalSnapshots} snapshot records in legacy database`);
+
+			const snapshotBatchSize = Math.min(options.batchSize, SNAPSHOT_BATCH_SIZE);
+			let lastSnapshotId = 0;
+
+			while (migratedSnapshots < targetSnapshotTotal) {
+				const batchLimit = Math.min(
+					snapshotBatchSize,
+					targetSnapshotTotal - migratedSnapshots
+				);
+				const snapshotRows = await legacyPool.query<LegacySnapshotRow>(
+					`
+					SELECT
+						id,
+						aid::text,
+						created_at,
+						COALESCE(views, 0) AS views,
+						COALESCE(coins, 0) AS coins,
+						COALESCE(likes, 0) AS likes,
+						COALESCE(favorites, 0) AS favorites,
+						COALESCE(shares, 0) AS shares,
+						COALESCE(danmakus, 0) AS danmakus,
+						COALESCE(replies, 0) AS replies
+					FROM video_snapshot
+					WHERE id > $1
+					ORDER BY id ASC
+					LIMIT $2
+					`,
+					[lastSnapshotId, batchLimit]
+				);
+
+				if (snapshotRows.rows.length === 0) break;
+
+				await insertSnapshotBatch(snapshotPool, snapshotRows.rows.map(toSnapshotInsertRow));
+				migratedSnapshots += snapshotRows.rows.length;
+				lastSnapshotId = snapshotRows.rows[snapshotRows.rows.length - 1].id;
+
+				appLogger.info(
+					`Migrated ${migratedSnapshots} / ${targetSnapshotTotal} snapshot records (${Math.round((migratedSnapshots / targetSnapshotTotal) * 100)}%)`
+				);
+			}
+		}
+
 		appLogger.info("Legacy migration successfully completed!", {
 			migratedTracking,
+			migratedSnapshots,
 		});
 	} finally {
 		await legacyPool.end();
+		await snapshotPool.end();
 		if (!options.dryRun) {
 			await snapshotDb.disconnect();
 		}
