@@ -1,0 +1,11 @@
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	handle /v2/* {
+		reverse_proxy backend:16412
+	}
+
+	handle {
+		reverse_proxy web:10199
+	}
+}
