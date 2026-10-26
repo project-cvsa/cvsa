@@ -16,12 +16,15 @@ export async function getRoleNameById(roleId: number): Promise<string | null> {
 }
 
 export async function ensureOwnerRole(): Promise<Role> {
-	let ownerRole = await prisma.orm.meta.Role.where({ name: "OWNER" }).first();
-	if (!ownerRole) {
-		ownerRole = await prisma.orm.meta.Role.create({
+	// `upsert` keeps this safe under concurrency: parallel registrations (the
+	// test suite runs them concurrently) would otherwise both observe a missing
+	// OWNER role and race to insert it, failing one request on `role_name_key`.
+	return prisma.orm.meta.Role.upsert({
+		create: {
 			name: "OWNER",
 			localizedNames: { zh: "所有者", en: "Owner" },
-		});
-	}
-	return ownerRole;
+		},
+		update: {},
+		conflictOn: { name: "OWNER" },
+	});
 }
