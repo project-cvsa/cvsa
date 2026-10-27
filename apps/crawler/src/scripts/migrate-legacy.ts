@@ -1,18 +1,20 @@
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
-import { snapshotDb, toInstant } from "@cvsa/snapshot-db";
 import { Pool, type QueryResult } from "pg";
-import { TrackingRepository } from "../crawler/tracking/repository";
-import { DiscoveryRepository } from "../crawler/discovery/repository";
-import type { UpsertMetadataInput } from "../crawler/discovery/types";
 import {
 	DEFAULT_SNAPSHOT_DAYS,
+	insertMetadataBatch,
 	insertSnapshotBatch,
+	type LegacyMetadataRow,
 	type LegacySnapshotRow,
-	SNAPSHOT_BATCH_SIZE,
+	type LegacyTrackingRow,
 	parseSnapshotDays,
+	resolveImportBatchSize,
 	resolveSnapshotCutoff,
+	toMetadataInsertRow,
 	toSnapshotInsertRow,
+	toTrackingInsertRow,
+	upsertTrackingBatch,
 } from "./legacy-snapshots";
 
 interface MigrationOptions {
@@ -28,7 +30,7 @@ interface MigrationOptions {
 function parseCliArgs(): MigrationOptions {
 	const args = process.argv.slice(2);
 	let legacyDbUrl = process.env.LEGACY_DATABASE_URL ?? "";
-	let batchSize = 1000;
+	let batchSize = resolveImportBatchSize(undefined);
 	let dryRun = false;
 	let includeMetadata = true;
 	let includeSnapshots = true;
@@ -39,7 +41,7 @@ function parseCliArgs(): MigrationOptions {
 		if (arg.startsWith("--legacy-db=")) {
 			legacyDbUrl = arg.slice("--legacy-db=".length);
 		} else if (arg.startsWith("--batch-size=")) {
-			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 1000;
+			batchSize = resolveImportBatchSize(arg.slice("--batch-size=".length));
 		} else if (arg === "--dry-run") {
 			dryRun = true;
 		} else if (arg === "--no-metadata") {
@@ -70,31 +72,6 @@ function parseCliArgs(): MigrationOptions {
 	};
 }
 
-interface LegacyTrackingRow {
-	aid: string;
-	schedule_type: string | null;
-	schedule_started_at: Date | string | null;
-	current_views: number | null;
-	velocity: number | null;
-	eta_hours: number | null;
-	target_milestone: number | null;
-	next_snapshot: Date | string | null;
-	published_at: Date | string | null;
-}
-
-interface LegacyMetadataRow {
-	aid: string;
-	bvid: string | null;
-	title: string | null;
-	description: string | null;
-	cover_url: string | null;
-	published_at: Date | string | null;
-	duration: number | null;
-	uid: string | null;
-	tags: string | null;
-	created_at: Date | string | null;
-}
-
 export async function runLegacyMigration(options: MigrationOptions): Promise<void> {
 	appLogger.info("Starting legacy database migration...", {
 		batchSize: options.batchSize,
@@ -108,9 +85,9 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 	const legacyPool = new Pool({
 		connectionString: options.legacyDbUrl,
 	});
-	// Snapshots stream through `pg` directly: millions of rows are faster as
-	// multi-row inserts than as one ORM call per batch, and the keyset cursor
-	// keeps the source read memory-bounded.
+	// Every write goes through `pg` as a single `INSERT ... SELECT FROM
+	// jsonb_to_recordset($1)` statement, and the keyset cursor keeps the source
+	// read memory-bounded.
 	const snapshotPool = new Pool({
 		connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL,
 	});
@@ -125,13 +102,6 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 		});
 		throw error;
 	}
-
-	if (!options.dryRun) {
-		await snapshotDb.connect();
-	}
-
-	const trackingRepo = new TrackingRepository(snapshotDb.client);
-	const discoveryRepo = new DiscoveryRepository(snapshotDb.client);
 
 	try {
 		// 1. Count active tracking items
@@ -176,14 +146,16 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 		}
 
 		// 2. Migrate Tracking Records in batches
-		let offset = 0;
+		// Keyset pagination: OFFSET re-scans and re-sorts the whole union on
+		// every page, which collapses once the legacy table is large.
+		let lastAid = "0";
 		let migratedTracking = 0;
 		const targetTrackingTotal = options.limit
 			? Math.min(totalActive, options.limit)
 			: totalActive;
 
-		while (offset < targetTrackingTotal) {
-			const batchLimit = Math.min(options.batchSize, targetTrackingTotal - offset);
+		while (migratedTracking < targetTrackingTotal) {
+			const batchLimit = Math.min(options.batchSize, targetTrackingTotal - migratedTracking);
 			const trackingRows = await legacyPool.query<LegacyTrackingRow>(
 				`
 				WITH active_aids AS (
@@ -212,49 +184,23 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 				LEFT JOIN eta e ON e.aid = a.aid
 				LEFT JOIN internal.eta ie ON ie.aid = a.aid
 				LEFT JOIN bilibili_metadata m ON m.aid = a.aid
+				WHERE a.aid > $1::bigint
 				ORDER BY a.aid ASC
-				LIMIT $1 OFFSET $2
+				LIMIT $2
 				`,
-				[batchLimit, offset]
+				[lastAid, batchLimit]
 			);
 
 			if (trackingRows.rows.length === 0) break;
 
 			const now = new Date();
-			for (const row of trackingRows.rows) {
-				const aid = BigInt(row.aid);
-				const scheduleType = row.schedule_type ?? "normal";
-				const state =
-					scheduleType === "milestone"
-						? "milestone"
-						: scheduleType === "new"
-							? "new"
-							: "regular";
+			await upsertTrackingBatch(
+				snapshotPool,
+				trackingRows.rows.map((row) => toTrackingInsertRow(row, now))
+			);
+			migratedTracking += trackingRows.rows.length;
 
-				let nextSnapshotAtDate = now;
-				if (row.next_snapshot) {
-					const ns = new Date(row.next_snapshot);
-					if (!Number.isNaN(ns.getTime())) nextSnapshotAtDate = ns;
-				} else if (row.schedule_started_at) {
-					const ss = new Date(row.schedule_started_at);
-					if (!Number.isNaN(ss.getTime())) nextSnapshotAtDate = ss;
-				}
-
-				await trackingRepo.upsertTracking({
-					aid,
-					state,
-					nextSnapshotAt: toInstant(nextSnapshotAtDate),
-					lastViews: row.current_views ?? 0,
-					velocity: row.velocity ?? 0,
-					targetMilestone: row.target_milestone ?? null,
-					etaHours: row.eta_hours ?? null,
-					publishedAt: row.published_at ? toInstant(new Date(row.published_at)) : null,
-					priority: state === "milestone" ? 1 : 2,
-				});
-				migratedTracking++;
-			}
-
-			offset += trackingRows.rows.length;
+			lastAid = trackingRows.rows[trackingRows.rows.length - 1].aid;
 			appLogger.info(
 				`Migrated ${migratedTracking} / ${targetTrackingTotal} tracking records (${Math.round((migratedTracking / targetTrackingTotal) * 100)}%)`
 			);
@@ -268,11 +214,11 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 			const totalMeta = Number.parseInt(metaCountResult.rows[0]?.count ?? "0", 10);
 			const targetMetaTotal = options.limit ? Math.min(totalMeta, options.limit) : totalMeta;
 
-			let metaOffset = 0;
+			let lastMetaAid = "0";
 			let migratedMeta = 0;
 
-			while (metaOffset < targetMetaTotal) {
-				const batchLimit = Math.min(options.batchSize, targetMetaTotal - metaOffset);
+			while (migratedMeta < targetMetaTotal) {
+				const batchLimit = Math.min(options.batchSize, targetMetaTotal - migratedMeta);
 				const metaRows = await legacyPool.query<LegacyMetadataRow>(
 					`
 					SELECT
@@ -287,46 +233,22 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 						tags,
 						created_at
 					FROM bilibili_metadata
-					ORDER BY aid ASC
-					LIMIT $1 OFFSET $2
+					WHERE aid > $1::bigint
+					ORDER BY bilibili_metadata.aid ASC
+					LIMIT $2
 					`,
-					[batchLimit, metaOffset]
+					[lastMetaAid, batchLimit]
 				);
 
 				if (metaRows.rows.length === 0) break;
 
-				const metadatasToInsert: UpsertMetadataInput[] = metaRows.rows.map((row) => {
-					const aid = BigInt(row.aid);
-					const pubdate = row.published_at ? toInstant(new Date(row.published_at)) : null;
-					const capturedAt = row.created_at
-						? toInstant(new Date(row.created_at))
-						: toInstant(new Date());
-
-					let parsedTags: string[] | null = null;
-					if (row.tags) {
-						parsedTags = row.tags
-							.split(",")
-							.map((t) => t.trim())
-							.filter(Boolean);
-					}
-
-					return {
-						aid,
-						bvid: row.bvid ?? `av${row.aid}`,
-						title: row.title ?? "",
-						description: row.description ?? null,
-						pic: row.cover_url ?? null,
-						pubdate,
-						duration: row.duration ?? 0,
-						mid: row.uid ? BigInt(row.uid) : null,
-						tags: parsedTags,
-						capturedAt,
-					};
-				});
-
-				await discoveryRepo.bulkUpsertMetadata(metadatasToInsert);
+				const now = new Date();
+				await insertMetadataBatch(
+					snapshotPool,
+					metaRows.rows.map((row) => toMetadataInsertRow(row, now))
+				);
 				migratedMeta += metaRows.rows.length;
-				metaOffset += metaRows.rows.length;
+				lastMetaAid = metaRows.rows[metaRows.rows.length - 1].aid;
 
 				appLogger.info(
 					`Migrated ${migratedMeta} / ${targetMetaTotal} metadata records (${Math.round((migratedMeta / targetMetaTotal) * 100)}%)`
@@ -353,7 +275,7 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 				`Found ${totalSnapshots} snapshot records in the last ${options.snapshotDays} days`
 			);
 
-			const snapshotBatchSize = Math.min(options.batchSize, SNAPSHOT_BATCH_SIZE);
+			const snapshotBatchSize = options.batchSize;
 			let lastCreatedAt: Date | string = cutoff;
 			let lastSnapshotId = 0;
 
@@ -408,9 +330,6 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 	} finally {
 		await legacyPool.end();
 		await snapshotPool.end();
-		if (!options.dryRun) {
-			await snapshotDb.disconnect();
-		}
 	}
 }
 

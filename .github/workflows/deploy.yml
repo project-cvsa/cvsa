@@ -30,7 +30,7 @@ jobs:
 
       - name: Prepare .env files
         run: |
-          cp .env.docker.example .env.docker
+          cp .env.example .env
           cp packages/db/.env.example packages/db/.env
           cp packages/db/.env.test.example packages/db/.env.test
           cp apps/backend/.env.test.example apps/backend/.env.test
@@ -40,7 +40,7 @@ jobs:
         # `--wait` blocks until every container reports healthy, so Postgres,
         # TimescaleDB, Redis and Meilisearch are accepting connections before
         # `setup:ci` runs instead of racing their first-boot initialization.
-        run: docker compose up -d --wait --wait-timeout 240
+        run: docker compose up -d --wait --wait-timeout 240 db snapshot-db redis meili
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -60,8 +60,8 @@ jobs:
       - name: Verify Production Web Build
         run: bun run --cwd apps/web build
 
-      - name: Validate production compose file
-        run: docker compose -f docker-compose.prod.yml --env-file .env.prod.example config --quiet
+      - name: Validate compose file
+        run: docker compose config --quiet
 
       - name: Stop backing services
         if: always()

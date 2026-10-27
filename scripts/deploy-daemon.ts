@@ -15,12 +15,14 @@
  *   3. `docker login ghcr.io` when pull credentials are configured
  *   4. pull the four application images
  *   5. drain the crawler (single dispatcher, no overlapping generations)
- *   6. apply `@cvsa/db` and `@cvsa/snapshot-db` migrations
- *   7. `docker compose up -d --wait` against the native healthchecks
- *   8. roll `IMAGE_TAG` back and re-`up` when 6 or 7 fails
+ *   6. make sure the data services are up before anything touches the schema
+ *   7. apply `@cvsa/db` and `@cvsa/snapshot-db` migrations
+ *   8. `docker compose up -d --wait` against the native healthchecks
+ *   9. roll `IMAGE_TAG` back and re-`up` when 7 or 8 fails
  *
- * Caddy exposes it at `https://<SITE_ADDRESS>/_deploy/...`, so the daemon can
- * stay bound to `127.0.0.1` and no extra firewall port is opened.
+ * The daemon binds `127.0.0.1` and is reached through the reverse proxy that
+ * already runs on the host, so no extra firewall port is opened. It never
+ * terminates TLS itself.
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
@@ -30,8 +32,8 @@ import { join, resolve } from "node:path";
 
 const DEFAULT_PORT = 9420;
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_COMPOSE_FILE = "docker-compose.prod.yml";
-const DEFAULT_ENV_FILE = ".env.prod";
+const DEFAULT_COMPOSE_FILE = "docker-compose.yml";
+const DEFAULT_ENV_FILE = ".env";
 const MAX_BODY_BYTES = 16 * 1024;
 const MAX_OUTPUT_CHARS = 8_000;
 const HEALTH_PATHS = new Set(["/health", "/_deploy/health"]);
@@ -398,58 +400,49 @@ async function performDeploy(
 	log("info", "Deploy started", { deployId, tag: request.tag, syncGit: request.syncGit });
 
 	// 1. Refresh deployment artifacts from the released branch.
-	await runStep(
-		steps,
-		"sync-git",
-		"Refresh compose, Caddyfile and daemon from origin/main",
-		() => {
-			if (!request.syncGit) {
-				return Promise.resolve({
-					status: "skipped",
-					detail: "syncGit disabled by request",
-				});
-			}
-			if (!existsSync(join(config.workdir, ".git"))) {
-				return Promise.resolve({
-					status: "skipped",
-					detail: "workdir is not a git checkout",
-				});
-			}
-
-			return (async (): Promise<StepResult> => {
-				const artifacts = [
-					"docker-compose.prod.yml",
-					"docker/Caddyfile",
-					"scripts/deploy-daemon.ts",
-				];
-				const fetch = await runCommand(["git", "fetch", "origin", "main"], {
-					cwd: config.workdir,
-					timeoutMs: 120_000,
-				});
-				if (fetch.code !== 0) {
-					return {
-						status: "failed",
-						exitCode: fetch.code,
-						output: fetch.output,
-						detail: "git fetch origin main failed",
-					};
-				}
-				const checkout = await runCommand(
-					["git", "checkout", "FETCH_HEAD", "--", ...artifacts],
-					{ cwd: config.workdir, timeoutMs: 60_000 }
-				);
-				return {
-					status: checkout.code === 0 ? "ok" : "failed",
-					exitCode: checkout.code,
-					output: checkout.output,
-					detail:
-						checkout.code === 0
-							? `Checked out ${artifacts.join(", ")} from FETCH_HEAD`
-							: "git checkout FETCH_HEAD failed",
-				};
-			})();
+	await runStep(steps, "sync-git", "Refresh compose and daemon from origin/main", () => {
+		if (!request.syncGit) {
+			return Promise.resolve({
+				status: "skipped",
+				detail: "syncGit disabled by request",
+			});
 		}
-	);
+		if (!existsSync(join(config.workdir, ".git"))) {
+			return Promise.resolve({
+				status: "skipped",
+				detail: "workdir is not a git checkout",
+			});
+		}
+
+		return (async (): Promise<StepResult> => {
+			const artifacts = ["docker-compose.yml", "scripts/deploy-daemon.ts"];
+			const fetch = await runCommand(["git", "fetch", "origin", "main"], {
+				cwd: config.workdir,
+				timeoutMs: 120_000,
+			});
+			if (fetch.code !== 0) {
+				return {
+					status: "failed",
+					exitCode: fetch.code,
+					output: fetch.output,
+					detail: "git fetch origin main failed",
+				};
+			}
+			const checkout = await runCommand(
+				["git", "checkout", "FETCH_HEAD", "--", ...artifacts],
+				{ cwd: config.workdir, timeoutMs: 60_000 }
+			);
+			return {
+				status: checkout.code === 0 ? "ok" : "failed",
+				exitCode: checkout.code,
+				output: checkout.output,
+				detail:
+					checkout.code === 0
+						? `Checked out ${artifacts.join(", ")} from FETCH_HEAD`
+						: "git checkout FETCH_HEAD failed",
+			};
+		})();
+	});
 
 	// 2. Pin the new image tag before anything is pulled.
 	const envStep = await runStep(steps, "pin-image-tag", "Pin IMAGE_TAG in env file", () => {
@@ -460,7 +453,7 @@ async function performDeploy(
 			} catch (readError) {
 				return {
 					status: "failed",
-					detail: `Cannot read ${envPath}: ${describeError(readError)}. Copy .env.prod.example to .env.prod on the host first.`,
+					detail: `Cannot read ${envPath}: ${describeError(readError)}. Copy .env.example to .env on the host first.`,
 				};
 			}
 			previousTag = readImageTag(content);
@@ -542,7 +535,51 @@ async function performDeploy(
 		};
 	}
 
-	// 5. Drain the crawler: it is the only dispatcher, so two generations must
+	// 5. Cold start / recovery. `compose run --no-deps` never starts a
+	// dependency, so on a fresh host (or after `compose down`) the databases
+	// would be down when the migrations run. Bring the data services up first,
+	// and treat a failure here as "abort before touching the running stack".
+	const dataServices = await runStep(steps, "data-services", "Start data services", () => {
+		return (async (): Promise<StepResult> => {
+			const result = await compose(
+				[
+					"up",
+					"-d",
+					"--wait",
+					"--wait-timeout",
+					"120",
+					"db",
+					"snapshot-db",
+					"redis",
+					"meili",
+				],
+				180_000
+			);
+			return {
+				status: result.code === 0 ? "ok" : "failed",
+				exitCode: result.code,
+				output: result.output,
+				detail:
+					result.code === 0
+						? "Data services healthy"
+						: "Data services did not become healthy",
+			};
+		})();
+	});
+	if (dataServices.status !== "ok") {
+		await restoreTag(envPath, previousTag);
+		return {
+			ok: false,
+			tag: request.tag,
+			previousTag,
+			rolledBack: false,
+			steps,
+			error: "Data services are not healthy; the running stack was left untouched",
+			durationMs: Date.now() - startedAt,
+		};
+	}
+
+	// 6. Drain the crawler: it is the only dispatcher, so two generations must
 	// never overlap during a rollout. A missing crawler is not an error.
 	await runStep(steps, "drain-crawler", "Drain the crawler", () => {
 		return (async (): Promise<StepResult> => {
@@ -561,7 +598,7 @@ async function performDeploy(
 		})();
 	});
 
-	// 6. Apply both migration sets. `-T` keeps stdout non-interactive, and
+	// 7. Apply both migration sets. `-T` keeps stdout non-interactive, and
 	// `--no-deps` avoids starting the whole stack before the migrations run.
 	const migrate = await runStep(steps, "migrate", "Apply database migrations", () => {
 		return (async (): Promise<StepResult> => {
@@ -617,7 +654,7 @@ async function performDeploy(
 		})();
 	});
 
-	// 7. Start the stack and block on the native healthchecks (every service in
+	// 8. Start the stack and block on the native healthchecks (every service in
 	// `docker-compose.prod.yml` ships one, Meilisearch included).
 	const up = await runStep(steps, "up", "docker compose up --wait", () => {
 		if (migrate.status !== "ok") {

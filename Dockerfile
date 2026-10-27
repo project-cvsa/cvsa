@@ -56,9 +56,9 @@ ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=16412
 EXPOSE 16412
-HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
 	CMD curl -fsS http://127.0.0.1:${PORT:-16412}/v2/health || exit 1
-CMD ["bun", "run", "--cwd", "apps/backend", "start"]
+CMD ["sh", "-c", "bun run --filter @cvsa/db migrate:deploy && exec bun run --cwd apps/backend start"]
 
 # ==============================================================================
 # Stage 5: Target - Crawler Daemon & Control Plane
@@ -75,9 +75,9 @@ ENV CONTROL_API_PORT=16413
 ENV HF_HOME=/app/model/.cache/huggingface
 VOLUME ["/app/model"]
 EXPOSE 16413
-HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=25s --retries=5 \
 	CMD curl -fsS -H "Authorization: Bearer ${CONTROL_API_TOKEN}" http://127.0.0.1:${CONTROL_API_PORT:-16413}/v2/network-runtime/status || exit 1
-CMD ["bun", "run", "--cwd", "apps/crawler", "start"]
+CMD ["sh", "-c", "bun run --filter @cvsa/snapshot-db migrate:deploy && exec bun run --cwd apps/crawler start"]
 
 # ==============================================================================
 # Stage 6: Target - Search Embedding Service
@@ -100,9 +100,9 @@ CMD ["bun", "run", "--cwd", "packages/embedding", "start"]
 # Stage 7: Build - Web SSR Bundle (Astro + Solid)
 #
 # `PUBLIC_API_URL` is read by Vite and baked into the bundle: an empty value is
-# the supported default behind Caddy, where `/v2/*` and `/` share one origin and
-# the browser calls `window.location.origin`. Pass a full origin only when the
-# API is served from a different domain.
+# the supported default when the host proxy serves `/v2/*` and `/` from one
+# origin and the browser calls `window.location.origin`. Pass a full origin only
+# when the API is served from a different domain.
 # ==============================================================================
 FROM source AS web-builder
 ENV NODE_ENV=production

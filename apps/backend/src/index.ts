@@ -48,8 +48,9 @@ function escapeRegExp(value: string): string {
 /**
  * Convert one deployment-configured origin into a CORS allow pattern. An entry
  * may be a full origin (`https://cvsa.example.com`) or a bare host, which is
- * how `SITE_ADDRESS` configures Caddy. Either scheme and an optional port are
- * accepted because the same stack runs behind plain HTTP in staging.
+ * how `SITE_ADDRESS` configures the public hostname. Either scheme and an
+ * optional port are accepted because the same stack runs behind plain HTTP in
+ * staging.
  */
 function toCorsOriginPattern(entry: string): RegExp | undefined {
 	const value = entry.trim().replace(/\/+$/, "");
@@ -62,8 +63,8 @@ function toCorsOriginPattern(entry: string): RegExp | undefined {
 
 /**
  * Every domain configured for this deployment (`WEB_ORIGINS`, comma-separated,
- * or the single `SITE_ADDRESS` Caddy serves) is allowed automatically, so
- * pointing the stack at a new host needs no code change.
+ * or the single public `SITE_ADDRESS`) is allowed automatically, so pointing
+ * the stack at a new host needs no code change.
  */
 const CONFIGURED_CORS_ORIGIN_PATTERNS = [process.env.WEB_ORIGINS, process.env.SITE_ADDRESS]
 	.flatMap((value) => value?.split(",") ?? [])

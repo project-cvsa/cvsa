@@ -12,9 +12,12 @@ logs
 .env
 .env.*
 !.env.example
-!.env.docker.example
 data
 model
 .DS_Store
 .idea
 .omo
+# The docs site is published by its own workflow and has no place in these
+# images; keep its build output out of the build context.
+apps/docs/out
+apps/docs/.next

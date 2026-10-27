@@ -1,25 +1,167 @@
+# ==============================================================================
+# CVSA Stack (Single Compose for Development & Production)
+#
+# Production:
+#   docker compose up -d
+#
+# Development (backing services only):
+#   docker compose up -d db snapshot-db redis meili
+#
+# All variables and ports are configurable via `.env` with sensible defaults.
+# Every service automatically loads `.env` if present.
+# ==============================================================================
+
 services:
+  web:
+    image: ${IMAGE_REGISTRY:-ghcr.io/project-cvsa}/cvsa-web:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+      args:
+        PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+    container_name: cvsa-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-10199}:${WEB_PORT:-10199}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${WEB_PORT:-10199}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-}
+      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://backend:${BACKEND_PORT:-16412}}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+
+  backend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/project-cvsa}/cvsa-backend:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    container_name: cvsa-backend
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-16412}:${BACKEND_PORT:-16412}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${BACKEND_PORT:-16412}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      MEILI_API_URL: ${MEILI_API_URL:-http://meili:7700}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-cvsa_meili_master_key_16bytes}
+      EMBEDDING_API_URL: ${EMBEDDING_API_URL:-http://embedding:${EMBEDDING_PORT:-14900}}
+      CONTROL_API_HOST: crawler
+      CONTROL_API_PORT: ${CRAWLER_PORT:-16413}
+      CONTROL_API_URL: ${CONTROL_API_URL:-http://crawler:${CRAWLER_PORT:-16413}/v2}
+      CONTROL_API_TOKEN: ${CONTROL_API_TOKEN:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
+      WEB_ORIGINS: ${WEB_ORIGINS:-}
+      SITE_ADDRESS: ${SITE_ADDRESS:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meili:
+        condition: service_healthy
+      embedding:
+        condition: service_healthy
+
+  crawler:
+    image: ${IMAGE_REGISTRY:-ghcr.io/project-cvsa}/cvsa-crawler:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: crawler
+    container_name: cvsa-crawler
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - "${CRAWLER_BIND_IP:-127.0.0.1}:${CRAWLER_PORT:-16413}:${CRAWLER_PORT:-16413}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      SNAPSHOT_DATABASE_URL: ${SNAPSHOT_DATABASE_URL:-postgres://${SNAPSHOT_DB_USER:-cvsa}:${SNAPSHOT_DB_PASSWORD:-password}@snapshot-db:5432/${SNAPSHOT_DB_NAME:-cvsa_snapshot}}
+      CONTROL_API_HOST: 0.0.0.0
+      CONTROL_API_PORT: ${CRAWLER_PORT:-16413}
+      CONTROL_API_TOKEN: ${CONTROL_API_TOKEN:-}
+      CRAWLER_MODEL_DIR: ${CRAWLER_MODEL_DIR:-/app/model}
+      HF_HOME: ${HF_HOME:-/app/model/.cache/huggingface}
+    volumes:
+      - ${MODEL_DIR:-./model}:/app/model
+    depends_on:
+      snapshot-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  embedding:
+    image: ${IMAGE_REGISTRY:-ghcr.io/project-cvsa}/cvsa-embedding:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: embedding
+    container_name: cvsa-embedding
+    restart: unless-stopped
+    ports:
+      - "${EMBEDDING_BIND_IP:-127.0.0.1}:${EMBEDDING_PORT:-14900}:${EMBEDDING_PORT:-14900}"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: ${EMBEDDING_PORT:-14900}
+      HF_HOME: ${HF_HOME:-/app/model/.cache/huggingface}
+    volumes:
+      - ${MODEL_DIR:-./model}:/app/model
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
   db:
     image: postgres:18-alpine
     container_name: cvsa-db
     restart: always
     ports:
-      - "127.0.0.1:5432:5432"
-    environment:
-        - PGDATA=/var/lib/postgresql/18/docker
+      - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     env_file:
-      - .env.docker
+      - path: .env
+        required: false
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+      POSTGRES_USER: ${POSTGRES_USER:-cvsa}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-cvsa}
     volumes:
       - data:/var/lib/postgresql
-      # Seeds `cvsa_test` the first time the volume is created. The healthcheck
-      # below then guarantees `docker compose up -d --wait` returns only once
-      # the server accepts connections, not while the entrypoint is still
-      # initializing the cluster.
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
-    command: postgres
     healthcheck:
-      # Probe over TCP: `pg_isready` already succeeds against the temporary
-      # socket-only server the entrypoint uses while running init scripts.
       test:
         [
           "CMD-SHELL",
@@ -35,14 +177,16 @@ services:
     container_name: cvsa-snapshot-db
     restart: always
     ports:
-      - "127.0.0.1:5433:5432"
+      - "${SNAPSHOT_DB_BIND_IP:-127.0.0.1}:${SNAPSHOT_DB_PORT:-5433}:5432"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      POSTGRES_DB: cvsa_snapshot
-      POSTGRES_USER: cvsa
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${SNAPSHOT_DB_NAME:-cvsa_snapshot}
+      POSTGRES_USER: ${SNAPSHOT_DB_USER:-cvsa}
+      POSTGRES_PASSWORD: ${SNAPSHOT_DB_PASSWORD:-password}
     volumes:
       - snapshot_data:/var/lib/postgresql/data
-      # Seeds `cvsa_snapshot_test` plus the TimescaleDB extension on first boot.
       - ./docker/timescale/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
@@ -60,9 +204,13 @@ services:
     container_name: cvsa-meili
     restart: always
     ports:
-      - "127.0.0.1:7700:7700"
+      - "${MEILI_BIND_IP:-127.0.0.1}:${MEILI_PORT:-7700}:7700"
     env_file:
-      - .env.docker
+      - path: .env
+        required: false
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-cvsa_meili_master_key_16bytes}
+      MEILI_ENV: ${MEILI_ENV:-development}
     volumes:
       - meili:/meili_data
     healthcheck:
@@ -81,7 +229,15 @@ services:
     container_name: cvsa-redis
     restart: always
     ports:
-      - "127.0.0.1:6379:6379"
+      - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-512mb}
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis:/data
     healthcheck:

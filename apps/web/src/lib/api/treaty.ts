@@ -43,8 +43,9 @@ const TRACE_ID_HEADER = "x-trace-id";
 
 /**
  * Origin used by server-side rendering when nothing else is configured: the
- * compose service name. In production Caddy publishes `/v2/*` on the public
- * origin, so the container never needs to leave the Docker network.
+ * compose service name. In production the host reverse proxy publishes `/v2/*`
+ * on the public origin, so the container never needs to leave the Docker
+ * network.
  */
 const SSR_API_URL_FALLBACK = "http://backend:16412";
 
@@ -60,10 +61,11 @@ function normalizeApiUrl(value: string | undefined): string | undefined {
  * Read the deployed API origin. Resolution is deferred to first use so a
  * missing variable cannot break module evaluation on an unrelated page.
  *
- * Behind Caddy, `/v2/*` and `/` share a single origin, so an unset or empty
- * `PUBLIC_API_URL` is a supported "same origin" configuration rather than an
- * error: the browser calls `window.location.origin`, and SSR stays inside the
- * Docker network. A non-empty value (a dedicated API domain) still wins.
+ * Behind the host reverse proxy, `/v2/*` and `/` share a single origin, so an
+ * unset or empty `PUBLIC_API_URL` is a supported "same origin" configuration
+ * rather than an error: the browser calls `window.location.origin`, and SSR
+ * stays inside the Docker network. A non-empty value (a dedicated API domain)
+ * still wins.
  */
 function resolveApiUrl(): string {
 	const configured = normalizeApiUrl(import.meta.env.PUBLIC_API_URL);

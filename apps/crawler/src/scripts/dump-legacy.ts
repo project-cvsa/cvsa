@@ -3,9 +3,11 @@ import { createWriteStream } from "node:fs";
 import { Pool, type QueryResult } from "pg";
 import {
 	DEFAULT_SNAPSHOT_DAYS,
+	type LegacyMetadataRow,
 	type LegacySnapshotRow,
-	SNAPSHOT_BATCH_SIZE,
+	type LegacyTrackingRow,
 	parseSnapshotDays,
+	resolveImportBatchSize,
 	resolveSnapshotCutoff,
 } from "./legacy-snapshots";
 
@@ -22,7 +24,7 @@ function parseCliArgs(): DumpOptions {
 	const args = process.argv.slice(2);
 	let legacyDbUrl = process.env.LEGACY_DATABASE_URL ?? "";
 	let outFile = "legacy-tracking-dump.jsonl";
-	let batchSize = 2000;
+	let batchSize = resolveImportBatchSize(undefined);
 	let includeSnapshots = true;
 	let snapshotDays = DEFAULT_SNAPSHOT_DAYS;
 	let limit: number | undefined;
@@ -33,7 +35,7 @@ function parseCliArgs(): DumpOptions {
 		} else if (arg.startsWith("--out=")) {
 			outFile = arg.slice("--out=".length);
 		} else if (arg.startsWith("--batch-size=")) {
-			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 2000;
+			batchSize = resolveImportBatchSize(arg.slice("--batch-size=".length));
 		} else if (arg === "--no-snapshots") {
 			includeSnapshots = false;
 		} else if (arg.startsWith("--snapshot-days=")) {
@@ -88,12 +90,15 @@ async function runDump(): Promise<void> {
 		const targetTotal = opts.limit ? Math.min(totalActive, opts.limit) : totalActive;
 		appLogger.info(`Found ${totalActive} active tracking candidates to dump`);
 
-		let offset = 0;
+		// Keyset pagination: OFFSET re-scans and re-sorts the whole union on every
+		// page, which collapses on a legacy table of this size. `aid` is the
+		// primary key of every branch, so `aid > cursor` is an index seek.
+		let lastAid = "0";
 		let dumpedTracking = 0;
 
-		while (offset < targetTotal) {
-			const batchLimit = Math.min(opts.batchSize, targetTotal - offset);
-			const rows = await pool.query(
+		while (dumpedTracking < targetTotal) {
+			const batchLimit = Math.min(opts.batchSize, targetTotal - dumpedTracking);
+			const rows = await pool.query<LegacyTrackingRow>(
 				`
 				WITH active_aids AS (
 					SELECT aid FROM songs WHERE deleted = false AND aid IS NOT NULL
@@ -121,10 +126,11 @@ async function runDump(): Promise<void> {
 				LEFT JOIN eta e ON e.aid = a.aid
 				LEFT JOIN internal.eta ie ON ie.aid = a.aid
 				LEFT JOIN bilibili_metadata m ON m.aid = a.aid
+				WHERE a.aid > $1::bigint
 				ORDER BY a.aid ASC
-				LIMIT $1 OFFSET $2
+				LIMIT $2
 			`,
-				[batchLimit, offset]
+				[lastAid, batchLimit]
 			);
 
 			if (rows.rows.length === 0) break;
@@ -138,7 +144,8 @@ async function runDump(): Promise<void> {
 				dumpedTracking++;
 			}
 
-			offset += rows.rows.length;
+			lastAid = rows.rows[rows.rows.length - 1].aid;
+
 			appLogger.info(`Dumped ${dumpedTracking} / ${targetTotal} tracking records`);
 		}
 
@@ -150,12 +157,12 @@ async function runDump(): Promise<void> {
 		const targetMeta = opts.limit ? Math.min(totalMeta, opts.limit) : totalMeta;
 		appLogger.info(`Found ${totalMeta} metadata records to dump`);
 
-		let metaOffset = 0;
+		let lastMetaAid = "0";
 		let dumpedMeta = 0;
 
-		while (metaOffset < targetMeta) {
-			const batchLimit = Math.min(opts.batchSize, targetMeta - metaOffset);
-			const rows = await pool.query(
+		while (dumpedMeta < targetMeta) {
+			const batchLimit = Math.min(opts.batchSize, targetMeta - dumpedMeta);
+			const rows = await pool.query<LegacyMetadataRow>(
 				`
 				SELECT
 					aid::text,
@@ -169,10 +176,11 @@ async function runDump(): Promise<void> {
 					tags,
 					created_at
 				FROM bilibili_metadata
-				ORDER BY aid ASC
-				LIMIT $1 OFFSET $2
+				WHERE aid > $1::bigint
+				ORDER BY bilibili_metadata.aid ASC
+				LIMIT $2
 			`,
-				[batchLimit, metaOffset]
+				[lastMetaAid, batchLimit]
 			);
 
 			if (rows.rows.length === 0) break;
@@ -186,7 +194,7 @@ async function runDump(): Promise<void> {
 				dumpedMeta++;
 			}
 
-			metaOffset += rows.rows.length;
+			lastMetaAid = rows.rows[rows.rows.length - 1].aid;
 			appLogger.info(`Dumped ${dumpedMeta} / ${targetMeta} metadata records`);
 		}
 
@@ -210,7 +218,7 @@ async function runDump(): Promise<void> {
 				`Found ${totalSnapshots} snapshot records in the last ${opts.snapshotDays} days to dump`
 			);
 
-			const snapshotBatchSize = Math.min(opts.batchSize, SNAPSHOT_BATCH_SIZE);
+			const snapshotBatchSize = opts.batchSize;
 			let lastCreatedAt: Date | string = cutoff;
 			let lastSnapshotId = 0;
 
