@@ -1,0 +1,22 @@
+[Unit]
+Description=CVSA Deployment Webhook Daemon
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+# Set WorkingDirectory to the cvsa repository root on the VPS
+WorkingDirectory=/root/cvsa
+# Load environment variables (such as DEPLOY_WEBHOOK_SECRET, DEPLOY_PORT)
+EnvironmentFile=-/root/cvsa/.env
+ExecStart=/usr/local/bin/bun run scripts/deploy-daemon.ts
+Restart=always
+RestartSec=5s
+
+# Standard logging into systemd journal (view via `journalctl -u cvsa-deploy -f`)
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
