@@ -9,7 +9,7 @@
 		"migrate:legacy": "bun src/scripts/migrate-legacy.ts",
 		"dump:legacy": "bun src/scripts/dump-legacy.ts",
 		"import:legacy": "bun src/scripts/import-legacy.ts",
-		"test": "bun test --concurrent",
+		"test": "bun test",
 		"lint": "bunx --bun biome lint",
 		"typecheck": "bunx --bun tsc --noEmit"
 	},
