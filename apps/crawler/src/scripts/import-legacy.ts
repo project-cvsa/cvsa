@@ -1,18 +1,24 @@
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
-import { snapshotDb, toInstant } from "@cvsa/snapshot-db";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { Pool } from "pg";
-import { DiscoveryRepository } from "../crawler/discovery/repository";
-import type { UpsertMetadataInput } from "../crawler/discovery/types";
-import { TrackingRepository } from "../crawler/tracking/repository";
 import {
 	DEFAULT_SNAPSHOT_DAYS,
-	SNAPSHOT_BATCH_SIZE,
-	type SnapshotInsertRow,
+	insertMetadataBatch,
 	insertSnapshotBatch,
+	type LegacyMetadataRow,
+	type LegacySnapshotRow,
+	type LegacyTrackingRow,
+	type MetadataInsertRow,
 	parseSnapshotDays,
+	resolveImportBatchSize,
+	type SnapshotInsertRow,
+	toMetadataInsertRow,
+	toSnapshotInsertRow,
+	toTrackingInsertRow,
+	type TrackingInsertRow,
+	upsertTrackingBatch,
 } from "./legacy-snapshots";
 
 interface ImportOptions {
@@ -25,7 +31,7 @@ interface ImportOptions {
 function parseCliArgs(): ImportOptions {
 	const args = process.argv.slice(2);
 	let file = "legacy-tracking-dump.jsonl";
-	let batchSize = 1000;
+	let batchSizeArg: string | undefined;
 	let includeSnapshots = true;
 	let snapshotDays = DEFAULT_SNAPSHOT_DAYS;
 
@@ -33,7 +39,7 @@ function parseCliArgs(): ImportOptions {
 		if (arg.startsWith("--file=")) {
 			file = arg.slice("--file=".length);
 		} else if (arg.startsWith("--batch-size=")) {
-			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 1000;
+			batchSizeArg = arg.slice("--batch-size=".length);
 		} else if (arg === "--no-snapshots") {
 			includeSnapshots = false;
 		} else if (arg.startsWith("--snapshot-days=")) {
@@ -41,7 +47,92 @@ function parseCliArgs(): ImportOptions {
 		}
 	}
 
-	return { file, batchSize, includeSnapshots, snapshotDays };
+	return {
+		file,
+		batchSize: resolveImportBatchSize(batchSizeArg),
+		includeSnapshots,
+		snapshotDays,
+	};
+}
+
+// ------------------------------------------------------------------ reading
+
+/**
+ * The dump is untrusted JSONL, so every field is narrowed instead of cast. A
+ * record that cannot yield a usable `aid` is skipped rather than aborting a
+ * multi-million-line import.
+ */
+function asText(value: unknown): string | null {
+	if (typeof value === "string") return value;
+	if (typeof value === "number" && Number.isFinite(value)) return String(value);
+	return null;
+}
+
+function asNumberish(value: unknown): number | string | null {
+	if (typeof value === "number" || typeof value === "string") return value;
+	return null;
+}
+
+function asDateish(value: unknown): string | null {
+	if (value === null || value === undefined) return null;
+	if (typeof value === "string") return value;
+	if (value instanceof Date) return value.toISOString();
+	return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readRecord(value: unknown, lineNumber: number): Record<string, unknown> {
+	if (!isRecord(value)) {
+		throw new Error(`line ${lineNumber}: expected a JSON object`);
+	}
+	return value;
+}
+
+function readTrackingRow(record: Record<string, unknown>, aid: string): LegacyTrackingRow {
+	return {
+		aid,
+		schedule_type: asText(record.schedule_type),
+		schedule_started_at: asDateish(record.schedule_started_at),
+		current_views: asNumberish(record.current_views),
+		velocity: asNumberish(record.velocity),
+		eta_hours: asNumberish(record.eta_hours),
+		target_milestone: asNumberish(record.target_milestone),
+		next_snapshot: asDateish(record.next_snapshot),
+		published_at: asDateish(record.published_at),
+	};
+}
+
+function readMetadataRow(record: Record<string, unknown>, aid: string): LegacyMetadataRow {
+	return {
+		aid,
+		bvid: asText(record.bvid),
+		title: asText(record.title),
+		description: asText(record.description),
+		cover_url: asText(record.cover_url),
+		published_at: asDateish(record.published_at),
+		duration: asNumberish(record.duration),
+		uid: asText(record.uid),
+		tags: asText(record.tags),
+		created_at: asDateish(record.created_at),
+	};
+}
+
+function readSnapshotRow(record: Record<string, unknown>, aid: string): LegacySnapshotRow {
+	return {
+		id: Number(asNumberish(record.id) ?? 0),
+		aid,
+		created_at: asDateish(record.created_at) ?? "",
+		views: Number(asNumberish(record.views) ?? 0),
+		coins: Number(asNumberish(record.coins) ?? 0),
+		likes: Number(asNumberish(record.likes) ?? 0),
+		favorites: Number(asNumberish(record.favorites) ?? 0),
+		shares: Number(asNumberish(record.shares) ?? 0),
+		danmakus: Number(asNumberish(record.danmakus) ?? 0),
+		replies: Number(asNumberish(record.replies) ?? 0),
+	};
 }
 
 async function runImport(): Promise<void> {
@@ -53,18 +144,13 @@ async function runImport(): Promise<void> {
 		snapshotDays: opts.snapshotDays,
 	});
 
-	await snapshotDb.connect();
-	const trackingRepo = new TrackingRepository(snapshotDb.client);
-	const discoveryRepo = new DiscoveryRepository(snapshotDb.client);
-	// Snapshots go through `pg` so a batch is one multi-row INSERT instead of
-	// one ORM call per row.
-	const snapshotPool = new Pool({
-		connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL,
-	});
+	// Writes go through `pg` rather than the ORM: every batch is a single
+	// `INSERT ... SELECT FROM jsonb_to_recordset($1)` with one bound parameter,
+	// so a 10k-row batch is one statement instead of 10k round trips.
+	const pool = new Pool({ connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL });
 
-	const fileStream = createReadStream(opts.file, { encoding: "utf8" });
 	const rl = createInterface({
-		input: fileStream,
+		input: createReadStream(opts.file, { encoding: "utf8" }),
 		crlfDelay: Infinity,
 	});
 
@@ -72,116 +158,60 @@ async function runImport(): Promise<void> {
 	let importedMeta = 0;
 	let importedSnapshots = 0;
 	let skippedSnapshots = 0;
-	let metadataBatch: UpsertMetadataInput[] = [];
+	let skippedRecords = 0;
+	let lineNumber = 0;
+
+	let trackingBatch: TrackingInsertRow[] = [];
+	let metadataBatch: MetadataInsertRow[] = [];
 	let snapshotBatch: SnapshotInsertRow[] = [];
-	const snapshotBatchSize = Math.min(opts.batchSize, SNAPSHOT_BATCH_SIZE);
 
 	const now = new Date();
 	const snapshotCutoffMs = now.getTime() - opts.snapshotDays * 24 * 60 * 60 * 1_000;
 
 	try {
 		for await (const line of rl) {
+			lineNumber++;
 			const trimmed = line.trim();
 			if (!trimmed) continue;
 
-			const record = JSON.parse(trimmed);
+			const record = readRecord(JSON.parse(trimmed), lineNumber);
+			const recordType = asText(record._type);
+			const aid = asText(record.aid);
+			if (!aid) {
+				skippedRecords++;
+				continue;
+			}
 
-			if (record._type === "tracking") {
-				const aid = BigInt(record.aid);
-				const scheduleType = record.schedule_type ?? "normal";
-				const state =
-					scheduleType === "milestone"
-						? "milestone"
-						: scheduleType === "new"
-							? "new"
-							: "regular";
-
-				let nextSnapshotAtDate = now;
-				if (record.next_snapshot) {
-					const ns = new Date(record.next_snapshot);
-					if (!Number.isNaN(ns.getTime())) nextSnapshotAtDate = ns;
-				} else if (record.schedule_started_at) {
-					const ss = new Date(record.schedule_started_at);
-					if (!Number.isNaN(ss.getTime())) nextSnapshotAtDate = ss;
-				}
-
-				await trackingRepo.upsertTracking({
-					aid,
-					state,
-					nextSnapshotAt: toInstant(nextSnapshotAtDate),
-					lastViews: record.current_views ?? 0,
-					velocity: record.velocity ?? 0,
-					targetMilestone: record.target_milestone ?? null,
-					etaHours: record.eta_hours ?? null,
-					publishedAt: record.published_at
-						? toInstant(new Date(record.published_at))
-						: null,
-					priority: state === "milestone" ? 1 : 2,
-				});
-
-				importedTracking++;
-				if (importedTracking % 1000 === 0) {
+			if (recordType === "tracking") {
+				trackingBatch.push(toTrackingInsertRow(readTrackingRow(record, aid), now));
+				if (trackingBatch.length >= opts.batchSize) {
+					await upsertTrackingBatch(pool, trackingBatch);
+					importedTracking += trackingBatch.length;
+					trackingBatch = [];
 					appLogger.info(`Imported ${importedTracking} tracking records...`);
 				}
-			} else if (record._type === "metadata") {
-				const aid = BigInt(record.aid);
-				const pubdate = record.published_at
-					? toInstant(new Date(record.published_at))
-					: null;
-				const capturedAt = record.created_at
-					? toInstant(new Date(record.created_at))
-					: toInstant(new Date());
-
-				let parsedTags: string[] | null = null;
-				if (record.tags) {
-					parsedTags = record.tags
-						.split(",")
-						.map((t: string) => t.trim())
-						.filter(Boolean);
-				}
-
-				metadataBatch.push({
-					aid,
-					bvid: record.bvid ?? `av${record.aid}`,
-					title: record.title ?? "",
-					description: record.description ?? null,
-					pic: record.cover_url ?? null,
-					pubdate,
-					duration: record.duration ?? 0,
-					mid: record.uid ? BigInt(record.uid) : null,
-					tags: parsedTags,
-					capturedAt,
-				});
-
+			} else if (recordType === "metadata") {
+				metadataBatch.push(toMetadataInsertRow(readMetadataRow(record, aid), now));
 				if (metadataBatch.length >= opts.batchSize) {
-					await discoveryRepo.bulkUpsertMetadata(metadataBatch);
+					await insertMetadataBatch(pool, metadataBatch);
 					importedMeta += metadataBatch.length;
 					metadataBatch = [];
 					appLogger.info(`Imported ${importedMeta} metadata records...`);
 				}
-			} else if (record._type === "snapshot" && opts.includeSnapshots) {
-				const capturedAt = new Date(record.created_at);
+			} else if (recordType === "snapshot" && opts.includeSnapshots) {
+				const snapshot = toSnapshotInsertRow(readSnapshotRow(record, aid));
+				const capturedAtMs = new Date(snapshot.capturedAt).getTime();
 				// The dump is already windowed, but re-checking here keeps a stale
-				// dump file from silently resurrecting old history.
-				if (Number.isNaN(capturedAt.getTime()) || capturedAt.getTime() < snapshotCutoffMs) {
+				// or malformed dump file from silently resurrecting old history or
+				// failing the batch.
+				if (Number.isNaN(capturedAtMs) || capturedAtMs < snapshotCutoffMs) {
 					skippedSnapshots++;
 					continue;
 				}
 
-				snapshotBatch.push({
-					aid: record.aid,
-					capturedAt: record.created_at,
-					views: record.views ?? 0,
-					coins: record.coins ?? 0,
-					likes: record.likes ?? 0,
-					favorites: record.favorites ?? 0,
-					shares: record.shares ?? 0,
-					danmakus: record.danmakus ?? 0,
-					replies: record.replies ?? 0,
-				});
-
-				if (snapshotBatch.length >= snapshotBatchSize) {
-					await insertSnapshotBatch(snapshotPool, snapshotBatch);
+				snapshotBatch.push(snapshot);
+				if (snapshotBatch.length >= opts.batchSize) {
+					await insertSnapshotBatch(pool, snapshotBatch);
 					importedSnapshots += snapshotBatch.length;
 					snapshotBatch = [];
 					appLogger.info(`Imported ${importedSnapshots} snapshot records...`);
@@ -189,13 +219,16 @@ async function runImport(): Promise<void> {
 			}
 		}
 
+		if (trackingBatch.length > 0) {
+			await upsertTrackingBatch(pool, trackingBatch);
+			importedTracking += trackingBatch.length;
+		}
 		if (metadataBatch.length > 0) {
-			await discoveryRepo.bulkUpsertMetadata(metadataBatch);
+			await insertMetadataBatch(pool, metadataBatch);
 			importedMeta += metadataBatch.length;
 		}
-
 		if (snapshotBatch.length > 0) {
-			await insertSnapshotBatch(snapshotPool, snapshotBatch);
+			await insertSnapshotBatch(pool, snapshotBatch);
 			importedSnapshots += snapshotBatch.length;
 		}
 
@@ -204,10 +237,10 @@ async function runImport(): Promise<void> {
 			importedMeta,
 			importedSnapshots,
 			skippedSnapshots,
+			skippedRecords,
 		});
 	} finally {
-		await snapshotPool.end();
-		await snapshotDb.disconnect();
+		await pool.end();
 	}
 }
 
