@@ -140,7 +140,12 @@ export class DiscoveryCandidateEvaluator {
 				// only needs the names, and `tagNames` is derived from the same list.
 				tags: fromDetailTags(tags),
 				videoStatus: "normal",
-				filterDecision: decision.action === "accept" ? "accepted" : "rejected",
+				filterDecision:
+					decision.reason === "model_unavailable"
+						? "pending"
+						: decision.action === "accept"
+							? "accepted"
+							: "rejected",
 				modelScore: decision.confidence,
 				modelVersion: decision.model?.modelVersion ?? null,
 				discoverySource: source,
@@ -181,6 +186,12 @@ export class DiscoveryCandidateEvaluator {
 				});
 
 				return { status: "accepted", decision, details, metadata };
+			}
+
+			if (decision.reason === "model_unavailable") {
+				// Keep the metadata as pending when the ONNX model is unavailable
+				// so no candidate is silently lost during model initialization.
+				await this.discoveryRepo.upsertMetadata(metadata);
 			}
 
 			if (decision.sampled) {

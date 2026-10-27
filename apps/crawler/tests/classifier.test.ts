@@ -262,18 +262,18 @@ describe("DiscoveryFilterService.evaluateCandidate with the model", () => {
 		expect(decision.reason).toBe("model_rejected");
 	});
 
-	test("blacklist outranks the model", async () => {
+	test("routes non-whitelist candidates to the ONNX model regardless of keywords or duration", async () => {
 		const local = fakeLocal(prediction());
 		const service = new DiscoveryFilterService();
 
 		const decision = await service.evaluateCandidate(
-			{ ...baseInput, title: "原神 live" },
+			{ ...baseInput, title: "原神 live", duration: 10 },
 			clientWith(local)
 		);
 
-		expect(decision.action).toBe("reject");
-		expect(decision.reason).toBe("blacklist_hit");
-		expect(local.calls).toBe(0);
+		expect(decision.action).toBe("accept");
+		expect(decision.reason).toBe("model_hit");
+		expect(local.calls).toBe(1);
 	});
 
 	test("strong whitelist hit skips the model entirely", async () => {

@@ -148,18 +148,29 @@ export class SnapshotService {
 					});
 				}
 
-				// If tracking state is milestone or nearing milestone, fetch recent history
+				// Fetch recent history for active videos so multi-window milestone ETA
+				// can evaluate 100k, 1M, 10M+ targets across all non-archived states.
 				let recentSnapshots: Array<{ capturedAt: Date; views: number }> | undefined;
-				if (
-					tracking?.state === "milestone" ||
-					(stat.views > 90_000 && stat.views < 100_000)
-				) {
+				if (tracking?.state !== "archive") {
 					const history = await this.snapshotRepo.getRecentSnapshots(aid, 6);
 					recentSnapshots = history.map((h) => ({
 						capturedAt: new Date(h.capturedAt.epochMilliseconds),
 						views: h.views,
 					}));
 				}
+
+				// For new videos, anchor the 1.5/3/5/10m initial sampling cadence to
+				// the earliest snapshot (or publishedAt if within the initial window).
+				const earliestSnapshotMs =
+					recentSnapshots && recentSnapshots.length > 0
+						? Math.min(...recentSnapshots.map((s) => s.capturedAt.getTime()))
+						: undefined;
+				const acceptedAt =
+					tracking?.state === "new"
+						? earliestSnapshotMs !== undefined
+							? new Date(earliestSnapshotMs)
+							: new Date(response.time)
+						: undefined;
 
 				const next = evaluateNextSchedule({
 					aid,
@@ -173,6 +184,7 @@ export class SnapshotService {
 					publishedAt: tracking?.publishedAt
 						? new Date(tracking.publishedAt.epochMilliseconds)
 						: null,
+					acceptedAt,
 					targetMilestone: tracking?.targetMilestone,
 					consecutiveFails: 0,
 					recentSnapshots,

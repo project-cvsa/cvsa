@@ -364,9 +364,11 @@ export class DiscoveryFilterService {
 	}
 
 	/**
-	 * The deterministic half of the decision. `decision` is set when a rule is
-	 * conclusive; `matchedSinger` is reported so the caller can keep the legacy
-	 * heuristic for border cases.
+	 * The deterministic whitelist check.
+	 *
+	 * Per architecture design: no blacklist and no hard duration rejection.
+	 * Whitelist hit accepts immediately; everything else is handed to the ONNX
+	 * classifier (or kept as pending/singer-heuristic when the model is absent).
 	 */
 	private evaluateRules(input: {
 		title: string;
@@ -375,35 +377,8 @@ export class DiscoveryFilterService {
 		duration?: number;
 	}): { decision?: FilterDecision; matchedSinger: boolean } {
 		const titleLower = input.title.toLowerCase();
-		const descLower = (input.description ?? "").toLowerCase();
 		const tagSet = new Set(input.tags.map((t) => t.toLowerCase()));
 
-		// 1. Duration boundaries (songs are typically 45s - 15min)
-		const duration = input.duration ?? 0;
-		if (
-			duration > 0 &&
-			(duration < this.config.minDurationSeconds || duration > this.config.maxDurationSeconds)
-		) {
-			return {
-				matchedSinger: false,
-				decision: {
-					action: "reject",
-					reason: "duration_out_of_range",
-					sampled: Math.random() < this.config.rejectionSampleRate,
-					confidence: 0.0,
-				},
-			};
-		}
-
-		// 2. Blacklist keyword
-		const hasBlacklistKeyword = this.config.blacklistKeywords.some(
-			(kw) =>
-				titleLower.includes(kw.toLowerCase()) ||
-				descLower.includes(kw.toLowerCase()) ||
-				tagSet.has(kw.toLowerCase())
-		);
-
-		// 3. Singer and song indicator whitelists
 		const matchedSinger = this.config.whitelistSingers.find(
 			(singer) =>
 				titleLower.includes(singer.toLowerCase()) || tagSet.has(singer.toLowerCase())
@@ -412,20 +387,6 @@ export class DiscoveryFilterService {
 		const matchedIndicator = this.config.whitelistSongIndicators.find(
 			(ind) => titleLower.includes(ind.toLowerCase()) || tagSet.has(ind.toLowerCase())
 		);
-
-		// A hard blacklist keyword outranks the whitelist: it is the operator's
-		// explicit "this never belongs here" channel.
-		if (hasBlacklistKeyword) {
-			return {
-				matchedSinger: matchedSinger !== undefined,
-				decision: {
-					action: "reject",
-					reason: "blacklist_hit",
-					sampled: Math.random() < this.config.rejectionSampleRate,
-					confidence: 0.0,
-				},
-			};
-		}
 
 		if (
 			matchedSinger &&

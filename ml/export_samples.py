@@ -21,7 +21,7 @@ def export_samples(database_url: str, output_path: str) -> int:
             labeled_at
         FROM discovery_sample
         WHERE human_label IS NOT NULL
-        ORDER BY updated_at DESC
+        ORDER BY labeled_at DESC NULLS LAST, created_at DESC
     """
     count = 0
     with psycopg.connect(database_url) as conn:
@@ -66,11 +66,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--db-url",
-        default=os.environ.get(
-            "SNAPSHOT_DATABASE_URL",
-            "postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot",
-        ),
-        help="PostgreSQL connection string for snapshot-db",
+        default=os.environ.get("SNAPSHOT_DATABASE_URL", ""),
+        help="PostgreSQL connection string for snapshot-db (or set SNAPSHOT_DATABASE_URL)",
     )
     parser.add_argument(
         "--output",
@@ -78,6 +75,8 @@ def main() -> None:
         help="Output JSONL file path",
     )
     args = parser.parse_args()
+    if not args.db_url:
+        raise SystemExit("Error: SNAPSHOT_DATABASE_URL environment variable or --db-url is required")
     total = export_samples(args.db_url, args.output)
     print(f"Exported {total} labeled samples to {args.output}")
 
