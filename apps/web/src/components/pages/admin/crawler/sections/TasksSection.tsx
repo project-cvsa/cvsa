@@ -1,11 +1,21 @@
 import { createSignal, For, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
+import Badge from "@components/ui/Badge";
+import TextField from "@components/ui/TextField";
+import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api, type ApiResult } from "@lib/api";
+import { getComponentT } from "@lib/i18n/isomorphic";
 import type { CrawlerOverviewStats } from "@cvsa/contracts";
 import { formatDateTime, formatMetric, formatWaitSeconds } from "../format";
 import { MetricCard, QueueStatusTable } from "../statsView";
 import { createRequestSequence } from "../videoActions";
+import ListTodo from "lucide-solid/icons/list-todo";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
+import Play from "lucide-solid/icons/play";
+import Search from "lucide-solid/icons/search";
+import Camera from "lucide-solid/icons/camera";
+import History from "lucide-solid/icons/history";
 
 type ActionStatus = "queued" | "failed";
 
@@ -18,6 +28,8 @@ type ActionRecord = {
 };
 
 export default function TasksSection() {
+	const t = getComponentT("crawler");
+
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
 	const [loadingStats, setLoadingStats] = createSignal(false);
 	const [statsError, setStatsError] = createSignal<string | null>(null);
@@ -38,7 +50,7 @@ export default function TasksSection() {
 			setStatsError(null);
 			return;
 		}
-		setStatsError(res.ok ? "No stats" : res.error.message || "Queue status unavailable");
+		setStatsError(res.ok ? t("common.unknown") : res.error.message || t("common.error"));
 	};
 
 	const recordAction = (label: string, detail: string, status: ActionStatus) => {
@@ -50,7 +62,7 @@ export default function TasksSection() {
 			status,
 			at: new Date().toISOString(),
 		};
-		setActions((current) => [record, ...current].slice(0, 5));
+		setActions((current) => [record, ...current].slice(0, 10));
 	};
 
 	const runAction = async (params: {
@@ -64,18 +76,18 @@ export default function TasksSection() {
 		const res = await params.action();
 		setPending(null);
 		if (res.ok) {
-			toast.success(`${params.label} queued`);
+			toast.success(t("common.success"));
 			recordAction(params.label, params.detail, "queued");
 			return;
 		}
-		toast.error(res.error.message || `${params.label} failed`);
+		toast.error(res.error.message || t("common.error"));
 		recordAction(params.label, params.detail, "failed");
 	};
 
 	const requireAid = (): string | null => {
 		const value = aid().trim();
 		if (!value) {
-			toast.error("Enter an AID");
+			toast.error(t("tasks.manualSnapshot.aidPlaceholder"));
 			return null;
 		}
 		return value;
@@ -84,8 +96,8 @@ export default function TasksSection() {
 	const runSweep = () =>
 		void runAction({
 			key: "sweep",
-			label: "Search sweep",
-			detail: "Default keywords",
+			label: t("tasks.actions.sweep"),
+			detail: "Default search keywords",
 			action: () => api.crawler.triggerSweep({}),
 		});
 
@@ -94,8 +106,8 @@ export default function TasksSection() {
 		if (!value) return;
 		void runAction({
 			key: "detail",
-			label: "Detail fetch",
-			detail: `AID ${value}`,
+			label: t("tasks.actions.detail"),
+			detail: `AID/BVID: ${value}`,
 			action: () => api.crawler.fetchDetail(value),
 		});
 	};
@@ -105,8 +117,8 @@ export default function TasksSection() {
 		if (!value) return;
 		void runAction({
 			key: "active",
-			label: "Active discovery",
-			detail: `AID ${value}`,
+			label: t("tasks.actions.active"),
+			detail: `AID/BVID: ${value}`,
 			action: () => api.crawler.triggerActive(value),
 		});
 	};
@@ -117,136 +129,219 @@ export default function TasksSection() {
 
 	return (
 		<div class="flex flex-col gap-6">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<h2 class="ts-heading-2 text-primary">Tasks</h2>
+			{/* Page Subtitle & Description */}
+			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+				<div class="flex flex-col gap-1.5">
+					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
+						<ListTodo class="w-5 h-5 text-primary" />
+						<span>{t("tasks.title")}</span>
+					</h2>
+					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
+						{t("tasks.description")}
+					</p>
+				</div>
+
 				<Button
 					size="sm"
 					variant="outlined"
 					disabled={loadingStats()}
 					onClick={() => void loadStats()}
+					class="gap-1.5 shrink-0 self-start sm:self-auto"
 				>
-					{loadingStats() ? "Refreshing" : "Refresh"}
+					<RefreshCw class={"w-3.5 h-3.5 " + (loadingStats() ? "animate-spin" : "")} />
+					<span>{loadingStats() ? t("common.refreshing") : t("common.refresh")}</span>
 				</Button>
 			</div>
 
-			<section class="flex flex-col gap-3">
-				<h3 class="ts-subhead font-semibold text-primary">Queue status</h3>
+			{/* Queue Status Section */}
+			<div class="flex flex-col gap-4">
 				<Show
 					when={stats()}
 					fallback={
-						<div class="p-6 text-center text-tertiary border border-border rounded">
+						<div class="p-8 text-center text-tertiary border border-border rounded-lg bg-surface">
 							{loadingStats()
-								? "Loading"
+								? t("common.loading")
 								: statsError() !== null
 									? statsError()
-									: "No queue status"}
+									: t("common.unknown")}
 						</div>
 					}
 				>
 					{(current) => (
-						<div class="flex flex-col gap-3">
-							<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+						<div class="flex flex-col gap-4">
+							<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
 								<MetricCard
-									label="Overdue tracking"
+									label={t("tasks.queues.overdue")}
 									value={formatMetric(current().overdueTrackingCount)}
-									hint={`Max lag ${formatWaitSeconds(current().maxOverdueLagSec)}`}
+									hint={`Lag: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
 								/>
 								<MetricCard
-									label="Jobs / minute"
+									label={t("tasks.queues.jobsPerMin")}
 									value={formatMetric(current().jobsPerMin)}
 								/>
 								<MetricCard
-									label="Requests / second"
+									label={t("tasks.queues.requestsPerSec")}
 									value={formatMetric(current().requestsPerSec)}
 								/>
 							</div>
-							<QueueStatusTable queues={current().queues} />
+
+							<Card>
+								<CardHeader title={t("tasks.queues.title")} />
+								<CardContent class="p-0">
+									<QueueStatusTable queues={current().queues} />
+								</CardContent>
+							</Card>
 						</div>
 					)}
 				</Show>
-			</section>
+			</div>
 
-			<section class="p-4 rounded border border-border flex flex-col gap-4">
-				<h3 class="ts-subhead font-semibold text-primary">Manual actions</h3>
-				<div class="flex flex-wrap items-center gap-3">
-					<Button
-						size="sm"
-						variant="outlined"
-						disabled={pending() !== null}
-						onClick={runSweep}
-					>
-						{pending() === "sweep" ? "Queuing" : "Search sweep"}
-					</Button>
-					<label class="ts-label text-primary" for="crawler-task-aid">
-						AID
-					</label>
-					<input
-						id="crawler-task-aid"
-						type="text"
-						inputmode="numeric"
-						class="h-10 px-3 border border-border rounded text-primary bg-transparent w-60 text-sm"
-						placeholder="170001"
-						value={aid()}
-						onInput={(event) => setAid(event.currentTarget.value)}
-					/>
-					<Button
-						size="sm"
-						variant="outlined"
-						disabled={pending() !== null || !aid().trim()}
-						onClick={runDetailFetch}
-					>
-						{pending() === "detail" ? "Queuing" : "Fetch details"}
-					</Button>
-					<Button
-						size="sm"
-						variant="filled"
-						disabled={pending() !== null || !aid().trim()}
-						onClick={runActiveDiscovery}
-					>
-						{pending() === "active" ? "Queuing" : "Active discovery"}
-					</Button>
-				</div>
+			{/* Manual Operations Card */}
+			<Card>
+				<CardHeader
+					title={
+						<div class="flex items-center gap-2">
+							<Camera class="w-4 h-4 text-primary" />
+							<span>{t("tasks.manualSnapshot.title")}</span>
+						</div>
+					}
+				/>
+				<CardContent class="flex flex-col gap-6">
+					<div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+						<div class="flex-1">
+							<TextField
+								label={t("tasks.manualSnapshot.aid")}
+								value={aid()}
+								onInput={(e) => setAid(e.currentTarget.value)}
+								helperText={t("tasks.manualSnapshot.aidPlaceholder")}
+							/>
+						</div>
 
-				<div class="flex flex-col gap-2 border-t border-border pt-3">
-					<span class="ts-caption text-tertiary">Task execution</span>
+						<div class="flex flex-wrap items-center gap-2 shrink-0">
+							<Button
+								size="md"
+								variant="outlined"
+								disabled={pending() !== null || !aid().trim()}
+								onClick={runDetailFetch}
+								class="gap-1.5"
+							>
+								<Search
+									class={
+										"w-4 h-4 " + (pending() === "detail" ? "animate-spin" : "")
+									}
+								/>
+								<span>{t("tasks.actions.detail")}</span>
+							</Button>
+							<Button
+								size="md"
+								variant="filled"
+								disabled={pending() !== null || !aid().trim()}
+								onClick={runActiveDiscovery}
+								class="gap-1.5"
+							>
+								<Play
+									class={
+										"w-4 h-4 " + (pending() === "active" ? "animate-spin" : "")
+									}
+								/>
+								<span>{t("tasks.actions.active")}</span>
+							</Button>
+						</div>
+					</div>
+
+					<div class="pt-4 border-t border-border flex items-center justify-between">
+						<div class="flex flex-col gap-0.5">
+							<span class="ts-label font-medium text-primary">
+								{t("tasks.actions.sweep")}
+							</span>
+							<span class="ts-caption text-tertiary">
+								Trigger full rover sweep with default keyword dictionaries
+							</span>
+						</div>
+						<Button
+							size="sm"
+							variant="outlined"
+							disabled={pending() !== null}
+							onClick={runSweep}
+							class="gap-1.5"
+						>
+							<RefreshCw
+								class={
+									"w-3.5 h-3.5 " + (pending() === "sweep" ? "animate-spin" : "")
+								}
+							/>
+							<span>
+								{pending() === "sweep"
+									? t("common.loading")
+									: t("tasks.actions.sweep")}
+							</span>
+						</Button>
+					</div>
+				</CardContent>
+			</Card>
+
+			{/* Recent Action History Card */}
+			<Card>
+				<CardHeader
+					title={
+						<div class="flex items-center gap-2">
+							<History class="w-4 h-4 text-primary" />
+							<span>{t("tasks.recentHistory.title")}</span>
+						</div>
+					}
+				/>
+				<CardContent class="p-0">
 					<Show
 						when={actions().length > 0}
-						fallback={<span class="ts-caption text-tertiary">No actions yet</span>}
+						fallback={
+							<div class="p-8 text-center text-tertiary">
+								{t("tasks.recentHistory.empty")}
+							</div>
+						}
 					>
 						<div class="overflow-x-auto">
 							<table class="w-full text-left ts-caption">
 								<thead>
-									<tr class="border-b border-border text-tertiary">
-										<th class="py-2 px-3">Task</th>
-										<th class="py-2 px-3">Target</th>
-										<th class="py-2 px-3">Status</th>
-										<th class="py-2 px-3">Queued at</th>
+									<tr class="border-b border-border text-tertiary bg-surface-container-low/50">
+										<th class="py-3 px-4 font-medium">
+											{t("tasks.history.col.task")}
+										</th>
+										<th class="py-3 px-4 font-medium">
+											{t("tasks.history.col.target")}
+										</th>
+										<th class="py-3 px-4 font-medium">
+											{t("tasks.history.col.status")}
+										</th>
+										<th class="py-3 px-4 font-medium text-right">
+											{t("tasks.history.col.time")}
+										</th>
 									</tr>
 								</thead>
-								<tbody>
+								<tbody class="divide-y divide-border">
 									<For each={actions()}>
 										{(record) => (
-											<tr class="border-b border-border hover:bg-hover">
-												<td class="py-2 px-3 text-primary">
+											<tr class="hover:bg-hover/50 transition-colors">
+												<td class="py-3 px-4 font-medium text-primary">
 													{record.label}
 												</td>
-												<td class="py-2 px-3 font-mono text-tertiary">
+												<td class="py-3 px-4 font-mono text-secondary">
 													{record.detail}
 												</td>
-												<td class="py-2 px-3">
-													<span
-														class={
+												<td class="py-3 px-4">
+													<Badge
+														variant={
 															record.status === "queued"
-																? "text-green-600"
-																: "text-red-600"
+																? "success"
+																: "danger"
 														}
+														size="sm"
 													>
 														{record.status === "queued"
-															? "Queued"
-															: "Failed"}
-													</span>
+															? t("tasks.history.status.queued")
+															: t("tasks.history.status.failed")}
+													</Badge>
 												</td>
-												<td class="py-2 px-3 text-tertiary">
+												<td class="py-3 px-4 text-tertiary text-right font-mono">
 													{formatDateTime(record.at)}
 												</td>
 											</tr>
@@ -256,8 +351,8 @@ export default function TasksSection() {
 							</table>
 						</div>
 					</Show>
-				</div>
-			</section>
+				</CardContent>
+			</Card>
 		</div>
 	);
 }

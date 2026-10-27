@@ -105,8 +105,8 @@ export const statsRoutes = new Elysia().get(
 		const windowMinutes = windowSeconds / 60;
 		const counters = overview.metrics.counters;
 		const errors = overview.metrics.errors;
-		const totalAttempts = counters.networkRequests;
 		const totalFailures = Object.values(errors).reduce((sum, value) => sum + value, 0);
+		const totalAttempts = Math.max(counters.networkRequests, totalFailures);
 
 		return {
 			window,
@@ -118,8 +118,12 @@ export const statsRoutes = new Elysia().get(
 			requestsPerSec: counters.networkRequests / windowSeconds,
 			totalAttempts,
 			totalFailures,
-			errorRate: totalAttempts > 0 ? totalFailures / totalAttempts : 0,
-			retryRate: totalAttempts > 0 ? overview.metrics.retries / totalAttempts : 0,
+			errorRate:
+				totalAttempts > 0 ? Math.min(1, Math.max(0, totalFailures / totalAttempts)) : 0,
+			retryRate:
+				totalAttempts > 0
+					? Math.min(1, Math.max(0, overview.metrics.retries / totalAttempts))
+					: 0,
 			breakdown: errors,
 			overdueTrackingCount: overview.tracking.overdueCount,
 			maxOverdueLagSec: overview.tracking.maxOverdueLagSec,

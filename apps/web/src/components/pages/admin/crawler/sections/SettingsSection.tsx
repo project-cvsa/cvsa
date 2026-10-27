@@ -1,19 +1,37 @@
-import { createSignal, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
+import Switch from "@components/ui/Switch";
+import NumberField from "@components/ui/NumberField";
+import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
+import { getComponentT } from "@lib/i18n/isomorphic";
 import type { DiscoveryFilterConfigDto } from "@cvsa/contracts";
 import KeywordListEditor from "./KeywordListEditor";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
 import { toDiscoveryConfigUpdatePayload } from "../discoveryConfig";
+import SlidersHorizontal from "lucide-solid/icons/sliders-horizontal";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
+import Save from "lucide-solid/icons/save";
+import AlertTriangle from "lucide-solid/icons/alert-triangle";
+import Cpu from "lucide-solid/icons/cpu";
 
 type KeywordField = "whitelistSingers" | "whitelistSongIndicators" | "blacklistKeywords";
 
 export default function SettingsSection() {
+	const t = getComponentT("crawler");
+
 	const [config, setConfig] = createSignal<DiscoveryFilterConfigDto | null>(null);
+	const [savedSnapshot, setSavedSnapshot] = createSignal<string>("");
 	const [loading, setLoading] = createSignal(false);
 	const [saving, setSaving] = createSignal(false);
 	const requests = createConfigRequestCoordinator();
+
+	const isDirty = createMemo(() => {
+		const cur = config();
+		if (!cur || !savedSnapshot()) return false;
+		return JSON.stringify(cur) !== savedSnapshot();
+	});
 
 	const loadConfig = async () => {
 		if (loading() || saving()) return;
@@ -24,9 +42,10 @@ export default function SettingsSection() {
 		setLoading(false);
 		if (res.ok && res.data) {
 			setConfig(res.data);
+			setSavedSnapshot(JSON.stringify(res.data));
 			return;
 		}
-		toast.error(res.ok ? "No configuration" : res.error.message || "Could not load settings");
+		toast.error(res.ok ? t("common.unknown") : res.error.message || t("common.error"));
 	};
 
 	const saveConfig = async () => {
@@ -42,10 +61,11 @@ export default function SettingsSection() {
 		setSaving(false);
 		if (res.ok && res.data) {
 			setConfig((latest) => applySaveResult(latest, current, res.data));
-			toast.success("Settings saved");
+			setSavedSnapshot(JSON.stringify(res.data));
+			toast.success(t("common.saved"));
 			return;
 		}
-		toast.error(res.ok ? "Save failed" : res.error.message || "Could not save settings");
+		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
 	};
 
 	const addKeyword = (field: KeywordField, value: string): boolean => {
@@ -71,181 +91,186 @@ export default function SettingsSection() {
 	});
 
 	return (
-		<div class="flex flex-col gap-4">
-			<div class="flex items-center justify-between gap-3">
-				<h2 class="ts-heading-2 text-primary">Discovery settings</h2>
-				<div class="flex gap-2">
+		<div class="flex flex-col gap-6">
+			{/* Page Subtitle & Description */}
+			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+				<div class="flex flex-col gap-1.5">
+					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
+						<SlidersHorizontal class="w-5 h-5 text-primary" />
+						<span>{t("settings.title")}</span>
+					</h2>
+					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
+						{t("settings.description")}
+					</p>
+				</div>
+
+				<div class="flex items-center gap-2 shrink-0">
 					<Button
 						size="sm"
 						variant="outlined"
 						disabled={loading() || saving()}
 						onClick={() => void loadConfig()}
+						class="gap-1.5"
 					>
-						{loading() ? "Loading" : "Reload"}
+						<RefreshCw class={"w-3.5 h-3.5 " + (loading() ? "animate-spin" : "")} />
+						<span>{loading() ? t("common.refreshing") : t("common.refresh")}</span>
 					</Button>
 					<Button
 						size="sm"
 						variant="filled"
-						disabled={loading() || saving() || !config()}
+						disabled={loading() || saving() || !config() || !isDirty()}
 						onClick={() => void saveConfig()}
+						class="gap-1.5"
 					>
-						{saving() ? "Saving" : "Save"}
+						<Save class={"w-3.5 h-3.5 " + (saving() ? "animate-spin" : "")} />
+						<span>{saving() ? t("common.saving") : t("common.save")}</span>
 					</Button>
 				</div>
 			</div>
 
+			{/* Unsaved Draft Alert */}
+			<Show when={isDirty()}>
+				<div class="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
+					<div class="flex items-center gap-2.5 text-amber-700 dark:text-amber-300">
+						<AlertTriangle class="w-4 h-4 shrink-0" />
+						<span class="text-sm font-medium">{t("network.adapters.draftNotice")}</span>
+					</div>
+					<Button
+						size="sm"
+						variant="filled"
+						disabled={saving()}
+						onClick={() => void saveConfig()}
+						class="gap-1.5 shrink-0"
+					>
+						<Save class="w-3.5 h-3.5" />
+						<span>{saving() ? t("common.saving") : t("common.save")}</span>
+					</Button>
+				</div>
+			</Show>
+
 			<Show
 				when={config()}
 				fallback={
-					<div class="p-8 text-center text-tertiary border border-border rounded">
-						{loading() ? "Loading" : "No settings"}
+					<div class="p-10 text-center text-tertiary border border-border rounded-lg bg-surface">
+						{loading() ? t("common.loading") : t("common.unknown")}
 					</div>
 				}
 			>
 				{(current) => (
 					<fieldset disabled={loading() || saving()} class="min-w-0 border-0 p-0">
-						<div class="flex flex-col gap-4">
-							<KeywordListEditor
-								title="Singer whitelist"
-								items={current().whitelistSingers}
-								placeholder="Singer name"
-								onAdd={(value) => addKeyword("whitelistSingers", value)}
-								onRemove={(value) => removeKeyword("whitelistSingers", value)}
-							/>
-							<KeywordListEditor
-								title="Song indicators"
-								items={current().whitelistSongIndicators}
-								placeholder="Indicator keyword"
-								onAdd={(value) => addKeyword("whitelistSongIndicators", value)}
-								onRemove={(value) =>
-									removeKeyword("whitelistSongIndicators", value)
-								}
-							/>
-							<KeywordListEditor
-								title="Blacklist"
-								items={current().blacklistKeywords}
-								placeholder="Keyword"
-								onAdd={(value) => addKeyword("blacklistKeywords", value)}
-								onRemove={(value) => removeKeyword("blacklistKeywords", value)}
-							/>
+						<div class="flex flex-col gap-6">
+							{/* Keyword Lists */}
+							<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+								<KeywordListEditor
+									title={t("settings.singers.title")}
+									description={t("settings.singers.description")}
+									items={current().whitelistSingers}
+									placeholder={t("settings.singers.title")}
+									onAdd={(val) => addKeyword("whitelistSingers", val)}
+									onRemove={(val) => removeKeyword("whitelistSingers", val)}
+								/>
 
-							<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-								<div class="p-4 rounded border border-border flex flex-col gap-2">
-									<label
-										class="ts-label text-primary font-medium"
-										for="crawler-min-duration"
-									>
-										Min duration (s)
-									</label>
-									<input
-										id="crawler-min-duration"
-										type="number"
-										min="1"
-										class="h-10 px-3 border border-border rounded text-primary bg-transparent"
-										value={current().minDurationSeconds}
-										onInput={(event) =>
-											updateConfig({
-												minDurationSeconds:
-													Number.parseInt(
-														event.currentTarget.value,
-														10
-													) || 0,
-											})
-										}
-									/>
-								</div>
-								<div class="p-4 rounded border border-border flex flex-col gap-2">
-									<label
-										class="ts-label text-primary font-medium"
-										for="crawler-max-duration"
-									>
-										Max duration (s)
-									</label>
-									<input
-										id="crawler-max-duration"
-										type="number"
-										min="1"
-										class="h-10 px-3 border border-border rounded text-primary bg-transparent"
-										value={current().maxDurationSeconds}
-										onInput={(event) =>
-											updateConfig({
-												maxDurationSeconds:
-													Number.parseInt(
-														event.currentTarget.value,
-														10
-													) || 0,
-											})
-										}
-									/>
-								</div>
-								<div class="p-4 rounded border border-border flex flex-col gap-2">
-									<label
-										class="ts-label text-primary font-medium"
-										for="crawler-rejection-rate"
-									>
-										Rejection sample ·{" "}
-										{Math.round(current().rejectionSampleRate * 100)}%
-									</label>
-									<input
-										id="crawler-rejection-rate"
-										type="range"
-										min="0"
-										max="1"
-										step="0.01"
-										class="h-10"
-										value={current().rejectionSampleRate}
-										onInput={(event) =>
-											updateConfig({
-												rejectionSampleRate:
-													Number.parseFloat(event.currentTarget.value) ||
-													0,
-											})
-										}
-									/>
-								</div>
-							</div>
-
-							<div class="p-4 rounded border border-border flex flex-col gap-3">
-								<div class="flex items-center justify-between gap-3">
-									<h3 class="ts-subhead font-semibold text-primary">
-										Classifier
-									</h3>
-									<label class="flex items-center gap-2 ts-caption text-primary">
-										<input
-											type="checkbox"
-											checked={current().modelEnabled}
-											onChange={(event) =>
-												updateConfig({
-													modelEnabled: event.currentTarget.checked,
-												})
-											}
-										/>
-										Enabled
-									</label>
-								</div>
-								<label
-									class="ts-label text-primary font-medium"
-									for="crawler-model-threshold"
-								>
-									Acceptance threshold · {current().modelThreshold.toFixed(2)}
-								</label>
-								<input
-									id="crawler-model-threshold"
-									type="range"
-									min="0"
-									max="1"
-									step="0.01"
-									class="h-10"
-									disabled={!current().modelEnabled}
-									value={current().modelThreshold}
-									onInput={(event) =>
-										updateConfig({
-											modelThreshold:
-												Number.parseFloat(event.currentTarget.value) || 0,
-										})
+								<KeywordListEditor
+									title={t("settings.indicators.title")}
+									description={t("settings.indicators.description")}
+									items={current().whitelistSongIndicators}
+									placeholder={t("settings.indicators.title")}
+									onAdd={(val) => addKeyword("whitelistSongIndicators", val)}
+									onRemove={(val) =>
+										removeKeyword("whitelistSongIndicators", val)
 									}
 								/>
+
+								<KeywordListEditor
+									title={t("settings.blacklist.title")}
+									description={t("settings.blacklist.description")}
+									items={current().blacklistKeywords}
+									placeholder={t("settings.blacklist.title")}
+									onAdd={(val) => addKeyword("blacklistKeywords", val)}
+									onRemove={(val) => removeKeyword("blacklistKeywords", val)}
+								/>
 							</div>
+
+							{/* Numerical Parameters & AI Model Configuration */}
+							<Card>
+								<CardHeader
+									title={
+										<div class="flex items-center gap-2">
+											<Cpu class="w-4 h-4 text-primary" />
+											<span>{t("settings.parameters.title")}</span>
+										</div>
+									}
+								/>
+								<CardContent class="flex flex-col gap-6">
+									{/* Model Enable Toggle */}
+									<div class="p-4 rounded-lg border border-border bg-surface-container-low/50 flex items-center justify-between gap-4">
+										<div class="flex flex-col gap-1">
+											<span class="ts-label font-medium text-primary">
+												{t("settings.modelEnabled.title")}
+											</span>
+											<span class="ts-caption text-secondary">
+												{t("settings.modelEnabled.description")}
+											</span>
+										</div>
+										<Switch
+											checked={current().modelEnabled}
+											onChange={() =>
+												updateConfig({
+													modelEnabled: !current().modelEnabled,
+												})
+											}
+											aria-label={t("settings.modelEnabled.title")}
+										/>
+									</div>
+
+									{/* Numerical Fields Grid */}
+									<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+										<NumberField
+											label={t("settings.threshold.title")}
+											min={0}
+											max={1}
+											step={0.05}
+											value={current().modelThreshold}
+											onChange={(val) =>
+												updateConfig({ modelThreshold: val })
+											}
+											helperText={t("settings.threshold.description")}
+										/>
+
+										<NumberField
+											label={t("settings.duration.min")}
+											min={1}
+											value={current().minDurationSeconds}
+											onChange={(val) =>
+												updateConfig({ minDurationSeconds: val })
+											}
+											suffix="s"
+										/>
+
+										<NumberField
+											label={t("settings.duration.max")}
+											min={1}
+											value={current().maxDurationSeconds}
+											onChange={(val) =>
+												updateConfig({ maxDurationSeconds: val })
+											}
+											suffix="s"
+										/>
+
+										<NumberField
+											label={t("settings.sampleRate.title")}
+											min={0}
+											max={1}
+											step={0.01}
+											value={current().rejectionSampleRate}
+											onChange={(val) =>
+												updateConfig({ rejectionSampleRate: val })
+											}
+											helperText={t("settings.sampleRate.description")}
+										/>
+									</div>
+								</CardContent>
+							</Card>
 						</div>
 					</fieldset>
 				)}

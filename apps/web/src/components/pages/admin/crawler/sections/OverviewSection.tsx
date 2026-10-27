@@ -1,15 +1,24 @@
 import { createSignal, For, onMount, Show } from "solid-js";
 import type { Accessor } from "solid-js";
 import Button from "@components/ui/Button";
+import Badge from "@components/ui/Badge";
+import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { api } from "@lib/api";
+import { getComponentT } from "@lib/i18n/isomorphic";
 import type {
 	ClassifierHealthDto,
 	CrawlerOverviewStats,
 	CrawlerStatsWindow,
 	CrawlerStatusDto,
 } from "@cvsa/contracts";
-import { formatDateTime, formatMetric, formatPercent, formatWaitSeconds } from "../format";
-import { readSeriesMetrics } from "../seriesMetrics";
+import Activity from "lucide-solid/icons/activity";
+import Clock from "lucide-solid/icons/clock";
+import Cpu from "lucide-solid/icons/cpu";
+import Layers from "lucide-solid/icons/layers";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
+import ShieldAlert from "lucide-solid/icons/shield-alert";
+import Zap from "lucide-solid/icons/zap";
+import { formatMetric, formatPercent, formatWaitSeconds } from "../format";
 import { MetricCard, QueueStatusTable } from "../statsView";
 import { createRequestSequence } from "../videoActions";
 
@@ -21,19 +30,8 @@ type OverviewSectionProps = {
 
 const WINDOWS: CrawlerStatsWindow[] = ["5m", "1h", "24h"];
 
-const ERROR_ROWS: ReadonlyArray<{
-	key: keyof CrawlerOverviewStats["breakdown"];
-	label: string;
-}> = [
-	{ key: "timeout", label: "Timeout" },
-	{ key: "rateLimited412Or429", label: "Rate limited (412/429)" },
-	{ key: "bilibiliBusinessError", label: "Bilibili business error" },
-	{ key: "inferenceError", label: "Inference error" },
-	{ key: "dbError", label: "Database error" },
-	{ key: "other", label: "Other" },
-];
-
 export default function OverviewSection(props: OverviewSectionProps) {
+	const t = getComponentT("crawler");
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
 	const [statsWindow, setStatsWindow] = createSignal<CrawlerStatsWindow>("1h");
 	const [loadingStats, setLoadingStats] = createSignal(false);
@@ -41,6 +39,18 @@ export default function OverviewSection(props: OverviewSectionProps) {
 	const [classifierHealth, setClassifierHealth] = createSignal<ClassifierHealthDto | null>(null);
 	const [loadingClassifier, setLoadingClassifier] = createSignal(false);
 	const statsRequests = createRequestSequence();
+
+	const errorRows = (): ReadonlyArray<{
+		key: keyof CrawlerOverviewStats["breakdown"];
+		label: string;
+	}> => [
+		{ key: "timeout", label: t("overview.err.timeout") },
+		{ key: "rateLimited412Or429", label: t("overview.err.rateLimited") },
+		{ key: "bilibiliBusinessError", label: t("overview.err.bilibiliBusiness") },
+		{ key: "inferenceError", label: t("overview.err.inference") },
+		{ key: "dbError", label: t("overview.err.db") },
+		{ key: "other", label: t("overview.err.other") },
+	];
 
 	const loadStats = async (window = statsWindow()) => {
 		const request = statsRequests.start();
@@ -53,7 +63,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 			setStatsError(null);
 			return;
 		}
-		setStatsError(res.ok ? "No stats" : res.error.message || "Stats unavailable");
+		setStatsError(res.ok ? t("common.error") : res.error.message || t("common.error"));
 	};
 
 	const selectWindow = async (window: CrawlerStatsWindow) => {
@@ -72,19 +82,20 @@ export default function OverviewSection(props: OverviewSectionProps) {
 		setClassifierHealth({ reachable: false, modelsLoaded: null });
 	};
 
-	const classifierState = () => {
-		const health = classifierHealth();
-		if (health === null) return "Unknown";
-		if (!health.reachable) return "Unavailable";
-		if (health.modelsLoaded === true) return "Ready";
-		if (health.modelsLoaded === false) return "No models loaded";
-		return "Unknown";
-	};
+	onMount(() => {
+		void loadStats();
+		void refreshClassifier();
+	});
 
-	const classifierReachability = () => {
-		const health = classifierHealth();
-		if (health === null) return "Unknown";
-		return health.reachable ? "Reachable" : "Unreachable";
+	const windowLabel = (w: CrawlerStatsWindow) => {
+		switch (w) {
+			case "5m":
+				return t("overview.range.5m");
+			case "1h":
+				return t("overview.range.1h");
+			case "24h":
+				return t("overview.range.24h");
+		}
 	};
 
 	const healthyAdapterCount = () =>
@@ -93,44 +104,35 @@ export default function OverviewSection(props: OverviewSectionProps) {
 			?.adapters.filter((adapter) => adapter.healthState.toLowerCase() === "healthy")
 			.length ?? 0;
 
-	const orderedSeries = () =>
-		[...(stats()?.series ?? [])].sort((left, right) =>
-			left.bucketTime.localeCompare(right.bucketTime)
-		);
-	const recentSeries = () => orderedSeries().slice(-6).reverse();
-	const seriesGroups = () => [
-		...new Set((stats()?.series ?? []).map((point) => point.metricGroup)),
-	];
-	const latestSeriesTime = () => {
-		const points = orderedSeries();
-		return points.length > 0 ? points[points.length - 1].bucketTime : null;
-	};
-
-	onMount(() => {
-		void loadStats();
-		void refreshClassifier();
-	});
+	const totalAdapterCount = () => props.statusData()?.adapters.length ?? 0;
 
 	return (
 		<div class="flex flex-col gap-6">
-			<div class="flex flex-wrap items-center justify-between gap-3">
-				<h2 class="ts-heading-2 text-primary">Overview</h2>
-				<div class="flex flex-wrap items-center gap-2">
-					<fieldset class="flex gap-1 border-0 p-0 m-0 min-w-0">
-						<legend class="sr-only">Stats window</legend>
+			{/* Top Bar: Time Range Selector & Refresh */}
+			<div class="flex flex-wrap items-center justify-between gap-4 bg-surface p-4 rounded-lg border border-border">
+				<div class="flex items-center gap-3">
+					<span class="ts-caption text-tertiary">{t("overview.timeRange")}:</span>
+					<div class="flex items-center gap-1.5 bg-surface-container-high/40 p-1 rounded-md border border-border">
 						<For each={WINDOWS}>
 							{(option) => (
-								<Button
-									size="sm"
-									variant={statsWindow() === option ? "filled" : "outlined"}
-									aria-pressed={statsWindow() === option}
+								<button
+									type="button"
+									class={
+										"px-3 py-1 rounded text-xs font-medium transition-colors select-none " +
+										(statsWindow() === option
+											? "bg-primary text-display-inverted shadow-xs"
+											: "text-secondary hover:text-primary hover:bg-hover")
+									}
 									onClick={() => void selectWindow(option)}
 								>
-									{option}
-								</Button>
+									{windowLabel(option)}
+								</button>
 							)}
 						</For>
-					</fieldset>
+					</div>
+				</div>
+
+				<div class="flex items-center gap-2">
 					<Button
 						size="sm"
 						variant="outlined"
@@ -138,9 +140,14 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						onClick={() => {
 							void loadStats();
 							void props.refreshStatus();
+							void refreshClassifier();
 						}}
+						class="gap-1.5"
 					>
-						{loadingStats() || props.loadingStatus() ? "Refreshing" : "Refresh"}
+						<RefreshCw
+							class={"w-3.5 h-3.5 " + (loadingStats() ? "animate-spin" : "")}
+						/>
+						<span>{loadingStats() ? t("common.refreshing") : t("common.refresh")}</span>
 					</Button>
 				</div>
 			</div>
@@ -148,228 +155,279 @@ export default function OverviewSection(props: OverviewSectionProps) {
 			<Show
 				when={stats()}
 				fallback={
-					<div class="p-8 text-center text-tertiary border border-border rounded">
+					<div class="p-12 text-center text-tertiary border border-border rounded-lg bg-surface">
 						{loadingStats()
-							? "Loading"
-							: statsError() !== null
-								? statsError()
-								: "No stats"}
+							? t("common.loading")
+							: (statsError() ?? t("common.unknown"))}
 					</div>
 				}
 			>
 				{(current) => (
 					<div class="flex flex-col gap-6">
-						<section class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-							<MetricCard
-								label="Jobs / second"
-								value={formatMetric(current().jobsPerSec)}
-							/>
-							<MetricCard
-								label="Jobs / minute"
-								value={formatMetric(current().jobsPerMin)}
-							/>
-							<MetricCard
-								label="Snapshots / minute"
-								value={formatMetric(current().snapshotsPerMin)}
-							/>
-							<MetricCard
-								label="Candidates / minute"
-								value={formatMetric(current().candidatesPerMin)}
-							/>
-							<MetricCard
-								label="Inferences / second"
-								value={formatMetric(current().inferencesPerSec)}
-							/>
-							<MetricCard
-								label="Requests / second"
-								value={formatMetric(current().requestsPerSec)}
-							/>
-						</section>
-
+						{/* Throughput Metrics Grid */}
 						<section class="flex flex-col gap-3">
-							<h3 class="ts-subhead font-semibold text-primary">Errors</h3>
-							<div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+							<div class="flex items-center justify-between">
+								<h3 class="ts-subhead font-semibold text-primary flex items-center gap-2">
+									<Zap class="w-4 h-4 text-primary" />
+									<span>{t("overview.section.throughput")}</span>
+								</h3>
+							</div>
+							<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
 								<MetricCard
-									label="Error rate"
-									value={formatPercent(current().errorRate)}
+									label={t("overview.snapshotsPerMin")}
+									value={formatMetric(current().snapshotsPerMin)}
+									hint="snapshots/min"
+									variant="success"
 								/>
 								<MetricCard
-									label="Retry rate"
-									value={formatPercent(current().retryRate)}
+									label={t("overview.jobsPerSec")}
+									value={formatMetric(current().jobsPerSec)}
+									hint="jobs/sec"
 								/>
 								<MetricCard
-									label="Attempts"
-									value={formatMetric(current().totalAttempts)}
-									hint={`${formatMetric(current().totalFailures)} failed`}
+									label={t("overview.requestsPerSec")}
+									value={formatMetric(current().requestsPerSec)}
+									hint="req/sec"
 								/>
 								<MetricCard
-									label="Overdue tracking"
-									value={formatMetric(current().overdueTrackingCount)}
-									hint={`Max lag ${formatWaitSeconds(current().maxOverdueLagSec)}`}
+									label={t("overview.candidatesPerMin")}
+									value={formatMetric(current().candidatesPerMin)}
+									hint="scanned/min"
+								/>
+								<MetricCard
+									label={t("overview.inferencesPerSec")}
+									value={formatMetric(current().inferencesPerSec)}
+									hint="inferences/sec"
+								/>
+								<MetricCard
+									label={t("overview.jobsPerMin")}
+									value={formatMetric(current().jobsPerMin)}
+									hint="jobs/min"
 								/>
 							</div>
-							<div class="overflow-x-auto border border-border rounded">
-								<table class="w-full text-left ts-caption">
-									<thead>
-										<tr class="border-b border-border text-tertiary">
-											<th class="py-2 px-3">Failure kind</th>
-											<th class="py-2 px-3">Count</th>
-										</tr>
-									</thead>
-									<tbody>
-										<For each={ERROR_ROWS}>
-											{(row) => (
-												<tr class="border-b border-border hover:bg-hover">
-													<td class="py-2 px-3 text-secondary">
-														{row.label}
-													</td>
-													<td class="py-2 px-3 font-mono text-primary">
-														{current().breakdown[row.key]}
-													</td>
+						</section>
+
+						{/* Errors & Health Grid */}
+						<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+							{/* Error Metrics */}
+							<Card class="lg:col-span-2">
+								<CardHeader
+									title={
+										<div class="flex items-center gap-2">
+											<ShieldAlert class="w-4 h-4 text-error" />
+											<span>{t("overview.section.errors")}</span>
+										</div>
+									}
+									description={windowLabel(statsWindow())}
+								/>
+								<CardContent class="flex flex-col gap-4">
+									<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+										<MetricCard
+											label={t("overview.errorRate")}
+											value={formatPercent(current().errorRate)}
+											variant={
+												current().errorRate > 0.1
+													? "danger"
+													: current().errorRate > 0.02
+														? "warning"
+														: "success"
+											}
+										/>
+										<MetricCard
+											label={t("overview.retryRate")}
+											value={formatPercent(current().retryRate)}
+										/>
+										<MetricCard
+											label={t("overview.totalAttempts")}
+											value={formatMetric(current().totalAttempts)}
+											hint={`${formatMetric(current().totalFailures)} ${t("overview.totalFailures")}`}
+										/>
+										<MetricCard
+											label={t("overview.overdueTracking")}
+											value={formatMetric(current().overdueTrackingCount)}
+											hint={`Max lag: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
+											variant={
+												current().overdueTrackingCount > 100
+													? "warning"
+													: "default"
+											}
+										/>
+									</div>
+
+									{/* Failure Breakdown Table */}
+									<div class="overflow-x-auto border border-border rounded-lg">
+										<table class="w-full text-left ts-caption">
+											<thead>
+												<tr class="border-b border-border text-tertiary bg-surface-container-high/30">
+													<th class="py-2 px-3 font-medium">
+														{t("overview.failureKind")}
+													</th>
+													<th class="py-2 px-3 font-medium">
+														{t("overview.failureCount")}
+													</th>
+													<th class="py-2 px-3 font-medium">占比</th>
 												</tr>
-											)}
-										</For>
-									</tbody>
-								</table>
-							</div>
-						</section>
-
-						<section class="flex flex-col gap-3">
-							<h3 class="ts-subhead font-semibold text-primary">
-								Backlog &amp; latency
-							</h3>
-							<QueueStatusTable queues={current().queues} />
-							<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-								<MetricCard
-									label="Task P95"
-									value={`${formatMetric(current().latencyMs.taskP95)} ms`}
-								/>
-								<MetricCard
-									label="API P95"
-									value={`${formatMetric(current().latencyMs.apiP95)} ms`}
-								/>
-								<MetricCard
-									label="Inference P95"
-									value={`${formatMetric(current().latencyMs.inferenceP95)} ms`}
-								/>
-							</div>
-						</section>
-
-						<section class="flex flex-col gap-3">
-							<h3 class="ts-subhead font-semibold text-primary">Health</h3>
-							<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-								<MetricCard
-									label="Runtime"
-									value={props.statusData()?.ready ? "Ready" : "Not ready"}
-									hint={`Revision ${props.statusData()?.revision ?? "—"}`}
-								/>
-								<MetricCard
-									label="Adapters"
-									value={`${healthyAdapterCount()} / ${props.statusData()?.adapters.length ?? 0}`}
-									hint={`${
-										props
-											.statusData()
-											?.adapters.filter((adapter) => adapter.enabled)
-											.length ?? 0
-									} enabled`}
-								/>
-								<div class="p-4 rounded border border-border flex flex-col gap-1">
-									<div class="flex items-center justify-between gap-2">
-										<span class="ts-caption text-tertiary">Classifier</span>
-										<Button
-											size="sm"
-											variant="outlined"
-											disabled={loadingClassifier()}
-											onClick={() => void refreshClassifier()}
-										>
-											{loadingClassifier() ? "Checking" : "Check"}
-										</Button>
+											</thead>
+											<tbody class="divide-y divide-border">
+												<For each={errorRows()}>
+													{(row) => {
+														const count = () =>
+															current().breakdown[row.key] ?? 0;
+														const percent = () =>
+															current().totalFailures > 0
+																? (
+																		(count() /
+																			current()
+																				.totalFailures) *
+																		100
+																	).toFixed(1) + "%"
+																: "0%";
+														return (
+															<tr class="hover:bg-hover transition-colors">
+																<td class="py-2 px-3 text-secondary">
+																	{row.label}
+																</td>
+																<td class="py-2 px-3 font-mono font-medium text-primary">
+																	{count()}
+																</td>
+																<td class="py-2 px-3 font-mono text-tertiary">
+																	{percent()}
+																</td>
+															</tr>
+														);
+													}}
+												</For>
+											</tbody>
+										</table>
 									</div>
-									<span class="ts-heading-3 font-semibold text-primary">
-										{classifierState()}
-									</span>
-									<span class="ts-caption text-tertiary">
-										{classifierReachability()}
-									</span>
-								</div>
-							</div>
-						</section>
+								</CardContent>
+							</Card>
 
-						<section class="flex flex-col gap-3">
-							<div class="flex flex-wrap items-center justify-between gap-2">
-								<h3 class="ts-subhead font-semibold text-primary">Rollup series</h3>
-								<span class="ts-caption text-tertiary">
-									{current().series.length} buckets · latest{" "}
-									{formatDateTime(latestSeriesTime())}
-								</span>
-							</div>
-							<Show
-								when={recentSeries().length > 0}
-								fallback={
-									<div class="p-6 text-center text-tertiary border border-border rounded">
-										No rollups
-									</div>
-								}
-							>
-								<div class="overflow-x-auto border border-border rounded">
-									<table class="w-full text-left ts-caption">
-										<thead>
-											<tr class="border-b border-border text-tertiary">
-												<th class="py-2 px-3">Bucket</th>
-												<th class="py-2 px-3">Group</th>
-												<th class="py-2 px-3">Counters</th>
-											</tr>
-										</thead>
-										<tbody>
-											<For each={recentSeries()}>
-												{(point) => (
-													<tr class="border-b border-border hover:bg-hover">
-														<td class="py-2 px-3 text-tertiary">
-															{formatDateTime(point.bucketTime)}
-														</td>
-														<td class="py-2 px-3 font-mono text-primary">
-															{point.metricGroup}
-														</td>
-														<td class="py-2 px-3 text-secondary">
-															<Show
-																when={
-																	readSeriesMetrics(point.metrics)
-																		.length > 0
-																}
-																fallback="—"
-															>
-																<For
-																	each={readSeriesMetrics(
-																		point.metrics
+							{/* Components & Model Health */}
+							<Card>
+								<CardHeader
+									title={
+										<div class="flex items-center gap-2">
+											<Activity class="w-4 h-4 text-primary" />
+											<span>{t("overview.section.components")}</span>
+										</div>
+									}
+								/>
+								<CardContent class="flex flex-col gap-4">
+									{/* Classifier Card */}
+									<div class="p-3.5 rounded-lg border border-border bg-surface-container-high/20 flex flex-col gap-2">
+										<div class="flex items-center justify-between">
+											<span class="ts-label font-medium text-primary flex items-center gap-1.5">
+												<Cpu class="w-4 h-4 text-primary" />
+												<span>{t("overview.classifier.title")}</span>
+											</span>
+											<Show
+												when={!loadingClassifier() && classifierHealth()}
+												fallback={
+													<Badge size="sm">{t("common.loading")}</Badge>
+												}
+											>
+												{(h) => (
+													<Badge
+														variant={
+															!h().reachable
+																? "danger"
+																: h().modelsLoaded
+																	? "success"
+																	: "warning"
+														}
+														size="sm"
+														dot
+													>
+														{!h().reachable
+															? t(
+																	"overview.classifier.status.unavailable"
+																)
+															: h().modelsLoaded
+																? t(
+																		"overview.classifier.status.ready"
+																	)
+																: t(
+																		"overview.classifier.status.notLoaded"
 																	)}
-																>
-																	{(metric, index) => (
-																		<span>
-																			{index() > 0
-																				? " · "
-																				: ""}
-																			{metric.label}{" "}
-																			{formatMetric(
-																				metric.value
-																			)}
-																		</span>
-																	)}
-																</For>
-															</Show>
-														</td>
-													</tr>
+													</Badge>
 												)}
-											</For>
-										</tbody>
-									</table>
-								</div>
-							</Show>
-							<Show when={seriesGroups().length > 0}>
-								<div class="ts-caption text-tertiary">
-									Groups ·{" "}
-									<span class="text-primary">{seriesGroups().join(", ")}</span>
-								</div>
-							</Show>
+											</Show>
+										</div>
+										<p class="ts-caption text-tertiary text-xs">
+											In-process HuggingFace Tokenizer &amp; ONNX Runtime
+										</p>
+									</div>
+
+									{/* Adapters Summary */}
+									<div class="p-3.5 rounded-lg border border-border bg-surface-container-high/20 flex flex-col gap-2">
+										<div class="flex items-center justify-between">
+											<span class="ts-label font-medium text-primary flex items-center gap-1.5">
+												<Layers class="w-4 h-4 text-primary" />
+												<span>Network Adapters</span>
+											</span>
+											<Badge
+												variant={
+													healthyAdapterCount() > 0 ? "success" : "danger"
+												}
+												size="sm"
+												dot
+											>
+												{healthyAdapterCount()} / {totalAdapterCount()}{" "}
+												Healthy
+											</Badge>
+										</div>
+										<p class="ts-caption text-tertiary text-xs">
+											Egress routes balanced with circuit-breaker protection
+										</p>
+									</div>
+
+									{/* Latencies */}
+									<div class="flex flex-col gap-2 pt-2 border-t border-border">
+										<span class="ts-caption text-tertiary font-medium">
+											Latency P95
+										</span>
+										<div class="grid grid-cols-3 gap-2 text-center">
+											<div class="p-2 rounded bg-surface-container-high/30 border border-border">
+												<span class="text-[11px] text-tertiary block">
+													API P95
+												</span>
+												<span class="font-mono text-sm font-medium text-primary">
+													{formatMetric(current().latencyMs.apiP95)} ms
+												</span>
+											</div>
+											<div class="p-2 rounded bg-surface-container-high/30 border border-border">
+												<span class="text-[11px] text-tertiary block">
+													Task P95
+												</span>
+												<span class="font-mono text-sm font-medium text-primary">
+													{formatMetric(current().latencyMs.taskP95)} ms
+												</span>
+											</div>
+											<div class="p-2 rounded bg-surface-container-high/30 border border-border">
+												<span class="text-[11px] text-tertiary block">
+													Model P95
+												</span>
+												<span class="font-mono text-sm font-medium text-primary">
+													{formatMetric(current().latencyMs.inferenceP95)}{" "}
+													ms
+												</span>
+											</div>
+										</div>
+									</div>
+								</CardContent>
+							</Card>
+						</div>
+
+						{/* Queue Backlog Section */}
+						<section class="flex flex-col gap-3">
+							<div class="flex items-center justify-between">
+								<h3 class="ts-subhead font-semibold text-primary flex items-center gap-2">
+									<Clock class="w-4 h-4 text-primary" />
+									<span>{t("overview.queues.title")}</span>
+								</h3>
+							</div>
+							<QueueStatusTable queues={current().queues} />
 						</section>
 					</div>
 				)}

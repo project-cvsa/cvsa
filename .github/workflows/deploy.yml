@@ -116,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Trigger deployment webhook
+      - name: Trigger and monitor deployment
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
@@ -134,8 +134,58 @@ jobs:
           fi
 
           echo "Triggering webhook: ${DEPLOY_WEBHOOK_URL} with tag: ${IMAGE_TAG}"
-          curl -fsS -X POST "${AUTH_HEADER[@]}" \
+          HTTP_STATUS=$(curl -fsS --max-time 15 -o /tmp/deploy-response.json -w "%{http_code}" -X POST "${AUTH_HEADER[@]}" \
             -H "Content-Type: application/json" \
             -d "{\"tag\":\"${IMAGE_TAG}\"}" \
-            "${DEPLOY_WEBHOOK_URL}"
-          echo "Deploy webhook triggered successfully."
+            "${DEPLOY_WEBHOOK_URL}")
+
+          echo "Webhook response status: ${HTTP_STATUS}"
+          cat /tmp/deploy-response.json
+          echo ""
+
+          if [ "${HTTP_STATUS}" != "200" ] && [ "${HTTP_STATUS}" != "202" ]; then
+            echo "::error::Webhook trigger failed with status ${HTTP_STATUS}" >&2
+            exit 1
+          fi
+
+          STATUS_URL="${DEPLOY_WEBHOOK_URL}"
+          case "${STATUS_URL}" in
+            */deploy) STATUS_URL="${STATUS_URL%/deploy}/status" ;;
+            *) STATUS_URL="${STATUS_URL%/}/status" ;;
+          esac
+
+          echo "Monitoring deployment status at ${STATUS_URL}..."
+          MAX_WAIT_SECONDS=900
+          POLL_INTERVAL=10
+          ELAPSED=0
+
+          while [ "${ELAPSED}" -lt "${MAX_WAIT_SECONDS}" ]; do
+            sleep "${POLL_INTERVAL}"
+            ELAPSED=$((ELAPSED + POLL_INTERVAL))
+
+            STATUS_BODY=$(curl -fsS --connect-timeout 5 --max-time 10 "${AUTH_HEADER[@]}" "${STATUS_URL}" 2>/dev/null || true)
+            if [ -z "${STATUS_BODY}" ]; then
+              echo "[${ELAPSED}s] Failed to fetch deployment status, retrying..."
+              continue
+            fi
+
+            DEPLOY_STATUS=$(echo "${STATUS_BODY}" | jq -r '.status // "unknown"')
+            DEPLOY_TAG=$(echo "${STATUS_BODY}" | jq -r '.tag // ""')
+            EXIT_CODE=$(echo "${STATUS_BODY}" | jq -r '.exitCode // empty')
+
+            echo "[${ELAPSED}s] Deployment status: ${DEPLOY_STATUS} (tag: ${DEPLOY_TAG})"
+
+            if [ "${DEPLOY_TAG}" = "${IMAGE_TAG}" ]; then
+              if [ "${DEPLOY_STATUS}" = "success" ]; then
+                echo "Deployment for tag ${IMAGE_TAG} completed successfully in ${ELAPSED}s."
+                exit 0
+              elif [ "${DEPLOY_STATUS}" = "failed" ]; then
+                echo "::error::Deployment failed with exit code ${EXIT_CODE}" >&2
+                echo "${STATUS_BODY}" >&2
+                exit 1
+              fi
+            fi
+          done
+
+          echo "::error::Deployment timed out after ${MAX_WAIT_SECONDS}s" >&2
+          exit 1

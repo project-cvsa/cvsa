@@ -154,9 +154,10 @@ export class BilibiliSession {
 			headers: browserHeaders,
 			method: "HEAD",
 		});
-		const bNut = getSetCookieValue(home.headers, "b_nut");
-		if (home.status < 200 || home.status >= 300 || !bNut) {
-			throw new Error("Bilibili home response did not provide b_nut");
+		const bNut =
+			getSetCookieValue(home.headers, "b_nut") ?? Math.floor(Date.now() / 1000).toString();
+		if (home.status < 200 || home.status >= 400) {
+			throw new Error(`Bilibili home response failed: HTTP ${home.status}`);
 		}
 
 		return { buvid3: finger.data.b_3, buvid4: finger.data.b_4, bNut };
