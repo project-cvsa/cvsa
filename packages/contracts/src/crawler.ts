@@ -253,9 +253,7 @@ export type UpdateDiscoveryFilterConfigRequest = z.infer<
 export type CrawlerStatusDto = z.infer<typeof CrawlerStatusDtoSchema>;
 export type ClassifierHealthDto = z.infer<typeof ClassifierHealthDtoSchema>;
 
-// ---------------------------------------------------------------------------
 // Admin actions
-// ---------------------------------------------------------------------------
 
 /** Returned by control-plane actions that enqueue background work for a video. */
 export const ActionQueuedResponseSchema = z.object({
@@ -263,9 +261,7 @@ export const ActionQueuedResponseSchema = z.object({
 	aid: z.string(),
 });
 
-// ---------------------------------------------------------------------------
 // Metadata history
-// ---------------------------------------------------------------------------
 
 /** One stored metadata change for a tracked video. */
 export const VideoMetadataHistoryItemSchema = z.object({
@@ -287,9 +283,7 @@ export const VideoMetadataHistoryListResponseSchema = z.object({
 	total: z.number().int().nonnegative(),
 });
 
-// ---------------------------------------------------------------------------
 // Discovery samples (classifier training data)
-// ---------------------------------------------------------------------------
 
 /** A stored discovery decision together with its optional human label. */
 export const DiscoverySampleItemSchema = z.object({
@@ -330,9 +324,7 @@ export const LabelDiscoverySampleRequestSchema = z.object({
 	humanLabel: z.union([z.literal(0), z.literal(1)]),
 });
 
-// ---------------------------------------------------------------------------
 // Tracking videos list
-// ---------------------------------------------------------------------------
 
 /** A tracking row joined with the metadata fields the admin UI displays. */
 export const TrackingVideoListItemSchema = VideoTrackingDtoSchema.extend({
@@ -356,9 +348,7 @@ export const TrackingVideoListResponseSchema = z.object({
 	total: z.number().int().nonnegative(),
 });
 
-// ---------------------------------------------------------------------------
 // Stats & rollups
-// ---------------------------------------------------------------------------
 
 export const CrawlerStatsWindowSchema = z.enum(["5m", "1h", "24h"]);
 

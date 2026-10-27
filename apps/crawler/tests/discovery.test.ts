@@ -22,8 +22,6 @@ import {
 	InMemoryTrackingRepository,
 } from "../src/crawler/testing/fakes";
 
-// ------------------------------------------------------------------ fixtures
-
 const WBI_STUB = {
 	finger: { code: 0, message: "0", data: { b_3: "b3", b_4: "b4" } },
 	ticket: {
@@ -227,8 +225,6 @@ function searchVideo(aid: number, title: string) {
 	};
 }
 
-// ------------------------------------------------------------------ metadata
-
 describe("metadata change detection", () => {
 	const baseRow = {
 		aid: 1n,
@@ -295,8 +291,6 @@ describe("metadata change detection", () => {
 		expect(changeTypeForDiff(diff)).toBe("status_changed");
 	});
 });
-
-// ------------------------------------------------------------------ relations
 
 describe("RelationExtractor", () => {
 	test("preserves exact recommendation position sequence and persists metadata", async () => {
@@ -385,8 +379,6 @@ describe("RelationExtractor", () => {
 	});
 });
 
-// ------------------------------------------------------------------ search
-
 describe("SearchRover", () => {
 	test("cleans highlighted HTML tags, parses duration, and stores structured tags", async () => {
 		const repo = new InMemoryDiscoveryRepository();
@@ -407,8 +399,6 @@ describe("SearchRover", () => {
 		expect(meta?.tags).toEqual([{ name: "洛天依" }, { name: "原创曲" }, { name: "VOCALOID" }]);
 	});
 });
-
-// ------------------------------------------------------------------ service
 
 describe("DiscoveryService", () => {
 	test("routes recommendation candidates through detail fetch and the filter", async () => {
@@ -555,8 +545,6 @@ describe("DiscoveryService", () => {
 	});
 });
 
-// ------------------------------------------------------------------- filter
-
 describe("DiscoveryFilterService", () => {
 	test("accepts whitelist singer with song indicator", () => {
 		const filter = new DiscoveryFilterService();
@@ -660,8 +648,6 @@ describe("normalizeFilterConfig", () => {
 		expect(config.maxDurationSeconds).toBe(900);
 	});
 });
-
-// ------------------------------------------------------------------ pipeline
 
 describe("DiscoveryPipelineProcessor", () => {
 	test("accepts a candidate, stores structured tags and samples, and enqueues related videos", async () => {
@@ -800,8 +786,6 @@ describe("DiscoveryPipelineProcessor", () => {
 		});
 	});
 });
-
-// ----------------------------------------------------------------- scheduler
 
 describe("DiscoveryScheduler", () => {
 	test("registers both repeatable jobs and manual triggers", async () => {

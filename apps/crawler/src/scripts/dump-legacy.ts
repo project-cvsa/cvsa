@@ -54,6 +54,17 @@ function parseCliArgs(): DumpOptions {
 	return { legacyDbUrl, outFile, batchSize, includeSnapshots, snapshotDays, limit };
 }
 
+/**
+ * Escapes Unicode line terminators U+2028 and U+2029.
+ * Standard JSON.stringify leaves them unescaped, which breaks line-based JSONL
+ * parsers that adhere to ECMAScript line termination rules.
+ */
+function serializeJsonLine(record: unknown): string {
+	return `${JSON.stringify(record)
+		.replace(/\u2028/g, "\\u2028")
+		.replace(/\u2029/g, "\\u2029")}\n`;
+}
+
 async function runDump(): Promise<void> {
 	const opts = parseCliArgs();
 	appLogger.info("Starting legacy data export dump...", {
@@ -140,7 +151,7 @@ async function runDump(): Promise<void> {
 					_type: "tracking",
 					...row,
 				};
-				outStream.write(`${JSON.stringify(record)}\n`);
+				outStream.write(serializeJsonLine(record));
 				dumpedTracking++;
 			}
 
@@ -190,7 +201,7 @@ async function runDump(): Promise<void> {
 					_type: "metadata",
 					...row,
 				};
-				outStream.write(`${JSON.stringify(record)}\n`);
+				outStream.write(serializeJsonLine(record));
 				dumpedMeta++;
 			}
 
@@ -254,7 +265,7 @@ async function runDump(): Promise<void> {
 						_type: "snapshot",
 						...row,
 					};
-					outStream.write(`${JSON.stringify(record)}\n`);
+					outStream.write(serializeJsonLine(record));
 					dumpedSnapshots++;
 				}
 

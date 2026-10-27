@@ -172,8 +172,6 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		this.rollup = options.rollup;
 	}
 
-	// ------------------------------------------------------------------ records
-
 	recordTask(latencyMs: number): void {
 		this.observeLatency("task", latencyMs);
 	}
@@ -210,8 +208,6 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	recordError(kind: StatsErrorKind): void {
 		this.bucket().errors[kind] += 1;
 	}
-
-	// ------------------------------------------------------------------ reading
 
 	/** Fold every bucket inside `window` into a single snapshot. */
 	getWindow(window: StatsWindow, nowMs = this.now()): StatsWindowMetrics {
@@ -291,8 +287,6 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			"24h": this.getWindow("24h", nowMs),
 		};
 	}
-
-	// ------------------------------------------------------------------- rollup
 
 	/**
 	 * Persist one summary row per window into `crawler_stats_rollup`, truncated
@@ -379,8 +373,6 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			metrics: row.metrics,
 		}));
 	}
-
-	// ------------------------------------------------------------------ private
 
 	private bucket(nowMs = this.now()): Bucket {
 		const slot = Math.floor(nowMs / BUCKET_MS);
