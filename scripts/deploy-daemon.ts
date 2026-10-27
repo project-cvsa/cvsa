@@ -101,7 +101,13 @@ const server = Bun.serve({
 		const url = new URL(req.url);
 		const path = url.pathname.replace(/\/+$/, "") || "/";
 
-		if (req.method === "GET" && (path === "/health" || path === "/_deploy/health")) {
+		if (
+			(req.method === "GET" || req.method === "HEAD") &&
+			(path === "/health" || path === "/_deploy/health")
+		) {
+			if (req.method === "HEAD") {
+				return new Response(null, { status: 200 });
+			}
 			return Response.json({ status: "ok" });
 		}
 
@@ -162,14 +168,24 @@ const server = Bun.serve({
 				}
 			}
 
-			try {
-				const result = await executeDeploy(tag);
-				return Response.json(result, { status: result.success ? 200 : 500 });
-			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				console.error("[daemon] Unexpected execution failure:", err);
-				return Response.json({ success: false, error: message }, { status: 500 });
-			}
+			// Launch the deployment in the background asynchronously so the HTTP connection
+			// completes immediately (returning 202 Accepted) instead of holding an idle socket open
+			// for 5-10 minutes while Docker pulls images and starts containers.
+			queueMicrotask(() => {
+				executeDeploy(tag).catch((err) => {
+					console.error("[daemon] Unexpected background deployment failure:", err);
+				});
+			});
+
+			return Response.json(
+				{
+					status: "deploying",
+					tag,
+					startedAt: new Date().toISOString(),
+					message: `Deployment initiated for tag: ${tag}`,
+				},
+				{ status: 202 }
+			);
 		}
 
 		return Response.json({ error: "Not found" }, { status: 404 });

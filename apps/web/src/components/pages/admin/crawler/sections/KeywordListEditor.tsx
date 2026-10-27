@@ -1,8 +1,14 @@
 import { createSignal, For } from "solid-js";
 import Button from "@components/ui/Button";
+import Badge from "@components/ui/Badge";
+import TextField from "@components/ui/TextField";
+import { Card, CardHeader, CardContent } from "@components/ui/Card";
+import Plus from "lucide-solid/icons/plus";
+import X from "lucide-solid/icons/x";
 
 type KeywordListEditorProps = {
 	title: string;
+	description?: string;
 	items: string[];
 	placeholder: string;
 	onAdd: (value: string) => boolean;
@@ -19,40 +25,65 @@ export default function KeywordListEditor(props: KeywordListEditorProps) {
 	};
 
 	return (
-		<div class="p-4 rounded border border-border flex flex-col gap-3">
-			<span class="ts-label font-semibold text-primary">
-				{props.title} ({props.items.length})
-			</span>
-			<div class="flex flex-wrap gap-2">
-				<For each={props.items}>
-					{(item) => (
-						<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-hover border border-border ts-caption text-primary">
-							{item}
-							<button
-								type="button"
-								class="text-tertiary hover:text-error ml-1"
-								aria-label={"Remove " + item}
-								onClick={() => props.onRemove(item)}
-							>
-								×
-							</button>
-						</span>
-					)}
-				</For>
-			</div>
-			<div class="flex items-center gap-2">
-				<input
-					type="text"
-					class="h-9 px-3 border border-border rounded text-primary bg-transparent text-sm w-64"
-					placeholder={props.placeholder}
-					value={value()}
-					onInput={(event) => setValue(event.currentTarget.value)}
-					onKeyDown={(event) => event.key === "Enter" && add()}
-				/>
-				<Button size="sm" variant="outlined" onClick={add}>
-					Add
-				</Button>
-			</div>
-		</div>
+		<Card>
+			<CardHeader
+				title={
+					<div class="flex items-center gap-2">
+						<span>{props.title}</span>
+						<Badge variant="neutral" size="sm">
+							{props.items.length}
+						</Badge>
+					</div>
+				}
+				description={props.description}
+			/>
+			<CardContent class="flex flex-col gap-4">
+				{/* Chips Container */}
+				<div class="flex flex-wrap gap-2 min-h-[32px]">
+					<For each={props.items}>
+						{(item) => (
+							<span class="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-surface-container-high border border-border text-xs text-primary group hover:border-primary/40 transition-colors">
+								<span class="font-medium">{item}</span>
+								<button
+									type="button"
+									class="p-0.5 rounded-full text-tertiary hover:text-error hover:bg-error/10 transition-colors focus:outline-none"
+									aria-label={"Remove " + item}
+									onClick={() => props.onRemove(item)}
+								>
+									<X class="w-3 h-3" />
+								</button>
+							</span>
+						)}
+					</For>
+				</div>
+
+				{/* Add Input Row */}
+				<div class="flex items-end gap-2 pt-2 border-t border-border">
+					<div class="flex-1 max-w-md">
+						<TextField
+							label={props.placeholder}
+							value={value()}
+							onInput={(e) => setValue(e.currentTarget.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") {
+									e.preventDefault();
+									add();
+								}
+							}}
+						/>
+					</div>
+					<Button
+						size="md"
+						variant="outlined"
+						disabled={!value().trim()}
+						onClick={add}
+						class="gap-1.5 shrink-0"
+					>
+						<Plus class="w-4 h-4" />
+						<span>Add</span>
+					</Button>
+				</div>
+			</CardContent>
+		</Card>
 	);
 }

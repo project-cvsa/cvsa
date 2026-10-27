@@ -10,7 +10,8 @@ export function formatMetric(value: number): string {
 /** Render a `0..1` fraction as a percentage. */
 export function formatPercent(fraction: number, digits = 1): string {
 	if (!Number.isFinite(fraction)) return "—";
-	return `${(fraction * 100).toFixed(digits)}%`;
+	const clamped = Math.min(1, Math.max(0, fraction));
+	return `${(clamped * 100).toFixed(digits)}%`;
 }
 
 /** Render a wait/lag duration in seconds as a compact human string. */

@@ -62,7 +62,10 @@ export const crawlerEnv = createEnv({
 		CONTROL_API_HOST: z.string().default("127.0.0.1"),
 		CONTROL_API_PORT: z.coerce.number().int().min(1).max(65_535).default(16_413),
 		CONTROL_API_URL: z.url().optional(),
-		CONTROL_API_TOKEN: z.string().min(1).optional(),
+		CONTROL_API_TOKEN: z
+			.string()
+			.min(1)
+			.default(process.env.NODE_ENV === "test" ? "test-control-token" : "dev-control-token"),
 		/**
 		 * Directory holding the in-process ONNX classifier artifacts:
 		 * `<dir>/embedding/model.onnx` and `<dir>/akari/<version>.onnx`.

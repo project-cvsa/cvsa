@@ -82,6 +82,11 @@ async function triggerSweep(
 	return settle(await eden.v2.admin.crawler.sweep.post(body));
 }
 
+async function triggerHotSample(): Promise<ApiResult<DiscoverySweepResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler["hot-sample"].post());
+}
+
 async function fetchDetail(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.detail({ aid }).post());
@@ -178,6 +183,7 @@ export const crawlerApi = {
 	getNetworkConfig,
 	updateNetworkConfig,
 	triggerSweep,
+	triggerHotSample,
 	fetchDetail,
 	triggerActive,
 	getTracking,

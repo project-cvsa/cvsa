@@ -1,18 +1,25 @@
-import { createSignal, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import type { Accessor } from "solid-js";
 import Button from "@components/ui/Button";
+import Badge from "@components/ui/Badge";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
+import { getComponentT } from "@lib/i18n/isomorphic";
 import type {
 	CrawlerStatusDto,
 	NetworkAdapterConfig,
+	NetworkRuntimeConfig,
 	NetworkRuntimeConfigDocument,
 } from "@cvsa/contracts";
 import NetworkAdapterForm from "../network/NetworkAdapterForm";
 import NetworkAdapterList from "../network/NetworkAdapterList";
 import NetworkHealthPolicy from "../network/NetworkHealthPolicy";
-import NetworkStatus from "../network/NetworkStatus";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
+import NetworkIcon from "lucide-solid/icons/network";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
+import Save from "lucide-solid/icons/save";
+import AlertTriangle from "lucide-solid/icons/alert-triangle";
+import Route from "lucide-solid/icons/route";
 
 type NetworkSectionProps = {
 	statusData: Accessor<CrawlerStatusDto | null>;
@@ -20,12 +27,46 @@ type NetworkSectionProps = {
 	refreshStatus: () => Promise<void>;
 };
 
+/**
+ * Ensures that the 'bilibili-api' request type is always bound to all enabled adapters.
+ * This prevents crawler requests from failing with NO_AVAILABLE_ADAPTER.
+ */
+function synchronizeBindings(config: NetworkRuntimeConfig): NetworkRuntimeConfig {
+	const enabledIds = config.adapters.filter((a) => a.enabled).map((a) => a.id);
+	const existingBindings = config.bindings ?? [];
+	const hasBiliBinding = existingBindings.some((b) => b.requestType === "bilibili-api");
+
+	const bindings = hasBiliBinding
+		? existingBindings.map((b) =>
+				b.requestType === "bilibili-api"
+					? { ...b, adapterIds: enabledIds.length > 0 ? enabledIds : b.adapterIds }
+					: b
+			)
+		: enabledIds.length > 0
+			? [...existingBindings, { requestType: "bilibili-api", adapterIds: enabledIds }]
+			: existingBindings;
+
+	return {
+		...config,
+		bindings,
+	};
+}
+
 export default function NetworkSection(props: NetworkSectionProps) {
+	const t = getComponentT("crawler");
+
 	const [networkDoc, setNetworkDoc] = createSignal<NetworkRuntimeConfigDocument | null>(null);
+	const [savedSnapshot, setSavedSnapshot] = createSignal<string>("");
 	const [loading, setLoading] = createSignal(false);
 	const [saving, setSaving] = createSignal(false);
 	const [configMissing, setConfigMissing] = createSignal(false);
 	const requests = createConfigRequestCoordinator();
+
+	const isDirty = createMemo(() => {
+		const doc = networkDoc();
+		if (!doc || !savedSnapshot()) return false;
+		return JSON.stringify(doc.config) !== savedSnapshot();
+	});
 
 	const loadConfig = async () => {
 		if (loading() || saving()) return;
@@ -40,83 +81,94 @@ export default function NetworkSection(props: NetworkSectionProps) {
 				setNetworkDoc(null);
 				return;
 			}
-			toast.error(res.error.message || "Could not load network config");
+			toast.error(res.error.message || t("common.error"));
 			return;
 		}
 		if (!res.data) {
-			toast.error("No network config");
+			toast.error(t("common.unknown"));
 			return;
 		}
 		setConfigMissing(false);
 		setNetworkDoc(res.data);
+		setSavedSnapshot(JSON.stringify(res.data.config));
 	};
 
 	const initializeConfig = async () => {
 		if (loading() || saving()) return;
 		const request = requests.beginSave();
 		setSaving(true);
+		const initialConfig: NetworkRuntimeConfig = {
+			adapters: [
+				{
+					type: "direct",
+					id: "direct-default",
+					enabled: true,
+					baseWeight: 1,
+					rateLimits: [],
+				},
+			],
+			bindings: [
+				{
+					requestType: "bilibili-api",
+					adapterIds: ["direct-default"],
+				},
+			],
+			requestTypePolicies: {},
+		};
+
 		const res = await api.crawler.updateNetworkConfig({
 			revision: 0,
-			config: {
-				adapters: [
-					{
-						type: "direct",
-						id: "direct-default",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [],
-					},
-				],
-				requestTypePolicies: {},
-			},
+			config: initialConfig,
 		});
 		if (!requests.canApplySave(request)) return;
 		setSaving(false);
 		if (res.ok && res.data) {
 			setConfigMissing(false);
 			setNetworkDoc(res.data);
-			toast.success("Network config initialized");
+			setSavedSnapshot(JSON.stringify(res.data.config));
+			toast.success(t("common.success"));
 			void props.refreshStatus();
 			return;
 		}
-		toast.error(
-			res.ok ? "Initialization failed" : res.error.message || "Initialization failed"
-		);
+		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
 	};
 
 	const saveConfig = async () => {
 		if (loading() || saving()) return;
 		const current = networkDoc();
 		if (!current) return;
+
+		const synchronizedConfig = synchronizeBindings(current.config);
+
 		const request = requests.beginSave();
 		setSaving(true);
 		const res = await api.crawler.updateNetworkConfig({
 			revision: current.revision,
-			config: current.config,
+			config: synchronizedConfig,
 		});
 		if (!requests.canApplySave(request)) return;
 		setSaving(false);
 		if (res.ok && res.data) {
 			setNetworkDoc((latest) => applySaveResult(latest, current, res.data));
-			toast.success("Network config saved");
+			setSavedSnapshot(JSON.stringify(res.data.config));
+			toast.success(t("common.saved"));
 			void props.refreshStatus();
 			return;
 		}
-		toast.error(res.ok ? "Save failed" : res.error.message || "Could not save network config");
+		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
 	};
 
 	const addAdapter = (adapter: NetworkAdapterConfig): boolean => {
 		const current = networkDoc();
 		if (!current) return false;
 		if (current.config.adapters.some((item) => item.id === adapter.id)) {
-			toast.error("Adapter ID already exists");
+			toast.error(t("network.form.idHelper"));
 			return false;
 		}
 		setNetworkDoc({
 			...current,
 			config: { ...current.config, adapters: [...current.config.adapters, adapter] },
 		});
-		toast.info("Adapter added to draft");
 		return true;
 	};
 
@@ -144,7 +196,7 @@ export default function NetworkSection(props: NetworkSectionProps) {
 				adapters: current.config.adapters.filter((adapter) => adapter.id !== id),
 			},
 		});
-		toast.info("Adapter removed from draft");
+		toast.info(t("common.delete"));
 	};
 
 	const updateWeight = (id: string, weight: number) => {
@@ -167,49 +219,96 @@ export default function NetworkSection(props: NetworkSectionProps) {
 
 	return (
 		<div class="flex flex-col gap-6">
-			<div class="flex items-center justify-between gap-3">
-				<div>
-					<h2 class="ts-heading-2 text-primary">Network</h2>
-					<div class="ts-caption text-tertiary">
-						Revision {networkDoc()?.revision ?? "—"}
-					</div>
+			{/* Page Subtitle & Description */}
+			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+				<div class="flex flex-col gap-1.5">
+					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
+						<NetworkIcon class="w-5 h-5 text-primary" />
+						<span>{t("network.title")}</span>
+						<Show when={networkDoc()}>
+							{(doc) => (
+								<Badge variant="neutral" size="sm" class="font-mono">
+									Rev {doc().revision}
+								</Badge>
+							)}
+						</Show>
+					</h2>
+					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
+						{t("network.description")}
+					</p>
 				</div>
-				<div class="flex gap-2">
+
+				<div class="flex items-center gap-2 shrink-0">
 					<Button
 						size="sm"
 						variant="outlined"
 						disabled={loading() || saving()}
 						onClick={() => void loadConfig()}
+						class="gap-1.5"
 					>
-						{loading() ? "Loading" : "Reload"}
+						<RefreshCw class={"w-3.5 h-3.5 " + (loading() ? "animate-spin" : "")} />
+						<span>{loading() ? t("common.refreshing") : t("common.refresh")}</span>
 					</Button>
 					<Button
 						size="sm"
 						variant="filled"
-						disabled={loading() || saving() || !networkDoc()}
+						disabled={loading() || saving() || !networkDoc() || !isDirty()}
 						onClick={() => void saveConfig()}
+						class="gap-1.5"
 					>
-						{saving() ? "Saving" : "Save"}
+						<Save class={"w-3.5 h-3.5 " + (saving() ? "animate-spin" : "")} />
+						<span>
+							{saving() ? t("common.saving") : t("network.adapters.saveChanges")}
+						</span>
 					</Button>
 				</div>
 			</div>
 
-			<NetworkStatus
-				status={props.statusData}
-				loading={props.loadingStatus}
-				refresh={props.refreshStatus}
-			/>
+			{/* Smart Routing Callout Banner */}
+			<div class="p-4 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
+				<Route class="w-5 h-5 text-primary shrink-0 mt-0.5" />
+				<div class="flex flex-col gap-1">
+					<span class="ts-subhead font-semibold text-primary">
+						{t("network.routingBanner.title")}
+					</span>
+					<span class="ts-body text-secondary text-sm">
+						{t("network.routingBanner.description")}
+					</span>
+				</div>
+			</div>
+
+			{/* Unsaved Draft Changes Alert */}
+			<Show when={isDirty()}>
+				<div class="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
+					<div class="flex items-center gap-2.5 text-amber-700 dark:text-amber-300">
+						<AlertTriangle class="w-4 h-4 shrink-0" />
+						<span class="text-sm font-medium">{t("network.adapters.draftNotice")}</span>
+					</div>
+					<Button
+						size="sm"
+						variant="filled"
+						disabled={saving()}
+						onClick={() => void saveConfig()}
+						class="gap-1.5 shrink-0"
+					>
+						<Save class="w-3.5 h-3.5" />
+						<span>
+							{saving() ? t("common.saving") : t("network.adapters.saveChanges")}
+						</span>
+					</Button>
+				</div>
+			</Show>
 
 			<Show
 				when={networkDoc()}
 				fallback={
-					<div class="p-6 text-center text-tertiary border border-border rounded flex flex-col items-center gap-3">
+					<div class="p-10 text-center text-tertiary border border-border rounded-lg flex flex-col items-center gap-4 bg-surface">
 						<span>
 							{loading()
-								? "Loading"
+								? t("common.loading")
 								: configMissing()
-									? "No network config"
-									: "No config returned"}
+									? t("network.adapters.empty")
+									: t("common.unknown")}
 						</span>
 						<Show when={configMissing() && !loading()}>
 							<Button
@@ -218,7 +317,7 @@ export default function NetworkSection(props: NetworkSectionProps) {
 								disabled={loading() || saving()}
 								onClick={() => void initializeConfig()}
 							>
-								{saving() ? "Initializing" : "Initialize"}
+								{saving() ? t("common.saving") : t("network.adapters.add")}
 							</Button>
 						</Show>
 					</div>
@@ -227,7 +326,6 @@ export default function NetworkSection(props: NetworkSectionProps) {
 				{(doc) => (
 					<fieldset disabled={loading() || saving()} class="min-w-0 border-0 p-0">
 						<div class="flex flex-col gap-6">
-							<NetworkAdapterForm onAdd={addAdapter} />
 							<NetworkAdapterList
 								adapters={doc().config.adapters}
 								status={props.statusData()}
@@ -235,6 +333,9 @@ export default function NetworkSection(props: NetworkSectionProps) {
 								onRemove={removeAdapter}
 								onWeightChange={updateWeight}
 							/>
+
+							<NetworkAdapterForm onAdd={addAdapter} />
+
 							<NetworkHealthPolicy config={doc().config.health} />
 						</div>
 					</fieldset>

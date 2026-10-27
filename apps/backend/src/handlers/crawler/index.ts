@@ -143,6 +143,17 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		}
 	)
 	.post(
+		"/hot-sample",
+		async (): Promise<DiscoverySweepResponse> => {
+			return callCrawlerApi<DiscoverySweepResponse>("/discovery/hot-sample", "POST");
+		},
+		{
+			response: {
+				200: DiscoverySweepResponseSchema,
+			},
+		}
+	)
+	.post(
 		"/detail/:aid",
 		async ({ params }): Promise<ActionQueuedResponse> => {
 			return callCrawlerApi<ActionQueuedResponse>(`/discovery/detail/${params.aid}`, "POST");
