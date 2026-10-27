@@ -74,12 +74,19 @@ const corsOriginPatterns = [...BASE_CORS_ORIGIN_PATTERNS, ...CONFIGURED_CORS_ORI
 
 const outboxWorker = createOutboxWorker(processOutboxEntry);
 
-outboxService.recoverStaleEntries().catch((e) => {
-	appLogger.warn(`Failed to recover stale outbox entries: ${e.message}`);
-});
+const drainPendingOutbox = () => {
+	outboxService.recoverStaleEntries().catch((e) => {
+		appLogger.warn(`Failed to recover stale outbox entries: ${e.message}`);
+	});
+};
+
+drainPendingOutbox();
+const outboxPollTimer =
+	process.env.NODE_ENV !== "test" ? setInterval(drainPendingOutbox, 5_000) : undefined;
 
 process.on("SIGTERM", async () => {
 	appLogger.info("Received SIGTERM, shutting down gracefully...");
+	if (outboxPollTimer) clearInterval(outboxPollTimer);
 	await outboxWorker.close();
 	await closeOutboxInfrastructure();
 	process.exit(0);
@@ -87,6 +94,7 @@ process.on("SIGTERM", async () => {
 
 process.on("SIGINT", async () => {
 	appLogger.info("Received SIGINT, shutting down gracefully...");
+	if (outboxPollTimer) clearInterval(outboxPollTimer);
 	await outboxWorker.close();
 	await closeOutboxInfrastructure();
 	process.exit(0);

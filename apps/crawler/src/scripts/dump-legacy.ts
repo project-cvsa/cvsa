@@ -20,9 +20,7 @@ interface DumpOptions {
 
 function parseCliArgs(): DumpOptions {
 	const args = process.argv.slice(2);
-	let legacyDbUrl =
-		process.env.LEGACY_DATABASE_URL ??
-		"postgres://postgres:KfXtLJgu4oettqmDC4@localhost:5432/cvsa_main";
+	let legacyDbUrl = process.env.LEGACY_DATABASE_URL ?? "";
 	let outFile = "legacy-tracking-dump.jsonl";
 	let batchSize = 2000;
 	let includeSnapshots = true;
@@ -43,6 +41,12 @@ function parseCliArgs(): DumpOptions {
 		} else if (arg.startsWith("--limit=")) {
 			limit = Number.parseInt(arg.slice("--limit=".length), 10);
 		}
+	}
+
+	if (!legacyDbUrl) {
+		throw new Error(
+			"LEGACY_DATABASE_URL environment variable or --legacy-db=<url> argument is required"
+		);
 	}
 
 	return { legacyDbUrl, outFile, batchSize, includeSnapshots, snapshotDays, limit };
