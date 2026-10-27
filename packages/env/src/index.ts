@@ -1,6 +1,11 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+const runtimeEnvironment = {
+	...process.env,
+	...(typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {}),
+};
+
 export const env = createEnv({
 	server: {
 		HOST: z.string().optional(),
@@ -28,7 +33,7 @@ export const env = createEnv({
 		WEB_ORIGINS: z.string().optional(),
 	},
 
-	runtimeEnv: import.meta.env,
+	runtimeEnv: runtimeEnvironment,
 
 	emptyStringAsUndefined: true,
 });
@@ -66,6 +71,6 @@ export const crawlerEnv = createEnv({
 		 */
 		CRAWLER_MODEL_DIR: z.string().min(1).optional(),
 	},
-	runtimeEnv: import.meta.env,
+	runtimeEnv: runtimeEnvironment,
 	emptyStringAsUndefined: true,
 });

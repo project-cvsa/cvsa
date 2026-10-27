@@ -1,0 +1,18 @@
+[Unit]
+Description=CVSA Deployment Webhook Daemon
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=%USER%
+WorkingDirectory=%WORKING_DIR%
+EnvironmentFile=-%WORKING_DIR%/.env
+ExecStart=%BUN_PATH% run scripts/deploy-daemon.ts
+Restart=always
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

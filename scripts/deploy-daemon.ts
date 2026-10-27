@@ -1,26 +1,16 @@
 #!/usr/bin/env bun
-/**
- * CVSA Deployment Webhook Daemon.
- *
- * Runs locally on the production host behind a reverse proxy (e.g. Caddy).
- * Listens for incoming deploy webhooks from GitHub Actions and triggers
- * `./scripts/deploy.sh` safely.
- *
- * Designed to be managed as a real system daemon via systemd (see cvsa-deploy.service).
- */
-
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const PORT = Number.parseInt(process.env.DEPLOY_PORT || "9420", 10);
 const HOST = process.env.DEPLOY_HOST || "127.0.0.1";
-const SECRET = process.env.DEPLOY_WEBHOOK_SECRET || "";
+const SECRET = process.env.DEPLOY_WEBHOOK_SECRET?.trim() || "";
 const SCRIPT_PATH = resolve(import.meta.dir, "deploy.sh");
+const LOCK_DIR = resolve(import.meta.dir, "../.deploy.lock");
+const STATE_FILE = resolve(import.meta.dir, "../.deploy.state.json");
 const TAG_PATTERN = /^[a-zA-Z0-9._-]+$/;
-
-let isDeploying = false;
-let lastDeployTime: string | null = null;
-let lastDeployStatus: "success" | "failure" | null = null;
+const MAX_BODY_BYTES = 16 * 1024;
 
 function safeCompare(a: string, b: string): boolean {
 	const bufA = Buffer.from(a, "utf8");
@@ -29,16 +19,14 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 function verifyAuth(req: Request, bodyText: string): boolean {
-	if (!SECRET) return true; // No secret configured, allow (open/internal mode)
+	if (!SECRET) return false;
 
-	// 1. Bearer Token
 	const authHeader = req.headers.get("authorization") || "";
 	const bearerMatch = /^Bearer\s+(.+)$/i.exec(authHeader);
 	if (bearerMatch && safeCompare(bearerMatch[1], SECRET)) {
 		return true;
 	}
 
-	// 2. HMAC-SHA256 Signature (GitHub Webhook style)
 	const sigHeader = req.headers.get("x-hub-signature-256") || "";
 	const sigMatch = /^sha256=([a-f0-9]{64})$/i.exec(sigHeader);
 	if (sigMatch) {
@@ -51,7 +39,36 @@ function verifyAuth(req: Request, bodyText: string): boolean {
 	return false;
 }
 
-async function handleDeploy(
+function isDeployLocked(): boolean {
+	if (!existsSync(LOCK_DIR)) return false;
+	const pidFile = resolve(LOCK_DIR, "pid");
+	if (!existsSync(pidFile)) return true;
+	try {
+		const pid = Number.parseInt(readFileSync(pidFile, "utf8").trim(), 10);
+		if (Number.isInteger(pid) && pid > 0) {
+			process.kill(pid, 0);
+			return true;
+		}
+	} catch {
+		return false;
+	}
+	return false;
+}
+
+function readDeploymentState(): Record<string, unknown> {
+	if (!existsSync(STATE_FILE)) {
+		return { status: "idle", locked: isDeployLocked() };
+	}
+	try {
+		const content = readFileSync(STATE_FILE, "utf8");
+		const parsed = JSON.parse(content) as Record<string, unknown>;
+		return { ...parsed, locked: isDeployLocked() };
+	} catch {
+		return { status: "unknown", locked: isDeployLocked() };
+	}
+}
+
+async function executeDeploy(
 	tag: string
 ): Promise<{ success: boolean; code: number; output: string }> {
 	console.log(`[daemon] Starting deployment for tag: ${tag}`);
@@ -67,8 +84,14 @@ async function handleDeploy(
 	const code = await proc.exited;
 	const output = `${stdout}\n${stderr}`.trim();
 
-	console.log(`[daemon] Deployment finished with code: ${code}`);
+	console.log(`[daemon] Deployment finished with exit code: ${code}`);
 	return { success: code === 0, code, output };
+}
+
+if (!SECRET) {
+	console.warn(
+		"[daemon] Warning: DEPLOY_WEBHOOK_SECRET is not configured; all deploy requests will be rejected (503)."
+	);
 }
 
 const server = Bun.serve({
@@ -78,20 +101,19 @@ const server = Bun.serve({
 		const url = new URL(req.url);
 		const path = url.pathname.replace(/\/+$/, "") || "/";
 
-		// Healthcheck endpoints
-		if (
-			req.method === "GET" &&
-			(path === "/health" || path === "/_deploy/health" || path === "/")
-		) {
-			return Response.json({
-				status: "ok",
-				deploying: isDeploying,
-				lastDeployTime,
-				lastDeployStatus,
-			});
+		if (req.method === "GET" && (path === "/health" || path === "/_deploy/health")) {
+			return Response.json({ status: "ok" });
 		}
 
-		// Deployment endpoints
+		if (req.method === "GET" && (path === "/status" || path === "/_deploy/status")) {
+			const authHeader = req.headers.get("authorization") || "";
+			const bearerMatch = /^Bearer\s+(.+)$/i.exec(authHeader);
+			if (!SECRET || !bearerMatch || !safeCompare(bearerMatch[1], SECRET)) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+			return Response.json(readDeploymentState());
+		}
+
 		if (
 			req.method === "POST" &&
 			(path === "/deploy" ||
@@ -99,18 +121,30 @@ const server = Bun.serve({
 				path === "/_deploy/deploy" ||
 				path === "/")
 		) {
+			if (!SECRET) {
+				return Response.json(
+					{ error: "DEPLOY_WEBHOOK_SECRET is not configured on daemon" },
+					{ status: 503 }
+				);
+			}
+
+			const contentLength = Number.parseInt(req.headers.get("content-length") || "0", 10);
+			if (contentLength > MAX_BODY_BYTES) {
+				return Response.json({ error: "Request payload too large" }, { status: 413 });
+			}
+
 			const bodyText = await req.text();
+			if (bodyText.length > MAX_BODY_BYTES) {
+				return Response.json({ error: "Request payload too large" }, { status: 413 });
+			}
 
 			if (!verifyAuth(req, bodyText)) {
-				console.warn("[daemon] Unauthorized deploy attempt received");
+				console.warn("[daemon] Rejected unauthorized deploy request");
 				return Response.json({ error: "Unauthorized" }, { status: 401 });
 			}
 
-			if (isDeploying) {
-				return Response.json(
-					{ error: "A deployment is already in progress" },
-					{ status: 409 }
-				);
+			if (isDeployLocked()) {
+				return Response.json({ error: "Deployment already in progress" }, { status: 409 });
 			}
 
 			let tag = "latest";
@@ -128,20 +162,13 @@ const server = Bun.serve({
 				}
 			}
 
-			isDeploying = true;
-			lastDeployTime = new Date().toISOString();
-
 			try {
-				const result = await handleDeploy(tag);
-				lastDeployStatus = result.success ? "success" : "failure";
+				const result = await executeDeploy(tag);
 				return Response.json(result, { status: result.success ? 200 : 500 });
 			} catch (err) {
-				lastDeployStatus = "failure";
 				const message = err instanceof Error ? err.message : String(err);
-				console.error("[daemon] Unexpected error during deployment:", err);
+				console.error("[daemon] Unexpected execution failure:", err);
 				return Response.json({ success: false, error: message }, { status: 500 });
-			} finally {
-				isDeploying = false;
 			}
 		}
 
@@ -149,12 +176,10 @@ const server = Bun.serve({
 	},
 });
 
-console.log(
-	`[daemon] Deployment webhook daemon running on http://${server.hostname}:${server.port}`
-);
+console.log(`[daemon] Listening on http://${server.hostname}:${server.port}`);
 
 const shutdown = () => {
-	console.log("[daemon] Stopping daemon...");
+	console.log("[daemon] Shutting down...");
 	server.stop(true);
 	process.exit(0);
 };

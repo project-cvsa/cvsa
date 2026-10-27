@@ -38,6 +38,16 @@ services:
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-}
       INTERNAL_API_URL: ${INTERNAL_API_URL:-http://backend:${BACKEND_PORT:-16412}}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS -H 'Host: zh.projectcvsa.com' http://127.0.0.1:${WEB_PORT:-10199}/ || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     depends_on:
       db:
         condition: service_healthy
@@ -251,3 +261,12 @@ volumes:
   snapshot_data:
   meili:
   redis:
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
+        - subnet: fd00:c75a::/64
+

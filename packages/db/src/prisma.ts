@@ -44,5 +44,6 @@ export function transformPrismaResult<T>(obj: T): Serialized<T> {
 }
 
 export const prisma = createDatabaseClient({
-	connectionString: env.DATABASE_URL,
+	connectionString:
+		env.DATABASE_URL ?? (typeof process !== "undefined" ? process.env.DATABASE_URL : undefined),
 });
