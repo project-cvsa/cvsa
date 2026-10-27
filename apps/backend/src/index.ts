@@ -125,7 +125,8 @@ export const app = new Elysia({
 		cors({
 			origin: corsOriginPatterns,
 			methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-			allowedHeaders: ["content-type", "x-locale", "authorization"],
+			allowedHeaders: ["content-type", "x-locale", "authorization", "accept-language"],
+			exposeHeaders: ["x-trace-id", "X-Trace-ID"],
 			credentials: true,
 		})
 	)

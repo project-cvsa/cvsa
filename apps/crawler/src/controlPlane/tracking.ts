@@ -59,15 +59,22 @@ export const trackingRoutes = new Elysia()
 		"/videos",
 		async ({ body }) => {
 			const now = toInstant(new Date());
-			for (const aid of body.aids) {
-				await trackingRepository.upsertTracking({
-					aid: BigInt(aid),
-					state: body.state ?? "regular",
-					priority: body.priority ?? 2,
-					nextSnapshotAt: now,
-				});
+			const aids = body.aids;
+			const chunkSize = 25;
+			for (let i = 0; i < aids.length; i += chunkSize) {
+				const chunk = aids.slice(i, i + chunkSize);
+				await Promise.all(
+					chunk.map((aid) =>
+						trackingRepository.upsertTracking({
+							aid: BigInt(aid),
+							state: body.state ?? "regular",
+							priority: body.priority ?? 2,
+							nextSnapshotAt: now,
+						})
+					)
+				);
 			}
-			return { registered: body.aids.length };
+			return { registered: aids.length };
 		},
 		{
 			body: RegisterTrackingVideosRequestSchema,

@@ -110,46 +110,32 @@ jobs:
           done
 
   deploy:
-    name: Trigger Deploy Webhook
+    name: Deploy to Server
     needs: build-and-push
     if: github.ref == 'refs/heads/main' && vars.ENABLE_VPS_DEPLOY == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
-      # The host-side `scripts/deploy-daemon.ts` owns the rollout: it pins
-      # `IMAGE_TAG`, drains the crawler, applies migrations, waits on the native
-      # healthchecks, and rolls back on its own. CI only has to authenticate and
-      # hand over the tag, so no SSH key or deploy path exists in this workflow.
-      - name: Call deploy webhook
+      - name: Trigger deployment webhook
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
           IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
         run: |
           set -euo pipefail
-          if [ -z "${DEPLOY_WEBHOOK_URL}" ] || [ -z "${DEPLOY_WEBHOOK_SECRET}" ]; then
-            echo "::error::DEPLOY_WEBHOOK_URL and DEPLOY_WEBHOOK_SECRET must be configured." >&2
+          if [ -z "${DEPLOY_WEBHOOK_URL}" ]; then
+            echo "::error::DEPLOY_WEBHOOK_URL must be configured when ENABLE_VPS_DEPLOY is enabled." >&2
             exit 1
           fi
 
-          PAYLOAD=$(jq -cn --arg tag "${IMAGE_TAG}" '{tag: $tag, syncGit: true}')
-          SIGNATURE=$(printf '%s' "${PAYLOAD}" \
-            | openssl dgst -sha256 -hmac "${DEPLOY_WEBHOOK_SECRET}" -hex \
-            | sed 's/^.* //')
-
-          HTTP_STATUS=$(curl --silent --show-error \
-            --max-time 900 \
-            --output deploy-response.json \
-            --write-out '%{http_code}' \
-            --header "Content-Type: application/json" \
-            --header "Authorization: Bearer ${DEPLOY_WEBHOOK_SECRET}" \
-            --header "X-Hub-Signature-256: sha256=${SIGNATURE}" \
-            --data "${PAYLOAD}" \
-            "${DEPLOY_WEBHOOK_URL}")
-
-          cat deploy-response.json || true
-          if [ "${HTTP_STATUS}" != "200" ]; then
-            echo "::error::Deploy webhook failed with HTTP ${HTTP_STATUS} for tag ${IMAGE_TAG}" >&2
-            exit 1
+          AUTH_HEADER=()
+          if [ -n "${DEPLOY_WEBHOOK_SECRET}" ]; then
+            AUTH_HEADER=(-H "Authorization: Bearer ${DEPLOY_WEBHOOK_SECRET}")
           fi
-          echo "Deploy daemon accepted ${IMAGE_TAG}"
+
+          echo "Triggering webhook: ${DEPLOY_WEBHOOK_URL} with tag: ${IMAGE_TAG}"
+          curl -fsS -X POST "${AUTH_HEADER[@]}" \
+            -H "Content-Type: application/json" \
+            -d "{\"tag\":\"${IMAGE_TAG}\"}" \
+            "${DEPLOY_WEBHOOK_URL}"
+          echo "Deploy webhook triggered successfully."

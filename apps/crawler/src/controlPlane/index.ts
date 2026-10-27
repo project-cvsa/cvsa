@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { AppError } from "@cvsa/contracts";
+import { AppError, type ErrorCode, ErrorCodeEnum } from "@cvsa/contracts";
 import { crawlerEnv } from "@cvsa/env";
 import { networkRuntimeRoutes } from "./networkRuntime";
 import { trackingRoutes } from "./tracking";
@@ -7,19 +7,14 @@ import { discoveryRoutes } from "./discovery";
 import { statsRoutes } from "./stats";
 
 function errorResponse(error: AppError): {
-	code: "ENTITY_CONFLICT" | "VALIDATION_ERROR" | "INTERNAL_SERVER_ERROR" | "NOT_FOUND";
+	code: ErrorCode;
 	message: string;
 } {
-	if (error.code === "ENTITY_CONFLICT") {
-		return { code: "ENTITY_CONFLICT", message: error.message };
-	}
-	if (error.code === "VALIDATION_ERROR") {
-		return { code: "VALIDATION_ERROR", message: error.message };
-	}
-	if (error.code === "NOT_FOUND") {
-		return { code: "NOT_FOUND", message: error.message };
-	}
-	return { code: "INTERNAL_SERVER_ERROR", message: error.message };
+	const parsed = ErrorCodeEnum.safeParse(error.code);
+	return {
+		code: parsed.success ? parsed.data : "INTERNAL_SERVER_ERROR",
+		message: error.message,
+	};
 }
 
 export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", prefix: "/v2" })
