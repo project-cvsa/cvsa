@@ -2,8 +2,8 @@ import type { Pool } from "pg";
 
 /**
  * Legacy `public.video_snapshot` row, as `pg` returns it. `aid` is an int8 and
- * therefore a string, while `id` is the legacy int4 primary key that drives
- * keyset pagination.
+ * therefore a string, while `id` is the legacy int4 primary key. The pair
+ * `(created_at, id)` drives keyset pagination over the recent window.
  */
 export interface LegacySnapshotRow {
 	id: number;
@@ -50,6 +50,34 @@ const SNAPSHOT_COLUMN_LIST = SNAPSHOT_COLUMNS.map((column) => `"${column}"`).joi
  * Postgres' 65535 limit, while keeping one statement per batch.
  */
 export const SNAPSHOT_BATCH_SIZE = 1000;
+
+/**
+ * The legacy `video_snapshot` table holds 100M+ rows, so copying its full
+ * history is neither practical nor useful. Only the most recent days are
+ * exported, which is enough to recover the multi-window history the crawler
+ * needs to resume immediately.
+ */
+export const DEFAULT_SNAPSHOT_DAYS = 7;
+
+/** Parses `--snapshot-days`, falling back to the default for invalid input. */
+export function parseSnapshotDays(raw: string | undefined): number {
+	if (!raw) return DEFAULT_SNAPSHOT_DAYS;
+	const days = Number.parseInt(raw, 10);
+	return Number.isInteger(days) && days > 0 ? days : DEFAULT_SNAPSHOT_DAYS;
+}
+
+/**
+ * Resolves the recent-window cutoff on the legacy server's clock. The legacy
+ * `video_snapshot` table has an index on `created_at`, so every read uses this
+ * bound instead of scanning the full history.
+ */
+export async function resolveSnapshotCutoff(pool: Pool, snapshotDays: number): Promise<Date> {
+	const { rows } = await pool.query<{ cutoff: Date }>(
+		"SELECT NOW() - ($1 * INTERVAL '1 day') AS cutoff",
+		[snapshotDays]
+	);
+	return rows[0]?.cutoff ?? new Date(Date.now() - snapshotDays * 24 * 60 * 60 * 1_000);
+}
 
 export function toSnapshotInsertRow(row: LegacySnapshotRow): SnapshotInsertRow {
 	return {

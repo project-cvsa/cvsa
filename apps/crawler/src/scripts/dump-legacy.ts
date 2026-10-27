@@ -1,13 +1,20 @@
 import { appLogger } from "@cvsa/logger";
 import { createWriteStream } from "node:fs";
-import { Pool } from "pg";
-import { type LegacySnapshotRow, SNAPSHOT_BATCH_SIZE } from "./legacy-snapshots";
+import { Pool, type QueryResult } from "pg";
+import {
+	DEFAULT_SNAPSHOT_DAYS,
+	type LegacySnapshotRow,
+	SNAPSHOT_BATCH_SIZE,
+	parseSnapshotDays,
+	resolveSnapshotCutoff,
+} from "./legacy-snapshots";
 
 interface DumpOptions {
 	legacyDbUrl: string;
 	outFile: string;
 	batchSize: number;
 	includeSnapshots: boolean;
+	snapshotDays: number;
 	limit?: number;
 }
 
@@ -19,6 +26,7 @@ function parseCliArgs(): DumpOptions {
 	let outFile = "legacy-tracking-dump.jsonl";
 	let batchSize = 2000;
 	let includeSnapshots = true;
+	let snapshotDays = DEFAULT_SNAPSHOT_DAYS;
 	let limit: number | undefined;
 
 	for (const arg of args) {
@@ -30,12 +38,14 @@ function parseCliArgs(): DumpOptions {
 			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 2000;
 		} else if (arg === "--no-snapshots") {
 			includeSnapshots = false;
+		} else if (arg.startsWith("--snapshot-days=")) {
+			snapshotDays = parseSnapshotDays(arg.slice("--snapshot-days=".length));
 		} else if (arg.startsWith("--limit=")) {
 			limit = Number.parseInt(arg.slice("--limit=".length), 10);
 		}
 	}
 
-	return { legacyDbUrl, outFile, batchSize, includeSnapshots, limit };
+	return { legacyDbUrl, outFile, batchSize, includeSnapshots, snapshotDays, limit };
 }
 
 async function runDump(): Promise<void> {
@@ -44,6 +54,7 @@ async function runDump(): Promise<void> {
 		outFile: opts.outFile,
 		batchSize: opts.batchSize,
 		includeSnapshots: opts.includeSnapshots,
+		snapshotDays: opts.snapshotDays,
 		limit: opts.limit,
 	});
 
@@ -175,26 +186,33 @@ async function runDump(): Promise<void> {
 			appLogger.info(`Dumped ${dumpedMeta} / ${targetMeta} metadata records`);
 		}
 
-		// 3. Export Video Snapshots with keyset pagination. `id` is the legacy
-		// sequence, so a million-row table streams batch by batch instead of
-		// holding every offset-scanned page or the whole result set in memory.
+		// 3. Export only the recent Video Snapshots. The legacy table holds 100M+
+		// rows, so the dump is bounded to the last `snapshotDays` days and read
+		// with a `(created_at, id)` keyset cursor. `created_at` is indexed on the
+		// legacy database, so every batch is a bounded index range scan instead of
+		// a full-table walk.
 		let dumpedSnapshots = 0;
 		if (opts.includeSnapshots) {
+			const cutoff = await resolveSnapshotCutoff(pool, opts.snapshotDays);
 			const snapshotCount = await pool.query<{ count: string }>(
-				"SELECT COUNT(*)::text AS count FROM video_snapshot"
+				"SELECT COUNT(*)::text AS count FROM video_snapshot WHERE created_at >= $1",
+				[cutoff]
 			);
 			const totalSnapshots = Number.parseInt(snapshotCount.rows[0]?.count ?? "0", 10);
 			const targetSnapshots = opts.limit
 				? Math.min(totalSnapshots, opts.limit)
 				: totalSnapshots;
-			appLogger.info(`Found ${totalSnapshots} snapshot records to dump`);
+			appLogger.info(
+				`Found ${totalSnapshots} snapshot records in the last ${opts.snapshotDays} days to dump`
+			);
 
 			const snapshotBatchSize = Math.min(opts.batchSize, SNAPSHOT_BATCH_SIZE);
+			let lastCreatedAt: Date | string = cutoff;
 			let lastSnapshotId = 0;
 
 			while (dumpedSnapshots < targetSnapshots) {
 				const batchLimit = Math.min(snapshotBatchSize, targetSnapshots - dumpedSnapshots);
-				const rows = await pool.query<LegacySnapshotRow>(
+				const rows: QueryResult<LegacySnapshotRow> = await pool.query<LegacySnapshotRow>(
 					`
 					SELECT
 						id,
@@ -208,11 +226,13 @@ async function runDump(): Promise<void> {
 						danmakus,
 						replies
 					FROM video_snapshot
-					WHERE id > $1
-					ORDER BY id ASC
-					LIMIT $2
+					WHERE created_at >= $1
+						AND created_at >= $2
+						AND (created_at, id) > ($2, $3)
+					ORDER BY created_at ASC, id ASC
+					LIMIT $4
 					`,
-					[lastSnapshotId, batchLimit]
+					[cutoff, lastCreatedAt, lastSnapshotId, batchLimit]
 				);
 
 				if (rows.rows.length === 0) break;
@@ -226,7 +246,9 @@ async function runDump(): Promise<void> {
 					dumpedSnapshots++;
 				}
 
-				lastSnapshotId = rows.rows[rows.rows.length - 1].id;
+				const lastRow: LegacySnapshotRow = rows.rows[rows.rows.length - 1];
+				lastCreatedAt = lastRow.created_at;
+				lastSnapshotId = lastRow.id;
 				appLogger.info(`Dumped ${dumpedSnapshots} / ${targetSnapshots} snapshot records`);
 			}
 		}
