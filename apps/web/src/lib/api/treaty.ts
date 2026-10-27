@@ -61,11 +61,13 @@ function normalizeApiUrl(value: string | undefined): string | undefined {
  * Read the deployed API origin. Resolution is deferred to first use so a
  * missing variable cannot break module evaluation on an unrelated page.
  *
- * Behind the host reverse proxy, `/v2/*` and `/` share a single origin, so an
- * unset or empty `PUBLIC_API_URL` is a supported "same origin" configuration
- * rather than an error: the browser calls `window.location.origin`, and SSR
- * stays inside the Docker network. A non-empty value (a dedicated API domain)
- * still wins.
+ * In production, the backend API is hosted on a dedicated subdomain
+ * (`api.projectcvsa.com` / `api.dev.projectcvsa.com`), while web SSR is on
+ * `zh.projectcvsa.com` / `en.projectcvsa.com`.
+ *
+ * When `PUBLIC_API_URL` is set, it wins. In the browser, if unset on projectcvsa.com,
+ * it automatically infers `https://api.[dev.]projectcvsa.com`. During SSR inside
+ * the container, it calls the compose network endpoint (`INTERNAL_API_URL` or fallback).
  */
 function resolveApiUrl(): string {
 	const configured = normalizeApiUrl(import.meta.env.PUBLIC_API_URL);
@@ -73,8 +75,15 @@ function resolveApiUrl(): string {
 		return configured;
 	}
 
-	if (typeof window !== "undefined" && window.location.origin) {
-		return window.location.origin;
+	if (typeof window !== "undefined") {
+		const parts = window.location.hostname.split(".").reverse();
+		if (parts.length >= 2 && parts[0] === "com" && parts[1] === "projectcvsa") {
+			const isDev = parts[2] === "dev";
+			return `https://api.${isDev ? "dev." : ""}projectcvsa.com`;
+		}
+		if (window.location.origin) {
+			return window.location.origin;
+		}
 	}
 
 	// SSR in the container: runtime environment first (it can be injected at

@@ -104,19 +104,11 @@ type DeployOutcome = {
 	durationMs: number;
 };
 
-// -----------------------------------------------------------------------------
-// Structured logging
-// -----------------------------------------------------------------------------
-
 function log(level: LogLevel, message: string, fields: Record<string, unknown> = {}): void {
 	const entry = JSON.stringify({ time: new Date().toISOString(), level, message, ...fields });
 	const write = level === "error" || level === "warn" ? console.error : console.log;
 	write(entry);
 }
-
-// -----------------------------------------------------------------------------
-// Configuration
-// -----------------------------------------------------------------------------
 
 function parseDotEnv(content: string): Record<string, string> {
 	const values: Record<string, string> = {};
@@ -194,10 +186,6 @@ function resolveConfig(): DaemonConfig {
 	};
 }
 
-// -----------------------------------------------------------------------------
-// Environment file editing (IMAGE_TAG pinning / rollback)
-// -----------------------------------------------------------------------------
-
 function readImageTag(content: string): string | null {
 	for (const rawLine of content.split("\n")) {
 		const line = rawLine.trim();
@@ -228,10 +216,6 @@ async function writeEnvFile(envPath: string, content: string): Promise<void> {
 	await Bun.write(temporaryPath, content);
 	await rename(temporaryPath, envPath);
 }
-
-// -----------------------------------------------------------------------------
-// Process execution
-// -----------------------------------------------------------------------------
 
 function describeError(error: unknown): string {
 	if (error instanceof Error) return error.message;
@@ -310,10 +294,6 @@ async function runCommand(argv: string[], options: CommandOptions): Promise<Comm
 	return { code, timedOut, output: output.trimEnd(), durationMs };
 }
 
-// -----------------------------------------------------------------------------
-// Authentication
-// -----------------------------------------------------------------------------
-
 function constantTimeEquals(left: string, right: string): boolean {
 	const leftBuffer = Buffer.from(left, "utf8");
 	const rightBuffer = Buffer.from(right, "utf8");
@@ -342,10 +322,6 @@ function isAuthorized(request: Request, secret: string, body: string): boolean {
 		verifySignature(request.headers.get("x-hub-signature-256"), secret, body)
 	);
 }
-
-// -----------------------------------------------------------------------------
-// Deployment
-// -----------------------------------------------------------------------------
 
 async function runStep(
 	steps: StepRecord[],
@@ -750,10 +726,6 @@ async function rollback(input: {
 
 	return result.status === "ok";
 }
-
-// -----------------------------------------------------------------------------
-// HTTP layer
-// -----------------------------------------------------------------------------
 
 function jsonResponse(status: number, body: unknown): Response {
 	return new Response(JSON.stringify(body, null, 2), {

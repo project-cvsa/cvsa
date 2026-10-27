@@ -33,8 +33,6 @@ import type {
 } from "../tracking/repository.interface";
 import type { TrackingState } from "../tracking/types";
 
-// --------------------------------------------------------------------------- MQ
-
 export interface FakeMqState {
 	connected: boolean;
 	closed: boolean;
@@ -79,8 +77,6 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 	};
 }
 
-// --------------------------------------------------------------- snapshot DB
-
 export interface FakeSnapshotDbState {
 	connected: boolean;
 	disconnected: boolean;
@@ -109,8 +105,6 @@ export function createFakeSnapshotDb(): FakeSnapshotDbState & {
 		},
 	});
 }
-
-// ---------------------------------------------------------------- tracking
 
 export interface CreateTrackingOverrides {
 	state?: TrackingState;
@@ -342,8 +336,6 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		};
 	}
 }
-
-// --------------------------------------------------------------- discovery
 
 export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 	readonly metadatas = new Map<bigint, BilibiliVideoMetadata>();

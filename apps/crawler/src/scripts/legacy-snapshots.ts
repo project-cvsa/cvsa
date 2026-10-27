@@ -137,8 +137,6 @@ export async function resolveSnapshotCutoff(pool: Pool, snapshotDays: number): P
 	return rows[0]?.cutoff ?? new Date(Date.now() - snapshotDays * 24 * 60 * 60 * 1_000);
 }
 
-// ------------------------------------------------------------------ mapping
-
 function toNumber(value: number | string | null | undefined, fallback = 0): number {
 	if (value === null || value === undefined) return fallback;
 	const parsed = typeof value === "number" ? value : Number(value);
@@ -225,8 +223,6 @@ export function toMetadataInsertRow(row: LegacyMetadataRow, now = new Date()): M
 		capturedAt: (row.created_at ? toIsoString(row.created_at) : null) ?? now.toISOString(),
 	};
 }
-
-// ------------------------------------------------------------------ writing
 
 /**
  * Runs one bulk write.

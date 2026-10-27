@@ -1,7 +1,6 @@
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
 import { createReadStream } from "node:fs";
-import { createInterface } from "node:readline";
 import { Pool } from "pg";
 import {
 	DEFAULT_SNAPSHOT_DAYS,
@@ -54,8 +53,6 @@ function parseCliArgs(): ImportOptions {
 		snapshotDays,
 	};
 }
-
-// ------------------------------------------------------------------ reading
 
 /**
  * The dump is untrusted JSONL, so every field is narrowed instead of cast. A
@@ -135,6 +132,34 @@ function readSnapshotRow(record: Record<string, unknown>, aid: string): LegacySn
 	};
 }
 
+/**
+ * Streaming line reader that strictly splits on `\n`.
+ *
+ * Node/Bun's `readline.createInterface` treats ECMAScript line terminators
+ * U+2028 (Line Separator) and U+2029 (Paragraph Separator) as line breaks.
+ * Video descriptions frequently contain U+2028/U+2029 (from lyrics copy-pasting),
+ * which caused `readline` to slice a single JSON record into broken multi-line fragments.
+ */
+async function* splitJsonLines(stream: AsyncIterable<Buffer | Uint8Array>): AsyncIterable<string> {
+	let buffer = "";
+	const decoder = new TextDecoder("utf-8");
+	for await (const chunk of stream) {
+		buffer += decoder.decode(chunk, { stream: true });
+		let start = 0;
+		let idx = buffer.indexOf("\n", start);
+		while (idx !== -1) {
+			yield buffer.slice(start, idx);
+			start = idx + 1;
+			idx = buffer.indexOf("\n", start);
+		}
+		buffer = buffer.slice(start);
+	}
+	buffer += decoder.decode();
+	if (buffer.length > 0) {
+		yield buffer;
+	}
+}
+
 async function runImport(): Promise<void> {
 	const opts = parseCliArgs();
 	appLogger.info("Starting legacy data import from dump file...", {
@@ -148,11 +173,6 @@ async function runImport(): Promise<void> {
 	// `INSERT ... SELECT FROM jsonb_to_recordset($1)` with one bound parameter,
 	// so a 10k-row batch is one statement instead of 10k round trips.
 	const pool = new Pool({ connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL });
-
-	const rl = createInterface({
-		input: createReadStream(opts.file, { encoding: "utf8" }),
-		crlfDelay: Infinity,
-	});
 
 	let importedTracking = 0;
 	let importedMeta = 0;
@@ -169,12 +189,23 @@ async function runImport(): Promise<void> {
 	const snapshotCutoffMs = now.getTime() - opts.snapshotDays * 24 * 60 * 60 * 1_000;
 
 	try {
-		for await (const line of rl) {
+		for await (const line of splitJsonLines(createReadStream(opts.file))) {
 			lineNumber++;
 			const trimmed = line.trim();
 			if (!trimmed) continue;
 
-			const record = readRecord(JSON.parse(trimmed), lineNumber);
+			let rawRecord: unknown;
+			try {
+				rawRecord = JSON.parse(trimmed);
+			} catch (parseError) {
+				skippedRecords++;
+				appLogger.warn(`Skipping malformed JSON line ${lineNumber}`, {
+					error: (parseError as Error).message,
+				});
+				continue;
+			}
+
+			const record = readRecord(rawRecord, lineNumber);
 			const recordType = asText(record._type);
 			const aid = asText(record.aid);
 			if (!aid) {
