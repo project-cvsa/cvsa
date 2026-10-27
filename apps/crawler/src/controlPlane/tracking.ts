@@ -7,11 +7,12 @@ import {
 	TrackingVideoListQuerySchema,
 	TrackingVideoListResponseSchema,
 	VideoTrackingDtoSchema,
+	type TrackingVideoListItem,
 	type TrackingVideoListResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
-import { toInstant, type VideoTracking } from "@cvsa/snapshot-db";
-import { trackingRepository } from "../container";
+import { toInstant, type BilibiliVideoMetadata, type VideoTracking } from "@cvsa/snapshot-db";
+import { discoveryRepository, trackingRepository } from "../container";
 
 function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 	return {
@@ -31,6 +32,25 @@ function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 		scheduleReason: t.scheduleReason,
 		nextMetadataAt: t.nextMetadataAt ? t.nextMetadataAt.toString() : null,
 		lastError: t.lastError,
+	};
+}
+
+function toTrackingListItemDto(
+	t: VideoTracking,
+	metadata: BilibiliVideoMetadata | undefined
+): TrackingVideoListItem {
+	return {
+		...toTrackingDto(t),
+		...(metadata
+			? {
+					title: metadata.title,
+					bvid: metadata.bvid,
+					ownerName: metadata.ownerName,
+					videoStatus: metadata.videoStatus,
+					filterDecision: metadata.filterDecision,
+					discoverySource: metadata.discoverySource,
+				}
+			: {}),
 	};
 }
 
@@ -67,8 +87,14 @@ export const trackingRoutes = new Elysia()
 				state: query.state,
 				search: query.search,
 			});
+			const metadatas = await discoveryRepository.getMetadatas(
+				result.items.map((item) => item.aid)
+			);
+			const metadataByAid = new Map(metadatas.map((item) => [item.aid, item]));
 			return {
-				items: result.items.map(toTrackingDto),
+				items: result.items.map((item) =>
+					toTrackingListItemDto(item, metadataByAid.get(item.aid))
+				),
 				total: result.total,
 			};
 		},

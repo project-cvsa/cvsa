@@ -571,23 +571,33 @@ describe("DiscoveryFilterService", () => {
 		expect(decision.confidence).toBe(1);
 	});
 
-	test("rejects blacklist keywords even with singer", () => {
-		const decision = new DiscoveryFilterService().evaluateVideo({
-			title: "【原神/洛天依】直播录像切片剪辑",
-			tags: ["原神", "洛天依", "切片"],
-			duration: 180,
-		});
-		expect(decision.action).toBe("reject");
-	});
-
-	test("rejects duration out of bounds", () => {
-		const decision = new DiscoveryFilterService().evaluateVideo({
+	test("does not hard-reject by blacklist or duration when whitelist hits", () => {
+		const filter = new DiscoveryFilterService();
+		const shortWhitelist = filter.evaluateVideo({
 			title: "【言和原创】超短试听",
 			tags: ["言和", "原创"],
 			duration: 15,
 		});
+		expect(shortWhitelist.action).toBe("accept");
+		expect(shortWhitelist.reason).toBe("whitelist_hit");
+
+		const coverWhitelist = filter.evaluateVideo({
+			title: "【洛天依原创】带cover字样的原创曲",
+			tags: ["洛天依", "原创曲"],
+			duration: 1200,
+		});
+		expect(coverWhitelist.action).toBe("accept");
+		expect(coverWhitelist.reason).toBe("whitelist_hit");
+	});
+
+	test("rejects non-whitelist candidates without a model", () => {
+		const decision = new DiscoveryFilterService().evaluateVideo({
+			title: "【某游戏】直播录像切片剪辑",
+			tags: ["游戏", "切片"],
+			duration: 180,
+		});
 		expect(decision.action).toBe("reject");
-		expect(decision.reason).toBe("duration_out_of_range");
+		expect(decision.reason).toBe("model_rejected");
 	});
 
 	test("samples rejected candidates according to the sample rate", () => {
@@ -765,7 +775,7 @@ describe("DiscoveryPipelineProcessor", () => {
 		const samples = await repo.listSamples();
 		expect(samples).toHaveLength(1);
 		expect(samples[0]?.decision).toBe("model_rejected");
-		expect(samples[0]?.songProbability).toBe(0);
+		expect(samples[0]?.songProbability).toBe(0.2);
 	});
 
 	test("expands recommendations for hot sampled videos", async () => {
