@@ -12,7 +12,7 @@ import { NetworkRuntimeConfigSchema } from "@cvsa/network-scheduler";
  */
 
 export const NetworkRuntimeConfigDocumentSchema = z.object({
-	revision: z.number().int().positive(),
+	revision: z.number().int().nonnegative(),
 	config: NetworkRuntimeConfigSchema,
 	updatedAt: z.coerce.date(),
 });

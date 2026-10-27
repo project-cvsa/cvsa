@@ -1,66 +1,124 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ==============================================================================
-# CVSA Stack Production Deployment Script
-#
-# Usage:
-#   ./scripts/deploy.sh [IMAGE_TAG]
-#
-# Examples:
-#   ./scripts/deploy.sh
-#   ./scripts/deploy.sh sha-1b9edd326579
-# ==============================================================================
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+project_root="$(cd "${script_dir}/.." && pwd)"
+cd "${project_root}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-cd "${ROOT_DIR}"
+lock_dir="${project_root}/.deploy.lock"
+state_file="${project_root}/.deploy.state.json"
 
-TAG="${1:-latest}"
-echo "==> [deploy] Starting CVSA deployment with IMAGE_TAG=${TAG}..."
+acquire_lock() {
+	if ! mkdir "${lock_dir}" 2>/dev/null; then
+		if [ -f "${lock_dir}/pid" ]; then
+			local pid
+			pid="$(cat "${lock_dir}/pid" 2>/dev/null || true)"
+			if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+				echo "Error: deployment is already in progress (PID: ${pid})" >&2
+				exit 409
+			fi
+		fi
+		rm -rf "${lock_dir}" 2>/dev/null || true
+		if ! mkdir "${lock_dir}" 2>/dev/null; then
+			echo "Error: failed to acquire deployment lock" >&2
+			exit 409
+		fi
+	fi
+	echo "$$" > "${lock_dir}/pid"
+}
 
-# Export IMAGE_TAG for docker compose
-export IMAGE_TAG="${TAG}"
+release_lock() {
+	rm -rf "${lock_dir}" 2>/dev/null || true
+}
 
-# Ensure .env exists
+acquire_lock
+
+tag="${1:-${IMAGE_TAG:-latest}}"
+export IMAGE_TAG="${tag}"
+started_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+update_state() {
+	local status="$1"
+	local code="$2"
+	local finished_at
+	finished_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+	local temp_file="${state_file}.tmp.$$"
+	cat <<EOF > "${temp_file}"
+{
+  "status": "${status}",
+  "tag": "${IMAGE_TAG}",
+  "startedAt": "${started_at}",
+  "finishedAt": "${finished_at}",
+  "exitCode": ${code}
+}
+EOF
+	mv -f "${temp_file}" "${state_file}"
+}
+
+temp_initial_state="${state_file}.tmp.$$"
+cat <<EOF > "${temp_initial_state}"
+{
+  "status": "deploying",
+  "tag": "${IMAGE_TAG}",
+  "startedAt": "${started_at}",
+  "finishedAt": null,
+  "exitCode": null
+}
+EOF
+mv -f "${temp_initial_state}" "${state_file}"
+
+cleanup() {
+	local exit_code=$?
+	trap - EXIT INT TERM
+	if [ "${exit_code}" -eq 0 ]; then
+		update_state "success" 0
+	else
+		update_state "failed" "${exit_code}"
+	fi
+	release_lock
+	exit "${exit_code}"
+}
+trap cleanup EXIT INT TERM
+
+echo "Deploying CVSA stack with IMAGE_TAG=${IMAGE_TAG}"
+
 if [ ! -f .env ]; then
 	if [ -f .env.example ]; then
-		echo "==> [deploy] Notice: .env not found, initializing from .env.example..."
+		echo "Warning: .env not found, initializing from .env.example"
 		cp .env.example .env
 	else
-		echo "==> [deploy] Error: .env file not found and .env.example missing." >&2
+		echo "Error: neither .env nor .env.example exists in ${project_root}" >&2
 		exit 1
 	fi
 fi
 
-# Step 1: Optional Docker registry login if credentials are provided in environment
+if grep -q "^IMAGE_TAG=" .env 2>/dev/null; then
+	sed -i.bak "s|^IMAGE_TAG=.*|IMAGE_TAG=${IMAGE_TAG}|" .env && rm -f .env.bak
+else
+	echo "IMAGE_TAG=${IMAGE_TAG}" >> .env
+fi
+
 if [ -n "${GHCR_USERNAME:-}" ] && [ -n "${GHCR_PULL_TOKEN:-}" ]; then
-	echo "==> [deploy] Logging in to GitHub Container Registry (ghcr.io)..."
+	echo "Logging into ghcr.io registry"
 	echo "${GHCR_PULL_TOKEN}" | docker login ghcr.io --username "${GHCR_USERNAME}" --password-stdin
 fi
 
-# Step 2: Pull latest application images
-echo "==> [deploy] Pulling application images (backend, crawler, embedding, web)..."
+echo "Pulling application images"
 docker compose pull backend crawler embedding web
 
-# Step 3: Ensure data backing services are healthy before migration
-echo "==> [deploy] Ensuring data backing services are running and healthy..."
+echo "Starting data backing services"
 docker compose up -d --wait --wait-timeout 120 db snapshot-db redis meili
 
-# Step 4: Gracefully drain the crawler to avoid overlapping scheduler leases
-echo "==> [deploy] Draining and stopping crawler..."
+echo "Draining crawler dispatcher"
 docker compose stop -t 30 crawler || true
 docker compose rm -f crawler || true
 
-# Step 5: Run database migrations
-echo "==> [deploy] Running database migrations..."
+echo "Applying database migrations"
 docker compose run --rm --no-deps -T backend bun run --filter @cvsa/db migrate:deploy
 docker compose run --rm --no-deps -T crawler bun run --filter @cvsa/snapshot-db migrate:deploy
 
-# Step 6: Bring up the full stack and wait for native healthchecks
-echo "==> [deploy] Starting all services with healthchecks..."
+echo "Starting application stack"
 docker compose up -d --wait --wait-timeout 120 --remove-orphans
 
-# Step 7: Final health check overview
-echo "==> [deploy] Deployment finished successfully! Service status:"
+echo "Deployment completed successfully"
 docker compose ps

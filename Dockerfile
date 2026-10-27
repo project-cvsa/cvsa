@@ -46,7 +46,9 @@ FROM deps AS source
 COPY packages ./packages
 COPY locale ./locale
 COPY apps ./apps
-RUN bun run --filter @cvsa/db gen && bun run --filter @cvsa/snapshot-db gen
+RUN bun run --filter @cvsa/db gen && \
+	bun run --filter @cvsa/snapshot-db gen && \
+	bun run --filter @cvsa/network-scheduler build
 
 # ==============================================================================
 # Stage 4: Target - Backend API & Outbox Service
@@ -120,5 +122,5 @@ ENV PORT=10199
 COPY --from=web-builder /app/apps/web/dist /app/apps/web/dist
 EXPOSE 10199
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
-	CMD curl -fsS http://127.0.0.1:${PORT:-10199}/ || exit 1
+	CMD curl -fsS -H "Host: zh.projectcvsa.com" http://127.0.0.1:${PORT:-10199}/ || exit 1
 CMD ["bun", "./apps/web/dist/server/entry.mjs"]

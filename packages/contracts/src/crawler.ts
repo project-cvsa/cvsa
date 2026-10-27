@@ -215,7 +215,7 @@ export const NetworkRuntimeConfigSchema = z.object({
 });
 
 export const NetworkRuntimeConfigDocumentSchema = z.object({
-	revision: z.number().int().positive(),
+	revision: z.number().int().nonnegative(),
 	config: NetworkRuntimeConfigSchema,
 	updatedAt: z.union([z.string(), z.date()]),
 });
