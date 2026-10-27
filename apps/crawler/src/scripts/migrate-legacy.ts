@@ -1,14 +1,17 @@
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
 import { snapshotDb, toInstant } from "@cvsa/snapshot-db";
-import { Pool } from "pg";
+import { Pool, type QueryResult } from "pg";
 import { TrackingRepository } from "../crawler/tracking/repository";
 import { DiscoveryRepository } from "../crawler/discovery/repository";
 import type { UpsertMetadataInput } from "../crawler/discovery/types";
 import {
+	DEFAULT_SNAPSHOT_DAYS,
 	insertSnapshotBatch,
 	type LegacySnapshotRow,
 	SNAPSHOT_BATCH_SIZE,
+	parseSnapshotDays,
+	resolveSnapshotCutoff,
 	toSnapshotInsertRow,
 } from "./legacy-snapshots";
 
@@ -18,6 +21,7 @@ interface MigrationOptions {
 	dryRun: boolean;
 	includeMetadata: boolean;
 	includeSnapshots: boolean;
+	snapshotDays: number;
 	limit?: number;
 }
 
@@ -30,6 +34,7 @@ function parseCliArgs(): MigrationOptions {
 	let dryRun = false;
 	let includeMetadata = true;
 	let includeSnapshots = true;
+	let snapshotDays = DEFAULT_SNAPSHOT_DAYS;
 	let limit: number | undefined;
 
 	for (const arg of args) {
@@ -43,6 +48,8 @@ function parseCliArgs(): MigrationOptions {
 			includeMetadata = false;
 		} else if (arg === "--no-snapshots") {
 			includeSnapshots = false;
+		} else if (arg.startsWith("--snapshot-days=")) {
+			snapshotDays = parseSnapshotDays(arg.slice("--snapshot-days=".length));
 		} else if (arg.startsWith("--limit=")) {
 			limit = Number.parseInt(arg.slice("--limit=".length), 10);
 		}
@@ -54,6 +61,7 @@ function parseCliArgs(): MigrationOptions {
 		dryRun,
 		includeMetadata,
 		includeSnapshots,
+		snapshotDays,
 		limit,
 	};
 }
@@ -89,6 +97,7 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 		dryRun: options.dryRun,
 		includeMetadata: options.includeMetadata,
 		includeSnapshots: options.includeSnapshots,
+		snapshotDays: options.snapshotDays,
 		limit: options.limit,
 	});
 
@@ -146,14 +155,18 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 				appLogger.info(`[DRY-RUN] Would migrate ${totalMeta} metadata records.`);
 			}
 			if (options.includeSnapshots) {
+				const cutoff = await resolveSnapshotCutoff(legacyPool, options.snapshotDays);
 				const snapshotCountResult = await legacyPool.query<{ count: string }>(
-					"SELECT COUNT(*)::text AS count FROM video_snapshot"
+					"SELECT COUNT(*)::text AS count FROM video_snapshot WHERE created_at >= $1",
+					[cutoff]
 				);
 				const totalSnapshots = Number.parseInt(
 					snapshotCountResult.rows[0]?.count ?? "0",
 					10
 				);
-				appLogger.info(`[DRY-RUN] Would migrate ${totalSnapshots} snapshot records.`);
+				appLogger.info(
+					`[DRY-RUN] Would migrate ${totalSnapshots} snapshot records from the last ${options.snapshotDays} days.`
+				);
 			}
 			return;
 		}
@@ -317,21 +330,27 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 			}
 		}
 
-		// 4. Migrate Video Snapshots. `id` is the legacy sequence and the only
-		// stable cursor, so keyset pagination stays fast while million-row tables
-		// stream in batches instead of loading into memory.
+		// 4. Migrate only the recent Video Snapshots. The legacy table holds 100M+
+		// rows, so reads are bounded to the last `snapshotDays` days and paginated
+		// with a `(created_at, id)` keyset cursor. `created_at` is indexed on the
+		// legacy database, keeping every batch a bounded index range scan.
 		let migratedSnapshots = 0;
 		if (options.includeSnapshots) {
+			const cutoff = await resolveSnapshotCutoff(legacyPool, options.snapshotDays);
 			const snapshotCountResult = await legacyPool.query<{ count: string }>(
-				"SELECT COUNT(*)::text AS count FROM video_snapshot"
+				"SELECT COUNT(*)::text AS count FROM video_snapshot WHERE created_at >= $1",
+				[cutoff]
 			);
 			const totalSnapshots = Number.parseInt(snapshotCountResult.rows[0]?.count ?? "0", 10);
 			const targetSnapshotTotal = options.limit
 				? Math.min(totalSnapshots, options.limit)
 				: totalSnapshots;
-			appLogger.info(`Found ${totalSnapshots} snapshot records in legacy database`);
+			appLogger.info(
+				`Found ${totalSnapshots} snapshot records in the last ${options.snapshotDays} days`
+			);
 
 			const snapshotBatchSize = Math.min(options.batchSize, SNAPSHOT_BATCH_SIZE);
+			let lastCreatedAt: Date | string = cutoff;
 			let lastSnapshotId = 0;
 
 			while (migratedSnapshots < targetSnapshotTotal) {
@@ -339,8 +358,9 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 					snapshotBatchSize,
 					targetSnapshotTotal - migratedSnapshots
 				);
-				const snapshotRows = await legacyPool.query<LegacySnapshotRow>(
-					`
+				const snapshotRows: QueryResult<LegacySnapshotRow> =
+					await legacyPool.query<LegacySnapshotRow>(
+						`
 					SELECT
 						id,
 						aid::text,
@@ -353,18 +373,23 @@ export async function runLegacyMigration(options: MigrationOptions): Promise<voi
 						COALESCE(danmakus, 0) AS danmakus,
 						COALESCE(replies, 0) AS replies
 					FROM video_snapshot
-					WHERE id > $1
-					ORDER BY id ASC
-					LIMIT $2
+					WHERE created_at >= $1
+						AND created_at >= $2
+						AND (created_at, id) > ($2, $3)
+					ORDER BY created_at ASC, id ASC
+					LIMIT $4
 					`,
-					[lastSnapshotId, batchLimit]
-				);
+						[cutoff, lastCreatedAt, lastSnapshotId, batchLimit]
+					);
 
 				if (snapshotRows.rows.length === 0) break;
 
 				await insertSnapshotBatch(snapshotPool, snapshotRows.rows.map(toSnapshotInsertRow));
 				migratedSnapshots += snapshotRows.rows.length;
-				lastSnapshotId = snapshotRows.rows[snapshotRows.rows.length - 1].id;
+
+				const lastRow: LegacySnapshotRow = snapshotRows.rows[snapshotRows.rows.length - 1];
+				lastCreatedAt = lastRow.created_at;
+				lastSnapshotId = lastRow.id;
 
 				appLogger.info(
 					`Migrated ${migratedSnapshots} / ${targetSnapshotTotal} snapshot records (${Math.round((migratedSnapshots / targetSnapshotTotal) * 100)}%)`

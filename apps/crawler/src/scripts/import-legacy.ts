@@ -8,15 +8,18 @@ import { DiscoveryRepository } from "../crawler/discovery/repository";
 import type { UpsertMetadataInput } from "../crawler/discovery/types";
 import { TrackingRepository } from "../crawler/tracking/repository";
 import {
+	DEFAULT_SNAPSHOT_DAYS,
 	SNAPSHOT_BATCH_SIZE,
 	type SnapshotInsertRow,
 	insertSnapshotBatch,
+	parseSnapshotDays,
 } from "./legacy-snapshots";
 
 interface ImportOptions {
 	file: string;
 	batchSize: number;
 	includeSnapshots: boolean;
+	snapshotDays: number;
 }
 
 function parseCliArgs(): ImportOptions {
@@ -24,6 +27,7 @@ function parseCliArgs(): ImportOptions {
 	let file = "legacy-tracking-dump.jsonl";
 	let batchSize = 1000;
 	let includeSnapshots = true;
+	let snapshotDays = DEFAULT_SNAPSHOT_DAYS;
 
 	for (const arg of args) {
 		if (arg.startsWith("--file=")) {
@@ -32,10 +36,12 @@ function parseCliArgs(): ImportOptions {
 			batchSize = Number.parseInt(arg.slice("--batch-size=".length), 10) || 1000;
 		} else if (arg === "--no-snapshots") {
 			includeSnapshots = false;
+		} else if (arg.startsWith("--snapshot-days=")) {
+			snapshotDays = parseSnapshotDays(arg.slice("--snapshot-days=".length));
 		}
 	}
 
-	return { file, batchSize, includeSnapshots };
+	return { file, batchSize, includeSnapshots, snapshotDays };
 }
 
 async function runImport(): Promise<void> {
@@ -44,6 +50,7 @@ async function runImport(): Promise<void> {
 		file: opts.file,
 		batchSize: opts.batchSize,
 		includeSnapshots: opts.includeSnapshots,
+		snapshotDays: opts.snapshotDays,
 	});
 
 	await snapshotDb.connect();
@@ -64,11 +71,13 @@ async function runImport(): Promise<void> {
 	let importedTracking = 0;
 	let importedMeta = 0;
 	let importedSnapshots = 0;
+	let skippedSnapshots = 0;
 	let metadataBatch: UpsertMetadataInput[] = [];
 	let snapshotBatch: SnapshotInsertRow[] = [];
 	const snapshotBatchSize = Math.min(opts.batchSize, SNAPSHOT_BATCH_SIZE);
 
 	const now = new Date();
+	const snapshotCutoffMs = now.getTime() - opts.snapshotDays * 24 * 60 * 60 * 1_000;
 
 	try {
 		for await (const line of rl) {
@@ -151,6 +160,14 @@ async function runImport(): Promise<void> {
 					appLogger.info(`Imported ${importedMeta} metadata records...`);
 				}
 			} else if (record._type === "snapshot" && opts.includeSnapshots) {
+				const capturedAt = new Date(record.created_at);
+				// The dump is already windowed, but re-checking here keeps a stale
+				// dump file from silently resurrecting old history.
+				if (Number.isNaN(capturedAt.getTime()) || capturedAt.getTime() < snapshotCutoffMs) {
+					skippedSnapshots++;
+					continue;
+				}
+
 				snapshotBatch.push({
 					aid: record.aid,
 					capturedAt: record.created_at,
@@ -186,6 +203,7 @@ async function runImport(): Promise<void> {
 			importedTracking,
 			importedMeta,
 			importedSnapshots,
+			skippedSnapshots,
 		});
 	} finally {
 		await snapshotPool.end();
