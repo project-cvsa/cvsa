@@ -27,23 +27,23 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 	const modeOptions: RadioOption<"new" | "regular" | "milestone" | "archive">[] = [
 		{
 			value: "new",
-			label: "新投稿 / 爆发期 (New)",
-			description: "新投稿或爆款盯盘，以极高频次（分钟级）密集采样",
+			label: t("ingest.new"),
+			description: t("ingest.newHelp"),
 		},
 		{
 			value: "regular",
-			label: "常规盯盘 (Regular)",
-			description: "根据播放增速自动计算下一次采样间隔（基准周期）",
+			label: t("ingest.regular"),
+			description: t("ingest.regularHelp"),
 		},
 		{
 			value: "milestone",
-			label: "里程碑关注 (Milestone)",
-			description: "即将突破 10万/100万 时优先调度保障数据密度",
+			label: t("ingest.milestone"),
+			description: t("ingest.milestoneHelp"),
 		},
 		{
 			value: "archive",
-			label: "历史归档 (Archive)",
-			description: "低频长期存档采样，降低爬虫压力",
+			label: t("ingest.archive"),
+			description: t("ingest.archiveHelp"),
 		},
 	];
 
@@ -51,7 +51,7 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 		e.preventDefault();
 		const raw = identifier().trim();
 		if (!raw) {
-			toast.error("请输入 BVID (如 BV1xx...) 或 AID");
+			toast.error(t("ingest.required"));
 			return;
 		}
 
@@ -70,16 +70,14 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 			setIngestResult(res.data);
 			toast.success(
 				res.data.alreadyTracked
-					? `视频 ${res.data.bvid} 已在库中，已更新追踪状态`
-					: `成功收录视频: ${res.data.title}`
+					? t("ingest.updated") + ": " + res.data.bvid
+					: t("ingest.added") + ": " + res.data.title
 			);
 			props.onSuccess?.(res.data);
 			return;
 		}
 
-		toast.error(
-			res.ok ? t("common.error") : res.error.message || "收录失败，请检查视频是否存在"
-		);
+		toast.error(res.ok ? t("common.error") : res.error.message || t("ingest.failed"));
 	};
 
 	const resetAndClose = () => {
@@ -93,14 +91,15 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 			isOpen={props.isOpen}
 			onClose={resetAndClose}
 			size="lg"
-			title="手动收录视频 (Manual Video Ingest)"
-			description="直接将 B 站视频载入 CVSA 追踪系统并立即建立时序采样管道"
+			title={t("ingest.title")}
+			closeLabel={t("common.close")}
 		>
 			<div class="flex flex-col gap-6">
+				<p class="ts-caption text-secondary">{t("ingest.description")}</p>
 				<form onSubmit={handleIngest} class="flex flex-col gap-5">
 					<TextField
-						label="视频标识符 (BVID 或 AID)"
-						helperText="支持以 BV1... 开头的视频号或纯数字 AID，如 BV1xx411c7mD"
+						label={t("ingest.identifier")}
+						helperText={t("ingest.identifierHelp")}
 						value={identifier()}
 						onInput={(e) => setIdentifier(e.currentTarget.value)}
 						disabled={submitting()}
@@ -108,11 +107,9 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 					/>
 
 					<RadioGroup
-						label="初始追踪策略"
+						label={t("ingest.strategy")}
 						value={mode()}
-						onChange={(val) =>
-							setMode(val as "new" | "regular" | "milestone" | "archive")
-						}
+						onChange={setMode}
 						options={modeOptions}
 						disabled={submitting()}
 					/>
@@ -124,7 +121,7 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 							onClick={resetAndClose}
 							disabled={submitting()}
 						>
-							取消
+							{t("common.cancel")}
 						</Button>
 						<Button
 							type="submit"
@@ -133,7 +130,9 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 							class="gap-1.5"
 						>
 							<Plus class="w-4 h-4" />
-							<span>{submitting() ? "解析与入库中..." : "立即收录"}</span>
+							<span>
+								{submitting() ? t("ingest.submitting") : t("ingest.submit")}
+							</span>
 						</Button>
 					</div>
 				</form>
@@ -141,11 +140,13 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 				{/* Ingest Result Preview */}
 				<Show when={ingestResult()}>
 					{(item) => (
-						<div class="p-4 border-2 border-primary bg-surface-container-high flex flex-col gap-3">
+						<div class="p-4 border border-border bg-surface-container-high flex flex-col gap-3">
 							<div class="flex items-center gap-2 text-primary font-semibold text-sm">
 								<CheckCircle class="w-4 h-4 text-primary" />
 								<span>
-									{item().alreadyTracked ? "已在库中，已更新" : "新收录成功"}
+									{item().alreadyTracked
+										? t("ingest.updated")
+										: t("ingest.added")}
 								</span>
 							</div>
 
@@ -171,9 +172,14 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 									<div class="flex items-center gap-2 ts-caption text-secondary">
 										<span>{item().bvid}</span>
 										<span>·</span>
-										<span>UP: {item().ownerName ?? "未知"}</span>
+										<span>
+											{t("videoDetail.uploader")}:{" "}
+											{item().ownerName ?? t("ingest.unknown")}
+										</span>
 										<span>·</span>
-										<span>状态: {item().state}</span>
+										<span>
+											{t("videoDetail.videoStatus")}: {item().state}
+										</span>
 									</div>
 								</div>
 							</div>

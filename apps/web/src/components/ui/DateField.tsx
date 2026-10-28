@@ -215,7 +215,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 			<Show when={dateInput().value.length > 0 && !props.readOnly}>
 				<button
 					type="button"
-					class="flex h-10 w-10 shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-primary"
+					class="flex h-10 w-10 shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-[-4px] focus-visible:outline-primary"
 					aria-label={props.clearLabel}
 					disabled={props.disabled}
 					onclick={() => {
@@ -228,7 +228,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 
 			<ArkDatePicker.Trigger
 				type="button"
-				class="mr-1 flex h-10 w-10 shrink-0 items-center justify-center text-quaternary outline-none hover:bg-hover hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-primary"
+				class="mr-1 flex h-10 w-10 shrink-0 items-center justify-center text-quaternary outline-none hover:bg-hover hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-[-4px] focus-visible:outline-primary"
 				aria-label={props.calendarLabel}
 			>
 				<CalendarDays size={19} />
@@ -248,14 +248,14 @@ function CalendarContent(props: Pick<DateFieldProps, "todayLabel">) {
 							<ArkDatePicker.ViewControl class="mb-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center">
 								<ArkDatePicker.PrevTrigger
 									type="button"
-									class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
+									class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary"
 								>
 									<ChevronLeft size={19} />
 								</ArkDatePicker.PrevTrigger>
 								<ArkDatePicker.RangeText class="text-center ts-label text-primary" />
 								<ArkDatePicker.NextTrigger
 									type="button"
-									class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
+									class="flex h-11 items-center justify-center text-primary outline-none hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary"
 								>
 									<ChevronRight size={19} />
 								</ArkDatePicker.NextTrigger>
@@ -265,7 +265,7 @@ function CalendarContent(props: Pick<DateFieldProps, "todayLabel">) {
 
 							<button
 								type="button"
-								class="mt-3 h-10 w-full border border-border ts-label text-primary outline-none hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary"
+								class="mt-3 h-10 w-full border border-border ts-label text-primary outline-none hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary"
 								onclick={() => datePicker().selectToday()}
 							>
 								{props.todayLabel}
@@ -312,7 +312,7 @@ function CalendarDay(props: { day: DateValue }) {
 			<ArkDatePicker.TableCellTrigger
 				class={clsx(
 					"flex aspect-square w-full items-center justify-center outline-none ts-label text-primary transition-colors",
-					"hover:bg-hover focus-visible:outline-2 focus-visible:outline-primary",
+					"hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary",
 					"data-[selected]:bg-primary data-[selected]:text-display-inverted",
 					"data-[today]:border data-[today]:border-primary data-[outside-range]:text-quaternary data-[disabled]:opacity-35"
 				)}

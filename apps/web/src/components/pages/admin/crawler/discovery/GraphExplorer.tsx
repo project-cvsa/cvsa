@@ -5,6 +5,8 @@ import TextField from "@components/ui/TextField";
 import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
+import { getComponentT } from "@lib/i18n/isomorphic";
+import { createRequestSequence } from "../videoActions";
 import type { RecommendationGraphResponse } from "@cvsa/contracts";
 import ExternalLink from "lucide-solid/icons/external-link";
 import ArrowRight from "lucide-solid/icons/arrow-right";
@@ -16,7 +18,9 @@ type GraphExplorerProps = {
 };
 
 export default function GraphExplorer(props: GraphExplorerProps) {
+	const t = getComponentT("crawler");
 	const [identifier, setIdentifier] = createSignal("");
+	const requests = createRequestSequence();
 	const [loading, setLoading] = createSignal(false);
 	const [graph, setGraph] = createSignal<RecommendationGraphResponse | null>(null);
 	const [error, setError] = createSignal<string | null>(null);
@@ -25,13 +29,15 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 	const searchGraph = async (idToSearch?: string) => {
 		const target = (idToSearch ?? identifier()).trim();
 		if (!target) {
-			toast.error("请输入要查询的视频标识");
+			toast.error(t("graphUi.identifier"));
 			return;
 		}
 
+		const request = requests.start();
 		setLoading(true);
 		setError(null);
 		const res = await api.crawler.getRecommendationGraph(target);
+		if (!requests.isCurrent(request)) return;
 		setLoading(false);
 
 		if (res.ok && res.data) {
@@ -40,7 +46,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 			return;
 		}
 
-		const errMsg = res.ok ? "未找到该视频或相关图谱" : res.error.message || "推荐图谱查询失败";
+		const errMsg = res.ok ? t("graphUi.notFound") : res.error.message || t("graphUi.failed");
 		setError(errMsg);
 		toast.error(errMsg);
 	};
@@ -55,7 +61,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 		setIngestingAid(null);
 
 		if (res.ok && res.data) {
-			toast.success(`成功收录并开启追踪: ${res.data.title}`);
+			toast.success(`${t("graphUi.ingested")}: ${res.data.title}`);
 			setGraph((prev) => {
 				if (!prev) return prev;
 				return {
@@ -69,7 +75,9 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 			return;
 		}
 
-		toast.error(res.ok ? "收录失败" : res.error.message || "收录失败");
+		toast.error(
+			res.ok ? t("graphUi.ingestFailed") : res.error.message || t("graphUi.ingestFailed")
+		);
 	};
 
 	const formatDuration = (seconds?: number) => {
@@ -81,13 +89,13 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 
 	return (
 		<Card>
-			<CardHeader title="推荐拓扑" description="查询视频在推荐系统中的关联网络与收录状态" />
+			<CardHeader title={t("graphUi.title")}/>
 			<CardContent class="flex flex-col gap-6">
 				{/* Search Input Bar */}
 				<div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-					<div class="flex-1 max-w-lg">
+					<div class="flex-1">
 						<TextField
-							label="视频 BVID 或 AID"
+							placeholder={t("graphUi.input")}
 							value={identifier()}
 							onInput={(e) => setIdentifier(e.currentTarget.value)}
 							onKeyDown={(e) => {
@@ -104,10 +112,10 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 						variant="filled"
 						disabled={loading() || !identifier().trim()}
 						onClick={() => void searchGraph()}
-						class="h-[58px] px-6 gap-2 shrink-0"
+						class="gap-2 shrink-0"
 					>
 						<Compass class={"w-4 h-4 " + (loading() ? "animate-spin" : "")} />
-						<span>{loading() ? "查询中..." : "查询拓扑"}</span>
+						<span>{loading() ? t("graphUi.searching") : t("graphUi.search")}</span>
 					</Button>
 				</div>
 
@@ -129,12 +137,12 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 										when={current().seed.pic}
 										fallback={
 											<div class="w-24 h-16 bg-surface-container-high border border-border flex items-center justify-center text-xs text-tertiary shrink-0">
-												无封面
+												{t("graphUi.noCover")}
 											</div>
 										}
 									>
 										{(pic) => (
-											<div class="relative w-24 h-16 shrink-0 border border-border overflow-hidden bg-black">
+											<div class="relative w-24 h-16 shrink-0 border border-border overflow-hidden bg-surface-container-medium">
 												<img
 													src={pic()}
 													alt={current().seed.title}
@@ -143,7 +151,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 													referrerPolicy="no-referrer"
 												/>
 												<Show when={current().seed.duration}>
-													<span class="absolute bottom-1 right-1 px-1 bg-black/80 text-[10px] text-white">
+													<span class="absolute bottom-1 right-1 px-1 bg-surface text-[10px] text-primary">
 														{formatDuration(current().seed.duration)}
 													</span>
 												</Show>
@@ -154,7 +162,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 									<div class="flex flex-col gap-1 min-w-0">
 										<div class="flex items-center gap-2">
 											<span class="text-xs font-medium px-1.5 py-0.5 bg-primary text-display-inverted">
-												种子视频
+												{t("graphUi.seed")}
 											</span>
 											<span class="text-xs text-tertiary">
 												{current().seed.bvid} · av{current().seed.aid}
@@ -194,12 +202,12 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 												class="gap-1 text-xs"
 											>
 												<Plus class="w-3.5 h-3.5" />
-												<span>收录此视频</span>
+												<span>{t("graphUi.ingest")}</span>
 											</Button>
 										}
 									>
 										<Badge variant="success" size="sm" dot>
-											已在追踪库
+											{t("graphUi.tracked")}
 										</Badge>
 									</Show>
 								</div>
@@ -209,10 +217,10 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 							<div class="flex flex-col gap-3">
 								<div class="flex items-center justify-between">
 									<h4 class="text-xs font-semibold text-primary">
-										关联推荐 ({current().relations.length} 个视频)
+										{t("graphUi.relations")} ({current().relations.length})
 									</h4>
 									<span class="text-xs text-tertiary">
-										点击「沿此扩散」以此视频为种子继续探索
+										{t("graphUi.expandHelp")}
 									</span>
 								</div>
 
@@ -220,7 +228,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 									when={current().relations.length > 0}
 									fallback={
 										<div class="p-8 text-center text-tertiary border border-border text-xs">
-											该视频暂无关联推荐数据
+											{t("graphUi.empty")}
 										</div>
 									}
 								>
@@ -233,12 +241,12 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 															when={node.pic}
 															fallback={
 																<div class="w-20 h-14 bg-surface-container-high border border-border flex items-center justify-center text-[10px] text-tertiary shrink-0">
-																	无封面
+																	{t("graphUi.noCover")}
 																</div>
 															}
 														>
 															{(pic) => (
-																<div class="relative w-20 h-14 shrink-0 border border-border overflow-hidden bg-black">
+																<div class="relative w-20 h-14 shrink-0 border border-border overflow-hidden bg-surface-container-medium">
 																	<img
 																		src={pic()}
 																		alt={node.title}
@@ -247,7 +255,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 																		referrerPolicy="no-referrer"
 																	/>
 																	<Show when={node.duration}>
-																		<span class="absolute bottom-0.5 right-0.5 px-1 bg-black/80 text-[9px] text-white">
+																		<span class="absolute bottom-0.5 right-0.5 px-1 bg-surface text-[9px] text-primary">
 																			{formatDuration(
 																				node.duration
 																			)}
@@ -306,7 +314,9 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 																		class="gap-1 text-xs h-7 px-2"
 																	>
 																		<Plus class="w-3 h-3" />
-																		<span>收录</span>
+																		<span>
+																			{t("graphUi.ingest")}
+																		</span>
 																	</Button>
 																}
 															>
@@ -315,7 +325,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 																	size="sm"
 																	dot
 																>
-																	已追踪
+																	{t("graphUi.tracked")}
 																</Badge>
 															</Show>
 														</div>
@@ -328,7 +338,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 															}
 															class="gap-1 text-xs h-7 px-2"
 														>
-															<span>沿此扩散</span>
+															<span>{t("graphUi.expand")}</span>
 															<ArrowRight class="w-3 h-3" />
 														</Button>
 													</div>

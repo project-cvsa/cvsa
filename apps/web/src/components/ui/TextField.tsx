@@ -185,7 +185,7 @@ export default function TextField(props: TextFieldProps) {
 				<Show when={local.clearable}>
 					<button
 						type="button"
-						class="flex shrink-0 p-1.5 mr-2 text-quaternary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
+						class="flex shrink-0 p-1.5 mr-2 text-quaternary hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
 						disabled={local.disabled || !typed()}
 						aria-label={local.clearLabel}
 						onclick={clearValue}

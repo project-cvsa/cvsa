@@ -19,6 +19,10 @@ export type StatsCounter = (typeof STATS_COUNTERS)[number];
 /** Error taxonomy surfaced by the admin console's health panel. */
 export const STATS_ERROR_KINDS = [
 	"timeout",
+	"networkFailure",
+	"httpFailure",
+	"networkOther",
+	"adapterUnavailable",
 	"rateLimited412Or429",
 	"bilibiliBusinessError",
 	"inferenceError",
@@ -127,6 +131,10 @@ export function emptyCounters(): StatsCounters {
 export function emptyErrors(): StatsErrors {
 	return {
 		timeout: 0,
+		networkFailure: 0,
+		httpFailure: 0,
+		networkOther: 0,
+		adapterUnavailable: 0,
 		rateLimited412Or429: 0,
 		bilibiliBusinessError: 0,
 		inferenceError: 0,

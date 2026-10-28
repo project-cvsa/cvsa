@@ -346,7 +346,7 @@ export default function List(props: ListProps) {
 							<Show when={props.reorderable}>
 								<button
 									type="button"
-									class="flex w-12 shrink-0 touch-none cursor-grab items-center justify-center text-quaternary outline-none active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-primary disabled:cursor-not-allowed"
+									class="flex w-12 shrink-0 touch-none cursor-grab items-center justify-center text-quaternary outline-none active:cursor-grabbing focus-visible:outline-1 focus-visible:outline-offset-[-3px] focus-visible:outline-primary disabled:cursor-not-allowed"
 									disabled={item.disabled}
 									aria-label={props.dragLabel?.(item) ?? item.title}
 									aria-roledescription="sortable"
@@ -456,7 +456,7 @@ export function ListItemContent(props: { item: ListItem; onSelect?: (item: ListI
 				disabled={props.item.disabled}
 				class={clsx(
 					className,
-					"bg-transparent outline-none focus-visible:outline-2 focus-visible:outline-primary"
+					"bg-transparent outline-none focus-visible:outline-1 focus-visible:outline-primary"
 				)}
 				onclick={() => props.onSelect?.(props.item)}
 			>

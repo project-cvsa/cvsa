@@ -102,6 +102,11 @@ async function triggerActive(aid: string): Promise<ApiResult<ActionQueuedRespons
 	return settle(await eden.v2.admin.crawler.active({ aid }).post());
 }
 
+async function queueSnapshot(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.tracking.videos({ aid }).snapshots.post());
+}
+
 async function getTracking(aid: string): Promise<ApiResult<VideoTrackingDto | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.tracking({ aid }).get());
@@ -220,6 +225,7 @@ export const crawlerApi = {
 	triggerHotSample,
 	fetchDetail,
 	triggerActive,
+	queueSnapshot,
 	getTracking,
 	listTrackingVideos,
 	ingestVideo,

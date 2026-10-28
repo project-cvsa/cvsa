@@ -33,7 +33,7 @@
 		"wikiparser-node": "^1.45.0"
 	},
 	"devDependencies": {
-		"@fanee/vite": "^0.8.1",
+		"@fanee/vite": "^0.8.3",
 		"@types/accept-language-parser": "^1.5.8",
 		"@types/fs-extra": "^11.0.4",
 		"@unocss/astro": "^66.7.5",

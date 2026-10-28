@@ -43,6 +43,9 @@ export const ErrorCodeEnum = z.enum([
 	"EMAIL_NOT_VERIFIED",
 	"UNAUTHORIZED",
 	"FORBIDDEN",
+	"CRAWLER_UNAVAILABLE",
+	"CRAWLER_REQUEST_FAILED",
+	"CRAWLER_RATE_LIMITED",
 ]);
 
 export type ErrorCode = z.infer<typeof ErrorCodeEnum>;

@@ -45,6 +45,10 @@ export default function OverviewSection(props: OverviewSectionProps) {
 		label: string;
 	}> => [
 		{ key: "timeout", label: t("overview.err.timeout") },
+		{ key: "networkFailure", label: t("overview.err.networkFailure") },
+		{ key: "httpFailure", label: t("overview.err.httpFailure") },
+		{ key: "networkOther", label: t("overview.err.networkOther") },
+		{ key: "adapterUnavailable", label: t("overview.err.adapterUnavailable") },
 		{ key: "rateLimited412Or429", label: t("overview.err.rateLimited") },
 		{ key: "bilibiliBusinessError", label: t("overview.err.bilibiliBusiness") },
 		{ key: "inferenceError", label: t("overview.err.inference") },
@@ -101,8 +105,9 @@ export default function OverviewSection(props: OverviewSectionProps) {
 	const healthyAdapterCount = () =>
 		props
 			.statusData()
-			?.adapters.filter((adapter) => adapter.healthState.toLowerCase() === "healthy")
-			.length ?? 0;
+			?.adapters.filter(
+				(adapter) => adapter.enabled && adapter.healthState.toLowerCase() === "healthy"
+			).length ?? 0;
 
 	const totalAdapterCount = () => props.statusData()?.adapters.length ?? 0;
 
@@ -161,11 +166,11 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						<span>
 							{loadingStats()
 								? t("common.loading")
-								: (statsError() ?? "暂无监控数据")}
+								: (statsError() ?? t("overview.noData"))}
 						</span>
 						<Show when={!loadingStats()}>
 							<Button size="sm" variant="outlined" onClick={() => void loadStats()}>
-								重试
+								{t("common.retry")}
 							</Button>
 						</Show>
 					</div>
@@ -247,14 +252,18 @@ export default function OverviewSection(props: OverviewSectionProps) {
 											value={formatPercent(current().retryRate)}
 										/>
 										<MetricCard
-											label="网络请求 (成功 / 总计)"
-											value={`${formatMetric(Math.max(0, current().totalAttempts - current().totalFailures))} / ${formatMetric(current().totalAttempts)}`}
-											hint={`${formatMetric(current().totalFailures)} ${t("overview.totalFailures")}`}
+											label={t("overview.successfulAttempts")}
+											value={`${current().networkFailures === undefined ? "—" : formatMetric(Math.max(0, current().totalAttempts - (current().networkFailures ?? 0)))} / ${formatMetric(current().totalAttempts)}`}
+											hint={
+												current().networkFailures === undefined
+													? undefined
+													: `${formatMetric(current().networkFailures ?? 0)} ${t("overview.totalFailures")}`
+											}
 										/>
 										<MetricCard
 											label={t("overview.overdueTracking")}
 											value={formatMetric(current().overdueTrackingCount)}
-											hint={`Max lag: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
+											hint={`${t("overview.maxOverdueLag")}: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
 											variant={
 												current().overdueTrackingCount > 100
 													? "warning"
@@ -264,7 +273,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 									</div>
 
 									{/* Failure Breakdown Table */}
-									<div class="overflow-x-auto border border-border">
+									<div class="cvsa-scroll overflow-x-auto border border-border">
 										<table class="w-full text-left ts-caption">
 											<thead>
 												<tr class="border-b border-border text-tertiary bg-surface-container-high">
@@ -275,7 +284,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 														{t("overview.failureCount")}
 													</th>
 													<th class="py-2.5 px-3 uppercase text-xs">
-														占比
+														{t("overview.share")}
 													</th>
 												</tr>
 											</thead>
@@ -326,7 +335,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								/>
 								<CardContent class="flex flex-col gap-4">
 									{/* Classifier Card */}
-									<div class="p-3 border border-border bg-surface-container-low flex flex-col gap-2">
+									<div class="flex flex-col gap-2">
 										<div class="flex items-center justify-between">
 											<span class="font-[Outfit] uppercase text-xs font-semibold text-primary flex items-center gap-1.5">
 												<Cpu class="w-4 h-4 text-primary" />
@@ -365,58 +374,72 @@ export default function OverviewSection(props: OverviewSectionProps) {
 												)}
 											</Show>
 										</div>
-										<p class="text-caption text-tertiary text-xs">
-											分词器与推理引擎就绪
-										</p>
 									</div>
 
 									{/* Adapters Summary */}
-									<div class="p-3 border border-border bg-surface-container-low flex flex-col gap-2">
+									<div class="flex flex-col gap-2">
 										<div class="flex items-center justify-between">
 											<span class="font-[Outfit] uppercase text-xs font-semibold text-primary flex items-center gap-1.5">
 												<Layers class="w-4 h-4 text-primary" />
-												<span>网络适配器</span>
+												<span>{t("overview.adapters")}</span>
 											</span>
-											<Badge
-												variant={
-													healthyAdapterCount() > 0 ? "success" : "danger"
+											<Show
+												when={props.statusData()}
+												fallback={
+													<Badge size="sm">{t("common.unknown")}</Badge>
 												}
-												size="sm"
-												dot
 											>
-												{healthyAdapterCount()} / {totalAdapterCount()} 健康
-											</Badge>
+												<Badge
+													variant={
+														healthyAdapterCount() > 0
+															? "success"
+															: "danger"
+													}
+													size="sm"
+													dot
+												>
+													{t("overview.healthyCount")
+														.replace(
+															"{healthy}",
+															String(healthyAdapterCount())
+														)
+														.replace(
+															"{total}",
+															String(totalAdapterCount())
+														)}
+												</Badge>
+											</Show>
 										</div>
 										<p class="text-caption text-tertiary text-xs">
-											出口路由负载均衡与熔断保护
+											{t("overview.adaptersDescription")}
 										</p>
 									</div>
 
 									{/* Latencies */}
 									<div class="flex flex-col gap-2 pt-2 border-t border-border">
 										<span class="font-[Outfit] uppercase text-xs font-semibold text-tertiary">
-											P95 延迟
+											{t("overview.latency")}
 										</span>
 										<div class="grid grid-cols-3 gap-2 text-center">
-											<div class="p-2 border border-border bg-surface-container-low">
+											<div class="py-2">
 												<span class="text-[11px] uppercase text-tertiary block">
-													接口 P95
+													{t("overview.apiP95")}
 												</span>
 												<span class="text-sm font-semibold text-primary">
 													{formatMetric(current().latencyMs.apiP95)} ms
 												</span>
 											</div>
-											<div class="p-2 border border-border bg-surface-container-low">
+											<div class="py-2">
 												<span class="text-[11px] uppercase text-tertiary block">
-													任务 P95
+													{t("overview.taskP95")}
 												</span>
 												<span class="text-sm font-semibold text-primary">
 													{formatMetric(current().latencyMs.taskP95)} ms
 												</span>
 											</div>
-											<div class="p-2 border border-border bg-surface-container-low">
+											<div class="py-2">
 												<span class="text-[11px] uppercase text-tertiary block">
-													模型 P95
+													{t("overview.inferenceP95")}
 												</span>
 												<span class="text-sm font-semibold text-primary">
 													{formatMetric(current().latencyMs.inferenceP95)}{" "}

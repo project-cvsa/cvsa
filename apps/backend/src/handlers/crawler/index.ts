@@ -25,6 +25,7 @@ import {
 	ReplaceNetworkRuntimeConfigRequestSchema,
 	TestNetworkAdapterResponseSchema,
 	TrackingVideoListQuerySchema,
+	TrackingAidParamsSchema,
 	TrackingVideoListResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
 	VideoMetadataHistoryListQuerySchema,
@@ -263,6 +264,15 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 				200: RegisterTrackingVideosResponseSchema,
 			},
 		}
+	)
+	.post(
+		"/tracking/videos/:aid/snapshots",
+		({ params }): Promise<ActionQueuedResponse> =>
+			callCrawlerApi<ActionQueuedResponse>(
+				`/tracking/videos/${params.aid}/snapshots`,
+				"POST"
+			),
+		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
 	)
 	.post(
 		"/tracking/videos/:aid/promote",

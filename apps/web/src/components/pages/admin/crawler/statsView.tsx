@@ -1,9 +1,11 @@
 import { For, Show, type JSX } from "solid-js";
+import clsx from "clsx";
 import type { CrawlerQueueSnapshot } from "@cvsa/contracts";
 import Badge from "@components/ui/Badge";
+import { getComponentT } from "@lib/i18n/isomorphic";
 import { formatWaitSeconds } from "./format";
 
-/** One headline metric with brutalist sharp border styling. */
+/** One headline metric. */
 export function MetricCard(props: {
 	label: string;
 	value: string | JSX.Element;
@@ -11,25 +13,13 @@ export function MetricCard(props: {
 	variant?: "default" | "success" | "warning" | "danger";
 	icon?: () => JSX.Element;
 }) {
-	const variantClass = () => {
-		switch (props.variant) {
-			case "success":
-				return "border-primary bg-surface";
-			case "warning":
-				return "border-highlight bg-surface";
-			case "danger":
-				return "border-error bg-surface";
-			default:
-				return "border-border bg-surface";
-		}
-	};
-
 	return (
 		<div
-			class={
-				"p-4 border flex flex-col justify-between gap-1.5 shadow-sm transition-colors " +
-				variantClass()
-			}
+			class={clsx(
+				"p-4 bg-surface flex flex-col justify-between gap-1.5",
+				props.variant === "warning" && "border-l-2 border-highlight",
+				props.variant === "danger" && "border-l-2 border-error"
+			)}
 		>
 			<div class="flex items-center justify-between gap-2">
 				<span class="ts-caption text-xs uppercase tracking-wide text-tertiary select-none">
@@ -49,11 +39,12 @@ export function MetricCard(props: {
 	);
 }
 
-/** Per-queue backlog counters with sharp brutalist design. */
+/** Per-queue backlog counters. */
 export function QueueStatusTable(props: {
 	queues: Record<string, CrawlerQueueSnapshot>;
 	emptyLabel?: string;
 }) {
+	const t = getComponentT("crawler");
 	const rows = () => Object.entries(props.queues).map(([name, snapshot]) => ({ name, snapshot }));
 
 	return (
@@ -61,20 +52,20 @@ export function QueueStatusTable(props: {
 			when={rows().length > 0}
 			fallback={
 				<div class="p-8 text-center text-tertiary border border-border bg-surface text-sm">
-					{props.emptyLabel ?? "暂无活动队列"}
+					{props.emptyLabel ?? t("queue.empty")}
 				</div>
 			}
 		>
-			<div class="overflow-x-auto border border-border bg-surface">
+			<div class="cvsa-scroll overflow-x-auto border border-border bg-surface">
 				<table class="w-full text-left ts-caption">
 					<thead>
 						<tr class="border-b border-border text-tertiary bg-surface-container-high uppercase tracking-wider text-xs">
-							<th class="py-2.5 px-4 font-semibold">队列</th>
-							<th class="py-2.5 px-4 font-semibold">进行中</th>
-							<th class="py-2.5 px-4 font-semibold">等待中</th>
-							<th class="py-2.5 px-4 font-semibold">延迟</th>
-							<th class="py-2.5 px-4 font-semibold">失败</th>
-							<th class="py-2.5 px-4 font-semibold">最长等待</th>
+							<th class="py-2.5 px-4 font-semibold">{t("queue.name")}</th>
+							<th class="py-2.5 px-4 font-semibold">{t("queue.active")}</th>
+							<th class="py-2.5 px-4 font-semibold">{t("queue.waiting")}</th>
+							<th class="py-2.5 px-4 font-semibold">{t("queue.delayed")}</th>
+							<th class="py-2.5 px-4 font-semibold">{t("queue.failed")}</th>
+							<th class="py-2.5 px-4 font-semibold">{t("queue.oldest")}</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-border text-sm">

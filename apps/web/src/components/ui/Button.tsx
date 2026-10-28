@@ -30,8 +30,8 @@ export default function Button(props: ButtonProps) {
 	return (
 		<button
 			class={clsx(
-				"inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-2",
-				"focus-visible:outline-offset-6 focus-visible:outline-primary",
+				"inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-1",
+				"focus-visible:outline-offset-2 focus-visible:outline-primary",
 				variantClass[variant()],
 				sizeClass[size()],
 				local.class

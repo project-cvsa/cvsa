@@ -201,6 +201,10 @@ export const CrawlerStatusDtoSchema = z.object({
 			effectiveWeight: z.number(),
 			consecutiveFailures: z.number(),
 			openUntil: z.number().nullable(),
+			requests: z.number().nonnegative().optional(),
+			failures: z.number().nonnegative().optional(),
+			rateLimited: z.number().nonnegative().optional(),
+			averageDurationMs: z.number().nonnegative().nullable().optional(),
 		})
 	),
 });
@@ -304,6 +308,15 @@ export type CrawlerStatusDto = z.infer<typeof CrawlerStatusDtoSchema>;
 export type ClassifierHealthDto = z.infer<typeof ClassifierHealthDtoSchema>;
 
 // Admin actions
+
+export const TrackingAidParamsSchema = z.object({
+	aid: z
+		.string()
+		.regex(/^[1-9]\d{0,18}$/)
+		.refine(
+			(value) => /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n
+		),
+});
 
 /** Returned by control-plane actions that enqueue background work for a video. */
 export const ActionQueuedResponseSchema = z.object({
@@ -416,6 +429,10 @@ export const CrawlerStatsRollupPointSchema = z.object({
 
 export const CrawlerStatsErrorBreakdownSchema = z.object({
 	timeout: z.number().int().nonnegative(),
+	networkFailure: z.number().int().nonnegative().optional(),
+	httpFailure: z.number().int().nonnegative().optional(),
+	networkOther: z.number().int().nonnegative().optional(),
+	adapterUnavailable: z.number().int().nonnegative().optional(),
 	rateLimited412Or429: z.number().int().nonnegative(),
 	bilibiliBusinessError: z.number().int().nonnegative(),
 	inferenceError: z.number().int().nonnegative(),
@@ -449,6 +466,7 @@ export const CrawlerOverviewStatsSchema = z.object({
 	// Errors
 	totalAttempts: z.number().int().nonnegative(),
 	totalFailures: z.number().int().nonnegative(),
+	networkFailures: z.number().int().nonnegative().optional(),
 	/** Failure fraction for the window (`failures / attempts`). */
 	errorRate: z.number().min(0),
 	/** Retried-attempt fraction for the window. */

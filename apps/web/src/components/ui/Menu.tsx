@@ -37,7 +37,7 @@ const triggerSizeClass: Record<MenuSize, string> = {
 
 const triggerBaseClass = clsx(
 	"group inline-flex items-center text-primary transition-colors",
-	"focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary",
+	"focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-primary",
 	"disabled:cursor-not-allowed disabled:opacity-50"
 );
 

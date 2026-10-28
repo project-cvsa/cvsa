@@ -6,7 +6,7 @@ import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api, type ApiResult } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import type { CrawlerOverviewStats } from "@cvsa/contracts";
+import { TrackingAidParamsSchema, type CrawlerOverviewStats } from "@cvsa/contracts";
 import { formatDateTime, formatMetric, formatWaitSeconds } from "../format";
 import { MetricCard, QueueStatusTable } from "../statsView";
 import { createRequestSequence } from "../videoActions";
@@ -86,7 +86,7 @@ export default function TasksSection() {
 
 	const requireAid = (): string | null => {
 		const value = aid().trim();
-		if (!value) {
+		if (!TrackingAidParamsSchema.safeParse({ aid: value }).success) {
 			toast.error(t("tasks.manualSnapshot.aidPlaceholder"));
 			return null;
 		}
@@ -97,7 +97,7 @@ export default function TasksSection() {
 		void runAction({
 			key: "sweep",
 			label: t("tasks.actions.sweep"),
-			detail: "Default search keywords",
+			detail: t("tasks.defaultKeywords"),
 			action: () => api.crawler.triggerSweep({}),
 		});
 
@@ -107,7 +107,7 @@ export default function TasksSection() {
 		void runAction({
 			key: "detail",
 			label: t("tasks.actions.detail"),
-			detail: `AID/BVID: ${value}`,
+			detail: `AID: ${value}`,
 			action: () => api.crawler.fetchDetail(value),
 		});
 	};
@@ -118,8 +118,8 @@ export default function TasksSection() {
 		void runAction({
 			key: "active",
 			label: t("tasks.actions.active"),
-			detail: `AID/BVID: ${value}`,
-			action: () => api.crawler.triggerActive(value),
+			detail: `AID: ${value}`,
+			action: () => api.crawler.queueSnapshot(value),
 		});
 	};
 
@@ -173,15 +173,17 @@ export default function TasksSection() {
 								<MetricCard
 									label={t("tasks.queues.overdue")}
 									value={formatMetric(current().overdueTrackingCount)}
-									hint={`Lag: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
+									hint={`${t("overview.maxOverdueLag")}: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
 								/>
 								<MetricCard
 									label={t("tasks.queues.jobsPerMin")}
 									value={formatMetric(current().jobsPerMin)}
+									hint="jobs/min"
 								/>
 								<MetricCard
 									label={t("tasks.queues.requestsPerSec")}
 									value={formatMetric(current().requestsPerSec)}
+									hint="req/sec"
 								/>
 							</div>
 
@@ -207,8 +209,8 @@ export default function TasksSection() {
 					}
 				/>
 				<CardContent class="flex flex-col gap-6">
-					<div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-						<div class="flex-1">
+					<div class="flex flex-col items-start gap-3">
+						<div class="w-full max-w-xl">
 							<TextField
 								label={t("tasks.manualSnapshot.aid")}
 								value={aid()}
@@ -249,13 +251,13 @@ export default function TasksSection() {
 						</div>
 					</div>
 
-					<div class="pt-4 border-t border-border flex items-center justify-between">
+					<div class="pt-4 border-t border-border flex flex-wrap items-center justify-between gap-3">
 						<div class="flex flex-col gap-0.5">
 							<span class="ts-label font-medium text-primary">
 								{t("tasks.actions.sweep")}
 							</span>
 							<span class="ts-caption text-tertiary">
-								Trigger full rover sweep with default keyword dictionaries
+								{t("tasks.sweepDescription")}
 							</span>
 						</div>
 						<Button
@@ -299,7 +301,7 @@ export default function TasksSection() {
 							</div>
 						}
 					>
-						<div class="overflow-x-auto">
+						<div class="cvsa-scroll overflow-x-auto">
 							<table class="w-full text-left ts-caption">
 								<thead>
 									<tr class="border-b border-border text-tertiary bg-surface-container-low/50">

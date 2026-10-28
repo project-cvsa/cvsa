@@ -63,7 +63,7 @@ export default defineConfig({
 		"hover:border-secondary",
 		"hover:bg-hover",
 		"hover:border-tertiary",
-		"focus-visible:outline-2",
+		"focus-visible:outline-1",
 		"focus-visible:outline-offset-6",
 		"focus-visible:outline-primary",
 		"focus-within:border-primary",

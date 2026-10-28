@@ -84,6 +84,9 @@ const EXPECTED_ERROR_CODES = [
 	"EMAIL_NOT_VERIFIED",
 	"UNAUTHORIZED",
 	"FORBIDDEN",
+	"CRAWLER_UNAVAILABLE",
+	"CRAWLER_REQUEST_FAILED",
+	"CRAWLER_RATE_LIMITED",
 	"NETWORK_ERROR",
 ] as const satisfies readonly ApiErrorCode[];
 
@@ -109,6 +112,9 @@ function errorField(code: ApiErrorCode): AuthField {
 		case "USER_NOT_FOUND":
 		case "EMAIL_NOT_VERIFIED":
 		case "FORBIDDEN":
+		case "CRAWLER_UNAVAILABLE":
+		case "CRAWLER_REQUEST_FAILED":
+		case "CRAWLER_RATE_LIMITED":
 		case "NETWORK_ERROR":
 			return "form";
 	}

@@ -86,9 +86,6 @@ export default function VideosSection() {
 		setAppliedSearch(value);
 		setPage(0);
 		void loadList();
-		if (/^\d+$/.test(value)) {
-			inspect(value);
-		}
 	};
 
 	const stateBadge = (state: string) => {
@@ -141,7 +138,7 @@ export default function VideosSection() {
 						<Video class="w-5 h-5 text-primary" />
 						<span>{t("videos.title")}</span>
 						<Badge variant="neutral" size="sm">
-							{total()} tracked
+							{t("videos.tracked").replace("{count}", String(total()))}
 						</Badge>
 					</h2>
 					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
@@ -161,6 +158,11 @@ export default function VideosSection() {
 				</Button>
 			</div>
 
+			<Show when={listError() && list()}>
+				<p role="alert" class="ts-caption text-error">
+					{listError()}
+				</p>
+			</Show>
 			{/* Main Video List Card */}
 			<Card>
 				<CardHeader
@@ -174,8 +176,14 @@ export default function VideosSection() {
 									options={stateOptions}
 									value={stateFilter()}
 									onValueChange={(val) => {
-										if (val) {
-											setStateFilter(val as StateFilter);
+										if (
+											val === "all" ||
+											val === "new" ||
+											val === "regular" ||
+											val === "milestone" ||
+											val === "archive"
+										) {
+											setStateFilter(val);
 											setPage(0);
 											void loadList();
 										}
@@ -234,15 +242,12 @@ export default function VideosSection() {
 										</div>
 									}
 								>
-									<div class="overflow-x-auto">
+									<div class="cvsa-scroll overflow-x-auto">
 										<table class="w-full text-left ts-caption">
 											<thead>
 												<tr class="border-b border-border text-tertiary bg-surface-container-low/50">
 													<th class="py-3 px-4 font-medium">
-														{t("videos.col.aid")}
-													</th>
-													<th class="py-3 px-4 font-medium">
-														{t("videos.col.bvid")}
+														{t("videos.col.video")}
 													</th>
 													<th class="py-3 px-4 font-medium">
 														{t("videos.col.state")}
@@ -265,27 +270,40 @@ export default function VideosSection() {
 												<For each={current().items}>
 													{(item) => (
 														<tr class="hover:bg-hover/50 transition-colors">
-															<td class="py-3 px-4">
-																<button
-																	type="button"
-																	class="font-medium text-primary hover:underline focus:outline-none"
-																	onClick={() =>
-																		inspect(item.aid, item)
-																	}
-																>
-																	{item.aid}
-																</button>
-															</td>
-															<td class="py-3 px-4">
-																<a
-																	href={`https://www.bilibili.com/video/${item.bvid}`}
-																	target="_blank"
-																	rel="noopener noreferrer"
-																	class="inline-flex items-center gap-1 text-primary hover:text-primary-focus hover:underline"
-																>
-																	<span>{item.bvid}</span>
-																	<ExternalLink class="w-3 h-3 text-tertiary" />
-																</a>
+															<td class="py-3 px-4 min-w-60">
+																<div class="flex flex-col items-start gap-1">
+																	<button
+																		type="button"
+																		class="text-left font-medium text-primary hover:underline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary"
+																		onClick={() =>
+																			inspect(item.aid, item)
+																		}
+																	>
+																		{item.title ||
+																			`AID ${item.aid}`}
+																	</button>
+																	<div class="flex flex-wrap gap-x-2 text-tertiary">
+																		<span>AID {item.aid}</span>
+																		<Show when={item.bvid}>
+																			{(bvid) => (
+																				<a
+																					href={`https://www.bilibili.com/video/${bvid()}`}
+																					target="_blank"
+																					rel="noopener noreferrer"
+																					class="inline-flex items-center gap-1 text-secondary hover:underline"
+																				>
+																					{bvid()}
+																					<ExternalLink class="w-3 h-3" />
+																				</a>
+																			)}
+																		</Show>
+																		<Show when={item.ownerName}>
+																			<span>
+																				{item.ownerName}
+																			</span>
+																		</Show>
+																	</div>
+																</div>
 															</td>
 															<td class="py-3 px-4">
 																{stateBadge(item.state)}
@@ -331,7 +349,7 @@ export default function VideosSection() {
 								{/* Pagination */}
 								<div class="px-5 py-3 border-t border-border flex items-center justify-between">
 									<span class="ts-caption text-tertiary">
-										{formatPageLabel(page(), PAGE_SIZE, current().total)}
+										{formatPageLabel(page(), current().total, PAGE_SIZE)}
 									</span>
 									<div class="flex items-center gap-2">
 										<Button
@@ -349,7 +367,7 @@ export default function VideosSection() {
 											size="sm"
 											variant="outlined"
 											disabled={
-												!hasNextPage(page(), PAGE_SIZE, current().total) ||
+												!hasNextPage(page(), current().total, PAGE_SIZE) ||
 												loadingList()
 											}
 											onClick={() => {
@@ -370,6 +388,7 @@ export default function VideosSection() {
 			{/* Video Detail Modal */}
 			<Modal
 				isOpen={modalOpen()}
+				closeLabel={t("common.close")}
 				onClose={() => setModalOpen(false)}
 				title={t("videos.modal.title")}
 				size="xl"

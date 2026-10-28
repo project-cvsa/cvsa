@@ -113,11 +113,15 @@ describe("CrawlerStatsCollector", () => {
 		const stats = collector.getWindow("5m");
 		expect(stats.errors).toEqual({
 			timeout: 1,
+			networkFailure: 1,
+			httpFailure: 1,
+			networkOther: 0,
+			adapterUnavailable: 0,
 			rateLimited412Or429: 1,
 			bilibiliBusinessError: 1,
 			inferenceError: 1,
 			dbError: 1,
-			other: 2,
+			other: 0,
 		});
 		expect(stats.counters.networkRequests).toBe(5);
 	});

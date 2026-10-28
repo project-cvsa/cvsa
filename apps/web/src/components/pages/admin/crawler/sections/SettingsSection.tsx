@@ -14,7 +14,6 @@ import { toDiscoveryConfigUpdatePayload } from "../discoveryConfig";
 import SlidersHorizontal from "lucide-solid/icons/sliders-horizontal";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Save from "lucide-solid/icons/save";
-import AlertTriangle from "lucide-solid/icons/alert-triangle";
 import Cpu from "lucide-solid/icons/cpu";
 
 type KeywordField =
@@ -39,7 +38,7 @@ export default function SettingsSection() {
 	});
 
 	const loadConfig = async () => {
-		if (loading() || saving()) return;
+		if (loading() || saving() || isDirty()) return;
 		const request = requests.beginLoad();
 		setLoading(true);
 		const res = await api.crawler.getDiscoveryConfig();
@@ -113,10 +112,15 @@ export default function SettingsSection() {
 				</div>
 
 				<div class="flex items-center gap-2 shrink-0">
+					<Show when={isDirty()}>
+						<span class="ts-caption text-secondary">
+							{t("network.adapters.draftNotice")}
+						</span>
+					</Show>
 					<Button
 						size="sm"
 						variant="outlined"
-						disabled={loading() || saving()}
+						disabled={loading() || saving() || isDirty()}
 						onClick={() => void loadConfig()}
 						class="gap-1.5"
 					>
@@ -136,26 +140,6 @@ export default function SettingsSection() {
 				</div>
 			</div>
 
-			{/* Unsaved Draft Alert */}
-			<Show when={isDirty()}>
-				<div class="p-4 border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
-					<div class="flex items-center gap-2.5 text-amber-700 dark:text-amber-300">
-						<AlertTriangle class="w-4 h-4 shrink-0" />
-						<span class="text-sm font-medium">{t("network.adapters.draftNotice")}</span>
-					</div>
-					<Button
-						size="sm"
-						variant="filled"
-						disabled={saving()}
-						onClick={() => void saveConfig()}
-						class="gap-1.5 shrink-0"
-					>
-						<Save class="w-3.5 h-3.5" />
-						<span>{saving() ? t("common.saving") : t("common.save")}</span>
-					</Button>
-				</div>
-			</Show>
-
 			<Show
 				when={config()}
 				fallback={
@@ -169,16 +153,16 @@ export default function SettingsSection() {
 						<div class="flex flex-col gap-6">
 							{/* Search Rover Keywords */}
 							<KeywordListEditor
-								title="搜索发现关键词库 (Search Rover Keywords)"
-								description="定时探索 Rover 在 B 站搜索抓取时轮询使用的关键词列表"
+								title={t("settings.searchKeywords.title")}
+								description={t("settings.searchKeywords.description")}
 								items={current().searchKeywords ?? []}
-								placeholder="添加搜索词，如 洛天依 原创、Synthesizer V"
+								placeholder={t("settings.searchKeywords.placeholder")}
 								onAdd={(val) => addKeyword("searchKeywords", val)}
 								onRemove={(val) => removeKeyword("searchKeywords", val)}
 							/>
 
 							{/* Filter Keyword Lists */}
-							<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+							<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 								<KeywordListEditor
 									title={t("settings.singers.title")}
 									description={t("settings.singers.description")}
@@ -242,7 +226,7 @@ export default function SettingsSection() {
 									</div>
 
 									{/* Numerical Fields & Sliders Grid */}
-									<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+									<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 										<div class="flex flex-col gap-2">
 											<Slider
 												label={t("settings.threshold.title")}

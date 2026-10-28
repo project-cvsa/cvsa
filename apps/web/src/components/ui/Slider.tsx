@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import "./Slider.css";
 import { Show, createSignal, splitProps } from "solid-js";
 
 export interface SliderProps {
@@ -74,7 +75,7 @@ export default function Slider(props: SliderProps) {
 					disabled={local.disabled}
 					onInput={handleInput}
 					class={clsx(
-						"w-full h-2 bg-surface-container-medium border border-border appearance-none cursor-pointer outline-none transition-colors cvsa-slider",
+						"w-full h-2 bg-surface-container-medium border border-border appearance-none cursor-pointer focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors cvsa-slider",
 						"focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary",
 						local.disabled && "opacity-50 cursor-not-allowed"
 					)}

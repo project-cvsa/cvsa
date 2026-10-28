@@ -1,6 +1,6 @@
 import clsx from "clsx";
 import type { JSX } from "solid-js";
-import { Show, splitProps } from "solid-js";
+import { createMemo, Show, splitProps } from "solid-js";
 
 export interface CardProps {
 	class?: string;
@@ -24,7 +24,6 @@ export function Card(props: CardProps) {
 
 export interface CardHeaderProps {
 	title?: string | JSX.Element;
-	description?: string | JSX.Element;
 	actions?: JSX.Element;
 	variant?: "inverted" | "bordered";
 	class?: string;
@@ -34,7 +33,6 @@ export interface CardHeaderProps {
 export function CardHeader(props: CardHeaderProps) {
 	const [local, rest] = splitProps(props, [
 		"title",
-		"description",
 		"actions",
 		"variant",
 		"class",
@@ -42,6 +40,8 @@ export function CardHeader(props: CardHeaderProps) {
 	]);
 
 	const isInverted = () => local.variant === "inverted";
+	const title = createMemo(() => local.title);
+	const actions = createMemo(() => local.actions);
 
 	return (
 		<div
@@ -53,31 +53,21 @@ export function CardHeader(props: CardHeaderProps) {
 			)}
 			{...rest}
 		>
-			<Show when={local.title || local.description} fallback={local.children}>
+			<Show when={title()} fallback={local.children}>
 				<div class="flex items-center gap-3 min-w-0">
-					<Show when={local.title}>
+					<Show when={title()}>
 						<div
 							class={clsx(
 								"font-semibold truncate",
 								isInverted() ? "text-display-inverted" : "text-primary"
 							)}
 						>
-							{local.title}
+							{title()}
 						</div>
 					</Show>
-					<Show when={local.description}>
-						<span
-							class={clsx(
-								"ts-caption",
-								isInverted() ? "text-display-inverted/70" : "text-tertiary"
-							)}
-						>
-							{local.description}
-						</span>
-					</Show>
 				</div>
-				<Show when={local.actions}>
-					<div class="flex items-center gap-2 shrink-0">{local.actions}</div>
+				<Show when={actions()}>
+					<div class="flex items-center gap-2 shrink-0">{actions()}</div>
 				</Show>
 			</Show>
 		</div>

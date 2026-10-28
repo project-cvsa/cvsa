@@ -85,7 +85,7 @@ export default function Select(props: SelectProps) {
 			disabled={local.disabled}
 			required={local.required}
 			invalid={hasError()}
-			positioning={{ placement: "bottom-start", gutter: 8, sameWidth: true }}
+			positioning={{ placement: "bottom-start", gutter: 8 }}
 			onValueChange={(details) => local.onValueChange?.(details.value[0])}
 			class={clsx("flex flex-col gap-1.5", local.class)}
 			{...rest}
@@ -95,7 +95,7 @@ export default function Select(props: SelectProps) {
 					"group relative flex h-[58px] items-center border bg-surface transition-colors",
 					hasError()
 						? "border-error"
-						: "border-border hover:border-tertiary focus-within:border-primary",
+						: "border-border hover:border-tertiary focus-within:border-primary focus-within:ring-1 focus-within:ring-primary",
 					local.disabled && "opacity-60"
 				)}
 			>
@@ -138,7 +138,7 @@ export default function Select(props: SelectProps) {
 				<Show when={local.clearable}>
 					<ArkSelect.ClearTrigger
 						type="button"
-						class="mr-2 flex h-9 w-9 shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+						class="mr-2 flex h-9 w-9 shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary"
 						aria-label={local.clearLabel}
 					>
 						<X size={17} />
@@ -159,7 +159,7 @@ export default function Select(props: SelectProps) {
 
 			<Portal>
 				<ArkSelect.Positioner class="z-50">
-					<ArkSelect.Content class="max-h-[min(22rem,var(--available-height))] w-[var(--reference-width)] overflow-y-auto bg-surface p-3 shadow-xl outline-none">
+					<ArkSelect.Content class="z-60 max-h-[min(22rem,var(--available-height))] min-w-[var(--reference-width)] w-max max-w-[min(24rem,calc(100vw-2rem))] overflow-y-auto bg-surface p-3 shadow-xl outline-none">
 						<For each={local.options}>
 							{(option) => <SelectOptionRow option={option} />}
 						</For>
@@ -188,12 +188,12 @@ function SelectOptionRow(props: { option: SelectOption }) {
 				</span>
 			</Show>
 			<div class="min-w-0 flex-1 py-2">
-				<ArkSelect.ItemText class="block truncate ts-body text-primary">
+				<ArkSelect.ItemText class="block whitespace-normal break-words ts-body text-primary">
 					{props.option.label}
 				</ArkSelect.ItemText>
 				<Show when={props.option.description}>
 					{(description) => (
-						<span class="mt-0.5 block truncate ts-caption text-tertiary">
+						<span class="mt-0.5 block whitespace-normal break-words ts-caption text-tertiary">
 							{description()}
 						</span>
 					)}

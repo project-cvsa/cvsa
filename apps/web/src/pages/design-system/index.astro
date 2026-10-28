@@ -6,6 +6,7 @@ import Heading1 from "@components/typography/Heading1.astro";
 import Layout from "@layouts/Layout.astro";
 import Heading3 from "@components/typography/Heading3.astro";
 import { ButtonSizes, ButtonVariants } from "@components/pages/design-system/Buttons";
+import CompactControlsProposal from "@components/pages/design-system/CompactControlsProposal";
 import { MenuShowcase } from "@components/pages/design-system/Menus";
 import { TextFieldShowcase } from "@components/pages/design-system/TextFields";
 import { InputExtensionsShowcase } from "@components/pages/design-system/Inputs";
@@ -76,6 +77,9 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 			<div class="mt-4">
 				<InputExtensionsShowcase kind="select" locale={language} client:load />
 			</div>
+
+			<Heading3>{t("designSystem.proposal.title")}</Heading3>
+			<div class="mt-4"><CompactControlsProposal client:load /></div>
 
 			<Heading3>{t("designSystem.menus.title")}</Heading3>
 			<Paragraph>{t("designSystem.menus.description")}</Paragraph>

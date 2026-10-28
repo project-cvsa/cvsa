@@ -1,9 +1,21 @@
 import { appLogger } from "@cvsa/logger";
+import { AppError } from "@cvsa/contracts";
 import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { CrawlerMq, CrawlerWorker } from "../shared/types";
 import type { SnapshotService } from "./service";
 
 export const SNAPSHOT_BATCH_QUEUE = "snapshot-batch";
+const THROTTLE_RETRY_DELAY_MS = 60_000;
+
+export function snapshotFailureKind(error: unknown): "rate_limit" | "unavailable" | "other" {
+	if (AppError.isAppError(error) && error.code === "NO_AVAILABLE_ADAPTER") return "unavailable";
+	if (
+		error instanceof Error &&
+		/Bilibili request failed with HTTP (412|429)\b/.test(error.message)
+	)
+		return "rate_limit";
+	return "other";
+}
 
 export interface SnapshotBatchJobData {
 	aids: Array<number | string>;
@@ -45,6 +57,20 @@ export function createSnapshotBatchWorker(
 					missing: result.missingCount,
 				});
 			} catch (error) {
+				const failureKind = snapshotFailureKind(error);
+				if (failureKind !== "other") {
+					await snapshotService.deferLeases(aids, THROTTLE_RETRY_DELAY_MS, failureKind);
+					if (failureKind === "unavailable") stats.recordError("adapterUnavailable");
+					appLogger.warn(
+						"Snapshot batch deferred after throttling or unavailable exits",
+						{
+							component: "snapshot-worker",
+							jobId: job.id,
+							error,
+						}
+					);
+					return;
+				}
 				// Nothing was scheduled, so the lease has to go back immediately
 				// instead of blackholing these videos until it expires.
 				await snapshotService.releaseLeases(aids).catch((leaseError) => {

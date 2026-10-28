@@ -1,5 +1,6 @@
 ---
 import { getThemeColorVariables } from "@lib/theme";
+import "./global.css";
 import {
 	CLIENT_I18N_SCRIPT_ID,
 	serializeClientI18nPayload,
@@ -75,82 +76,11 @@ const clientI18nJson = clientI18n ? serializeClientI18nPayload(clientI18n) : und
 		>
 		<style id="cvsa-color-vars" set:html={themeCSS} is:global>
 		</style>
-		<style is:global>
-		:root {
-			--wireframe-line: oklch(92% 0 0);
-			--highlight-color: oklch(94% 50% 105);
-			--highlight-shadow-color: rgba(67, 46, 18, 0);
-		}
-		@media (prefers-color-scheme: dark) {
-			:root {
-				--wireframe-line: oklch(27% 0 0);
-				--highlight-color: oklch(94% 52% 105deg);
-				--highlight-shadow-color: rgba(67, 46, 18, 0.6);
-			}
-		}
-		body {
-			font-size: 16px;
-			font-weight: 400;
-			font-family: "Outfit", system-ui, sans-serif;
-			background-color: var(--background);
-		}
-		::selection {
-			background-color: var(--primary);
-			color: var(--background);
-		}
-		/* Hide number input spinners across all browsers */
-		input[type="number"]::-webkit-inner-spin-button,
-		input[type="number"]::-webkit-outer-spin-button {
-			-webkit-appearance: none;
-			margin: 0;
-		}
-		input[type="number"] {
-			-moz-appearance: textfield;
-		}
-		/* Prevent Chrome autofill from overriding background with glaring light-blue in dark mode */
-		input:-webkit-autofill,
-		input:-webkit-autofill:hover,
-		input:-webkit-autofill:focus,
-		input:-webkit-autofill:active,
-		textarea:-webkit-autofill,
-		textarea:-webkit-autofill:hover,
-		textarea:-webkit-autofill:focus,
-		select:-webkit-autofill,
-		select:-webkit-autofill:hover,
-		select:-webkit-autofill:focus {
-			/* biome-ignore lint/complexity/noImportantStyles: Chrome autofill requires !important to override UA styles */
-			-webkit-box-shadow: 0 0 0 1000px var(--surface) inset !important;
-			/* biome-ignore lint/complexity/noImportantStyles: Chrome autofill requires !important to override UA styles */
-			-webkit-text-fill-color: var(--display) !important;
-			/* biome-ignore lint/complexity/noImportantStyles: Chrome autofill requires !important to override UA styles */
-			caret-color: var(--display) !important;
-			transition: background-color 5000s ease-in-out 0s;
-		}
 
-		/* Industrial brutalist range slider thumb */
-		.cvsa-slider::-webkit-slider-thumb {
-			-webkit-appearance: none;
-			appearance: none;
-			width: 10px;
-			height: 20px;
-			background-color: var(--primary);
-			border: 1px solid var(--primary);
-			cursor: pointer;
-			border-radius: 0;
-		}
-		.cvsa-slider::-moz-range-thumb {
-			width: 10px;
-			height: 20px;
-			background-color: var(--primary);
-			border: 1px solid var(--primary);
-			cursor: pointer;
-			border-radius: 0;
-		}
-		</style>
 		<slot name="head" />
 	</head>
 
-	<body class="dark:text-white overflow-x-hidden">
+	<body class="overflow-x-hidden">
 		<slot />
 	</body>
 </html>

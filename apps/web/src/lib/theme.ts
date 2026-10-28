@@ -98,6 +98,10 @@ const baseVariables = {
 		light: primitives.yellow[60],
 		dark: primitives.yellow[100],
 	},
+	"--on-highlight": {
+		light: primitives.gray[840],
+		dark: primitives.gray[840],
+	},
 	"--shadow": {
 		light: primitives.gray[1000] + "0A",
 		dark: primitives.gray[1000] + "30",

@@ -1,6 +1,8 @@
 import { Elysia } from "elysia";
 import {
 	AppError,
+	ActionQueuedResponseSchema,
+	TrackingAidParamsSchema,
 	ErrorResponseSchema,
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
@@ -16,7 +18,12 @@ import {
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
 import { toInstant, type BilibiliVideoMetadata, type VideoTracking } from "@cvsa/snapshot-db";
-import { bilibiliClient, discoveryRepository, trackingRepository } from "../container";
+import {
+	bilibiliClient,
+	discoveryRepository,
+	manualSnapshotService,
+	trackingRepository,
+} from "../container";
 
 function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 	return {
@@ -209,6 +216,16 @@ export const trackingRoutes = new Elysia()
 			},
 		}
 	)
+	.post("/videos/:aid/snapshots", ({ params }) => manualSnapshotService.enqueue(params.aid), {
+		params: TrackingAidParamsSchema,
+		response: {
+			200: ActionQueuedResponseSchema,
+			401: ErrorResponseSchema,
+			404: ErrorResponseSchema,
+			409: ErrorResponseSchema,
+			422: ErrorResponseSchema,
+		},
+	})
 	.post(
 		"/videos/:aid/promote",
 		async ({ params, body, status }) => {

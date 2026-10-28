@@ -1,0 +1,19 @@
+/* Industrial brutalist range slider thumb */
+.cvsa-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 10px;
+	height: 20px;
+	background-color: var(--primary);
+	border: 1px solid var(--primary);
+	cursor: pointer;
+	border-radius: 0;
+}
+.cvsa-slider::-moz-range-thumb {
+	width: 10px;
+	height: 20px;
+	background-color: var(--primary);
+	border: 1px solid var(--primary);
+	cursor: pointer;
+	border-radius: 0;
+}

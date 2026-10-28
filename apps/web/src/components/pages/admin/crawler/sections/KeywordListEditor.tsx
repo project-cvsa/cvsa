@@ -3,6 +3,7 @@ import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import TextField from "@components/ui/TextField";
 import { Card, CardHeader, CardContent } from "@components/ui/Card";
+import { getComponentT } from "@lib/i18n/isomorphic";
 import Plus from "lucide-solid/icons/plus";
 import X from "lucide-solid/icons/x";
 
@@ -16,6 +17,7 @@ type KeywordListEditorProps = {
 };
 
 export default function KeywordListEditor(props: KeywordListEditorProps) {
+	const t = getComponentT("crawler");
 	const [value, setValue] = createSignal("");
 
 	const add = () => {
@@ -46,8 +48,8 @@ export default function KeywordListEditor(props: KeywordListEditorProps) {
 								<span class="font-medium">{item}</span>
 								<button
 									type="button"
-									class="p-0.5 text-tertiary hover:text-error hover:bg-hover transition-colors focus:outline-none"
-									aria-label={"Remove " + item}
+									class="p-0.5 text-tertiary hover:text-error hover:bg-hover transition-colors focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary"
+									aria-label={`${t("common.delete")} ${item}`}
 									onClick={() => props.onRemove(item)}
 								>
 									<X class="w-3 h-3" />
@@ -80,7 +82,7 @@ export default function KeywordListEditor(props: KeywordListEditorProps) {
 						class="gap-1.5 shrink-0"
 					>
 						<Plus class="w-4 h-4" />
-						<span>Add</span>
+						<span>{t("discoveryUi.add")}</span>
 					</Button>
 				</div>
 			</CardContent>

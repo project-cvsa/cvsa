@@ -71,7 +71,7 @@ export default function Switch(props: SwitchProps) {
 				disabled={local.disabled}
 				onClick={toggle}
 				class={clsx(
-					"relative inline-flex shrink-0 border transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+					"relative inline-flex shrink-0 border transition-colors duration-150 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
 					sizeStyles[size()].track,
 					local.checked
 						? "bg-primary border-primary"

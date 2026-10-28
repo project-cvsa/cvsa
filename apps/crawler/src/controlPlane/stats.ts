@@ -106,7 +106,14 @@ export const statsRoutes = new Elysia().get(
 		const counters = overview.metrics.counters;
 		const errors = overview.metrics.errors;
 		const totalFailures = Object.values(errors).reduce((sum, value) => sum + value, 0);
-		const totalAttempts = Math.max(counters.networkRequests, totalFailures);
+		const totalAttempts = counters.networkRequests;
+		const networkFailures =
+			errors.timeout +
+			errors.networkFailure +
+			errors.httpFailure +
+			errors.networkOther +
+			errors.rateLimited412Or429 +
+			errors.bilibiliBusinessError;
 
 		return {
 			window,
@@ -118,8 +125,9 @@ export const statsRoutes = new Elysia().get(
 			requestsPerSec: counters.networkRequests / windowSeconds,
 			totalAttempts,
 			totalFailures,
+			networkFailures,
 			errorRate:
-				totalAttempts > 0 ? Math.min(1, Math.max(0, totalFailures / totalAttempts)) : 0,
+				totalAttempts > 0 ? Math.min(1, Math.max(0, networkFailures / totalAttempts)) : 0,
 			retryRate:
 				totalAttempts > 0
 					? Math.min(1, Math.max(0, overview.metrics.retries / totalAttempts))

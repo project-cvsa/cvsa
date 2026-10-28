@@ -46,22 +46,26 @@ export async function callCrawlerApi<T>(
 
 		if (!res.ok) {
 			const errText = await res.text();
+			if (res.status === 404) throw new AppError("error.not-found", "NOT_FOUND", 404);
+			if (res.status === 409)
+				throw new AppError("error.crawler.conflict", "ENTITY_CONFLICT", 409);
+			if (res.status === 429) {
+				throw new AppError("error.crawler.rate-limited", "CRAWLER_RATE_LIMITED", 429);
+			}
+			const unavailable = res.status >= 500 || res.status === 401 || res.status === 403;
 			throw new AppError(
-				`Crawler control plane returned error (${res.status}): ${errText}`,
-				"THIRD_PARTY_ERROR",
-				res.status >= 500 ? 502 : res.status
+				unavailable ? "error.crawler.unavailable" : "error.crawler.request-failed",
+				unavailable ? "CRAWLER_UNAVAILABLE" : "CRAWLER_REQUEST_FAILED",
+				unavailable ? 502 : res.status,
+				{ upstreamStatus: res.status, upstreamResponse: errText }
 			);
 		}
 
 		return (await res.json()) as T;
 	} catch (error) {
 		if (AppError.isAppError(error)) throw error;
-		throw new AppError(
-			`Failed to communicate with crawler control plane: ${
-				error instanceof Error ? error.message : String(error)
-			}`,
-			"THIRD_PARTY_ERROR",
-			502
-		);
+		throw new AppError("error.crawler.unavailable", "CRAWLER_UNAVAILABLE", 502, {
+			cause: error instanceof Error ? error.message : String(error),
+		});
 	}
 }

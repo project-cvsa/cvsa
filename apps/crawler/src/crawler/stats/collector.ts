@@ -125,9 +125,11 @@ function toErrorKind(outcome: StatsNetworkOutcome): StatsErrorKind | undefined {
 		case "business_error":
 			return "bilibiliBusinessError";
 		case "http_error":
+			return "httpFailure";
 		case "connection_error":
+			return "networkFailure";
 		case "other_error":
-			return "other";
+			return "networkOther";
 	}
 }
 

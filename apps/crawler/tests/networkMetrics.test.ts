@@ -52,6 +52,9 @@ describe("networkRequestOutcome", () => {
 	});
 
 	test("treats 412 and 429 as rate limiting, not business errors", () => {
+		expect(
+			networkRequestOutcome(response({ errorCode: "APPLICATION_RATE_LIMIT", status: 200 }))
+		).toBe("rate_limited");
 		expect(networkRequestOutcome(response({ errorCode: "HTTP_4XX", status: 412 }))).toBe(
 			"rate_limited"
 		);

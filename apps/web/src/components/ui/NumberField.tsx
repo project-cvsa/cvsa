@@ -99,7 +99,7 @@ export default function NumberField(props: NumberFieldProps) {
 						margin: "0",
 					}}
 					class={clsx(
-						"w-full border bg-surface text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus:border-primary",
+						"w-full border bg-surface text-primary transition-colors focus-visible:outline-none focus:border-primary",
 						sizeStyles[size()].input,
 						local.errorText
 							? "border-error focus-visible:outline-error"

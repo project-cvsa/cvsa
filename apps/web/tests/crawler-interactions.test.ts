@@ -197,6 +197,10 @@ describe("console formatting", () => {
 
 	test("normalizes metadata tags", () => {
 		expect(formatTags(["a", "b"])).toEqual(["a", "b"]);
+		expect(formatTags([{ name: "Vocaloid", tagId: 1 }, { tag_name: "原创" }])).toEqual([
+			"Vocaloid",
+			"原创",
+		]);
 		expect(formatTags('["a","b"]')).toEqual(["a", "b"]);
 		expect(formatTags(null)).toEqual([]);
 	});

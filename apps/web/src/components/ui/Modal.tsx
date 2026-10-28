@@ -6,6 +6,7 @@ import X from "lucide-solid/icons/x";
 export interface ModalProps {
 	isOpen: boolean;
 	onClose: () => void;
+	closeLabel?: string;
 	title?: string | JSX.Element;
 	description?: string | JSX.Element;
 	size?: "sm" | "md" | "lg" | "xl";
@@ -25,6 +26,7 @@ export default function Modal(props: ModalProps) {
 	const [local, rest] = splitProps(props, [
 		"isOpen",
 		"onClose",
+		"closeLabel",
 		"title",
 		"description",
 		"size",
@@ -36,7 +38,7 @@ export default function Modal(props: ModalProps) {
 	const size = () => local.size ?? "md";
 
 	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.key === "Escape" && local.isOpen) {
+		if (event.key === "Escape" && local.isOpen && !event.defaultPrevented) {
 			local.onClose();
 		}
 	};
@@ -56,10 +58,6 @@ export default function Modal(props: ModalProps) {
 			<Portal>
 				<div
 					class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
-					onClick={(e) => {
-						if (e.target === e.currentTarget) local.onClose();
-					}}
-					onKeyDown={handleKeyDown}
 					role="dialog"
 					aria-modal="true"
 					tabIndex={-1}
@@ -87,9 +85,9 @@ export default function Modal(props: ModalProps) {
 							</div>
 							<button
 								type="button"
-								class="p-1 text-display-inverted hover:bg-white/20 transition-colors cursor-pointer"
+								class="p-1 text-display-inverted hover:bg-hover/20 transition-colors cursor-pointer focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-display-inverted"
 								onClick={() => local.onClose()}
-								aria-label="Close"
+								aria-label={local.closeLabel ?? "Close"}
 							>
 								<X class="w-5 h-5" />
 							</button>

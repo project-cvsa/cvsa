@@ -35,8 +35,8 @@ const variantStyles: Record<BadgeVariant, { container: string; dot: string }> = 
 		dot: "bg-display-inverted",
 	},
 	warning: {
-		container: "bg-highlight text-display border-highlight",
-		dot: "bg-display",
+		container: "bg-highlight text-[var(--on-highlight)] border-highlight",
+		dot: "bg-[var(--on-highlight)]",
 	},
 	danger: {
 		container: "bg-error text-on-error border-error",
@@ -47,8 +47,8 @@ const variantStyles: Record<BadgeVariant, { container: string; dot: string }> = 
 		dot: "bg-primary",
 	},
 	highlight: {
-		container: "bg-highlight text-display border-highlight",
-		dot: "bg-display",
+		container: "bg-highlight text-[var(--on-highlight)] border-highlight",
+		dot: "bg-[var(--on-highlight)]",
 	},
 };
 

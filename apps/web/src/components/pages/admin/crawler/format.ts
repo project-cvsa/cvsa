@@ -53,6 +53,10 @@ export function formatTags(tags: unknown): string[] {
 
 function describeTag(tag: unknown): string {
 	if (typeof tag === "string") return tag;
+	if (typeof tag === "object" && tag !== null) {
+		if ("name" in tag && typeof tag.name === "string") return tag.name;
+		if ("tag_name" in tag && typeof tag.tag_name === "string") return tag.tag_name;
+	}
 	const serialized = JSON.stringify(tag);
 	return serialized === undefined ? String(tag) : serialized;
 }

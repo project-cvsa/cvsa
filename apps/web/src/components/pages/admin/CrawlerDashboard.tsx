@@ -21,24 +21,35 @@ import VideosSection from "./crawler/sections/VideosSection";
 import DiscoverySection from "./crawler/sections/DiscoverySection";
 import NetworkSection from "./crawler/sections/NetworkSection";
 import SettingsSection from "./crawler/sections/SettingsSection";
+import { createRequestSequence } from "./crawler/videoActions";
 
 type SectionId = "overview" | "tasks" | "videos" | "discovery" | "network" | "settings";
 
 export default function CrawlerDashboard() {
 	const t = getComponentT("crawler");
 	const [activeSection, setActiveSection] = createSignal<SectionId>("overview");
+	const [visited, setVisited] = createSignal<ReadonlySet<SectionId>>(new Set(["overview"]));
+	const statusRequests = createRequestSequence();
 	const [statusData, setStatusData] = createSignal<CrawlerStatusDto | null>(null);
 	const [loadingStatus, setLoadingStatus] = createSignal(false);
+	const [statusError, setStatusError] = createSignal<string | null>(null);
 	const [manualIngestOpen, setManualIngestOpen] = createSignal(false);
 
 	const refreshStatus = async () => {
+		const request = statusRequests.start();
 		setLoadingStatus(true);
 		const res = await api.crawler.getStatus();
+		if (!statusRequests.isCurrent(request)) return;
 		setLoadingStatus(false);
 		if (res.ok && res.data) {
 			setStatusData(res.data);
+			setStatusError(null);
 			return;
 		}
+		setStatusData(null);
+		setStatusError(
+			res.ok ? t("dashboard.statusFailed") : res.error.message || t("dashboard.statusFailed")
+		);
 	};
 
 	onMount(() => {
@@ -55,7 +66,8 @@ export default function CrawlerDashboard() {
 	];
 
 	const healthyAdaptersCount = () =>
-		statusData()?.adapters.filter((a) => a.healthState.toLowerCase() === "healthy").length ?? 0;
+		statusData()?.adapters.filter((a) => a.enabled && a.healthState.toLowerCase() === "healthy")
+			.length ?? 0;
 	const totalAdaptersCount = () => statusData()?.adapters.length ?? 0;
 
 	return (
@@ -74,7 +86,9 @@ export default function CrawlerDashboard() {
 									dot
 									size="md"
 								>
-									{status().ready ? "就绪" : "启动中"}
+									{status().ready
+										? t("dashboard.ready")
+										: t("dashboard.starting")}
 								</Badge>
 							)}
 						</Show>
@@ -85,9 +99,11 @@ export default function CrawlerDashboard() {
 				<div class="flex items-center gap-3">
 					<Show when={statusData()}>
 						<div class="hidden sm:flex items-center gap-2 ts-caption text-secondary bg-surface-container-high px-3 py-1.5 border border-border">
-							<span class="text-tertiary">适配器:</span>
+							<span class="text-tertiary">{t("dashboard.adapters")}:</span>
 							<span class="font-medium text-primary">
-								{healthyAdaptersCount()} / {totalAdaptersCount()} 在线
+								{t("dashboard.healthyCount")
+									.replace("{healthy}", String(healthyAdaptersCount()))
+									.replace("{total}", String(totalAdaptersCount()))}
 							</span>
 						</div>
 					</Show>
@@ -99,7 +115,7 @@ export default function CrawlerDashboard() {
 						class="gap-1.5"
 					>
 						<Plus class="w-3.5 h-3.5" />
-						<span>手动收录</span>
+						<span>{t("dashboard.ingest")}</span>
 					</Button>
 
 					<Button
@@ -119,12 +135,23 @@ export default function CrawlerDashboard() {
 				</div>
 			</header>
 
+			<Show when={statusError()}>
+				{(error) => (
+					<p role="alert" class="ts-caption text-error">
+						{error()}
+					</p>
+				)}
+			</Show>
+
 			{/* Navigation Tabs */}
-			<nav aria-label="Dashboard Navigation">
+			<nav aria-label={t("dashboard.navigation")}>
 				<Tabs
 					items={tabs()}
 					value={activeSection()}
-					onChange={(id) => setActiveSection(id)}
+					onChange={(id) => {
+						setActiveSection(id);
+						setVisited((current) => new Set([...current, id]));
+					}}
 					size="md"
 				/>
 			</nav>
@@ -138,25 +165,35 @@ export default function CrawlerDashboard() {
 						refreshStatus={refreshStatus}
 					/>
 				</div>
-				<div classList={{ hidden: activeSection() !== "discovery" }}>
-					<DiscoverySection />
-				</div>
-				<div classList={{ hidden: activeSection() !== "network" }}>
-					<NetworkSection
-						statusData={statusData}
-						loadingStatus={loadingStatus}
-						refreshStatus={refreshStatus}
-					/>
-				</div>
-				<div classList={{ hidden: activeSection() !== "videos" }}>
-					<VideosSection />
-				</div>
-				<div classList={{ hidden: activeSection() !== "tasks" }}>
-					<TasksSection />
-				</div>
-				<div classList={{ hidden: activeSection() !== "settings" }}>
-					<SettingsSection />
-				</div>
+				<Show when={visited().has("discovery")}>
+					<div classList={{ hidden: activeSection() !== "discovery" }}>
+						<DiscoverySection active={activeSection() === "discovery"} />
+					</div>
+				</Show>
+				<Show when={visited().has("network")}>
+					<div classList={{ hidden: activeSection() !== "network" }}>
+						<NetworkSection
+							statusData={statusData}
+							loadingStatus={loadingStatus}
+							refreshStatus={refreshStatus}
+						/>
+					</div>
+				</Show>
+				<Show when={visited().has("videos")}>
+					<div classList={{ hidden: activeSection() !== "videos" }}>
+						<VideosSection />
+					</div>
+				</Show>
+				<Show when={visited().has("tasks")}>
+					<div classList={{ hidden: activeSection() !== "tasks" }}>
+						<TasksSection />
+					</div>
+				</Show>
+				<Show when={visited().has("settings")}>
+					<div classList={{ hidden: activeSection() !== "settings" }}>
+						<SettingsSection />
+					</div>
+				</Show>
 			</main>
 
 			<ManualIngestModal

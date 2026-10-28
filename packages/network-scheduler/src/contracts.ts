@@ -33,13 +33,13 @@ export const HEALTH_AFFECTING_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode>
 	"NETWORK_FAILURE",
 	"REQUEST_TIMEOUT",
 	"HTTP_429",
+	"APPLICATION_RATE_LIMIT",
 	"HTTP_5XX",
 ]);
 
 /** Codes worth retrying on another adapter within the same call. */
 export const RETRYABLE_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> = new Set([
 	...HEALTH_AFFECTING_NETWORK_ERROR_CODES,
-	"APPLICATION_RATE_LIMIT",
 ]);
 
 export interface NetworkApplicationErrorContext {
@@ -112,4 +112,9 @@ export interface NetworkAdapterRuntimeStatus {
 	consecutiveFailures: number;
 	/** Epoch milliseconds until which the adapter stays isolated, or `null`. */
 	openUntil: number | null;
+	/** Counts since this scheduler instance started, including retries. */
+	requests: number;
+	failures: number;
+	rateLimited: number;
+	averageDurationMs: number | null;
 }
