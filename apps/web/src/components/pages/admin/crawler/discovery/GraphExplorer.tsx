@@ -89,7 +89,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 
 	return (
 		<Card>
-			<CardHeader title={t("graphUi.title")}/>
+			<CardHeader title={t("graphUi.title")} />
 			<CardContent class="flex flex-col gap-6">
 				{/* Search Input Bar */}
 				<div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">

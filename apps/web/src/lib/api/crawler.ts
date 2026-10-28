@@ -7,12 +7,17 @@ import type {
 	BilibiliVideoRelationDto,
 	ClassifierHealthDto,
 	CrawlerOverviewStats,
+	CrawlerQueueJobDetail,
+	CrawlerQueueJobsQuery,
+	CrawlerQueueJobsResponse,
 	CrawlerStatusDto,
 	CrawlerStatsWindow,
+	DeleteTrackingVideoResponse,
 	DiscoveryFilterConfigDto,
 	DiscoverySampleItem,
 	DiscoverySampleListQuery,
 	DiscoverySampleListResponse,
+	DiscoveryStatusDto,
 	DiscoverySweepRequest,
 	DiscoverySweepResponse,
 	IngestVideoRequest,
@@ -51,9 +56,45 @@ async function getStats(
 	return settle(await eden.v2.admin.crawler.stats.get({ query: { window } }));
 }
 
+async function getQueueJobs(
+	query?: CrawlerQueueJobsQuery
+): Promise<ApiResult<CrawlerQueueJobsResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs.get({ query: query ?? { limit: 50 } }));
+}
+
+async function getQueueJobDetail(
+	queue: string,
+	id: string
+): Promise<ApiResult<CrawlerQueueJobDetail | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).get());
+}
+
+async function retryQueueJob(
+	queue: string,
+	id: string
+): Promise<ApiResult<{ ok: boolean } | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).retry.post());
+}
+
+async function removeQueueJob(
+	queue: string,
+	id: string
+): Promise<ApiResult<{ ok: boolean } | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).delete());
+}
+
 async function getClassifierHealth(): Promise<ApiResult<ClassifierHealthDto | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.classifier.get());
+}
+
+async function getDiscoveryStatus(): Promise<ApiResult<DiscoveryStatusDto | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.status.get());
 }
 
 async function getDiscoveryConfig(): Promise<ApiResult<DiscoveryFilterConfigDto | null>> {
@@ -112,6 +153,11 @@ async function getTracking(aid: string): Promise<ApiResult<VideoTrackingDto | nu
 	return settle(await eden.v2.admin.crawler.tracking({ aid }).get());
 }
 
+async function deleteTracking(aid: string): Promise<ApiResult<DeleteTrackingVideoResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.tracking({ aid }).delete());
+}
+
 async function listTrackingVideos(
 	query: Partial<TrackingVideoListQuery> = {}
 ): Promise<ApiResult<TrackingVideoListResponse | null>> {
@@ -121,6 +167,9 @@ async function listTrackingVideos(
 		offset: query.offset ?? 0,
 		...(query.state ? { state: query.state } : {}),
 		...(query.search ? { search: query.search } : {}),
+		...(query.statusFilter ? { statusFilter: query.statusFilter } : {}),
+		...(query.sortBy ? { sortBy: query.sortBy } : {}),
+		...(query.sortOrder ? { sortOrder: query.sortOrder } : {}),
 	};
 	return settle(await eden.v2.admin.crawler.tracking.videos.get({ query: params }));
 }
@@ -192,6 +241,11 @@ async function listDiscoverySamples(
 		offset: query.offset ?? 0,
 		...(query.decision ? { decision: query.decision } : {}),
 		...(query.labeled === undefined ? {} : { labeled: query.labeled }),
+		...(query.minConfidence !== undefined ? { minConfidence: query.minConfidence } : {}),
+		...(query.maxConfidence !== undefined ? { maxConfidence: query.maxConfidence } : {}),
+		...(query.search ? { search: query.search } : {}),
+		...(query.sortBy ? { sortBy: query.sortBy } : {}),
+		...(query.sortOrder ? { sortOrder: query.sortOrder } : {}),
 	};
 	return settle(await eden.v2.admin.crawler.discovery.samples.get({ query: params }));
 }
@@ -215,7 +269,12 @@ async function testNetworkAdapter(
 export const crawlerApi = {
 	getStatus,
 	getStats,
+	getQueueJobs,
+	getQueueJobDetail,
+	retryQueueJob,
+	removeQueueJob,
 	getClassifierHealth,
+	getDiscoveryStatus,
 	getDiscoveryConfig,
 	updateDiscoveryConfig,
 	getNetworkConfig,
@@ -227,6 +286,7 @@ export const crawlerApi = {
 	triggerActive,
 	queueSnapshot,
 	getTracking,
+	deleteTracking,
 	listTrackingVideos,
 	ingestVideo,
 	registerTracking,

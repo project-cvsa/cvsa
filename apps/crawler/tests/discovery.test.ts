@@ -628,9 +628,8 @@ describe("DiscoveryFilterService", () => {
 		const config = filter.getConfig();
 		expect(config.modelThreshold).toBe(0.5);
 		expect(config.minDurationSeconds).toBe(45);
-		// An emptied blacklist falls back to the default list rather than
-		// disabling the guardrail entirely.
-		expect(config.blacklistKeywords.length).toBeGreaterThan(0);
+		// Default blacklist keywords are removed per user configuration
+		expect(config.blacklistKeywords).toEqual([]);
 	});
 });
 

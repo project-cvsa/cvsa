@@ -10,6 +10,8 @@ import {
 	type NetworkAdapterConfig,
 	type NetworkRateLimit,
 } from "@cvsa/contracts";
+import Plus from "lucide-solid/icons/plus";
+import Trash2 from "lucide-solid/icons/trash-2";
 
 type NetworkAdapterFormProps = {
 	adapter?: NetworkAdapterConfig;
@@ -98,13 +100,14 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 		setId("");
 		setProxyUrl("");
 		setWeight(1);
-		toast.success(t("common.success"));
+		toast.success(t("common.saved"));
 	};
 
 	return (
-		<div class="flex flex-col gap-4">
+		<div class="flex flex-col gap-5">
 			<div class="flex flex-col gap-4">
 				<TextField
+					size="md"
 					label={t("network.form.id")}
 					disabled={Boolean(props.adapter)}
 					value={id()}
@@ -113,6 +116,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				/>
 
 				<Select
+					size="md"
 					label={t("network.form.type")}
 					options={typeOptions}
 					value={type()}
@@ -124,6 +128,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				/>
 
 				<NumberField
+					size="md"
 					label={t("network.form.weight")}
 					min={0.1}
 					step={0.1}
@@ -135,6 +140,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 
 			<Show when={type() === "http-proxy"}>
 				<TextField
+					size="md"
 					label={t("network.form.url")}
 					value={proxyUrl()}
 					onInput={(e) => setProxyUrl(e.currentTarget.value)}
@@ -142,9 +148,11 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				/>
 			</Show>
 
-			<section class="flex flex-col gap-3">
+			<section class="flex flex-col gap-3 pt-2 border-t border-border">
 				<div class="flex items-center justify-between gap-3">
-					<h3 class="ts-label text-primary">{t("network.adapters.col.rateLimit")}</h3>
+					<h3 class="ts-label text-primary font-medium">
+						{t("network.adapters.col.rateLimit")}
+					</h3>
 					<Button
 						variant="outlined"
 						size="sm"
@@ -154,53 +162,70 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 								{ durationSeconds: 60, maxRequests: 120 },
 							])
 						}
+						class="gap-1"
 					>
-						{t("network.form.addLimit")}
+						<Plus class="w-3.5 h-3.5" />
+						<span>{t("common.add")}</span>
 					</Button>
 				</div>
 				<Show when={limits().length === 0}>
-					<p class="ts-caption text-secondary">{t("common.unlimited")}</p>
+					<p class="ts-caption text-secondary py-2">{t("common.unlimited")}</p>
 				</Show>
-				<Index each={limits()}>
-					{(limit, index) => (
-						<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-							<NumberField
-								label={t("network.form.rateLimitDuration")}
-								min={1}
-								max={3600}
-								value={limit().durationSeconds}
-								onChange={(value) => updateLimit(index, { durationSeconds: value })}
-								suffix="s"
-							/>
-							<NumberField
-								label={t("network.form.rateLimitMax")}
-								min={1}
-								max={1000000}
-								value={limit().maxRequests}
-								onChange={(value) => updateLimit(index, { maxRequests: value })}
-							/>
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() =>
-									setLimits((current) =>
-										current.filter((_, position) => position !== index)
-									)
-								}
-							>
-								{t("common.delete")}
-							</Button>
-						</div>
-					)}
-				</Index>
+				<div class="flex flex-col gap-2.5">
+					<Index each={limits()}>
+						{(limit, index) => (
+							<div class="flex items-end gap-3 p-3 bg-surface-container-low border border-border">
+								<div class="flex-1 min-w-0">
+									<NumberField
+										size="sm"
+										label={t("network.form.rateLimitDuration")}
+										min={1}
+										max={3600}
+										value={limit().durationSeconds}
+										onChange={(value) =>
+											updateLimit(index, { durationSeconds: value })
+										}
+										suffix="s"
+									/>
+								</div>
+								<div class="flex-1 min-w-0">
+									<NumberField
+										size="sm"
+										label={t("network.form.rateLimitMax")}
+										min={1}
+										max={1000000}
+										value={limit().maxRequests}
+										onChange={(value) =>
+											updateLimit(index, { maxRequests: value })
+										}
+									/>
+								</div>
+								<Button
+									variant="outlined"
+									size="sm"
+									class="text-error border-error/30 hover:border-error hover:bg-error/10 shrink-0 h-9 w-9 p-0 flex items-center justify-center mb-0.5"
+									aria-label={t("common.delete")}
+									title={t("common.delete")}
+									onClick={() =>
+										setLimits((current) =>
+											current.filter((_, position) => position !== index)
+										)
+									}
+								>
+									<Trash2 class="w-4 h-4" />
+								</Button>
+							</div>
+						)}
+					</Index>
+				</div>
 			</section>
 
-			<div class="flex justify-end pt-2">
+			<div class="flex items-center justify-end gap-3 pt-4 border-t border-border">
 				<Button variant="ghost" size="md" onClick={props.onCancel}>
 					{t("common.cancel")}
 				</Button>
 				<Button variant="filled" size="md" onClick={add}>
-					{props.adapter ? t("common.save") : t("network.form.submit")}
+					{props.adapter ? t("common.save") : t("common.add")}
 				</Button>
 			</div>
 		</div>

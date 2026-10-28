@@ -18,7 +18,6 @@ import NetworkAdapterList from "../network/NetworkAdapterList";
 import NetworkHealthPolicy from "../network/NetworkHealthPolicy";
 import NetworkRoutingPolicy from "../network/NetworkRoutingPolicy";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
-import NetworkIcon from "lucide-solid/icons/network";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Save from "lucide-solid/icons/save";
 
@@ -225,23 +224,19 @@ export default function NetworkSection(props: NetworkSectionProps) {
 
 	return (
 		<div class="flex flex-col gap-6">
-			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-				<div class="flex flex-col gap-1.5">
-					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
-						<NetworkIcon class="w-5 h-5 text-primary" />
-						<span>{t("network.title")}</span>
-						<Show when={networkDoc()}>
-							{(doc) => (
+			{/* Top Operational Toolbar */}
+			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+				<div class="flex items-center gap-2">
+					<Show when={networkDoc()}>
+						{(doc) => (
+							<div class="flex items-center gap-2 text-xs text-secondary font-mono">
+								<span class="text-tertiary">配置版本:</span>
 								<Badge variant="neutral" size="sm">
 									Rev {doc().revision}
 								</Badge>
-							)}
-						</Show>
-					</h2>
-					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
-						{t("network.description")}
-					</p>
+							</div>
+						)}
+					</Show>
 				</div>
 
 				<div class="flex items-center gap-2 shrink-0">
@@ -253,27 +248,27 @@ export default function NetworkSection(props: NetworkSectionProps) {
 					<Button
 						size="sm"
 						variant="outlined"
-						disabled={loading() || saving() || isDirty()}
+						loading={loading()}
+						disabled={saving() || isDirty()}
 						onClick={() => {
 							void loadConfig();
 							void props.refreshStatus();
 						}}
 						class="gap-1.5"
 					>
-						<RefreshCw class={"w-3.5 h-3.5 " + (loading() ? "animate-spin" : "")} />
-						<span>{loading() ? t("common.refreshing") : t("common.refresh")}</span>
+						<RefreshCw class="w-3.5 h-3.5" />
+						<span>{t("common.refresh")}</span>
 					</Button>
 					<Button
 						size="sm"
 						variant="filled"
-						disabled={loading() || saving() || !networkDoc() || !isDirty()}
+						loading={saving()}
+						disabled={loading() || !networkDoc() || !isDirty()}
 						onClick={() => void saveConfig()}
 						class="gap-1.5"
 					>
-						<Save class={"w-3.5 h-3.5 " + (saving() ? "animate-spin" : "")} />
-						<span>
-							{saving() ? t("common.saving") : t("network.adapters.saveChanges")}
-						</span>
+						<Save class="w-3.5 h-3.5" />
+						<span>{t("common.save")}</span>
 					</Button>
 				</div>
 			</div>

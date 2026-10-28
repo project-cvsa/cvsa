@@ -49,6 +49,15 @@ export interface ListTrackingVideosParams {
 	 * exactly; anything else matches the stored video title.
 	 */
 	search?: string;
+	statusFilter?: "all" | "failing" | "highPriority" | "normal";
+	sortBy?:
+		| "views"
+		| "velocity"
+		| "nextSnapshotAt"
+		| "consecutiveFails"
+		| "publishedAt"
+		| "updatedAt";
+	sortOrder?: "asc" | "desc";
 }
 
 export interface ListTrackingVideosResult {
@@ -91,4 +100,5 @@ export interface ITrackingRepository {
 	postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void>;
 	countOverdueVideos(now: Temporal.Instant | Date): Promise<OverdueTrackingSummary>;
 	listTrackingVideos(params: ListTrackingVideosParams): Promise<ListTrackingVideosResult>;
+	deleteTracking(aid: bigint): Promise<boolean>;
 }

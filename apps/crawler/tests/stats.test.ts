@@ -222,11 +222,15 @@ describe("CrawlerStatsCollector", () => {
 		now = start + 1_000;
 		const written = await collector.flush();
 
-		expect(written).toBe(3);
+		expect(written).toBe(7);
 		expect(store.rows.map((row) => row.metricGroup)).toEqual([
 			"crawler:5m",
+			"crawler:15m",
+			"crawler:30m",
 			"crawler:1h",
+			"crawler:6h",
 			"crawler:24h",
+			"crawler:7d",
 		]);
 		for (const row of store.rows) {
 			expect(row.bucketTime.epochMilliseconds).toBe(Date.UTC(2026, 0, 1, 0, 5, 0, 0));

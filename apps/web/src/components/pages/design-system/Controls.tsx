@@ -207,12 +207,11 @@ export function CardShowcase() {
 			<Card class="flex-1">
 				<CardHeader
 					title={t("controls.songDetails")}
-					description={t("controls.songDetailsHelp")}
 					actions={
 						<Button
 							size="sm"
 							variant="filled"
-							class="bg-surface text-primary border-transparent"
+							class="bg-surface text-primary border-surface hover:bg-hover hover:border-hover"
 						>
 							{t("controls.action")}
 						</Button>
@@ -227,7 +226,6 @@ export function CardShowcase() {
 				<CardHeader
 					variant="bordered"
 					title={t("controls.metrics")}
-					description={t("controls.recentUpdates")}
 					actions={
 						<Badge variant="neutral" size="sm">
 							{t("controls.healthy")}

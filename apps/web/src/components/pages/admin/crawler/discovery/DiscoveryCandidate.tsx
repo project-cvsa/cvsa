@@ -20,6 +20,7 @@ type DiscoveryCandidateProps = {
 
 export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 	const t = getComponentT("crawler");
+
 	const decision = () => {
 		switch (props.item.decision) {
 			case "whitelist":
@@ -48,114 +49,154 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 				);
 		}
 	};
+
 	return (
 		<article
 			class={clsx(
-				"p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors",
+				"p-3.5 flex items-center justify-between gap-4 transition-colors border-b border-border last:border-b-0",
 				props.focused ? "bg-surface-container-low" : "bg-surface hover:bg-hover"
 			)}
 		>
-			<div class="flex items-start gap-3 min-w-0 flex-1">
-				<button
-					type="button"
-					data-review-focus="true"
-					onClick={props.onFocus}
-					aria-label={t("discoveryUi.focusCandidate").replace(
-						"{number}",
-						String(props.index + 1)
-					)}
-					aria-pressed={props.focused}
-					class={clsx(
-						"text-xs px-1.5 py-0.5 border shrink-0 focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
-						props.focused
-							? "bg-primary text-display-inverted border-primary"
-							: "bg-surface-container-high border-border text-tertiary"
-					)}
-				>
-					#{props.index + 1}
-				</button>
+			{/* Col 1: Index Number */}
+			<button
+				type="button"
+				data-review-focus="true"
+				onClick={props.onFocus}
+				aria-label={t("discoveryUi.focusCandidate").replace(
+					"{number}",
+					String(props.index + 1)
+				)}
+				aria-pressed={props.focused}
+				class={clsx(
+					"w-10 h-8 shrink-0 flex items-center justify-center font-mono text-xs font-semibold border transition-colors select-none",
+					props.focused
+						? "bg-primary text-display-inverted border-primary"
+						: "bg-surface-container-high border-border text-tertiary hover:border-secondary hover:text-primary"
+				)}
+			>
+				#{props.index + 1}
+			</button>
+
+			{/* Col 2: Video Cover */}
+			<div class="w-32 h-20 shrink-0 border border-border bg-surface-container-high overflow-hidden flex items-center justify-center">
 				<Show
 					when={props.item.pic}
-					fallback={
-						<div class="w-24 h-15 bg-surface-container-high flex items-center justify-center text-xs text-tertiary shrink-0">
-							{t("discoveryUi.noCover")}
-						</div>
-					}
+					fallback={<span class="text-xs text-tertiary">{t("discoveryUi.noCover")}</span>}
 				>
 					{(pic) => (
 						<img
 							src={pic()}
 							alt={props.item.title}
-							class="w-24 h-15 shrink-0 object-cover"
+							class="w-full h-full object-cover"
 							loading="lazy"
 							referrerPolicy="no-referrer"
 						/>
 					)}
 				</Show>
-				<div class="flex flex-col gap-1 min-w-0 flex-1">
-					<div class="flex flex-wrap items-center gap-2">
-						<span class="ts-caption text-tertiary">av{props.item.aid}</span>
-						<a
-							href={`https://www.bilibili.com/video/${props.item.bvid}`}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="ts-caption text-primary hover:underline inline-flex items-center gap-1"
-						>
-							{props.item.bvid}
-							<ExternalLink class="w-3 h-3 text-tertiary" />
-						</a>
-						{decision()}
-					</div>
+			</div>
+
+			{/* Col 3: Metadata & Title */}
+			<div class="flex-1 min-w-0 pr-4 flex flex-col justify-center gap-1.5">
+				<div class="flex items-center gap-3">
+					<span class="font-mono text-xs text-tertiary tabular-nums shrink-0">
+						av{props.item.aid}
+					</span>
 					<a
 						href={`https://www.bilibili.com/video/${props.item.bvid}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="font-medium text-sm text-primary hover:underline line-clamp-1"
-						title={props.item.title}
+						class="font-mono text-xs text-secondary hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0"
 					>
-						{props.item.title}
+						<span>{props.item.bvid}</span>
+						<ExternalLink class="w-3 h-3 text-tertiary" />
 					</a>
-					<div class="flex items-center gap-2 max-w-xs pt-0.5">
-						<span class="ts-caption text-tertiary shrink-0">
-							{t("discoveryUi.confidence")}:
-						</span>
-						<div class="flex-1 h-1.5 bg-surface-container-high overflow-hidden">
-							<div
-								class={clsx(
-									"h-full",
-									props.item.songProbability >= 0.7 ? "bg-primary" : "bg-tertiary"
-								)}
-								style={{
-									width: `${Math.round(props.item.songProbability * 100)}%`,
-								}}
-							/>
-						</div>
-						<span class="ts-caption text-primary">
-							{formatPercent(props.item.songProbability)}
-						</span>
-					</div>
+					<div class="shrink-0">{decision()}</div>
+				</div>
+				<a
+					href={`https://www.bilibili.com/video/${props.item.bvid}`}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="font-medium text-sm text-primary hover:underline truncate block"
+					title={props.item.title}
+				>
+					{props.item.title}
+				</a>
+			</div>
+
+			{/* Col 4: Confidence Score & Visual Meter */}
+			<div class="w-40 shrink-0 flex flex-col justify-center px-4 border-l border-border/40 gap-1.5">
+				<div class="flex items-center justify-between text-xs">
+					<span class="text-tertiary">{t("discoveryUi.confidence")}</span>
+					<span class="font-mono font-semibold text-primary">
+						{formatPercent(props.item.songProbability ?? 0)}
+					</span>
+				</div>
+				<div class="w-full bg-surface-container-high h-1.5 overflow-hidden">
+					<div
+						class={clsx(
+							"h-full transition-all",
+							(props.item.songProbability ?? 0) >= 0.8
+								? "bg-success"
+								: (props.item.songProbability ?? 0) >= 0.5
+									? "bg-warning"
+									: "bg-tertiary"
+						)}
+						style={{
+							width: `${Math.min(100, Math.max(0, (props.item.songProbability ?? 0) * 100))}%`,
+						}}
+					/>
 				</div>
 			</div>
-			<div class="flex flex-wrap gap-2 shrink-0 self-end md:self-center">
+
+			{/* Col 5: Actions - Fixed width to prevent any layout jitter */}
+			<div class="w-64 shrink-0 flex items-center justify-end gap-2 border-l border-border/40 pl-4">
 				<Button
 					size="sm"
 					variant={props.item.humanLabel === 1 ? "filled" : "outlined"}
 					disabled={props.busy}
 					onClick={() => props.onLabel(true)}
-					class="gap-1"
+					class={clsx(
+						"w-[110px] justify-between px-2.5 gap-1.5 whitespace-nowrap",
+						props.item.humanLabel === 1
+							? "bg-success border-success text-display-inverted"
+							: "hover:border-success hover:text-success"
+					)}
 				>
-					<Check class="w-3.5 h-3.5" />
-					{t("discoveryUi.song")}
+					<span class="inline-flex items-center gap-1 truncate text-xs">
+						<Check class="w-3.5 h-3.5 shrink-0" />
+						<span>
+							{props.item.humanLabel === 1
+								? t("discovery.samples.label.isSong")
+								: t("discovery.samples.label.markSong")}
+						</span>
+					</span>
+					<kbd class="shrink-0 px-1 py-0.2 text-[10px] font-mono bg-surface-container-high border border-border text-secondary">
+						1
+					</kbd>
 				</Button>
 				<Button
 					size="sm"
 					variant={props.item.humanLabel === 0 ? "filled" : "outlined"}
 					disabled={props.busy}
 					onClick={() => props.onLabel(false)}
-					class="gap-1"
+					class={clsx(
+						"w-[110px] justify-between px-2.5 gap-1.5 whitespace-nowrap",
+						props.item.humanLabel === 0
+							? "bg-error border-error text-display-inverted"
+							: "hover:border-error hover:text-error"
+					)}
 				>
-					<X class="w-3.5 h-3.5" />
-					{t("discoveryUi.notSong")}
+					<span class="inline-flex items-center gap-1 truncate text-xs">
+						<X class="w-3.5 h-3.5 shrink-0" />
+						<span>
+							{props.item.humanLabel === 0
+								? t("discovery.samples.label.isNonSong")
+								: t("discovery.samples.label.markNonSong")}
+						</span>
+					</span>
+					<kbd class="shrink-0 px-1 py-0.2 text-[10px] font-mono bg-surface-container-high border border-border text-secondary">
+						2
+					</kbd>
 				</Button>
 			</div>
 		</article>

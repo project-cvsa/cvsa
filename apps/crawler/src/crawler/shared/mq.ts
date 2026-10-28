@@ -8,6 +8,7 @@ import type {
 	CrawlerMq,
 	CrawlerProcessor,
 	CrawlerQueue,
+	CrawlerQueueJobSnapshot,
 	CrawlerWorker,
 } from "./types";
 
@@ -55,6 +56,58 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 						completed: counts.completed ?? 0,
 					};
 				},
+				getJobs: async (
+					types: string[] = ["active", "waiting", "delayed", "failed"],
+					limit = 50
+				): Promise<CrawlerQueueJobSnapshot[]> => {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const bullJobs = await queue.getJobs(types as never, 0, Math.max(0, limit - 1));
+					return Promise.all(
+						bullJobs.map(async (job) => {
+							const state = await job.getState();
+							return {
+								id: job.id ?? "unknown",
+								name: job.name,
+								data: job.data,
+								state,
+								attempts: job.attemptsMade,
+								failedReason: job.failedReason ?? null,
+								timestamp: job.timestamp,
+							};
+						})
+					);
+				},
+				getJobDetail: async (id: string) => {
+					const job = await queue.getJob(id);
+					if (!job) return null;
+					const state = await job.getState();
+					return {
+						id: job.id ?? id,
+						name: job.name,
+						data: job.data,
+						state,
+						attempts: job.attemptsMade,
+						failedReason: job.failedReason ?? null,
+						timestamp: job.timestamp,
+						opts: job.opts,
+						stacktrace: job.stacktrace ?? null,
+						returnvalue: job.returnvalue,
+						processedOn: job.processedOn ?? null,
+						finishedOn: job.finishedOn ?? null,
+					};
+				},
+				retryJob: async (id: string): Promise<boolean> => {
+					const job = await queue.getJob(id);
+					if (!job) return false;
+					await job.retry();
+					return true;
+				},
+				removeJob: async (id: string): Promise<boolean> => {
+					const job = await queue.getJob(id);
+					if (!job) return false;
+					await job.remove();
+					return true;
+				},
 				close: () => queue.close(),
 			};
 		},
@@ -80,13 +133,21 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 					error,
 				});
 			});
-			return { close: () => worker.close() };
+			return { close: (force = true) => worker.close(force) };
 		},
 
 		async close(): Promise<void> {
-			await Promise.all(workers.map((worker) => worker.close()));
+			await Promise.all(workers.map((worker) => worker.close(true)));
 			await Promise.all(queues.map((queue) => queue.close()));
-			await connection.quit();
+			try {
+				await Promise.race([
+					connection.quit(),
+					new Promise((resolve) => setTimeout(resolve, 300)),
+				]);
+			} catch {
+				// ignored
+			}
+			connection.disconnect();
 			appLogger.info("Crawler MQ closed", { component: "crawler-mq" });
 		},
 	};

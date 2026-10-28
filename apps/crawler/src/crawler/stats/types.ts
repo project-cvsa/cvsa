@@ -1,9 +1,9 @@
 import type { CrawlerJobCounts } from "../shared/types";
 import type { OverdueTrackingSummary } from "../tracking/repository.interface";
 
-export type StatsWindow = "5m" | "1h" | "24h";
+export type StatsWindow = "5m" | "15m" | "30m" | "1h" | "6h" | "24h" | "7d";
 
-export const STATS_WINDOWS: readonly StatsWindow[] = ["5m", "1h", "24h"];
+export const STATS_WINDOWS: readonly StatsWindow[] = ["5m", "15m", "30m", "1h", "6h", "24h", "7d"];
 
 /** Throughput counters tracked per window. */
 export const STATS_COUNTERS = [

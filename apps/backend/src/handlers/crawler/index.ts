@@ -1,16 +1,22 @@
 import { Elysia } from "elysia";
+import { z } from "zod";
 import {
 	ActionQueuedResponseSchema,
 	BilibiliVideoMetadataDtoSchema,
 	BilibiliVideoRelationDtoSchema,
 	ClassifierHealthDtoSchema,
 	CrawlerOverviewStatsSchema,
+	CrawlerQueueJobDetailSchema,
+	CrawlerQueueJobsQuerySchema,
+	CrawlerQueueJobsResponseSchema,
 	CrawlerStatsQuerySchema,
 	CrawlerStatusDtoSchema,
+	DeleteTrackingVideoResponseSchema,
 	DiscoveryFilterConfigDtoSchema,
 	DiscoverySampleItemSchema,
 	DiscoverySampleListQuerySchema,
 	DiscoverySampleListResponseSchema,
+	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
 	IngestVideoRequestSchema,
@@ -36,10 +42,14 @@ import {
 	type ClassifierHealthDto,
 	type BilibiliVideoRelationDto,
 	type CrawlerOverviewStats,
+	type CrawlerQueueJobDetail,
+	type CrawlerQueueJobsResponse,
 	type CrawlerStatusDto,
+	type DeleteTrackingVideoResponse,
 	type DiscoveryFilterConfigDto,
 	type DiscoverySampleItem,
 	type DiscoverySampleListResponse,
+	type DiscoveryStatusDto,
 	type DiscoverySweepResponse,
 	type IngestVideoResponse,
 	type NetworkRuntimeConfigDocument,
@@ -76,6 +86,62 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			query: CrawlerStatsQuerySchema,
 			response: {
 				200: CrawlerOverviewStatsSchema,
+			},
+		}
+	)
+	.get(
+		"/jobs",
+		async ({ query }): Promise<CrawlerQueueJobsResponse> => {
+			return callCrawlerApi<CrawlerQueueJobsResponse>("/stats/jobs", "GET", undefined, query);
+		},
+		{
+			query: CrawlerQueueJobsQuerySchema,
+			response: {
+				200: CrawlerQueueJobsResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/jobs/:queue/:id",
+		async ({ params }): Promise<CrawlerQueueJobDetail> => {
+			return callCrawlerApi<CrawlerQueueJobDetail>(
+				`/stats/jobs/${params.queue}/${params.id}`
+			);
+		},
+		{
+			params: z.object({ queue: z.string(), id: z.string() }),
+			response: {
+				200: CrawlerQueueJobDetailSchema,
+			},
+		}
+	)
+	.post(
+		"/jobs/:queue/:id/retry",
+		async ({ params }): Promise<{ ok: boolean }> => {
+			return callCrawlerApi<{ ok: boolean }>(
+				`/stats/jobs/${params.queue}/${params.id}/retry`,
+				"POST"
+			);
+		},
+		{
+			params: z.object({ queue: z.string(), id: z.string() }),
+			response: {
+				200: z.object({ ok: z.boolean() }),
+			},
+		}
+	)
+	.delete(
+		"/jobs/:queue/:id",
+		async ({ params }): Promise<{ ok: boolean }> => {
+			return callCrawlerApi<{ ok: boolean }>(
+				`/stats/jobs/${params.queue}/${params.id}`,
+				"DELETE"
+			);
+		},
+		{
+			params: z.object({ queue: z.string(), id: z.string() }),
+			response: {
+				200: z.object({ ok: z.boolean() }),
 			},
 		}
 	)
@@ -241,6 +307,20 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			},
 		}
 	)
+	.delete(
+		"/tracking/:aid",
+		async ({ params }): Promise<DeleteTrackingVideoResponse> => {
+			return callCrawlerApi<DeleteTrackingVideoResponse>(
+				`/tracking/videos/${params.aid}`,
+				"DELETE"
+			);
+		},
+		{
+			response: {
+				200: DeleteTrackingVideoResponseSchema,
+			},
+		}
+	)
 	.post(
 		"/tracking/ingest",
 		async ({ body }): Promise<IngestVideoResponse> => {
@@ -339,6 +419,17 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		{
 			response: {
 				200: BilibiliVideoMetadataDtoSchema,
+			},
+		}
+	)
+	.get(
+		"/discovery/status",
+		async (): Promise<DiscoveryStatusDto> => {
+			return callCrawlerApi<DiscoveryStatusDto>("/discovery/status");
+		},
+		{
+			response: {
+				200: DiscoveryStatusDtoSchema,
 			},
 		}
 	)

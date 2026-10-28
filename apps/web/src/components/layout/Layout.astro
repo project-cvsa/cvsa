@@ -82,5 +82,37 @@ const clientI18nJson = clientI18n ? serializeClientI18nPayload(clientI18n) : und
 
 	<body class="overflow-x-hidden">
 		<slot />
+		<script>
+		import { OverlayScrollbars } from "overlayscrollbars";
+
+		function initScrollbars() {
+			if (typeof window === "undefined") return;
+			OverlayScrollbars(document.body, {
+				scrollbars: {
+					theme: "os-theme-cvsa",
+					autoHide: "leave",
+					autoHideDelay: 400,
+				},
+			});
+
+			document.querySelectorAll<HTMLElement>(".cvsa-scroll").forEach((el) => {
+				if (!OverlayScrollbars(el)) {
+					OverlayScrollbars(el, {
+						scrollbars: {
+							theme: "os-theme-cvsa",
+							autoHide: "scroll",
+							autoHideDelay: 300,
+						},
+					});
+				}
+			});
+		}
+
+		if (document.readyState === "loading") {
+			document.addEventListener("DOMContentLoaded", initScrollbars);
+		} else {
+			initScrollbars();
+		}
+		</script>
 	</body>
 </html>

@@ -21,6 +21,7 @@ import type {
 	CrawlerMq,
 	CrawlerProcessor,
 	CrawlerQueue,
+	CrawlerQueueJobSnapshot,
 	CrawlerWorker,
 } from "../shared/types";
 import type {
@@ -63,6 +64,38 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 				},
 				async getJobCounts(): Promise<CrawlerJobCounts> {
 					return { ...state.jobCounts };
+				},
+				async getJobs(): Promise<CrawlerQueueJobSnapshot[]> {
+					return state.queuedJobs
+						.filter((j) => j.queue === name)
+						.map((j, idx) => ({
+							id: String(idx + 1),
+							name: j.name,
+							data: j.data,
+							state: "waiting",
+							attempts: 0,
+							timestamp: Date.now(),
+						}));
+				},
+				async getJobDetail(id: string) {
+					const matched = state.queuedJobs
+						.map((j, idx) => ({ j, idx }))
+						.find(({ idx }) => String(idx + 1) === id);
+					if (!matched) return null;
+					return {
+						id,
+						name: matched.j.name,
+						data: matched.j.data,
+						state: "waiting",
+						attempts: 0,
+						timestamp: Date.now(),
+					};
+				},
+				async retryJob(_id: string) {
+					return true;
+				},
+				async removeJob(_id: string) {
+					return true;
 				},
 				async close(): Promise<void> {},
 			};
@@ -334,6 +367,10 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 			items: rows.slice(params.offset, params.offset + params.limit),
 			total: rows.length,
 		};
+	}
+
+	async deleteTracking(aid: bigint): Promise<boolean> {
+		return this.trackings.delete(aid);
 	}
 }
 

@@ -72,7 +72,7 @@ export default function Badge(props: BadgeProps) {
 	return (
 		<span
 			class={clsx(
-				"inline-flex items-center justify-center font-medium border select-none transition-colors",
+				"inline-flex items-center justify-center font-medium border select-none whitespace-nowrap shrink-0 transition-colors",
 				variantStyles[variant()].container,
 				sizeStyles[size()].badge,
 				local.class

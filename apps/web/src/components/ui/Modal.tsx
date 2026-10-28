@@ -64,28 +64,21 @@ export default function Modal(props: ModalProps) {
 				>
 					<div
 						class={clsx(
-							"relative w-full bg-surface border-2 border-primary shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150",
+							"relative w-full bg-surface shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150",
 							sizeStyles[size()],
 							local.class
 						)}
 						{...rest}
 					>
 						<div class="h-12 bg-primary text-display-inverted px-6 flex items-center justify-between font-[Outfit,system-ui] uppercase text-base">
-							<div class="flex items-center gap-3 min-w-0">
-								<Show when={local.title}>
-									<h2 class="font-semibold text-display-inverted truncate text-base">
-										{local.title}
-									</h2>
-								</Show>
-								<Show when={local.description}>
-									<span class="ts-caption text-display-inverted/70">
-										{local.description}
-									</span>
-								</Show>
-							</div>
+							<Show when={local.title}>
+								<h2 class="font-semibold text-display-inverted truncate text-base">
+									{local.title}
+								</h2>
+							</Show>
 							<button
 								type="button"
-								class="p-1 text-display-inverted hover:bg-hover/20 transition-colors cursor-pointer focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-display-inverted"
+								class="w-8 h-8 -mr-2 inline-flex items-center justify-center text-display-inverted/80 hover:text-display-inverted hover:bg-display-inverted/15 transition-colors cursor-pointer focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-display-inverted"
 								onClick={() => local.onClose()}
 								aria-label={local.closeLabel ?? "Close"}
 							>
@@ -93,10 +86,17 @@ export default function Modal(props: ModalProps) {
 							</button>
 						</div>
 
-						<div class="p-6 max-h-[75vh] overflow-y-auto">{local.children}</div>
+						<div class="p-6 max-h-[75vh] overflow-y-auto">
+							<Show when={local.description}>
+								<p class="text-sm text-secondary mb-4 leading-relaxed">
+									{local.description}
+								</p>
+							</Show>
+							{local.children}
+						</div>
 
 						<Show when={local.footer}>
-							<div class="px-6 py-4 border-t border-border bg-surface-container-high flex items-center justify-end gap-3">
+							<div class="px-6 py-4 border-t border-border bg-surface flex items-center justify-end gap-3">
 								{local.footer}
 							</div>
 						</Show>

@@ -8,6 +8,7 @@ import {
 	DiscoverySampleItemSchema,
 	DiscoverySampleListQuerySchema,
 	DiscoverySampleListResponseSchema,
+	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
 	ErrorResponseSchema,
@@ -21,6 +22,7 @@ import {
 	type BilibiliVideoRelationDto,
 	type DiscoverySampleItem,
 	type DiscoverySampleListResponse,
+	type DiscoveryStatusDto,
 	type VideoMetadataHistoryItem,
 } from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -33,6 +35,7 @@ import { DEFAULT_HOT_SAMPLE_LIMIT } from "../crawler";
 import {
 	bilibiliClient,
 	discoveryFilterService,
+	discoveryQueue,
 	discoveryRepository,
 	discoveryScheduler,
 	discoveryService,
@@ -165,6 +168,58 @@ function toSampleItem(row: DiscoverySample, pic?: string | null): DiscoverySampl
 }
 
 export const discoveryRoutes = new Elysia()
+	.get(
+		"/status",
+		async (): Promise<DiscoveryStatusDto> => {
+			const counts = await discoveryQueue.getJobCounts();
+			const activeJobs = await discoveryQueue.getJobs(["active", "waiting"], 5);
+			const firstActive = activeJobs[0];
+			let target: string | null = null;
+			let currentStage = counts.active > 0 ? "深度发现任务处理中" : "就绪 (待命)";
+			if (firstActive?.data && typeof firstActive.data === "object") {
+				if ("keyword" in firstActive.data) {
+					target = `关键词: ${String(firstActive.data.keyword)}`;
+					currentStage = `正在扫描关键词 [${String(firstActive.data.keyword)}]`;
+				} else if ("aid" in firstActive.data) {
+					target = `AID ${String(firstActive.data.aid)}`;
+					currentStage = `正在抓取种子推荐拓扑 [AID ${String(firstActive.data.aid)}]`;
+				}
+			}
+			return {
+				active: counts.active > 0,
+				counts: {
+					waiting: counts.waiting,
+					active: counts.active,
+					delayed: counts.delayed,
+					failed: counts.failed,
+					oldestWaitSec: 0,
+				},
+				currentStage,
+				currentTarget: target,
+				candidatesScannedCount: counts.completed,
+				activeJobs: activeJobs.map((j) => {
+					let jobTarget: string | null = null;
+					if (j.data && typeof j.data === "object") {
+						if ("keyword" in j.data) jobTarget = `关键词: ${String(j.data.keyword)}`;
+						else if ("aid" in j.data) jobTarget = `AID ${String(j.data.aid)}`;
+					}
+					return {
+						id: j.id,
+						name: j.name,
+						state: j.state,
+						target: jobTarget,
+						timestamp: j.timestamp,
+					};
+				}),
+			};
+		},
+		{
+			response: {
+				200: DiscoveryStatusDtoSchema,
+				401: ErrorResponseSchema,
+			},
+		}
+	)
 	.get(
 		"/classifier",
 		() => {
@@ -539,13 +594,52 @@ export const discoveryRoutes = new Elysia()
 				decision: query.decision,
 				labeled: query.labeled,
 			});
+
+			let filtered = rows;
+			const minConf = query.minConfidence;
+			if (minConf !== undefined) {
+				filtered = filtered.filter((r) => r.songProbability >= minConf);
+			}
+			const maxConf = query.maxConfidence;
+			if (maxConf !== undefined) {
+				filtered = filtered.filter((r) => r.songProbability <= maxConf);
+			}
+			if (query.search?.trim()) {
+				const s = query.search.trim().toLowerCase();
+				filtered = filtered.filter(
+					(r) =>
+						r.title.toLowerCase().includes(s) ||
+						r.bvid.toLowerCase().includes(s) ||
+						r.aid.toString().includes(s)
+				);
+			}
+
+			const isAsc = query.sortOrder === "asc";
+			if (query.sortBy === "confidence") {
+				filtered.sort((a, b) =>
+					isAsc
+						? a.songProbability - b.songProbability
+						: b.songProbability - a.songProbability
+				);
+			} else if (query.sortBy === "aid") {
+				filtered.sort((a, b) =>
+					isAsc ? (a.aid < b.aid ? -1 : 1) : a.aid > b.aid ? -1 : 1
+				);
+			} else {
+				filtered.sort((a, b) =>
+					isAsc
+						? a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds
+						: b.createdAt.epochMilliseconds - a.createdAt.epochMilliseconds
+				);
+			}
+
 			const start = query.offset;
-			const sliced = rows.slice(start, start + query.limit);
+			const sliced = filtered.slice(start, start + query.limit);
 			const targetAids = sliced.map((r) => r.aid);
 			const metas = await discoveryRepository.getMetadatas(targetAids);
 			const picMap = new Map(metas.map((m) => [m.aid, m.pic]));
 			const items = sliced.map((row) => toSampleItem(row, picMap.get(row.aid)));
-			return { items, total: rows.length };
+			return { items, total: filtered.length };
 		},
 		{
 			query: DiscoverySampleListQuerySchema,
@@ -568,6 +662,9 @@ export const discoveryRoutes = new Elysia()
 			);
 			if (!updated) {
 				return status(404, { code: "NOT_FOUND", message: "Discovery sample not found" });
+			}
+			if (body.humanLabel === 0) {
+				await trackingRepository.deleteTracking(BigInt(params.aid));
 			}
 			return toSampleItem(updated);
 		},

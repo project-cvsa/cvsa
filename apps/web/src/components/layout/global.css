@@ -1,3 +1,5 @@
+@import "overlayscrollbars/styles/overlayscrollbars.css";
+
 :root {
 	--wireframe-line: var(--grid-lines);
 	--highlight-color: var(--highlight);
@@ -9,6 +11,10 @@ body {
 	font-weight: 400;
 	font-family: "Outfit", system-ui, sans-serif;
 	background-color: var(--background);
+	background-image:
+		linear-gradient(to right, var(--grid-lines) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--grid-lines) 1px, var(--background) 1px);
+	background-size: 100px 100px;
 	color: var(--display);
 }
 ::selection {
@@ -44,19 +50,74 @@ select:-webkit-autofill:focus {
 	transition: background-color 5000s ease-in-out 0s;
 }
 
-.cvsa-scroll {
-	scrollbar-width: thin;
-	scrollbar-color: var(--tertiary) var(--surface);
+/* OverlayScrollbars Brutalist Industrial Theme */
+.os-theme-cvsa {
+	--os-size: 7px;
+	--os-padding-perpendicular: 0px;
+	--os-padding-axis: 0px;
+	--os-track-border-radius: 0px;
+	--os-handle-border-radius: 0px;
+	--os-handle-bg: var(--tertiary);
+	--os-handle-bg-hover: var(--secondary);
+	--os-handle-bg-active: var(--primary);
+	--os-track-bg: var(--surface);
+	--os-track-bg-hover: var(--surface);
+	--os-track-bg-active: var(--surface);
 }
 
-.cvsa-scroll::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+/* Genuine CSS Keyframe Animations for Popovers, Menus, Modals */
+@keyframes cvsa-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
 }
 
-.cvsa-scroll::-webkit-scrollbar-track {
-	background: var(--surface);
+@keyframes cvsa-fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
 }
-.cvsa-scroll::-webkit-scrollbar-thumb {
-	background: var(--tertiary);
+
+@keyframes cvsa-zoom-in-95 {
+	from {
+		opacity: 0;
+		transform: scale(0.96) translateY(-2px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+@keyframes cvsa-zoom-out-95 {
+	from {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.96) translateY(-2px);
+	}
+}
+
+[data-state="open"] {
+	animation: cvsa-zoom-in-95 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+[data-state="closed"] {
+	animation: cvsa-zoom-out-95 0.09s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cvsa-modal-backdrop {
+	animation: cvsa-fade-in 0.15s ease-out forwards;
+}
+
+.cvsa-modal-content {
+	animation: cvsa-zoom-in-95 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }

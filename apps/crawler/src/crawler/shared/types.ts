@@ -7,6 +7,24 @@ export interface CrawlerJob<T> {
 
 export type CrawlerProcessor<T> = (job: CrawlerJob<T>) => Promise<void>;
 
+export type CrawlerQueueJobSnapshot = {
+	id: string;
+	name: string;
+	data: unknown;
+	state: string;
+	attempts: number;
+	failedReason?: string | null;
+	timestamp: number;
+};
+
+export type CrawlerQueueJobFullDetail = CrawlerQueueJobSnapshot & {
+	opts?: unknown;
+	stacktrace?: string[] | null;
+	returnvalue?: unknown;
+	processedOn?: number | null;
+	finishedOn?: number | null;
+};
+
 /** BullMQ job-state counts, normalized so callers never deal with partial maps. */
 export interface CrawlerJobCounts {
 	waiting: number;
@@ -19,6 +37,10 @@ export interface CrawlerJobCounts {
 export interface CrawlerQueue<T> {
 	add(name: string, data: T, options?: JobsOptions): Promise<void>;
 	getJobCounts(): Promise<CrawlerJobCounts>;
+	getJobs(types?: string[], limit?: number): Promise<CrawlerQueueJobSnapshot[]>;
+	getJobDetail(id: string): Promise<CrawlerQueueJobFullDetail | null>;
+	retryJob(id: string): Promise<boolean>;
+	removeJob(id: string): Promise<boolean>;
 	close(): Promise<void>;
 }
 

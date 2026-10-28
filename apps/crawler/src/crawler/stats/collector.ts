@@ -26,14 +26,18 @@ import {
 	type StatsWindowMetrics,
 } from "./types";
 
-/** One minute per bucket: 1440 buckets covers the 24h window exactly. */
+/** One minute per bucket: 1440 buckets per 24h, 10080 for 7d. */
 const BUCKET_MS = 60_000;
 const WINDOW_MS: Readonly<Record<StatsWindow, number>> = {
 	"5m": 5 * BUCKET_MS,
+	"15m": 15 * BUCKET_MS,
+	"30m": 30 * BUCKET_MS,
 	"1h": 60 * BUCKET_MS,
+	"6h": 360 * BUCKET_MS,
 	"24h": 1440 * BUCKET_MS,
+	"7d": 7 * 1440 * BUCKET_MS,
 };
-const MAX_BUCKETS = Math.ceil(WINDOW_MS["24h"] / BUCKET_MS);
+const MAX_BUCKETS = Math.ceil(WINDOW_MS["7d"] / BUCKET_MS);
 
 /**
  * Latency histogram upper bounds in milliseconds. P95 is reported as the first
@@ -285,8 +289,12 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	getAllWindows(nowMs = this.now()): Record<StatsWindow, StatsWindowMetrics> {
 		return {
 			"5m": this.getWindow("5m", nowMs),
+			"15m": this.getWindow("15m", nowMs),
+			"30m": this.getWindow("30m", nowMs),
 			"1h": this.getWindow("1h", nowMs),
+			"6h": this.getWindow("6h", nowMs),
 			"24h": this.getWindow("24h", nowMs),
+			"7d": this.getWindow("7d", nowMs),
 		};
 	}
 

@@ -24,11 +24,11 @@ export interface NumberFieldProps {
 
 const sizeStyles: Record<NumberFieldSize, { input: string; label: string }> = {
 	sm: {
-		input: "h-9 px-3 text-sm",
+		input: "h-8 px-2.5 text-xs",
 		label: "ts-caption",
 	},
 	md: {
-		input: "h-11 px-3 text-base",
+		input: "h-10 px-3 text-sm",
 		label: "ts-label",
 	},
 };

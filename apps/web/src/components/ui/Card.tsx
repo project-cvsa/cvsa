@@ -31,13 +31,7 @@ export interface CardHeaderProps {
 }
 
 export function CardHeader(props: CardHeaderProps) {
-	const [local, rest] = splitProps(props, [
-		"title",
-		"actions",
-		"variant",
-		"class",
-		"children",
-	]);
+	const [local, rest] = splitProps(props, ["title", "actions", "variant", "class", "children"]);
 
 	const isInverted = () => local.variant === "inverted";
 	const title = createMemo(() => local.title);

@@ -11,7 +11,7 @@ type FieldChange = {
 	new: unknown;
 };
 
-const MAX_VALUE_LENGTH = 120;
+const MAX_VALUE_LENGTH = 160;
 
 function truncate(value: string): string {
 	return value.length > MAX_VALUE_LENGTH ? `${value.slice(0, MAX_VALUE_LENGTH - 1)}…` : value;
@@ -21,18 +21,65 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Render one stored field value, truncating long JSON payloads. */
-export function formatFieldValue(value: unknown): string {
+function formatTags(value: unknown[]): string {
+	if (value.length === 0) return "—";
+	const names = value.map((item) => {
+		if (isRecord(item) && typeof item.name === "string") return item.name;
+		return String(item);
+	});
+	return truncate(names.join(", "));
+}
+
+function formatPages(value: unknown[]): string {
+	if (value.length === 0) return "—";
+	const parts = value.map((item, idx) => {
+		if (isRecord(item)) {
+			const num = item.page ?? idx + 1;
+			const part = item.part ? String(item.part) : "";
+			const dur = item.duration ? ` (${item.duration}s)` : "";
+			return `P${num}: ${part}${dur}`.trim();
+		}
+		return `P${idx + 1}`;
+	});
+	return truncate(parts.join("; "));
+}
+
+/** Render one stored field value, formatting complex types human-readably. */
+export function formatFieldDiffValue(field: string, value: unknown): string {
 	if (value === null || value === undefined) return "—";
-	if (typeof value === "string") return value.trim() ? truncate(value) : "—";
+	if (typeof value === "string") {
+		if ((field === "tags" || field === "pages") && value.startsWith("[")) {
+			try {
+				const parsed = JSON.parse(value);
+				if (Array.isArray(parsed)) {
+					return field === "tags" ? formatTags(parsed) : formatPages(parsed);
+				}
+			} catch {
+				// fallback to string formatting
+			}
+		}
+		return value.trim() ? truncate(value) : "—";
+	}
 	if (typeof value === "number" || typeof value === "boolean") return String(value);
 	if (typeof value === "bigint") return value.toString();
+
+	if (field === "tags" && Array.isArray(value)) {
+		return formatTags(value);
+	}
+	if (field === "pages" && Array.isArray(value)) {
+		return formatPages(value);
+	}
+
 	try {
 		const serialized = JSON.stringify(value);
 		return serialized === undefined ? String(value) : truncate(serialized);
 	} catch {
 		return String(value);
 	}
+}
+
+export function formatFieldValue(value: unknown): string {
+	return formatFieldDiffValue("", value);
 }
 
 /**
@@ -53,8 +100,8 @@ export function toMetadataFieldDiffs(changedFields: Record<string, unknown>): Me
 		const change = readFieldChange(value);
 		return {
 			field,
-			before: formatFieldValue(change.old),
-			after: formatFieldValue(change.new),
+			before: formatFieldDiffValue(field, change.old),
+			after: formatFieldDiffValue(field, change.new),
 		};
 	});
 }
@@ -72,5 +119,5 @@ export function hasFieldDiffs(changedFields: Record<string, unknown>): boolean {
 export function readOptionalFieldText(source: object, field: string): string | null {
 	const entry = Object.entries(source).find(([name]) => name === field);
 	if (!entry || entry[1] === null || entry[1] === undefined) return null;
-	return formatFieldValue(entry[1]);
+	return formatFieldDiffValue(field, entry[1]);
 }

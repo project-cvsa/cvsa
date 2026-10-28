@@ -1,21 +1,22 @@
 import { Elysia } from "elysia";
 import {
-	AppError,
 	ActionQueuedResponseSchema,
-	TrackingAidParamsSchema,
+	AppError,
+	DeleteTrackingVideoResponseSchema,
 	ErrorResponseSchema,
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
 	PromoteTrackingVideoRequestSchema,
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
+	TrackingAidParamsSchema,
 	TrackingVideoListQuerySchema,
 	TrackingVideoListResponseSchema,
-	VideoTrackingDtoSchema,
 	type IngestVideoResponse,
 	type TrackingVideoListItem,
 	type TrackingVideoListResponse,
 	type VideoTrackingDto,
+	VideoTrackingDtoSchema,
 } from "@cvsa/contracts";
 import { toInstant, type BilibiliVideoMetadata, type VideoTracking } from "@cvsa/snapshot-db";
 import {
@@ -174,6 +175,9 @@ export const trackingRoutes = new Elysia()
 				offset: query.offset,
 				state: query.state,
 				search: query.search,
+				statusFilter: query.statusFilter,
+				sortBy: query.sortBy,
+				sortOrder: query.sortOrder,
 			});
 			const metadatas = await discoveryRepository.getMetadatas(
 				result.items.map((item) => item.aid)
@@ -250,6 +254,28 @@ export const trackingRoutes = new Elysia()
 			body: PromoteTrackingVideoRequestSchema,
 			response: {
 				200: VideoTrackingDtoSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.delete(
+		"/videos/:aid",
+		async ({ params, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			const aid = BigInt(params.aid);
+			const deleted = await trackingRepository.deleteTracking(aid);
+			if (!deleted) {
+				return status(404, { code: "NOT_FOUND", message: "Video tracking not found" });
+			}
+			return { ok: true, aid: params.aid };
+		},
+		{
+			response: {
+				200: DeleteTrackingVideoResponseSchema,
 				401: ErrorResponseSchema,
 				404: ErrorResponseSchema,
 				422: ErrorResponseSchema,

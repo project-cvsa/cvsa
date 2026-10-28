@@ -2,10 +2,11 @@ import { For, Show, type Accessor } from "solid-js";
 import Button from "@components/ui/Button";
 import TextField from "@components/ui/TextField";
 import Select from "@components/ui/Select";
-import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { DiscoveryFilterConfigDto } from "@cvsa/contracts";
-import X from "lucide-solid/icons/x";
+import Search from "lucide-solid/icons/search";
+import GitFork from "lucide-solid/icons/git-fork";
+import Flame from "lucide-solid/icons/flame";
 
 type DiscoveryActionsProps = {
 	keyword: Accessor<string>;
@@ -15,11 +16,6 @@ type DiscoveryActionsProps = {
 	runningSweep: Accessor<boolean>;
 	runSweep: (word?: string) => Promise<void>;
 	configuredKeywords: Accessor<string[]>;
-	removeConfigKeyword: (word: string) => Promise<void>;
-	newKeywordInput: Accessor<string>;
-	setNewKeywordInput: (value: string) => void;
-	savingKeywords: Accessor<boolean>;
-	addConfigKeyword: (word: string) => Promise<void>;
 	sweepResult: Accessor<{ total: number; tracked: number } | null>;
 	seedInput: Accessor<string>;
 	setSeedInput: (value: string) => void;
@@ -28,21 +24,41 @@ type DiscoveryActionsProps = {
 	runningHot: Accessor<boolean>;
 	runHotSampling: () => Promise<void>;
 	filterConfig: Accessor<DiscoveryFilterConfigDto | null>;
+	onNavigateSettings?: () => void;
 };
 
 export default function DiscoveryActions(props: DiscoveryActionsProps) {
 	const t = getComponentT("crawler");
+
 	return (
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-			{/* Keyword Rover & Lexicon */}
-			<Card>
-				<CardHeader title={t("discoveryUi.keywordDiscovery")} />
-				<CardContent class="p-4 flex flex-col gap-4">
-					{/* Trigger Search */}
-					<div class="flex flex-col gap-3">
-						<div class="flex-1">
+		<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+			{/* Card 1: Keyword Rover Sweep */}
+			<div class="bg-surface border border-border p-4 flex flex-col justify-between gap-4">
+				<div class="flex flex-col gap-3">
+					<div class="flex items-center justify-between border-b border-border pb-2">
+						<div class="flex items-center gap-2">
+							<Search class="w-4 h-4 text-tertiary" />
+							<span class="text-xs font-semibold text-primary uppercase tracking-wider">
+								{t("discoveryUi.keywordDiscovery")}
+							</span>
+						</div>
+						<Show when={props.sweepResult()}>
+							{(res) => (
+								<span class="text-xs text-secondary font-mono">
+									{t("discoveryUi.discovered")}:{" "}
+									<strong class="text-primary">{res().total}</strong> ·{" "}
+									{t("discoveryUi.tracked")}:{" "}
+									<strong class="text-primary">{res().tracked}</strong>
+								</span>
+							)}
+						</Show>
+					</div>
+
+					<div class="flex items-center gap-2">
+						<div class="flex-1 min-w-0">
 							<TextField
-								label={t("discoveryUi.keyword")}
+								size="sm"
+								placeholder="输入关键词进行搜索探索..."
 								value={props.keyword()}
 								onInput={(e) => props.setKeyword(e.currentTarget.value)}
 								onKeyDown={(e) => {
@@ -53,10 +69,9 @@ export default function DiscoveryActions(props: DiscoveryActionsProps) {
 								}}
 							/>
 						</div>
-
-						<div>
+						<div class="w-32 shrink-0">
 							<Select
-								label={t("discoveryUi.depth")}
+								size="sm"
 								options={[
 									{ value: "1", label: t("discoveryUi.page1") },
 									{ value: "2", label: t("discoveryUi.page2") },
@@ -69,115 +84,78 @@ export default function DiscoveryActions(props: DiscoveryActionsProps) {
 								}
 							/>
 						</div>
-
 						<Button
+							size="sm"
 							variant="filled"
-							disabled={props.runningSweep()}
+							loading={props.runningSweep()}
 							onClick={() => void props.runSweep()}
-							class="self-start"
+							class="shrink-0 px-4 gap-1.5"
 						>
-							{props.runningSweep()
-								? t("discoveryUi.searching")
-								: t("discoveryUi.search")}
+							<Search class="w-3.5 h-3.5" />
+							<span>{t("discoveryUi.search")}</span>
 						</Button>
 					</div>
+				</div>
 
-					{/* Keywords List */}
-					<div class="flex flex-col gap-2 pt-3 border-t border-border">
-						<div class="flex items-center justify-between text-xs">
-							<span class="font-medium text-secondary">
-								{t("discoveryUi.keywords")} ({props.configuredKeywords().length})
-							</span>
-							<span class="text-tertiary">{t("discoveryUi.clickSearch")}</span>
-						</div>
-
-						<div class="flex flex-wrap items-center gap-1.5 min-h-[30px]">
-							<For
-								each={props.configuredKeywords()}
-								fallback={
-									<span class="text-tertiary text-xs">
-										{t("discoveryUi.defaultKeywords")}
-									</span>
-								}
+				{/* Quick Presets / Lexicon Tags */}
+				<div class="flex flex-col gap-1.5 pt-3 border-t border-border">
+					<div class="flex items-center justify-between text-xs text-tertiary">
+						<span class="font-medium">常用探索词预设：</span>
+						<Show when={props.onNavigateSettings}>
+							<button
+								type="button"
+								onClick={props.onNavigateSettings}
+								class="text-secondary hover:text-primary transition-colors cursor-pointer"
 							>
-								{(word) => (
-									<div class="inline-flex items-center gap-1 px-2 py-0.5 border border-border bg-surface-container-low text-xs group hover:border-primary transition-colors">
-										<button
-											type="button"
-											class="text-primary hover:underline cursor-pointer"
-											title={t("discoveryUi.searchKeyword")}
-											onClick={() => {
-												props.setKeyword(word);
-												void props.runSweep(word);
-											}}
-										>
-											{word}
-										</button>
-										<button
-											type="button"
-											class="text-tertiary hover:text-error ml-0.5 cursor-pointer"
-											title={t("discoveryUi.removeKeyword")}
-											onClick={() => void props.removeConfigKeyword(word)}
-										>
-											<X class="w-3 h-3" />
-										</button>
-									</div>
-								)}
-							</For>
-						</div>
-
-						{/* Add keyword form */}
-						<div class="flex flex-col items-start gap-2 pt-1">
-							<div class="w-full">
-								<TextField
-									label={t("discoveryUi.addKeyword")}
-									value={props.newKeywordInput()}
-									onInput={(e) => props.setNewKeywordInput(e.currentTarget.value)}
-									onKeyDown={(e) => {
-										if (e.key === "Enter") {
-											e.preventDefault();
-											void props.addConfigKeyword(props.newKeywordInput());
-										}
+								配置词库 →
+							</button>
+						</Show>
+					</div>
+					<div class="flex flex-wrap items-center gap-1.5">
+						<For
+							each={props.configuredKeywords()}
+							fallback={
+								<span class="text-tertiary text-xs">
+									{t("discoveryUi.defaultKeywords")}
+								</span>
+							}
+						>
+							{(word) => (
+								<button
+									type="button"
+									onClick={() => {
+										props.setKeyword(word);
+										void props.runSweep(word);
 									}}
-								/>
-							</div>
-							<Button
-								size="md"
-								variant="outlined"
-								disabled={props.savingKeywords() || !props.newKeywordInput().trim()}
-								onClick={() => void props.addConfigKeyword(props.newKeywordInput())}
-								class="shrink-0"
-							>
-								{t("discoveryUi.add")}
-							</Button>
+									class="px-2 py-0.5 bg-surface-container-high border border-border text-xs text-primary hover:border-primary/50 hover:bg-hover transition-colors cursor-pointer select-none"
+									title={`以「${word}」执行抓取`}
+								>
+									{word}
+								</button>
+							)}
+						</For>
+					</div>
+				</div>
+			</div>
+
+			{/* Card 2: Seed Graph Expansion & Hot Video Sampling */}
+			<div class="bg-surface border border-border p-4 flex flex-col justify-between gap-4">
+				<div class="flex flex-col gap-3">
+					<div class="flex items-center justify-between border-b border-border pb-2">
+						<div class="flex items-center gap-2">
+							<GitFork class="w-4 h-4 text-tertiary" />
+							<span class="text-xs font-semibold text-primary uppercase tracking-wider">
+								{t("discoveryUi.relatedDiscovery")}
+							</span>
 						</div>
+						<span class="text-xs text-tertiary">通过推荐拓扑扩散发现</span>
 					</div>
 
-					{/* Result */}
-					<Show when={props.sweepResult()}>
-						{(res) => (
-							<div class="p-2.5 border border-border bg-surface-container-low flex items-center justify-between text-xs">
-								<span class="text-primary font-medium">
-									{t("discoveryUi.discovered")}: {res().total}
-								</span>
-								<span class="text-primary font-semibold">
-									+{res().tracked} {t("discoveryUi.tracked")}
-								</span>
-							</div>
-						)}
-					</Show>
-				</CardContent>
-			</Card>
-
-			{/* Recommendation Graph Propagation */}
-			<Card>
-				<CardHeader title={t("discoveryUi.relatedDiscovery")} />
-				<CardContent class="p-4 flex flex-col gap-4">
-					{/* Direct Seed Input */}
-					<div class="flex flex-col gap-3">
-						<div class="flex-1">
+					<div class="flex items-center gap-2">
+						<div class="flex-1 min-w-0">
 							<TextField
-								label={t("discoveryUi.seed")}
+								size="sm"
+								placeholder={t("discoveryUi.seed")}
 								value={props.seedInput()}
 								onInput={(e) => props.setSeedInput(e.currentTarget.value)}
 								onKeyDown={(e) => {
@@ -189,54 +167,35 @@ export default function DiscoveryActions(props: DiscoveryActionsProps) {
 							/>
 						</div>
 						<Button
-							variant="filled"
-							disabled={props.runningSeedExpand() || !props.seedInput().trim()}
-							onClick={() => void props.runSeedExpand()}
-							class="self-start"
-						>
-							{props.runningSeedExpand()
-								? t("discoveryUi.expanding")
-								: t("discoveryUi.expand")}
-						</Button>
-					</div>
-
-					{/* Hot Seeds Global Expansion */}
-					<div class="pt-3 border-t border-border flex items-center justify-between gap-3">
-						<div class="flex flex-col">
-							<span class="ts-label text-primary font-medium">
-								{t("discoveryUi.hotSampling")}
-							</span>
-							<span class="ts-caption text-tertiary">
-								{t("discoveryUi.hotDescription")}
-							</span>
-						</div>
-						<Button
-							variant="outlined"
 							size="sm"
-							disabled={props.runningHot()}
-							onClick={() => void props.runHotSampling()}
-							class="shrink-0"
+							variant="filled"
+							loading={props.runningSeedExpand()}
+							onClick={() => void props.runSeedExpand()}
+							class="shrink-0 px-3 gap-1.5"
 						>
-							{props.runningHot()
-								? t("discoveryUi.sampling")
-								: t("discoveryUi.sampleHot")}
+							<GitFork class="w-3.5 h-3.5" />
+							<span>{t("discoveryUi.expand")}</span>
 						</Button>
 					</div>
+				</div>
 
-					{/* Strategy Indicators */}
-					<div class="pt-3 border-t border-border flex items-center justify-between text-xs text-tertiary">
-						<span>
-							{t("discoveryUi.threshold")}:{" "}
-							{props.filterConfig()?.modelThreshold ?? "0.70"}
-						</span>
-						<span>
-							{t("discoveryUi.duration")}:{" "}
-							{props.filterConfig()?.minDurationSeconds ?? 45}s -{" "}
-							{props.filterConfig()?.maxDurationSeconds ?? 900}s
-						</span>
+				<div class="flex items-center justify-between gap-4 pt-3 border-t border-border">
+					<div class="flex flex-col">
+						<span class="text-xs font-medium text-primary">高增长热门推荐采样</span>
+						<span class="text-xs text-tertiary">遍历在库高增长歌曲的关联推荐池</span>
 					</div>
-				</CardContent>
-			</Card>
+					<Button
+						size="sm"
+						variant="outlined"
+						loading={props.runningHot()}
+						onClick={() => void props.runHotSampling()}
+						class="gap-1.5 shrink-0"
+					>
+						<Flame class="w-3.5 h-3.5 text-warning" />
+						<span>{t("discoveryUi.sampleHot")}</span>
+					</Button>
+				</div>
+			</div>
 		</div>
 	);
 }

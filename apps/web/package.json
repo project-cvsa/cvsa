@@ -14,9 +14,9 @@
 		"@ark-ui/solid": "^5.36.2",
 		"@astrojs/node": "11.1.6",
 		"@astrojs/solid-js": "7.0.2",
+		"@cvsa/authentication": "workspace:*",
 		"@cvsa/catalog": "workspace:*",
 		"@cvsa/contracts": "workspace:*",
-		"@cvsa/authentication": "workspace:*",
 		"@cvsa/db": "workspace:*",
 		"@elysiajs/eden": "^1.4.9",
 		"@fanee/core": "^0.8.1",
@@ -28,6 +28,7 @@
 		"clsx": "^2.1.1",
 		"lucide-solid": "^1.46.0",
 		"opencc": "^1.4.1",
+		"overlayscrollbars": "^2.17.0",
 		"resolve-accept-language": "^3.2.2",
 		"solid-js": "^1.9.14",
 		"wikiparser-node": "^1.45.0"

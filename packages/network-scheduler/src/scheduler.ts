@@ -566,7 +566,9 @@ export class NetworkScheduler implements NetworkDelegate {
 		if (health.openUntil !== undefined) {
 			return health.openUntil <= this.clock() ? "half-open" : "open";
 		}
-		return health.factor < 1 ? "degraded" : "healthy";
+		// Hysteresis threshold: isolated transient hiccups (e.g. factor 0.85) do not
+		// cause the adapter to flap between healthy and degraded every few requests.
+		return health.factor < 0.8 ? "degraded" : "healthy";
 	}
 
 	/** Claims the single half-open probe slot, or reports that the adapter is unavailable. */

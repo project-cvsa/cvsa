@@ -93,7 +93,6 @@ export default function CrawlerDashboard() {
 							)}
 						</Show>
 					</div>
-					<p class="ts-caption text-tertiary">{t("subtitle")}</p>
 				</div>
 
 				<div class="flex items-center gap-3">
@@ -121,16 +120,12 @@ export default function CrawlerDashboard() {
 					<Button
 						variant="outlined"
 						size="sm"
-						disabled={loadingStatus()}
+						loading={loadingStatus()}
 						onClick={() => void refreshStatus()}
 						class="gap-1.5"
 					>
-						<RefreshCw
-							class={"w-3.5 h-3.5 " + (loadingStatus() ? "animate-spin" : "")}
-						/>
-						<span>
-							{loadingStatus() ? t("common.refreshing") : t("common.refresh")}
-						</span>
+						<RefreshCw class="w-3.5 h-3.5" />
+						<span>{t("common.refresh")}</span>
 					</Button>
 				</div>
 			</header>

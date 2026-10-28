@@ -1,0 +1,25 @@
+---
+import Layout from "@layouts/Layout.astro";
+import Header from "@layouts/Header.astro";
+import VideoDetailPage from "@components/pages/admin/crawler/videoDetail/VideoDetailPage";
+
+const user = Astro.locals.user;
+if (!user) {
+	return Astro.redirect(`/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+if (user.roleName !== "OWNER" && user.roleName !== "admin") {
+	return Astro.redirect("/403");
+}
+
+const { id } = Astro.params;
+if (!id) {
+	return Astro.redirect("/admin/crawler");
+}
+---
+
+<Layout title={`Video ${id} - Crawler - CVSA`} i18nNamespace="crawler">
+	<Header />
+	<main class="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
+		<VideoDetailPage aid={id} client:only="@cvsa/solid-i18n" />
+	</main>
+</Layout>

@@ -30,35 +30,38 @@ export interface MenuProps extends Omit<ComponentProps<"div">, "children" | "onS
 }
 
 const triggerSizeClass: Record<MenuSize, string> = {
-	sm: "h-8 px-3 ts-caption",
-	md: "h-11 px-4 ts-label",
-	lg: "h-14 px-5 ts-body",
+	sm: "h-8 px-2.5 text-xs",
+	md: "h-10 px-3.5 text-sm",
+	lg: "h-14 px-5 text-base",
 };
 
 const triggerBaseClass = clsx(
-	"group inline-flex items-center text-primary transition-colors",
-	"focus-visible:outline-1 focus-visible:outline-offset-4 focus-visible:outline-primary",
+	"group inline-flex items-center text-primary transition-colors select-none",
+	"focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
 	"disabled:cursor-not-allowed disabled:opacity-50"
 );
 
 const standardTriggerClass = clsx(
-	"justify-between gap-3",
+	"justify-between gap-2.5",
 	"border border-border bg-surface",
-	"hover:border-tertiary hover:bg-hover"
+	"hover:border-tertiary hover:bg-hover active:bg-surface-container-high"
 );
 
 const iconOnlyTriggerClass = clsx(
-	"h-11 w-11 justify-center border border-transparent bg-transparent px-1.5",
+	"h-10 w-10 justify-center border border-transparent bg-transparent px-1",
 	"hover:border-transparent hover:bg-hover"
 );
 
-const contentClass = clsx("min-w-56 border-0 bg-surface p-3 select-none", "shadow-xl outline-none");
+const contentClass = clsx(
+	"min-w-56 border border-border bg-surface p-1.5 select-none",
+	"shadow-xl outline-none"
+);
 
 const itemClass = clsx(
-	"group grid min-h-12 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3",
-	"px-4 text-left text-primary outline-none transition-colors",
+	"group flex items-center gap-2.5 min-h-9 w-full px-2.5 py-1.5",
+	"text-left text-sm text-primary outline-none transition-colors cursor-pointer",
 	"data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
-	"data-[highlighted]:bg-hover data-[highlighted]:text-display"
+	"data-[highlighted]:bg-hover data-[highlighted]:text-primary"
 );
 
 interface MenuTriggerProps {

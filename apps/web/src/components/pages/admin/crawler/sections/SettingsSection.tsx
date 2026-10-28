@@ -1,7 +1,6 @@
 import { createMemo, createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Switch from "@components/ui/Switch";
-import NumberField from "@components/ui/NumberField";
 import Slider from "@components/ui/Slider";
 import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
@@ -11,16 +10,10 @@ import type { DiscoveryFilterConfigDto } from "@cvsa/contracts";
 import KeywordListEditor from "./KeywordListEditor";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
 import { toDiscoveryConfigUpdatePayload } from "../discoveryConfig";
-import SlidersHorizontal from "lucide-solid/icons/sliders-horizontal";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Save from "lucide-solid/icons/save";
-import Cpu from "lucide-solid/icons/cpu";
 
-type KeywordField =
-	| "searchKeywords"
-	| "whitelistSingers"
-	| "whitelistSongIndicators"
-	| "blacklistKeywords";
+type KeywordField = "searchKeywords" | "whitelistSingers" | "whitelistSongIndicators";
 
 export default function SettingsSection() {
 	const t = getComponentT("crawler");
@@ -99,16 +92,12 @@ export default function SettingsSection() {
 
 	return (
 		<div class="flex flex-col gap-6">
-			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-				<div class="flex flex-col gap-1.5">
-					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
-						<SlidersHorizontal class="w-5 h-5 text-primary" />
-						<span>{t("settings.title")}</span>
-					</h2>
-					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
-						{t("settings.description")}
-					</p>
+			{/* Top Operational Toolbar */}
+			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+				<div class="flex items-center gap-2">
+					<span class="ts-caption text-xs uppercase tracking-wider text-tertiary font-semibold">
+						{t("settings.title")}
+					</span>
 				</div>
 
 				<div class="flex items-center gap-2 shrink-0">
@@ -120,22 +109,24 @@ export default function SettingsSection() {
 					<Button
 						size="sm"
 						variant="outlined"
-						disabled={loading() || saving() || isDirty()}
+						loading={loading()}
+						disabled={saving() || isDirty()}
 						onClick={() => void loadConfig()}
 						class="gap-1.5"
 					>
-						<RefreshCw class={"w-3.5 h-3.5 " + (loading() ? "animate-spin" : "")} />
-						<span>{loading() ? t("common.refreshing") : t("common.refresh")}</span>
+						<RefreshCw class="w-3.5 h-3.5" />
+						<span>{t("common.refresh")}</span>
 					</Button>
 					<Button
 						size="sm"
 						variant="filled"
-						disabled={loading() || saving() || !config() || !isDirty()}
+						loading={saving()}
+						disabled={loading() || !config() || !isDirty()}
 						onClick={() => void saveConfig()}
 						class="gap-1.5"
 					>
-						<Save class={"w-3.5 h-3.5 " + (saving() ? "animate-spin" : "")} />
-						<span>{saving() ? t("common.saving") : t("common.save")}</span>
+						<Save class="w-3.5 h-3.5" />
+						<span>{t("common.save")}</span>
 					</Button>
 				</div>
 			</div>
@@ -161,7 +152,7 @@ export default function SettingsSection() {
 								onRemove={(val) => removeKeyword("searchKeywords", val)}
 							/>
 
-							{/* Filter Keyword Lists */}
+							{/* Whitelist Lexicons */}
 							<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 								<KeywordListEditor
 									title={t("settings.singers.title")}
@@ -182,27 +173,11 @@ export default function SettingsSection() {
 										removeKeyword("whitelistSongIndicators", val)
 									}
 								/>
-
-								<KeywordListEditor
-									title={t("settings.blacklist.title")}
-									description={t("settings.blacklist.description")}
-									items={current().blacklistKeywords}
-									placeholder={t("settings.blacklist.title")}
-									onAdd={(val) => addKeyword("blacklistKeywords", val)}
-									onRemove={(val) => removeKeyword("blacklistKeywords", val)}
-								/>
 							</div>
 
-							{/* Numerical Parameters & AI Model Configuration */}
+							{/* AI Model Parameters */}
 							<Card>
-								<CardHeader
-									title={
-										<div class="flex items-center gap-2">
-											<Cpu class="w-4 h-4 text-primary" />
-											<span>{t("settings.parameters.title")}</span>
-										</div>
-									}
-								/>
+								<CardHeader title={t("settings.parameters.title")} />
 								<CardContent class="flex flex-col gap-6">
 									{/* Model Enable Toggle */}
 									<div class="p-4 border border-border bg-surface-container-low flex items-center justify-between gap-4">
@@ -225,7 +200,7 @@ export default function SettingsSection() {
 										/>
 									</div>
 
-									{/* Numerical Fields & Sliders Grid */}
+									{/* Model Sliders */}
 									<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 										<div class="flex flex-col gap-2">
 											<Slider
@@ -260,26 +235,6 @@ export default function SettingsSection() {
 												{t("settings.sampleRate.description")}
 											</span>
 										</div>
-
-										<NumberField
-											label={t("settings.duration.min")}
-											min={1}
-											value={current().minDurationSeconds}
-											onChange={(val) =>
-												updateConfig({ minDurationSeconds: val })
-											}
-											suffix="s"
-										/>
-
-										<NumberField
-											label={t("settings.duration.max")}
-											min={1}
-											value={current().maxDurationSeconds}
-											onChange={(val) =>
-												updateConfig({ maxDurationSeconds: val })
-											}
-											suffix="s"
-										/>
 									</div>
 								</CardContent>
 							</Card>
