@@ -19,12 +19,12 @@ export interface SwitchProps {
 const sizeStyles: Record<SwitchSize, { track: string; thumb: string; thumbChecked: string }> = {
 	sm: {
 		track: "w-8 h-4.5 p-0.5",
-		thumb: "w-3.5 h-3.5",
+		thumb: "w-3 h-3",
 		thumbChecked: "translate-x-3.5",
 	},
 	md: {
 		track: "w-11 h-6 p-0.5",
-		thumb: "w-5 h-5",
+		thumb: "w-4.5 h-4.5",
 		thumbChecked: "translate-x-5",
 	},
 };
@@ -71,17 +71,21 @@ export default function Switch(props: SwitchProps) {
 				disabled={local.disabled}
 				onClick={toggle}
 				class={clsx(
-					"relative inline-flex shrink-0 rounded-full transition-colors duration-200 ease-in-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+					"relative inline-flex shrink-0 border transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
 					sizeStyles[size()].track,
-					local.checked ? "bg-primary" : "bg-surface-container-high border border-border"
+					local.checked
+						? "bg-primary border-primary"
+						: "bg-surface-container-high border-border"
 				)}
 				{...rest}
 			>
 				<span
 					class={clsx(
-						"pointer-events-none inline-block transform rounded-full bg-surface shadow transition duration-200 ease-in-out",
+						"pointer-events-none inline-block transform transition-transform duration-150",
 						sizeStyles[size()].thumb,
-						local.checked ? sizeStyles[size()].thumbChecked : "translate-x-0"
+						local.checked
+							? clsx("bg-display-inverted", sizeStyles[size()].thumbChecked)
+							: "bg-primary translate-x-0"
 					)}
 				/>
 			</button>

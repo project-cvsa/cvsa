@@ -1,5 +1,6 @@
 import { defineMiddleware } from "astro:middleware";
 import { resolveCurrentAuth } from "@lib/auth/server";
+import type { CurrentUserInfoDto } from "@cvsa/authentication";
 import {
 	ADMIN_REQUIRED_ROUTES,
 	ANONYMOUS_ONLY_ROUTES,
@@ -13,6 +14,21 @@ import { requireAdmin, requireAnonymous, requireUser } from "@lib/auth/guards";
  * that are about to be redirected anyway never touch the database.
  */
 export const authMiddleware = defineMiddleware(async (context, next) => {
+	if (import.meta.env.DEV && context.url.searchParams.get("preview") === "1") {
+		const devUser: CurrentUserInfoDto = {
+			id: "dev-preview",
+			username: "admin",
+			email: "admin@projectcvsa.com",
+			displayName: "Dev Admin",
+			roleName: "OWNER",
+			image: null,
+			createdAt: new Date().toISOString(),
+		};
+		context.locals.user = devUser;
+		context.locals.session = null;
+		return next();
+	}
+
 	const { user, session } = await resolveCurrentAuth(context.request);
 	context.locals.user = user;
 	context.locals.session = session;

@@ -313,11 +313,11 @@ export class NetworkScheduler implements NetworkDelegate {
 		const configSnapshot: NetworkRuntimeConfig = structuredClone(config);
 		const adaptersSnapshot = new Map(adapters);
 		const healthConfig: HealthConfig = {
-			failurePenalty: configSnapshot.health?.failurePenalty ?? 0.5,
-			recoveryBonus: configSnapshot.health?.recoveryBonus ?? 0.2,
-			minWeightFactor: configSnapshot.health?.minWeightFactor ?? 0.05,
-			failureThreshold: configSnapshot.health?.failureThreshold ?? 3,
-			cooldownMs: configSnapshot.health?.cooldownMs ?? 30_000,
+			failurePenalty: configSnapshot.health?.failurePenalty ?? 0.85,
+			recoveryBonus: configSnapshot.health?.recoveryBonus ?? 0.5,
+			minWeightFactor: configSnapshot.health?.minWeightFactor ?? 0.1,
+			failureThreshold: configSnapshot.health?.failureThreshold ?? 20,
+			cooldownMs: configSnapshot.health?.cooldownMs ?? 10_000,
 		};
 
 		return {

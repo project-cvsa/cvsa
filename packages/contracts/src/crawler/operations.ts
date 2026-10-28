@@ -69,7 +69,7 @@ export const CrawlerOperationsConfigSchema = z.object({
 });
 
 export const CrawlerOperationsConfigDocumentSchema = z.object({
-	revision: z.number().int().positive(),
+	revision: z.number().int().nonnegative(),
 	config: CrawlerOperationsConfigSchema,
 	updatedAt: z.iso.datetime(),
 });

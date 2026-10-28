@@ -93,20 +93,24 @@ export default function NumberField(props: NumberFieldProps) {
 					disabled={local.disabled}
 					placeholder={local.placeholder}
 					onInput={handleInput}
+					style={{
+						"-webkit-appearance": "none",
+						"-moz-appearance": "textfield",
+						margin: "0",
+					}}
 					class={clsx(
-						"w-full rounded border bg-transparent font-mono text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+						"w-full border bg-surface text-primary transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary focus:border-primary",
 						sizeStyles[size()].input,
 						local.errorText
 							? "border-error focus-visible:outline-error"
-							: "border-border hover:border-split-lines",
-						local.disabled &&
-							"cursor-not-allowed opacity-50 bg-surface-container-high/40",
+							: "border-border hover:border-tertiary",
+						local.disabled && "cursor-not-allowed opacity-50 bg-surface-container-high",
 						local.suffix && "pr-12"
 					)}
 					{...rest}
 				/>
 				<Show when={local.suffix}>
-					<span class="pointer-events-none absolute right-3 font-mono text-xs text-tertiary select-none">
+					<span class="pointer-events-none absolute right-3 text-xs text-tertiary select-none">
 						{local.suffix}
 					</span>
 				</Show>

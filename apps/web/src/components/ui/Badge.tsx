@@ -31,34 +31,34 @@ const variantStyles: Record<BadgeVariant, { container: string; dot: string }> = 
 		dot: "bg-secondary",
 	},
 	success: {
-		container: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-		dot: "bg-emerald-500",
+		container: "bg-primary text-display-inverted border-primary",
+		dot: "bg-display-inverted",
 	},
 	warning: {
-		container: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
-		dot: "bg-amber-500",
+		container: "bg-highlight text-display border-highlight",
+		dot: "bg-display",
 	},
 	danger: {
-		container: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30",
-		dot: "bg-red-500",
+		container: "bg-error text-on-error border-error",
+		dot: "bg-on-error",
 	},
 	info: {
-		container: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30",
-		dot: "bg-sky-500",
+		container: "bg-surface text-primary border-primary",
+		dot: "bg-primary",
 	},
 	highlight: {
-		container: "bg-highlight/30 text-display border-highlight",
+		container: "bg-highlight text-display border-highlight",
 		dot: "bg-display",
 	},
 };
 
 const sizeStyles: Record<BadgeSize, { badge: string; dot: string }> = {
 	sm: {
-		badge: "h-5 px-1.5 text-[11px] gap-1",
+		badge: "h-5 px-1.5 text-xs gap-1",
 		dot: "w-1.5 h-1.5",
 	},
 	md: {
-		badge: "h-6 px-2.5 text-xs gap-1.5",
+		badge: "h-6 px-2 text-xs gap-1.5",
 		dot: "w-2 h-2",
 	},
 };
@@ -72,7 +72,7 @@ export default function Badge(props: BadgeProps) {
 	return (
 		<span
 			class={clsx(
-				"inline-flex items-center justify-center font-medium rounded-full border select-none transition-colors",
+				"inline-flex items-center justify-center font-medium border select-none transition-colors",
 				variantStyles[variant()].container,
 				sizeStyles[size()].badge,
 				local.class
@@ -81,11 +81,7 @@ export default function Badge(props: BadgeProps) {
 		>
 			<Show when={local.dot}>
 				<span
-					class={clsx(
-						"rounded-full shrink-0",
-						sizeStyles[size()].dot,
-						variantStyles[variant()].dot
-					)}
+					class={clsx("shrink-0", sizeStyles[size()].dot, variantStyles[variant()].dot)}
 					aria-hidden="true"
 				/>
 			</Show>

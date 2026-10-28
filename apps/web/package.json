@@ -3,7 +3,7 @@
 	"type": "module",
 	"version": "0.3.0",
 	"scripts": {
-		"dev": "bunx --bun astro dev --port 10199",
+		"dev": "bunx --bun astro dev --host 0.0.0.0 --port 10199",
 		"build": "bunx --bun astro build",
 		"preview": "bunx --bun astro preview --port 10199",
 		"astro": "bunx --bun astro",

@@ -130,7 +130,7 @@ export default function TasksSection() {
 	return (
 		<div class="flex flex-col gap-6">
 			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+			<div class="bg-surface p-5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 				<div class="flex flex-col gap-1.5">
 					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
 						<ListTodo class="w-5 h-5 text-primary" />
@@ -158,7 +158,7 @@ export default function TasksSection() {
 				<Show
 					when={stats()}
 					fallback={
-						<div class="p-8 text-center text-tertiary border border-border rounded-lg bg-surface">
+						<div class="p-8 text-center text-tertiary border border-border bg-surface">
 							{loadingStats()
 								? t("common.loading")
 								: statsError() !== null
@@ -324,7 +324,7 @@ export default function TasksSection() {
 												<td class="py-3 px-4 font-medium text-primary">
 													{record.label}
 												</td>
-												<td class="py-3 px-4 font-mono text-secondary">
+												<td class="py-3 px-4 text-secondary">
 													{record.detail}
 												</td>
 												<td class="py-3 px-4">
@@ -341,7 +341,7 @@ export default function TasksSection() {
 															: t("tasks.history.status.failed")}
 													</Badge>
 												</td>
-												<td class="py-3 px-4 text-tertiary text-right font-mono">
+												<td class="py-3 px-4 text-tertiary text-right">
 													{formatDateTime(record.at)}
 												</td>
 											</tr>

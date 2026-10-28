@@ -47,12 +47,10 @@ export default function NetworkStatus(props: NetworkStatusProps) {
 								<For each={status().adapters}>
 									{(adapter) => (
 										<tr class="border-b border-border hover:bg-hover">
-											<td class="py-2 px-3 font-mono font-medium text-primary">
+											<td class="py-2 px-3 font-medium text-primary">
 												{adapter.id}
 											</td>
-											<td class="py-2 px-3 font-mono">
-												{adapter.healthState}
-											</td>
+											<td class="py-2 px-3">{adapter.healthState}</td>
 											<td class="py-2 px-3">
 												{Math.round(adapter.healthFactor * 100)}%
 											</td>

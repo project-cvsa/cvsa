@@ -71,10 +71,11 @@ export const networkRuntimeConfigRepository = new NetworkRuntimeConfigRepository
 export const networkRuntimeConfigService = new NetworkRuntimeConfigService(
 	networkRuntimeConfigRepository
 );
+export const crawlerAdapterRegistry = createCrawlerAdapterRegistry();
 export const networkRuntime = new NetworkRuntimeConfigManager(
 	networkRuntimeConfigRepository,
 	// Bilibili application-error semantics are injected here, not in the scheduler.
-	createCrawlerAdapterRegistry(),
+	crawlerAdapterRegistry,
 	createRedisRateLimiter(crawlerEnv.REDIS_URL),
 	{
 		// Every HTTP attempt lands in both OTel and the sliding-window counters.

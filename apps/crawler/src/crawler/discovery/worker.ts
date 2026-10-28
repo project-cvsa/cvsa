@@ -85,7 +85,12 @@ export class DiscoveryPipelineProcessor {
 				component: "discovery-worker",
 			});
 
-			const candidates = await this.searchRover.runSearchSweep(config);
+			const effectiveKeywords =
+				config?.keywords ?? this.filterService.getConfig().searchKeywords;
+			const candidates = await this.searchRover.runSearchSweep({
+				...config,
+				keywords: effectiveKeywords,
+			});
 			if (candidates.length === 0) return;
 
 			// Filter out already tracked aids before queuing detail fetch

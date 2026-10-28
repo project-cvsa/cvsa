@@ -135,7 +135,7 @@ export default function VideosSection() {
 	return (
 		<div class="flex flex-col gap-6">
 			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+			<div class="bg-surface p-5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 				<div class="flex flex-col gap-1.5">
 					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
 						<Video class="w-5 h-5 text-primary" />
@@ -268,7 +268,7 @@ export default function VideosSection() {
 															<td class="py-3 px-4">
 																<button
 																	type="button"
-																	class="font-mono font-medium text-primary hover:underline focus:outline-none"
+																	class="font-medium text-primary hover:underline focus:outline-none"
 																	onClick={() =>
 																		inspect(item.aid, item)
 																	}
@@ -276,7 +276,7 @@ export default function VideosSection() {
 																	{item.aid}
 																</button>
 															</td>
-															<td class="py-3 px-4 font-mono">
+															<td class="py-3 px-4">
 																<a
 																	href={`https://www.bilibili.com/video/${item.bvid}`}
 																	target="_blank"
@@ -290,17 +290,17 @@ export default function VideosSection() {
 															<td class="py-3 px-4">
 																{stateBadge(item.state)}
 															</td>
-															<td class="py-3 px-4 font-mono font-medium text-primary">
+															<td class="py-3 px-4 font-medium text-primary">
 																{item.lastViews !== null
 																	? formatMetric(item.lastViews)
 																	: "—"}
 															</td>
-															<td class="py-3 px-4 font-mono text-secondary">
+															<td class="py-3 px-4 text-secondary">
 																{typeof item.velocity === "number"
 																	? `${item.velocity.toFixed(1)}/h`
 																	: "—"}
 															</td>
-															<td class="py-3 px-4 font-mono text-tertiary">
+															<td class="py-3 px-4 text-tertiary">
 																{formatDateTime(
 																	item.nextSnapshotAt
 																)}

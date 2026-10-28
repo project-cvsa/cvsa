@@ -1,18 +1,22 @@
 import { Elysia } from "elysia";
 import {
+	AppError,
 	ErrorResponseSchema,
+	IngestVideoRequestSchema,
+	IngestVideoResponseSchema,
 	PromoteTrackingVideoRequestSchema,
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
 	TrackingVideoListQuerySchema,
 	TrackingVideoListResponseSchema,
 	VideoTrackingDtoSchema,
+	type IngestVideoResponse,
 	type TrackingVideoListItem,
 	type TrackingVideoListResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
 import { toInstant, type BilibiliVideoMetadata, type VideoTracking } from "@cvsa/snapshot-db";
-import { discoveryRepository, trackingRepository } from "../container";
+import { bilibiliClient, discoveryRepository, trackingRepository } from "../container";
 
 function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 	return {
@@ -55,6 +59,76 @@ function toTrackingListItemDto(
 }
 
 export const trackingRoutes = new Elysia()
+	.post(
+		"/ingest",
+		async ({ body }): Promise<IngestVideoResponse> => {
+			const identifier = body.identifier.trim();
+			let details: Awaited<ReturnType<typeof bilibiliClient.getVideoDetails>>;
+			try {
+				details = await bilibiliClient.getVideoDetails(identifier);
+			} catch (error) {
+				throw new AppError(
+					error instanceof Error
+						? error.message
+						: "Failed to fetch video details from Bilibili",
+					"VALIDATION_ERROR",
+					422
+				);
+			}
+
+			const aid = BigInt(details.View.aid);
+			const existing = await trackingRepository.getTracking(aid);
+			const now = toInstant(new Date());
+
+			await discoveryRepository.bulkUpsertMetadata([
+				{
+					aid,
+					bvid: details.View.bvid,
+					title: details.View.title,
+					description: details.View.desc ?? null,
+					pic: details.View.pic ?? null,
+					pubdate: details.View.pubdate
+						? toInstant(new Date(details.View.pubdate * 1000))
+						: null,
+					duration: details.View.duration ?? 0,
+					mid: details.View.owner?.mid ? BigInt(details.View.owner.mid) : null,
+					ownerName: details.View.owner?.name ?? null,
+					ownerFace: details.View.owner?.face ?? null,
+					tid: details.View.tid ?? null,
+					tname: details.View.tname ?? null,
+					tags: details.Tags?.map((t) => t.tag_name) ?? [],
+					discoverySource: "manual",
+					capturedAt: now,
+				},
+			]);
+
+			await trackingRepository.upsertTracking({
+				aid,
+				state: body.state ?? "regular",
+				priority: body.priority ?? 2,
+				nextSnapshotAt: now,
+			});
+
+			return {
+				aid: aid.toString(),
+				bvid: details.View.bvid,
+				title: details.View.title,
+				pic: details.View.pic ?? null,
+				ownerName: details.View.owner?.name ?? null,
+				state: body.state ?? "regular",
+				priority: body.priority ?? 2,
+				alreadyTracked: Boolean(existing),
+			};
+		},
+		{
+			body: IngestVideoRequestSchema,
+			response: {
+				200: IngestVideoResponseSchema,
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
 	.post(
 		"/videos",
 		async ({ body }) => {

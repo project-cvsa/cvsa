@@ -63,5 +63,21 @@
 	"designSystem.textarea.description": "For longer text, such as descriptions and notes.",
 	"designSystem.date.description": "Enter the year, month and day, or choose a date from the calendar.",
 	"designSystem.duration.description": "Enter a duration in minutes and seconds.",
-	"designSystem.select.description": "Choose one item from a set of options."
+	"designSystem.select.description": "Choose one item from a set of options.",
+	"designSystem.badge.title": "Badges",
+	"designSystem.badge.description": "Used to display status results and category tags.",
+	"designSystem.slider.title": "Sliders",
+	"designSystem.slider.description": "Used to select values within a continuous range.",
+	"designSystem.switch.title": "Switches",
+	"designSystem.switch.description": "Used to toggle binary states.",
+	"designSystem.radio.title": "Radio Groups",
+	"designSystem.radio.description": "Choose one item from a set of mutually exclusive options.",
+	"designSystem.numberField.title": "Number Fields",
+	"designSystem.numberField.description": "Numeric inputs with steppers, units, and boundaries.",
+	"designSystem.tabs.title": "Tabs",
+	"designSystem.tabs.description": "Switch between peer views or modules.",
+	"designSystem.card.title": "Cards",
+	"designSystem.card.description": "Content containers for specific modules.",
+	"designSystem.modal.title": "Modals",
+	"designSystem.modal.description": "Blocking confirmations and layered dialog containers."
 }

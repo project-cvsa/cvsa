@@ -13,6 +13,9 @@ await i18nServer.ready();
 
 export const parseHostInfo = (urlStr: string) => {
 	const url = new URL(urlStr);
+	if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
+		return { isDev: true, languageInHost: "zh", hostname: url.hostname };
+	}
 	const parts = url.hostname?.split(".")?.reverse();
 
 	if (!parts || parts.length < 2 || parts[0] !== "com" || parts[1] !== "projectcvsa") {

@@ -60,13 +60,13 @@ export const SoftReservePolicySchema = z.object({
 });
 
 export const HealthConfigSchema = z.object({
-	failurePenalty: z.number().gt(0).lt(1).default(0.5),
-	recoveryBonus: z.number().gt(0).lt(1).default(0.2),
-	minWeightFactor: z.number().gte(0).lt(1).default(0.05),
+	failurePenalty: z.number().gt(0).lt(1).default(0.85),
+	recoveryBonus: z.number().gt(0).lt(1).default(0.5),
+	minWeightFactor: z.number().gte(0).lt(1).default(0.1),
 	/** Consecutive health-affecting failures before the adapter is isolated. */
-	failureThreshold: z.number().int().positive().max(100).default(3),
+	failureThreshold: z.number().int().positive().max(100).default(20),
 	/** How long an isolated adapter stays out of rotation before a probe is allowed. */
-	cooldownMs: z.number().int().positive().max(3_600_000).default(30_000),
+	cooldownMs: z.number().int().positive().max(3_600_000).default(10_000),
 });
 
 export const NetworkRuntimeConfigSchema = z

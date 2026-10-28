@@ -88,7 +88,11 @@ export default function List(props: ListProps) {
 		for (const animation of animations.values()) animation.cancel();
 		animations.clear();
 		setOrderedItems(next);
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (
+			typeof window !== "undefined" &&
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches
+		)
+			return;
 		for (const row of rows) {
 			if (row.dataset.listItemId === draggedId()) continue;
 			const distance =
@@ -255,7 +259,11 @@ export default function List(props: ListProps) {
 		resetDrag();
 		for (const animation of animations.values()) animation.cancel();
 		animations.clear();
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (
+			typeof window !== "undefined" &&
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches
+		)
+			return;
 		for (const row of rows) {
 			const distance =
 				(positions.get(row) ?? row.getBoundingClientRect().top) -

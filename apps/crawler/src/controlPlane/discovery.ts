@@ -13,6 +13,7 @@ import {
 	ErrorResponseSchema,
 	LabelDiscoverySampleRequestSchema,
 	ProcessRecommendationsResponseSchema,
+	RecommendationGraphResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
@@ -30,6 +31,7 @@ import type {
 } from "@cvsa/snapshot-db";
 import { DEFAULT_HOT_SAMPLE_LIMIT } from "../crawler";
 import {
+	bilibiliClient,
 	discoveryFilterService,
 	discoveryRepository,
 	discoveryScheduler,
@@ -144,7 +146,7 @@ function toHistoryItem(row: {
 	};
 }
 
-function toSampleItem(row: DiscoverySample): DiscoverySampleItem {
+function toSampleItem(row: DiscoverySample, pic?: string | null): DiscoverySampleItem {
 	return {
 		aid: row.aid.toString(),
 		bvid: row.bvid,
@@ -153,6 +155,7 @@ function toSampleItem(row: DiscoverySample): DiscoverySampleItem {
 		tags: toStringArray(row.tags),
 		decision: row.decision,
 		modelVersion: row.modelVersion,
+		pic: pic ?? null,
 		probabilities: toNumberRecord(row.probabilities),
 		songProbability: row.songProbability,
 		humanLabel: row.humanLabel,
@@ -393,6 +396,139 @@ export const discoveryRoutes = new Elysia()
 		}
 	)
 	.get(
+		"/graph/:identifier",
+		async ({ params, status }) => {
+			let seedAid: bigint | null = null;
+			let seedBvid: string | null = null;
+			let seedTitle = "未知视频";
+			let seedPic: string | null = null;
+			let seedOwnerName: string | null = null;
+			let seedDuration: number | undefined;
+
+			// 1. Resolve seed video
+			if (/^\d+$/.test(params.identifier)) {
+				seedAid = BigInt(params.identifier);
+				const meta = await discoveryRepository.getMetadata(seedAid);
+				if (meta) {
+					seedBvid = meta.bvid;
+					seedTitle = meta.title;
+					seedPic = meta.pic;
+					seedOwnerName = meta.ownerName;
+					seedDuration = meta.duration;
+				}
+			}
+
+			// If not in DB or was BVID, fetch from Bilibili
+			if (!seedAid || !seedBvid) {
+				try {
+					const details = await bilibiliClient.getVideoDetails(params.identifier);
+					seedAid = BigInt(details.View.aid);
+					seedBvid = details.View.bvid;
+					seedTitle = details.View.title;
+					seedPic = details.View.pic;
+					seedOwnerName = details.View.owner?.name ?? null;
+					seedDuration = details.View.duration;
+
+					await discoveryRepository.bulkUpsertMetadata([
+						{
+							aid: seedAid,
+							bvid: seedBvid,
+							title: seedTitle,
+							pic: seedPic,
+							duration: seedDuration ?? 0,
+							ownerName: seedOwnerName,
+							discoverySource: "recommendation-graph-explorer",
+						},
+					]);
+				} catch {
+					return status(404, {
+						code: "NOT_FOUND",
+						message: "Video not found on Bilibili",
+					});
+				}
+			}
+
+			const isSeedTracked = (await trackingRepository.getTracking(seedAid)) !== null;
+
+			// 2. Fetch relations from DB
+			let relations = await discoveryRepository.getRelationsBySource(seedAid);
+
+			// If no relations recorded yet, fetch live from Bilibili and persist!
+			if (relations.length === 0) {
+				try {
+					const relatedVideos = await bilibiliClient.getRelatedVideos(seedAid);
+					if (relatedVideos.length > 0) {
+						await discoveryRepository.bulkUpsertMetadata(
+							relatedVideos.map((item) => ({
+								aid: BigInt(item.aid),
+								bvid: item.bvid,
+								title: item.title,
+								pic: item.pic,
+								duration: item.duration ?? 0,
+								ownerName: item.owner?.name ?? null,
+								discoverySource: "related",
+							}))
+						);
+						await discoveryRepository.saveRelations(
+							relatedVideos.map((item, idx) => ({
+								sourceAid: seedAid ?? 0n,
+								targetAid: BigInt(item.aid),
+								position: idx + 1,
+							}))
+						);
+						relations = await discoveryRepository.getRelationsBySource(seedAid);
+					}
+				} catch {
+					// Fall through with empty relations
+				}
+			}
+
+			// 3. Fetch metadata and tracking state for all target relations
+			const targetAids = relations.map((r) => r.targetAid);
+			const targetMetas = await discoveryRepository.getMetadatas(targetAids);
+			const metaMap = new Map(targetMetas.map((m) => [m.aid, m]));
+
+			const trackedRows = await trackingRepository.getTrackings(targetAids);
+			const trackedSet = new Set(trackedRows.map((r) => r.aid));
+
+			const relationNodes = relations.map((rel) => {
+				const meta = metaMap.get(rel.targetAid);
+				return {
+					aid: rel.targetAid.toString(),
+					bvid: meta?.bvid ?? `av${rel.targetAid}`,
+					title: meta?.title ?? `Video ${rel.targetAid}`,
+					pic: meta?.pic ?? null,
+					ownerName: meta?.ownerName ?? null,
+					duration: meta?.duration,
+					position: rel.position,
+					isTracked: trackedSet.has(rel.targetAid),
+					capturedAt: rel.capturedAt.toString(),
+				};
+			});
+
+			return {
+				seed: {
+					aid: seedAid.toString(),
+					bvid: seedBvid,
+					title: seedTitle,
+					pic: seedPic,
+					ownerName: seedOwnerName,
+					duration: seedDuration,
+					isTracked: isSeedTracked,
+				},
+				relations: relationNodes,
+			};
+		},
+		{
+			response: {
+				200: RecommendationGraphResponseSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
 		"/samples",
 		async ({ query }): Promise<DiscoverySampleListResponse> => {
 			// The repository exposes no COUNT, so the maximum page is read once and
@@ -404,7 +540,11 @@ export const discoveryRoutes = new Elysia()
 				labeled: query.labeled,
 			});
 			const start = query.offset;
-			const items = rows.slice(start, start + query.limit).map(toSampleItem);
+			const sliced = rows.slice(start, start + query.limit);
+			const targetAids = sliced.map((r) => r.aid);
+			const metas = await discoveryRepository.getMetadatas(targetAids);
+			const picMap = new Map(metas.map((m) => [m.aid, m.pic]));
+			const items = sliced.map((row) => toSampleItem(row, picMap.get(row.aid)));
 			return { items, total: rows.length };
 		},
 		{

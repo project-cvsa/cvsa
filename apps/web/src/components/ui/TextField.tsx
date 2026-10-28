@@ -118,7 +118,9 @@ export default function TextField(props: TextFieldProps) {
 	const boxClass = () => {
 		const border = hasError() ? "border-error" : "border-border";
 		const interactive =
-			hasError() || local.disabled ? "" : "hover:border-tertiary focus-within:border-primary";
+			hasError() || local.disabled
+				? ""
+				: "hover:border-tertiary focus-within:border-primary focus-within:ring-1 focus-within:ring-primary";
 		return clsx(border, interactive);
 	};
 

@@ -42,11 +42,13 @@ export default function Modal(props: ModalProps) {
 	};
 
 	onMount(() => {
+		if (typeof window === "undefined") return;
 		window.addEventListener("keydown", handleKeyDown);
-	});
-
-	onCleanup(() => {
-		window.removeEventListener("keydown", handleKeyDown);
+		onCleanup(() => {
+			if (typeof window !== "undefined") {
+				window.removeEventListener("keydown", handleKeyDown);
+			}
+		});
 	});
 
 	return (
@@ -64,26 +66,28 @@ export default function Modal(props: ModalProps) {
 				>
 					<div
 						class={clsx(
-							"relative w-full rounded-xl bg-surface border border-border shadow-xl overflow-hidden animate-in zoom-in-95 duration-150",
+							"relative w-full bg-surface border-2 border-primary shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150",
 							sizeStyles[size()],
 							local.class
 						)}
 						{...rest}
 					>
-						<div class="px-6 py-4 border-b border-border flex items-center justify-between gap-4">
-							<div class="flex flex-col gap-0.5 min-w-0">
+						<div class="h-12 bg-primary text-display-inverted px-6 flex items-center justify-between font-[Outfit,system-ui] uppercase text-base">
+							<div class="flex items-center gap-3 min-w-0">
 								<Show when={local.title}>
-									<h2 class="ts-heading-3 font-semibold text-primary truncate">
+									<h2 class="font-semibold text-display-inverted truncate text-base">
 										{local.title}
 									</h2>
 								</Show>
 								<Show when={local.description}>
-									<p class="ts-caption text-tertiary">{local.description}</p>
+									<span class="ts-caption text-display-inverted/70">
+										{local.description}
+									</span>
 								</Show>
 							</div>
 							<button
 								type="button"
-								class="p-1 rounded-md text-tertiary hover:text-primary hover:bg-hover transition-colors"
+								class="p-1 text-display-inverted hover:bg-white/20 transition-colors cursor-pointer"
 								onClick={() => local.onClose()}
 								aria-label="Close"
 							>
@@ -94,7 +98,7 @@ export default function Modal(props: ModalProps) {
 						<div class="p-6 max-h-[75vh] overflow-y-auto">{local.children}</div>
 
 						<Show when={local.footer}>
-							<div class="px-6 py-4 border-t border-border bg-surface-container-high/20 flex items-center justify-end gap-3">
+							<div class="px-6 py-4 border-t border-border bg-surface-container-high flex items-center justify-end gap-3">
 								{local.footer}
 							</div>
 						</Show>

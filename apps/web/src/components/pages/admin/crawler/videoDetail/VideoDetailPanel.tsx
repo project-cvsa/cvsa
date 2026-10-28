@@ -493,10 +493,10 @@ export default function VideoDetailPanel(props: VideoDetailPanelProps) {
 									<For each={relations() ?? []}>
 										{(relation) => (
 											<tr class="border-b border-border hover:bg-hover">
-												<td class="py-2 px-3 font-mono text-tertiary">
+												<td class="py-2 px-3 text-tertiary">
 													{relation.position}
 												</td>
-												<td class="py-2 px-3 font-mono text-primary">
+												<td class="py-2 px-3 text-primary">
 													{relation.targetAid}
 												</td>
 												<td class="py-2 px-3 text-tertiary">

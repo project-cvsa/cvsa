@@ -62,6 +62,7 @@ export class DiscoveryService {
 	readonly relationExtractor: RelationExtractor;
 	readonly searchRover: SearchRover;
 	readonly evaluator: DiscoveryCandidateEvaluator;
+	readonly filterService: DiscoveryFilterService;
 
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
@@ -71,6 +72,8 @@ export class DiscoveryService {
 		classifier?: VideoClassifierClient,
 		stats: StatsRecorder = createNoopStatsRecorder()
 	) {
+		const effectiveFilter = filterService ?? new DiscoveryFilterService();
+		this.filterService = effectiveFilter;
 		this.relationExtractor = new RelationExtractor(discoveryRepo);
 		this.searchRover = new SearchRover(bilibiliClient, discoveryRepo);
 		this.evaluator = new DiscoveryCandidateEvaluator(
@@ -79,7 +82,7 @@ export class DiscoveryService {
 			trackingRepo,
 			// A rules-only filter is still a filter: without a service instance the
 			// evaluator must not silently accept everything.
-			filterService ?? new DiscoveryFilterService(),
+			effectiveFilter,
 			classifier,
 			stats
 		);
@@ -128,7 +131,12 @@ export class DiscoveryService {
 
 	async runSearchSweep(config?: Partial<SearchRoverConfig>): Promise<SearchSweepResult> {
 		return traceTask("discovery.runSearchSweep", async () => {
-			const candidates = await this.searchRover.runSearchSweep(config);
+			const effectiveKeywords =
+				config?.keywords ?? this.filterService.getConfig().searchKeywords;
+			const candidates = await this.searchRover.runSearchSweep({
+				...config,
+				keywords: effectiveKeywords,
+			});
 			if (candidates.length === 0) {
 				return { totalDiscovered: 0, newTracked: 0 };
 			}

@@ -63,5 +63,21 @@
 	"designSystem.textarea.description": "用于简介、备注等较长的文本。",
 	"designSystem.date.description": "按年、月、日输入日期，也可从日历中选择。",
 	"designSystem.duration.description": "以分钟和秒填写时长。",
-	"designSystem.select.description": "从一组选项中选择一项。"
+	"designSystem.select.description": "从一组选项中选择一项。",
+	"designSystem.badge.title": "徽章",
+	"designSystem.badge.description": "用于呈现状态结果与分类标签。",
+	"designSystem.slider.title": "滑块",
+	"designSystem.slider.description": "用于在连续区间内选取数值。",
+	"designSystem.switch.title": "开关",
+	"designSystem.switch.description": "用于切换二元状态。",
+	"designSystem.radio.title": "单选框",
+	"designSystem.radio.description": "在一组互斥选项中选择一项。",
+	"designSystem.numberField.title": "数字输入框",
+	"designSystem.numberField.description": "步进数值调节输入，支持单位后缀与步长限制。",
+	"designSystem.tabs.title": "标签页",
+	"designSystem.tabs.description": "在平级视图或模块之间切换。",
+	"designSystem.card.title": "卡片",
+	"designSystem.card.description": "承载特定模块的内容容器。",
+	"designSystem.modal.title": "对话框",
+	"designSystem.modal.description": "阻断式确认与弹出层操作容器。"
 }

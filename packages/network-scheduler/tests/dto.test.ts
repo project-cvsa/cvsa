@@ -56,8 +56,8 @@ describe("HttpProxyAdapterConfigSchema", () => {
 describe("HealthConfigSchema", () => {
 	test("defaults isolation thresholds", () => {
 		const parsed = HealthConfigSchema.parse({});
-		expect(parsed.failureThreshold).toBe(3);
-		expect(parsed.cooldownMs).toBe(30_000);
+		expect(parsed.failureThreshold).toBe(20);
+		expect(parsed.cooldownMs).toBe(10_000);
 	});
 
 	test("rejects a non-positive cooldown", () => {

@@ -15,12 +15,17 @@ import type {
 	DiscoverySampleListResponse,
 	DiscoverySweepRequest,
 	DiscoverySweepResponse,
+	IngestVideoRequest,
+	IngestVideoResponse,
 	LabelDiscoverySampleRequest,
 	NetworkRuntimeConfigDocument,
+	ProcessRecommendationsResponse,
 	PromoteTrackingVideoRequest,
+	RecommendationGraphResponse,
 	RegisterTrackingVideosRequest,
 	RegisterTrackingVideosResponse,
 	ReplaceNetworkRuntimeConfigRequest,
+	TestNetworkAdapterResponse,
 	TrackingVideoListQuery,
 	TrackingVideoListResponse,
 	UpdateDiscoveryFilterConfigRequest,
@@ -115,6 +120,13 @@ async function listTrackingVideos(
 	return settle(await eden.v2.admin.crawler.tracking.videos.get({ query: params }));
 }
 
+async function ingestVideo(
+	body: IngestVideoRequest
+): Promise<ApiResult<IngestVideoResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.tracking.ingest.post(body));
+}
+
 async function registerTracking(
 	body: RegisterTrackingVideosRequest
 ): Promise<ApiResult<RegisterTrackingVideosResponse | null>> {
@@ -133,6 +145,20 @@ async function promoteTracking(
 async function getRelations(aid: string): Promise<ApiResult<BilibiliVideoRelationDto[] | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.relations({ aid }).get());
+}
+
+async function processVideoRecommendations(
+	aid: string
+): Promise<ApiResult<ProcessRecommendationsResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.recommendations({ aid }).post());
+}
+
+async function getRecommendationGraph(
+	identifier: string
+): Promise<ApiResult<RecommendationGraphResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.graph({ identifier }).get());
 }
 
 async function getMetadata(aid: string): Promise<ApiResult<BilibiliVideoMetadataDto | null>> {
@@ -174,6 +200,13 @@ async function labelDiscoverySample(
 	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).label.post(body));
 }
 
+async function testNetworkAdapter(
+	id: string
+): Promise<ApiResult<TestNetworkAdapterResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.network.adapters({ id }).test.post());
+}
+
 export const crawlerApi = {
 	getStatus,
 	getStats,
@@ -182,15 +215,19 @@ export const crawlerApi = {
 	updateDiscoveryConfig,
 	getNetworkConfig,
 	updateNetworkConfig,
+	testNetworkAdapter,
 	triggerSweep,
 	triggerHotSample,
 	fetchDetail,
 	triggerActive,
 	getTracking,
 	listTrackingVideos,
+	ingestVideo,
 	registerTracking,
 	promoteTracking,
 	getRelations,
+	processVideoRecommendations,
+	getRecommendationGraph,
 	getMetadata,
 	getMetadataHistory,
 	listDiscoverySamples,

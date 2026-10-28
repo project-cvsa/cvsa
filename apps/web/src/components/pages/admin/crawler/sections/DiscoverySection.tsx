@@ -1,4 +1,4 @@
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import TextField from "@components/ui/TextField";
@@ -6,95 +6,135 @@ import Select, { type SelectOption } from "@components/ui/Select";
 import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
-import { getComponentT } from "@lib/i18n/isomorphic";
-import type { DiscoveryFilterConfigDto, DiscoverySampleListResponse } from "@cvsa/contracts";
-import Compass from "lucide-solid/icons/compass";
-import ExternalLink from "lucide-solid/icons/external-link";
-import Flame from "lucide-solid/icons/flame";
-import Play from "lucide-solid/icons/play";
-import RefreshCw from "lucide-solid/icons/refresh-cw";
-import Search from "lucide-solid/icons/search";
-import Sliders from "lucide-solid/icons/sliders";
-import Sparkles from "lucide-solid/icons/sparkles";
-import {
-	type SampleDecisionFilter,
-	type SampleLabeledFilter,
-	toSampleDecisionQuery,
-	toSampleLabeledQuery,
-} from "../discoveryFilters";
 import { formatPercent } from "../format";
-import { formatPageLabel, getPageOffset, hasNextPage } from "../pagination";
-import { createRequestSequence } from "../videoActions";
-
-const PAGE_SIZE = 10;
+import type { DiscoveryFilterConfigDto, DiscoverySampleListResponse } from "@cvsa/contracts";
+import ExternalLink from "lucide-solid/icons/external-link";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
+import Check from "lucide-solid/icons/check";
+import X from "lucide-solid/icons/x";
+import ChevronLeft from "lucide-solid/icons/chevron-left";
+import ChevronRight from "lucide-solid/icons/chevron-right";
+import GraphExplorer from "../discovery/GraphExplorer";
+import type { SampleDecisionFilter, SampleLabeledFilter } from "../discoveryFilters";
 
 export default function DiscoverySection() {
-	const t = getComponentT("crawler");
-
-	// Search Sweep state
+	const [activeTab, setActiveTab] = createSignal<"review" | "graph">("review");
+	const [filterConfig, setFilterConfig] = createSignal<DiscoveryFilterConfigDto | null>(null);
+	const [_loadingConfig, setLoadingConfig] = createSignal(false);
 	const [keyword, setKeyword] = createSignal("");
-	const [pagesPerQuery, setPagesPerQuery] = createSignal(2);
+	const [pagesPerQuery, setPagesPerQuery] = createSignal<number>(2);
 	const [runningSweep, setRunningSweep] = createSignal(false);
+	const [runningHot, setRunningHot] = createSignal(false);
 	const [sweepResult, setSweepResult] = createSignal<{ total: number; tracked: number } | null>(
 		null
 	);
+	const [newKeywordInput, setNewKeywordInput] = createSignal("");
+	const [savingKeywords, setSavingKeywords] = createSignal(false);
 
-	// Hot Sample state
-	const [runningHotSample, setRunningHotSample] = createSignal(false);
+	// Recommendation Seed Expansion State
+	const [seedInput, setSeedInput] = createSignal("");
+	const [runningSeedExpand, setRunningSeedExpand] = createSignal(false);
 
-	// Filter rules overview state
-	const [filterConfig, setFilterConfig] = createSignal<DiscoveryFilterConfigDto | null>(null);
-
-	// Samples state
-	const [decisionFilter, setDecisionFilter] = createSignal<SampleDecisionFilter>("all");
-	const [labeledFilter, setLabeledFilter] = createSignal<SampleLabeledFilter>("all");
-	const [page, setPage] = createSignal(0);
+	// Samples Workbench State
 	const [samples, setSamples] = createSignal<DiscoverySampleListResponse | null>(null);
 	const [loadingSamples, setLoadingSamples] = createSignal(false);
 	const [samplesError, setSamplesError] = createSignal<string | null>(null);
+	const [decisionFilter, setDecisionFilter] = createSignal<SampleDecisionFilter>("all");
+	const [labeledFilter, setLabeledFilter] = createSignal<SampleLabeledFilter>("unlabeled");
+	const [page, setPage] = createSignal<number>(0);
+	const [focusedIndex, setFocusedIndex] = createSignal<number>(0);
 	const [labelingAid, setLabelingAid] = createSignal<string | null>(null);
-	const sampleRequests = createRequestSequence();
 
-	const loadFilterConfig = async () => {
+	const pageSize = 15;
+
+	const loadConfig = async () => {
+		setLoadingConfig(true);
 		const res = await api.crawler.getDiscoveryConfig();
+		setLoadingConfig(false);
 		if (res.ok && res.data) {
 			setFilterConfig(res.data);
 		}
 	};
 
 	const loadSamples = async () => {
-		const request = sampleRequests.start();
-		const decision = toSampleDecisionQuery(decisionFilter());
-		const labeled = toSampleLabeledQuery(labeledFilter());
 		setLoadingSamples(true);
-		const res = await api.crawler.listDiscoverySamples({
-			limit: PAGE_SIZE,
-			offset: getPageOffset(page(), PAGE_SIZE),
-			...(decision ? { decision } : {}),
-			...(labeled === undefined ? {} : { labeled }),
-		});
-		if (!sampleRequests.isCurrent(request)) return;
-		setLoadingSamples(false);
-		if (!res.ok) {
-			setSamplesError(res.error.message || t("common.error"));
-			return;
-		}
-		if (!res.data) {
-			setSamplesError(t("common.unknown"));
-			return;
-		}
 		setSamplesError(null);
-		setSamples(res.data);
+		const query: {
+			limit: number;
+			offset: number;
+			decision?: "whitelist" | "model_accepted" | "model_rejected_sampled";
+			labeled?: boolean;
+		} = {
+			limit: pageSize,
+			offset: page() * pageSize,
+		};
+
+		const dec = decisionFilter();
+		if (dec !== "all") query.decision = dec;
+
+		const lab = labeledFilter();
+		if (lab === "labeled") query.labeled = true;
+		else if (lab === "unlabeled") query.labeled = false;
+
+		const res = await api.crawler.listDiscoverySamples(query);
+		setLoadingSamples(false);
+		if (res.ok && res.data) {
+			setSamples(res.data);
+			setFocusedIndex(0);
+			return;
+		}
+		setSamplesError(res.ok ? "无法获取候选数据" : res.error.message || "无法获取候选数据");
 	};
 
-	const runSweep = async (customKeyword?: string) => {
+	onMount(() => {
+		void loadConfig();
+		void loadSamples();
+
+		const handleKeyDown = (e: KeyboardEvent) => {
+			const activeEl = document.activeElement;
+			if (
+				activeEl &&
+				(activeEl.tagName === "INPUT" ||
+					activeEl.tagName === "TEXTAREA" ||
+					activeEl.getAttribute("contenteditable") === "true")
+			) {
+				return;
+			}
+
+			const currentList = samples()?.items ?? [];
+			if (currentList.length === 0) return;
+
+			if (e.key === "j" || e.key === "J" || e.key === "ArrowDown") {
+				e.preventDefault();
+				setFocusedIndex((prev) => Math.min(prev + 1, currentList.length - 1));
+			} else if (e.key === "k" || e.key === "K" || e.key === "ArrowUp") {
+				e.preventDefault();
+				setFocusedIndex((prev) => Math.max(prev - 1, 0));
+			} else if (e.key === "1") {
+				e.preventDefault();
+				const item = currentList[focusedIndex()];
+				if (item) void setHumanLabel(item.aid, true);
+			} else if (e.key === "2") {
+				e.preventDefault();
+				const item = currentList[focusedIndex()];
+				if (item) void setHumanLabel(item.aid, false);
+			}
+		};
+
+		window.addEventListener("keydown", handleKeyDown);
+		onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+	});
+
+	const runSweep = async (customWord?: string) => {
+		const targetKeyword = (customWord ?? keyword()).trim();
 		setRunningSweep(true);
 		setSweepResult(null);
-		const query = (customKeyword ?? keyword()).trim();
+
 		const res = await api.crawler.triggerSweep({
-			keywords: query ? [query] : undefined,
+			keywords: targetKeyword ? [targetKeyword] : undefined,
 			pagesPerQuery: pagesPerQuery(),
 		});
+
 		setRunningSweep(false);
 		if (res.ok && res.data) {
 			setSweepResult({
@@ -102,96 +142,169 @@ export default function DiscoverySection() {
 				tracked: res.data.newTracked,
 			});
 			toast.success(
-				t("discovery.sweep.summary")
-					.replace("{total}", String(res.data.totalDiscovered))
-					.replace("{tracked}", String(res.data.newTracked))
+				`扫描完成：发现 ${res.data.totalDiscovered} 个视频，新增纳入追踪 ${res.data.newTracked} 个`
 			);
 			void loadSamples();
 			return;
 		}
-		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
+		toast.error(res.ok ? "抓取任务排队失败" : res.error.message || "抓取失败");
 	};
 
-	const runHotSample = async () => {
-		setRunningHotSample(true);
+	const runHotSampling = async () => {
+		setRunningHot(true);
 		const res = await api.crawler.triggerHotSample();
-		setRunningHotSample(false);
-		if (res.ok) {
-			toast.success(t("discovery.hot.success"));
+		setRunningHot(false);
+		if (res.ok && res.data) {
+			toast.success(
+				`热门采样完成：扫描 ${res.data.totalDiscovered} 个关联视频，新增追踪 ${res.data.newTracked} 个`
+			);
 			void loadSamples();
 			return;
 		}
-		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
+		toast.error(res.ok ? "触发失败" : res.error.message || "触发失败");
+	};
+
+	const runSeedExpand = async () => {
+		const raw = seedInput().trim();
+		if (!raw) {
+			toast.error("请输入视频 BVID 或 AID");
+			return;
+		}
+
+		setRunningSeedExpand(true);
+		let targetAid = raw;
+		if (!/^\d+$/.test(raw)) {
+			const graphRes = await api.crawler.getRecommendationGraph(raw);
+			if (!graphRes.ok || !graphRes.data) {
+				setRunningSeedExpand(false);
+				toast.error(
+					graphRes.ok ? "未找到该视频" : graphRes.error.message || "视频查询失败"
+				);
+				return;
+			}
+			targetAid = graphRes.data.seed.aid;
+		}
+
+		const res = await api.crawler.processVideoRecommendations(targetAid);
+		setRunningSeedExpand(false);
+		if (res.ok && res.data) {
+			toast.success(
+				`推荐扩散完成：抓取关联 ${res.data.relationsCount} 条，新增追踪 ${res.data.newTracked} 条`
+			);
+			setSeedInput("");
+			void loadSamples();
+			return;
+		}
+		toast.error(res.ok ? "扩散失败" : res.error.message || "扩散失败");
 	};
 
 	const setHumanLabel = async (aid: string, isSong: boolean) => {
 		setLabelingAid(aid);
 		const targetLabel: 0 | 1 = isSong ? 1 : 0;
+
+		setSamples((prev) => {
+			if (!prev) return prev;
+			return {
+				...prev,
+				items: prev.items.map((item) =>
+					item.aid === aid
+						? {
+								...item,
+								humanLabel: targetLabel,
+								decision: isSong ? "model_accepted" : "model_rejected_sampled",
+							}
+						: item
+				),
+			};
+		});
+
 		const res = await api.crawler.labelDiscoverySample(aid, targetLabel);
 		setLabelingAid(null);
-		if (res.ok && res.data) {
-			const updatedItem = res.data;
-			toast.success(t("discovery.samples.labelSuccess"));
-			// Optimistically update list
-			setSamples((prev) => {
-				if (!prev) return prev;
-				return {
-					...prev,
-					items: prev.items.map((item) => (item.aid === aid ? updatedItem : item)),
-				};
-			});
+		if (res.ok) {
+			toast.success(isSong ? "已标记为曲目并入库" : "已标记为非曲目");
+			if (focusedIndex() < (samples()?.items.length ?? 0) - 1) {
+				setFocusedIndex((p) => p + 1);
+			}
 			return;
 		}
-		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
+		toast.error(res.ok ? "标注失败" : res.error.message || "标注失败");
+		void loadSamples();
 	};
 
-	onMount(() => {
-		void loadFilterConfig();
-		void loadSamples();
-	});
+	const addConfigKeyword = async (word: string) => {
+		const clean = word.trim();
+		if (!clean) return;
+
+		const current = filterConfig()?.searchKeywords ?? [];
+		if (current.includes(clean)) {
+			toast.error("词库中已存在该关键词");
+			return;
+		}
+
+		const next = [...current, clean];
+		setSavingKeywords(true);
+		const res = await api.crawler.updateDiscoveryConfig({
+			searchKeywords: next,
+		});
+		setSavingKeywords(false);
+		if (res.ok && res.data) {
+			setFilterConfig(res.data);
+			setNewKeywordInput("");
+			toast.success(`已添加关键词：${clean}`);
+			return;
+		}
+		toast.error("更新词库失败");
+	};
+
+	const removeConfigKeyword = async (word: string) => {
+		const current = filterConfig()?.searchKeywords ?? [];
+		const next = current.filter((k) => k !== word);
+		setSavingKeywords(true);
+		const res = await api.crawler.updateDiscoveryConfig({
+			searchKeywords: next,
+		});
+		setSavingKeywords(false);
+		if (res.ok && res.data) {
+			setFilterConfig(res.data);
+			toast.success(`已移除关键词：${word}`);
+			return;
+		}
+		toast.error("移除关键词失败");
+	};
 
 	const decisionOptions: SelectOption[] = [
-		{ value: "all", label: t("discovery.samples.decision.all") },
-		{ value: "whitelist", label: t("discovery.samples.decision.whitelist") },
-		{ value: "model_accepted", label: t("discovery.samples.decision.modelAccepted") },
-		{
-			value: "model_rejected_sampled",
-			label: t("discovery.samples.decision.modelRejectedSampled"),
-		},
+		{ value: "all", label: "全部判定" },
+		{ value: "whitelist", label: "白名单准入" },
+		{ value: "model_accepted", label: "模型通过" },
+		{ value: "model_rejected_sampled", label: "模型淘汰" },
 	];
 
 	const labeledOptions: SelectOption[] = [
-		{ value: "all", label: t("discovery.samples.label.all") },
-		{ value: "labeled", label: t("discovery.samples.label.labeled") },
-		{ value: "unlabeled", label: t("discovery.samples.label.unlabeled") },
+		{ value: "all", label: "全部标注" },
+		{ value: "unlabeled", label: "待人工复核" },
+		{ value: "labeled", label: "已人工标注" },
 	];
 
-	const presets = [
-		{ label: t("discovery.sweep.preset.vocaloid"), query: "洛天依 原创" },
-		{ label: t("discovery.sweep.preset.synthesizerV"), query: "Synthesizer V 原创" },
-		{ label: t("discovery.sweep.preset.cevio"), query: "CeVIO 原创" },
-		{ label: t("discovery.sweep.preset.ace"), query: "ACE Studio 原创" },
-		{ label: t("discovery.sweep.preset.utau"), query: "UTAU 原创" },
-	];
+	const configuredKeywords = () => filterConfig()?.searchKeywords ?? [];
 
 	const decisionBadge = (decision: string) => {
 		switch (decision) {
 			case "whitelist":
 				return (
 					<Badge variant="info" size="sm">
-						{t("discovery.samples.decision.whitelist")}
+						白名单准入
 					</Badge>
 				);
 			case "model_accepted":
 				return (
 					<Badge variant="success" size="sm">
-						{t("discovery.samples.decision.modelAccepted")}
+						模型通过
 					</Badge>
 				);
 			case "model_rejected_sampled":
 				return (
 					<Badge variant="warning" size="sm">
-						{t("discovery.samples.decision.modelRejectedSampled")}
+						模型淘汰
 					</Badge>
 				);
 			default:
@@ -205,48 +318,92 @@ export default function DiscoverySection() {
 
 	return (
 		<div class="flex flex-col gap-6">
-			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col gap-2">
-				<h2 class="ts-heading-2 text-primary flex items-center gap-2">
-					<Compass class="w-5 h-5 text-primary" />
-					<span>{t("discovery.title")}</span>
-				</h2>
-				<p class="ts-body text-secondary text-sm leading-relaxed max-w-4xl">
-					{t("discovery.description")}
-				</p>
+			{/* Top Operational Toolbar */}
+			<div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface p-4 border border-border">
+				<div class="flex items-center gap-3">
+					<span class="ts-heading-3 text-primary font-semibold">新曲发现</span>
+					<div class="flex items-center gap-2 text-xs text-secondary">
+						<span>候选: {samples()?.total ?? 0}</span>
+						<span>·</span>
+						<span>词库: {configuredKeywords().length} 词</span>
+						<span>·</span>
+						<span>准入阈值: {filterConfig()?.modelThreshold ?? "0.70"}</span>
+					</div>
+				</div>
+
+				<div class="flex items-center gap-2">
+					<div class="inline-flex border border-border bg-surface-container-low p-0.5">
+						<button
+							type="button"
+							class={
+								"px-3 py-1 text-xs font-medium transition-colors " +
+								(activeTab() === "review"
+									? "bg-primary text-display-inverted"
+									: "text-primary hover:bg-hover")
+							}
+							onClick={() => setActiveTab("review")}
+						>
+							候选审查
+						</button>
+						<button
+							type="button"
+							class={
+								"px-3 py-1 text-xs font-medium transition-colors " +
+								(activeTab() === "graph"
+									? "bg-primary text-display-inverted"
+									: "text-primary hover:bg-hover")
+							}
+							onClick={() => setActiveTab("graph")}
+						>
+							推荐拓扑
+						</button>
+					</div>
+
+					<Button
+						size="sm"
+						variant="outlined"
+						disabled={loadingSamples()}
+						onClick={() => void loadSamples()}
+						class="gap-1.5"
+					>
+						<RefreshCw
+							class={"w-3.5 h-3.5 " + (loadingSamples() ? "animate-spin" : "")}
+						/>
+						<span>刷新</span>
+					</Button>
+				</div>
 			</div>
 
-			{/* Operational Control Center: Sweep & Hot Sample */}
-			<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-				{/* Search Sweep Card */}
-				<Card class="lg:col-span-2">
-					<CardHeader
-						title={
-							<div class="flex items-center gap-2">
-								<Search class="w-4 h-4 text-primary" />
-								<span>{t("discovery.sweep.title")}</span>
-							</div>
-						}
-					/>
-					<CardContent class="flex flex-col gap-4">
-						{/* Keyword input & Action */}
-						<div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
+			{/* Operational Deck: Keyword Rover & Recommendation Graph */}
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+				{/* Keyword Rover & Lexicon */}
+				<Card>
+					<CardHeader title="关键词发现" />
+					<CardContent class="p-4 flex flex-col gap-4">
+						{/* Trigger Search */}
+						<div class="flex items-end gap-3">
 							<div class="flex-1">
 								<TextField
-									label={t("discovery.sweep.keyword")}
+									label="搜索关键词"
 									value={keyword()}
 									onInput={(e) => setKeyword(e.currentTarget.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											void runSweep();
+										}
+									}}
 								/>
 							</div>
 
-							<div class="w-32">
+							<div class="w-36 shrink-0">
 								<Select
-									label={t("discovery.sweep.pages")}
+									label="抓取深度"
 									options={[
-										{ value: "1", label: "1 page" },
-										{ value: "2", label: "2 pages" },
-										{ value: "3", label: "3 pages" },
-										{ value: "5", label: "5 pages" },
+										{ value: "1", label: "1 页 (20 条)" },
+										{ value: "2", label: "2 页 (40 条)" },
+										{ value: "3", label: "3 页 (60 条)" },
+										{ value: "5", label: "5 页 (100 条)" },
 									]}
 									value={String(pagesPerQuery())}
 									onValueChange={(val) =>
@@ -257,399 +414,460 @@ export default function DiscoverySection() {
 
 							<Button
 								variant="filled"
-								size="md"
 								disabled={runningSweep()}
 								onClick={() => void runSweep()}
-								class="gap-2 shrink-0"
+								class="h-[58px] px-6 shrink-0"
 							>
-								<Play class={"w-4 h-4 " + (runningSweep() ? "animate-spin" : "")} />
-								<span>
-									{runningSweep()
-										? t("discovery.sweep.running")
-										: t("discovery.sweep.trigger")}
-								</span>
+								{runningSweep() ? "抓取中..." : "抓取"}
 							</Button>
 						</div>
 
-						{/* Keyword Presets */}
-						<div class="flex flex-wrap items-center gap-2 pt-1">
-							<span class="ts-caption text-tertiary">
-								{t("discovery.sweep.presets")}
-							</span>
-							<For each={presets}>
-								{(preset) => (
-									<button
-										type="button"
-										class="px-2.5 py-1 rounded-full text-xs border border-border bg-surface-container-high/40 text-secondary hover:text-primary hover:border-primary transition-colors select-none"
-										onClick={() => {
-											setKeyword(preset.query);
-											void runSweep(preset.query);
+						{/* Keywords List */}
+						<div class="flex flex-col gap-2 pt-3 border-t border-border">
+							<div class="flex items-center justify-between text-xs">
+								<span class="font-medium text-secondary">
+									词库 ({configuredKeywords().length})
+								</span>
+								<span class="text-tertiary">点击发起抓取</span>
+							</div>
+
+							<div class="flex flex-wrap items-center gap-1.5 min-h-[30px]">
+								<For
+									each={configuredKeywords()}
+									fallback={
+										<span class="text-tertiary text-xs">
+											未配置自定义词，使用默认词库
+										</span>
+									}
+								>
+									{(word) => (
+										<div class="inline-flex items-center gap-1 px-2 py-0.5 border border-border bg-surface-container-low text-xs group hover:border-primary transition-colors">
+											<button
+												type="button"
+												class="text-primary hover:underline cursor-pointer"
+												title="以此词执行抓取"
+												onClick={() => {
+													setKeyword(word);
+													void runSweep(word);
+												}}
+											>
+												{word}
+											</button>
+											<button
+												type="button"
+												class="text-tertiary hover:text-error ml-0.5 cursor-pointer"
+												title="移除关键词"
+												onClick={() => void removeConfigKeyword(word)}
+											>
+												<X class="w-3 h-3" />
+											</button>
+										</div>
+									)}
+								</For>
+							</div>
+
+							{/* Add keyword form */}
+							<div class="flex items-end gap-2 pt-1 max-w-sm">
+								<div class="flex-1">
+									<TextField
+										label="添加关键词"
+										value={newKeywordInput()}
+										onInput={(e) => setNewKeywordInput(e.currentTarget.value)}
+										onKeyDown={(e) => {
+											if (e.key === "Enter") {
+												e.preventDefault();
+												void addConfigKeyword(newKeywordInput());
+											}
 										}}
-									>
-										{preset.label}
-									</button>
-								)}
-							</For>
+									/>
+								</div>
+								<Button
+									size="md"
+									variant="outlined"
+									disabled={savingKeywords() || !newKeywordInput().trim()}
+									onClick={() => void addConfigKeyword(newKeywordInput())}
+									class="h-[58px] px-4 shrink-0"
+								>
+									添加
+								</Button>
+							</div>
 						</div>
 
-						{/* Sweep Result Banner */}
+						{/* Result */}
 						<Show when={sweepResult()}>
 							{(res) => (
-								<div class="p-3.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex items-center justify-between text-sm">
-									<div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-medium">
-										<Sparkles class="w-4 h-4" />
-										<span>
-											{t("discovery.sweep.summary")
-												.replace("{total}", String(res().total))
-												.replace("{tracked}", String(res().tracked))}
-										</span>
-									</div>
-									<Badge variant="success" size="sm">
-										+{res().tracked} Tracked
-									</Badge>
+								<div class="p-2.5 border border-border bg-surface-container-low flex items-center justify-between text-xs">
+									<span class="text-primary font-medium">
+										本次发现: {res().total} 个视频
+									</span>
+									<span class="text-success font-semibold">
+										+{res().tracked} 纳入追踪
+									</span>
 								</div>
 							)}
 						</Show>
 					</CardContent>
 				</Card>
 
-				{/* Hot Sample & Filter Rules Card */}
+				{/* Recommendation Graph Propagation */}
 				<Card>
-					<CardHeader
-						title={
-							<div class="flex items-center gap-2">
-								<Flame class="w-4 h-4 text-amber-500" />
-								<span>{t("discovery.hot.title")}</span>
-							</div>
-						}
-					/>
-					<CardContent class="flex flex-col gap-4">
-						<p class="ts-caption text-tertiary">{t("discovery.hot.description")}</p>
-
-						<Button
-							variant="outlined"
-							size="md"
-							disabled={runningHotSample()}
-							onClick={() => void runHotSample()}
-							class="gap-2 w-full justify-center"
-						>
-							<Flame
-								class={
-									"w-4 h-4 text-amber-500 " +
-									(runningHotSample() ? "animate-spin" : "")
-								}
-							/>
-							<span>
-								{runningHotSample()
-									? t("discovery.hot.running")
-									: t("discovery.hot.trigger")}
-							</span>
-						</Button>
-
-						{/* Filter Rules Summary */}
-						<div class="pt-3 border-t border-border flex flex-col gap-2">
-							<span class="ts-caption font-medium text-secondary flex items-center gap-1.5">
-								<Sliders class="w-3.5 h-3.5 text-tertiary" />
-								<span>{t("discovery.filterSummary.title")}</span>
-							</span>
-							<div class="grid grid-cols-2 gap-2 text-xs">
-								<div class="p-2 rounded bg-surface-container-high/30 border border-border">
-									<span class="text-tertiary block">
-										{t("discovery.filterSummary.threshold")}
-									</span>
-									<span class="font-mono font-medium text-primary">
-										P &ge; {filterConfig()?.modelThreshold ?? "0.70"}
-									</span>
-								</div>
-								<div class="p-2 rounded bg-surface-container-high/30 border border-border">
-									<span class="text-tertiary block">
-										{t("discovery.filterSummary.duration")}
-									</span>
-									<span class="font-mono font-medium text-primary">
-										{filterConfig()?.minDurationSeconds ?? 45}s -{" "}
-										{filterConfig()?.maxDurationSeconds ?? 900}s
-									</span>
-								</div>
-							</div>
-						</div>
-					</CardContent>
-				</Card>
-			</div>
-
-			{/* Candidate Evaluation Samples Table */}
-			<Card>
-				<CardHeader
-					title={t("discovery.samples.title")}
-					description={
-						samples() ? `${t("common.total")} ${samples()?.total ?? 0}` : undefined
-					}
-					actions={
-						<div class="flex flex-wrap items-center gap-2">
-							<div class="w-48">
-								<Select
-									label={t("discovery.samples.filterDecision")}
-									options={decisionOptions}
-									value={decisionFilter()}
-									onValueChange={(val) => {
-										if (val) {
-											setDecisionFilter(val as SampleDecisionFilter);
-											setPage(0);
-											void loadSamples();
-										}
-									}}
-								/>
-							</div>
-							<div class="w-40">
-								<Select
-									label={t("discovery.samples.filterLabel")}
-									options={labeledOptions}
-									value={labeledFilter()}
-									onValueChange={(val) => {
-										if (val) {
-											setLabeledFilter(val as SampleLabeledFilter);
-											setPage(0);
-											void loadSamples();
+					<CardHeader title="关联推荐发现" />
+					<CardContent class="p-4 flex flex-col gap-4">
+						{/* Direct Seed Input */}
+						<div class="flex items-end gap-3">
+							<div class="flex-1">
+								<TextField
+									label="种子视频 (BVID 或 AID)"
+									value={seedInput()}
+									onInput={(e) => setSeedInput(e.currentTarget.value)}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											void runSeedExpand();
 										}
 									}}
 								/>
 							</div>
 							<Button
-								size="sm"
-								variant="outlined"
-								disabled={loadingSamples()}
-								onClick={() => void loadSamples()}
-								class="gap-1.5"
+								variant="filled"
+								disabled={runningSeedExpand() || !seedInput().trim()}
+								onClick={() => void runSeedExpand()}
+								class="h-[58px] px-6 shrink-0"
 							>
-								<RefreshCw
-									class={
-										"w-3.5 h-3.5 " + (loadingSamples() ? "animate-spin" : "")
-									}
-								/>
-								<span>
-									{loadingSamples()
-										? t("common.refreshing")
-										: t("common.refresh")}
-								</span>
+								{runningSeedExpand() ? "扩散中..." : "推荐扩散"}
 							</Button>
 						</div>
-					}
-				/>
-				<CardContent class="p-0">
-					<Show
-						when={samples()}
-						fallback={
-							<div class="p-12 text-center text-tertiary">
-								{loadingSamples()
-									? t("common.loading")
-									: (samplesError() ?? t("discovery.samples.empty"))}
+
+						{/* Hot Seeds Global Expansion */}
+						<div class="pt-3 border-t border-border flex items-center justify-between gap-3">
+							<div class="flex flex-col">
+								<span class="ts-label text-primary font-medium">热门推荐采样</span>
+								<span class="ts-caption text-tertiary">
+									遍历在库高增长视频关联推荐
+								</span>
+							</div>
+							<Button
+								variant="outlined"
+								size="sm"
+								disabled={runningHot()}
+								onClick={() => void runHotSampling()}
+								class="shrink-0"
+							>
+								{runningHot() ? "采样分析中..." : "采样热门推荐"}
+							</Button>
+						</div>
+
+						{/* Strategy Indicators */}
+						<div class="pt-3 border-t border-border flex items-center justify-between text-xs text-tertiary">
+							<span>准入阈值: {filterConfig()?.modelThreshold ?? "0.70"}</span>
+							<span>
+								时长: {filterConfig()?.minDurationSeconds ?? 45}s -{" "}
+								{filterConfig()?.maxDurationSeconds ?? 900}s
+							</span>
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+
+			{/* Sub-view 1: Candidate Review Workbench */}
+			<Show when={activeTab() === "review"}>
+				<Card>
+					<CardHeader
+						title={
+							<div class="flex items-center gap-3">
+								<span>候选审查</span>
+								<Badge variant="neutral" size="sm">
+									{samples()?.total ?? 0}
+								</Badge>
+								<span class="text-xs text-tertiary font-normal hidden sm:inline">
+									快捷键：[1] 确认曲目 [2] 标记非曲目 [J/K] 切换
+								</span>
 							</div>
 						}
-					>
-						{(current) => (
-							<div class="flex flex-col">
-								<Show
-									when={current().items.length > 0}
-									fallback={
-										<div class="p-12 text-center text-tertiary">
-											{t("discovery.samples.empty")}
-										</div>
-									}
-								>
-									<div class="overflow-x-auto">
-										<table class="w-full text-left ts-caption">
-											<thead>
-												<tr class="border-b border-border text-tertiary bg-surface-container-high/30">
-													<th class="py-3 px-4 font-medium">
-														{t("discovery.samples.col.aid")}
-													</th>
-													<th class="py-3 px-4 font-medium">
-														{t("discovery.samples.col.bvid")}
-													</th>
-													<th class="py-3 px-4 font-medium min-w-[200px]">
-														{t("discovery.samples.col.title")}
-													</th>
-													<th class="py-3 px-4 font-medium">
-														{t("discovery.samples.col.decision")}
-													</th>
-													<th class="py-3 px-4 font-medium">
-														{t("discovery.samples.col.probability")}
-													</th>
-													<th class="py-3 px-4 font-medium">
-														{t("discovery.samples.col.label")}
-													</th>
-													<th class="py-3 px-4 font-medium text-right">
-														{t("discovery.samples.col.action")}
-													</th>
-												</tr>
-											</thead>
-											<tbody class="divide-y divide-border">
-												<For each={current().items}>
-													{(item) => (
-														<tr class="hover:bg-hover transition-colors">
-															<td class="py-3 px-4 font-mono font-medium text-primary">
-																{item.aid}
-															</td>
-															<td class="py-3 px-4 font-mono">
+						actions={
+							<div class="flex flex-wrap items-center gap-3">
+								<div class="w-36">
+									<Select
+										label="判定过滤"
+										options={decisionOptions}
+										value={decisionFilter()}
+										onValueChange={(val) => {
+											if (val) {
+												setDecisionFilter(val as SampleDecisionFilter);
+												setPage(0);
+												void loadSamples();
+											}
+										}}
+									/>
+								</div>
+								<div class="w-36">
+									<Select
+										label="标注状态"
+										options={labeledOptions}
+										value={labeledFilter()}
+										onValueChange={(val) => {
+											if (val) {
+												setLabeledFilter(val as SampleLabeledFilter);
+												setPage(0);
+												void loadSamples();
+											}
+										}}
+									/>
+								</div>
+							</div>
+						}
+					/>
+					<CardContent class="p-4 flex flex-col gap-4">
+						<Show
+							when={samples()?.items.length ? samples() : undefined}
+							fallback={
+								<div class="p-12 text-center text-tertiary text-sm flex flex-col items-center gap-3 bg-surface">
+									<span>
+										{loadingSamples()
+											? "加载样本中..."
+											: samplesError()
+												? "无法获取候选数据，请检查网络或服务状态"
+												: "暂无待审查候选视频"}
+									</span>
+									<Show when={!loadingSamples()}>
+										<Button
+											size="sm"
+											variant="outlined"
+											onClick={() => void loadSamples()}
+										>
+											刷新
+										</Button>
+									</Show>
+								</div>
+							}
+						>
+							{(current) => (
+								<div class="flex flex-col gap-4">
+									<div class="flex flex-col gap-2">
+										<For each={current().items}>
+											{(item, idx) => {
+												const isFocused = () => focusedIndex() === idx();
+												const isSong = () => item.humanLabel === 1;
+												const isNonSong = () => item.humanLabel === 0;
+
+												return (
+													// biome-ignore lint/a11y/noStaticElementInteractions: focus row selection
+													// biome-ignore lint/a11y/useKeyWithClickEvents: handled by global document keydown listener
+													<div
+														class={
+															"p-3 border transition-colors flex flex-col md:flex-row items-start md:items-center justify-between gap-4 cursor-pointer " +
+															(isFocused()
+																? "border-primary bg-surface-container-low"
+																: "border-border bg-surface hover:border-tertiary")
+														}
+														onClick={() => setFocusedIndex(idx())}
+													>
+														{/* Left: Thumbnail & Metadata */}
+														<div class="flex items-start gap-3 min-w-0 flex-1">
+															<span
+																class={
+																	"text-xs px-1.5 py-0.5 border shrink-0 " +
+																	(isFocused()
+																		? "bg-primary text-display-inverted border-primary font-bold"
+																		: "bg-surface-container-high border-border text-tertiary")
+																}
+															>
+																#{idx() + 1}
+															</span>
+
+															<Show
+																when={item.pic}
+																fallback={
+																	<div class="w-24 h-15 bg-surface-container-high border border-border flex items-center justify-center text-[10px] text-tertiary shrink-0">
+																		无封面
+																	</div>
+																}
+															>
+																{(pic) => (
+																	<div class="relative w-24 h-15 shrink-0 border border-border overflow-hidden bg-black">
+																		<img
+																			src={pic()}
+																			alt={item.title}
+																			class="w-full h-full object-cover"
+																			loading="lazy"
+																			referrerPolicy="no-referrer"
+																		/>
+																	</div>
+																)}
+															</Show>
+
+															<div class="flex flex-col gap-1 min-w-0 flex-1">
+																<div class="flex flex-wrap items-center gap-2">
+																	<span class="text-xs text-tertiary">
+																		av{item.aid}
+																	</span>
+																	<a
+																		href={`https://www.bilibili.com/video/${item.bvid}`}
+																		target="_blank"
+																		rel="noopener noreferrer"
+																		class="text-xs text-primary hover:underline inline-flex items-center gap-1"
+																		onClick={(e) =>
+																			e.stopPropagation()
+																		}
+																	>
+																		<span>{item.bvid}</span>
+																		<ExternalLink class="w-3 h-3 text-tertiary" />
+																	</a>
+																	{decisionBadge(item.decision)}
+																</div>
+
 																<a
 																	href={`https://www.bilibili.com/video/${item.bvid}`}
 																	target="_blank"
 																	rel="noopener noreferrer"
-																	class="text-primary hover:underline inline-flex items-center gap-1"
+																	class="font-medium text-sm text-primary hover:underline line-clamp-1"
+																	title={item.title}
+																	onClick={(e) =>
+																		e.stopPropagation()
+																	}
 																>
-																	<span>{item.bvid}</span>
-																	<ExternalLink class="w-3 h-3 text-tertiary" />
+																	{item.title}
 																</a>
-															</td>
-															<td
-																class="py-3 px-4 max-w-sm truncate text-secondary"
-																title={item.title}
-															>
-																{item.title}
-															</td>
-															<td class="py-3 px-4">
-																{decisionBadge(item.decision)}
-															</td>
-															<td class="py-3 px-4 font-mono">
-																<span
-																	class={
-																		item.songProbability >= 0.7
-																			? "text-emerald-600 dark:text-emerald-400 font-semibold"
-																			: "text-secondary"
-																	}
-																>
-																	{formatPercent(
-																		item.songProbability
-																	)}
-																</span>
-															</td>
-															<td class="py-3 px-4">
-																<Show
-																	when={item.humanLabel !== null}
-																	fallback={
-																		<Badge
-																			variant="neutral"
-																			size="sm"
-																		>
-																			{t(
-																				"discovery.samples.label.unlabeled"
-																			)}
-																		</Badge>
-																	}
-																>
-																	<Badge
-																		variant={
-																			item.humanLabel === 1
-																				? "success"
-																				: "danger"
-																		}
-																		size="sm"
-																	>
-																		{item.humanLabel === 1
-																			? t(
-																					"discovery.samples.label.isSong"
-																				)
-																			: t(
-																					"discovery.samples.label.isNonSong"
-																				)}
-																	</Badge>
-																</Show>
-															</td>
-															<td class="py-3 px-4 text-right">
-																<div class="inline-flex items-center gap-1.5">
-																	<Button
-																		size="sm"
-																		variant={
-																			item.humanLabel === 1
-																				? "filled"
-																				: "outlined"
-																		}
-																		disabled={
-																			labelingAid() ===
-																			item.aid
-																		}
-																		onClick={() =>
-																			void setHumanLabel(
-																				item.aid,
-																				true
-																			)
-																		}
-																		class="text-xs px-2 h-7"
-																	>
-																		{t(
-																			"discovery.samples.label.markSong"
-																		)}
-																	</Button>
-																	<Button
-																		size="sm"
-																		variant={
-																			item.humanLabel === 0
-																				? "filled"
-																				: "outlined"
-																		}
-																		disabled={
-																			labelingAid() ===
-																			item.aid
-																		}
-																		onClick={() =>
-																			void setHumanLabel(
-																				item.aid,
-																				false
-																			)
-																		}
-																		class="text-xs px-2 h-7"
-																	>
-																		{t(
-																			"discovery.samples.label.markNonSong"
-																		)}
-																	</Button>
-																</div>
-															</td>
-														</tr>
-													)}
-												</For>
-											</tbody>
-										</table>
-									</div>
-								</Show>
 
-								{/* Pagination */}
-								<div class="px-5 py-3 border-t border-border flex items-center justify-between">
-									<span class="ts-caption text-tertiary">
-										{formatPageLabel(page(), PAGE_SIZE, current().total)}
-									</span>
-									<div class="flex items-center gap-2">
-										<Button
-											size="sm"
-											variant="outlined"
-											disabled={page() === 0 || loadingSamples()}
-											onClick={() => {
-												setPage((p) => Math.max(0, p - 1));
-												void loadSamples();
+																{/* Model Score Progress */}
+																<div class="flex items-center gap-2 max-w-xs pt-0.5">
+																	<span class="text-xs text-tertiary shrink-0">
+																		置信度:
+																	</span>
+																	<div class="flex-1 h-1.5 bg-surface-container-high border border-border overflow-hidden">
+																		<div
+																			class={
+																				"h-full " +
+																				(item.songProbability >=
+																				0.7
+																					? "bg-primary"
+																					: "bg-tertiary")
+																			}
+																			style={{
+																				width: `${Math.round(item.songProbability * 100)}%`,
+																			}}
+																		/>
+																	</div>
+																	<span class="text-xs font-medium text-primary">
+																		{formatPercent(
+																			item.songProbability
+																		)}
+																	</span>
+																</div>
+															</div>
+														</div>
+
+														{/* Right: Actions */}
+														<div class="flex items-center gap-2 shrink-0 self-end md:self-center">
+															<Button
+																size="sm"
+																variant={
+																	isSong() ? "filled" : "outlined"
+																}
+																disabled={
+																	labelingAid() === item.aid
+																}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	void setHumanLabel(
+																		item.aid,
+																		true
+																	);
+																}}
+																class={
+																	"gap-1 text-xs " +
+																	(isSong()
+																		? "bg-primary text-display-inverted border-primary"
+																		: "")
+																}
+															>
+																<Check class="w-3.5 h-3.5" />
+																<span>[1] 是曲目</span>
+															</Button>
+
+															<Button
+																size="sm"
+																variant={
+																	isNonSong()
+																		? "filled"
+																		: "outlined"
+																}
+																disabled={
+																	labelingAid() === item.aid
+																}
+																onClick={(e) => {
+																	e.stopPropagation();
+																	void setHumanLabel(
+																		item.aid,
+																		false
+																	);
+																}}
+																class={
+																	"gap-1 text-xs " +
+																	(isNonSong()
+																		? "bg-primary text-display-inverted border-primary"
+																		: "")
+																}
+															>
+																<X class="w-3.5 h-3.5" />
+																<span>[2] 非曲目</span>
+															</Button>
+														</div>
+													</div>
+												);
 											}}
-										>
-											{t("common.previous")}
-										</Button>
-										<Button
-											size="sm"
-											variant="outlined"
-											disabled={
-												!hasNextPage(page(), PAGE_SIZE, current().total) ||
-												loadingSamples()
-											}
-											onClick={() => {
-												setPage((p) => p + 1);
-												void loadSamples();
-											}}
-										>
-											{t("common.next")}
-										</Button>
+										</For>
+									</div>
+
+									{/* Pagination */}
+									<div class="flex items-center justify-between pt-3 border-t border-border text-xs text-secondary">
+										<span>
+											第 {page() + 1} 页 / 共{" "}
+											{Math.ceil((current().total || 1) / pageSize)} 页
+										</span>
+										<div class="flex items-center gap-2">
+											<Button
+												size="sm"
+												variant="outlined"
+												disabled={page() === 0 || loadingSamples()}
+												onClick={() => {
+													setPage((p) => Math.max(0, p - 1));
+													void loadSamples();
+												}}
+												class="gap-1"
+											>
+												<ChevronLeft class="w-3.5 h-3.5" />
+												<span>上一页</span>
+											</Button>
+											<Button
+												size="sm"
+												variant="outlined"
+												disabled={
+													(page() + 1) * pageSize >= current().total ||
+													loadingSamples()
+												}
+												onClick={() => {
+													setPage((p) => p + 1);
+													void loadSamples();
+												}}
+												class="gap-1"
+											>
+												<span>下一页</span>
+												<ChevronRight class="w-3.5 h-3.5" />
+											</Button>
+										</div>
 									</div>
 								</div>
-							</div>
-						)}
-					</Show>
-				</CardContent>
-			</Card>
+							)}
+						</Show>
+					</CardContent>
+				</Card>
+			</Show>
+
+			{/* Sub-view 2: Graph Explorer */}
+			<Show when={activeTab() === "graph"}>
+				<GraphExplorer onIngestSuccess={() => void loadSamples()} />
+			</Show>
 		</div>
 	);
 }

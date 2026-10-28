@@ -44,7 +44,7 @@ export default function Tabs<T extends string = string>(props: TabsProps<T>) {
 							disabled={item.disabled}
 							onClick={() => local.onChange(item.id)}
 							class={clsx(
-								"group inline-flex items-center gap-2 whitespace-nowrap border-b-2 font-medium transition-all select-none shrink-0",
+								"group inline-flex items-center gap-2 whitespace-nowrap border-b-2 font-[Outfit,system-ui] uppercase tracking-wider font-semibold transition-all select-none shrink-0 cursor-pointer",
 								size() === "sm" ? "px-3 py-2 text-xs" : "px-4 py-3 text-sm",
 								active()
 									? "border-primary text-primary font-semibold"

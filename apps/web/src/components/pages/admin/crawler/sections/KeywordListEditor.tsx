@@ -42,11 +42,11 @@ export default function KeywordListEditor(props: KeywordListEditorProps) {
 				<div class="flex flex-wrap gap-2 min-h-[32px]">
 					<For each={props.items}>
 						{(item) => (
-							<span class="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-surface-container-high border border-border text-xs text-primary group hover:border-primary/40 transition-colors">
+							<span class="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 border border-border bg-surface-container-high text-xs text-primary group hover:border-primary/40 transition-colors">
 								<span class="font-medium">{item}</span>
 								<button
 									type="button"
-									class="p-0.5 rounded-full text-tertiary hover:text-error hover:bg-error/10 transition-colors focus:outline-none"
+									class="p-0.5 text-tertiary hover:text-error hover:bg-hover transition-colors focus:outline-none"
 									aria-label={"Remove " + item}
 									onClick={() => props.onRemove(item)}
 								>

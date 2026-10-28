@@ -34,12 +34,13 @@ export const HEALTH_AFFECTING_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode>
 	"REQUEST_TIMEOUT",
 	"HTTP_429",
 	"HTTP_5XX",
-	"APPLICATION_RATE_LIMIT",
 ]);
 
 /** Codes worth retrying on another adapter within the same call. */
-export const RETRYABLE_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> =
-	HEALTH_AFFECTING_NETWORK_ERROR_CODES;
+export const RETRYABLE_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> = new Set([
+	...HEALTH_AFFECTING_NETWORK_ERROR_CODES,
+	"APPLICATION_RATE_LIMIT",
+]);
 
 export interface NetworkApplicationErrorContext {
 	status: number;

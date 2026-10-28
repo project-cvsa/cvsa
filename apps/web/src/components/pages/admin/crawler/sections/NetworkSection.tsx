@@ -7,6 +7,7 @@ import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type {
 	CrawlerStatusDto,
+	HealthConfig,
 	NetworkAdapterConfig,
 	NetworkRuntimeConfig,
 	NetworkRuntimeConfigDocument,
@@ -19,7 +20,6 @@ import NetworkIcon from "lucide-solid/icons/network";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Save from "lucide-solid/icons/save";
 import AlertTriangle from "lucide-solid/icons/alert-triangle";
-import Route from "lucide-solid/icons/route";
 
 type NetworkSectionProps = {
 	statusData: Accessor<CrawlerStatusDto | null>;
@@ -213,6 +213,18 @@ export default function NetworkSection(props: NetworkSectionProps) {
 		});
 	};
 
+	const updateHealth = (health: HealthConfig) => {
+		const current = networkDoc();
+		if (!current) return;
+		setNetworkDoc({
+			...current,
+			config: {
+				...current.config,
+				health,
+			},
+		});
+	};
+
 	onMount(() => {
 		void loadConfig();
 	});
@@ -220,14 +232,14 @@ export default function NetworkSection(props: NetworkSectionProps) {
 	return (
 		<div class="flex flex-col gap-6">
 			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+			<div class="bg-surface p-5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 				<div class="flex flex-col gap-1.5">
 					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
 						<NetworkIcon class="w-5 h-5 text-primary" />
 						<span>{t("network.title")}</span>
 						<Show when={networkDoc()}>
 							{(doc) => (
-								<Badge variant="neutral" size="sm" class="font-mono">
+								<Badge variant="neutral" size="sm">
 									Rev {doc().revision}
 								</Badge>
 							)}
@@ -264,22 +276,9 @@ export default function NetworkSection(props: NetworkSectionProps) {
 				</div>
 			</div>
 
-			{/* Smart Routing Callout Banner */}
-			<div class="p-4 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
-				<Route class="w-5 h-5 text-primary shrink-0 mt-0.5" />
-				<div class="flex flex-col gap-1">
-					<span class="ts-subhead font-semibold text-primary">
-						{t("network.routingBanner.title")}
-					</span>
-					<span class="ts-body text-secondary text-sm">
-						{t("network.routingBanner.description")}
-					</span>
-				</div>
-			</div>
-
 			{/* Unsaved Draft Changes Alert */}
 			<Show when={isDirty()}>
-				<div class="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
+				<div class="p-4 border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
 					<div class="flex items-center gap-2.5 text-amber-700 dark:text-amber-300">
 						<AlertTriangle class="w-4 h-4 shrink-0" />
 						<span class="text-sm font-medium">{t("network.adapters.draftNotice")}</span>
@@ -302,13 +301,13 @@ export default function NetworkSection(props: NetworkSectionProps) {
 			<Show
 				when={networkDoc()}
 				fallback={
-					<div class="p-10 text-center text-tertiary border border-border rounded-lg flex flex-col items-center gap-4 bg-surface">
+					<div class="p-10 text-center text-tertiary border border-border flex flex-col items-center gap-4 bg-surface">
 						<span>
 							{loading()
 								? t("common.loading")
 								: configMissing()
 									? t("network.adapters.empty")
-									: t("common.unknown")}
+									: "无法获取网络适配器配置"}
 						</span>
 						<Show when={configMissing() && !loading()}>
 							<Button
@@ -318,6 +317,16 @@ export default function NetworkSection(props: NetworkSectionProps) {
 								onClick={() => void initializeConfig()}
 							>
 								{saving() ? t("common.saving") : t("network.adapters.add")}
+							</Button>
+						</Show>
+						<Show when={!configMissing() && !loading()}>
+							<Button
+								size="sm"
+								variant="outlined"
+								disabled={loading()}
+								onClick={() => void loadConfig()}
+							>
+								重试
 							</Button>
 						</Show>
 					</div>
@@ -336,7 +345,10 @@ export default function NetworkSection(props: NetworkSectionProps) {
 
 							<NetworkAdapterForm onAdd={addAdapter} />
 
-							<NetworkHealthPolicy config={doc().config.health} />
+							<NetworkHealthPolicy
+								config={doc().config.health}
+								onChange={updateHealth}
+							/>
 						</div>
 					</fieldset>
 				)}

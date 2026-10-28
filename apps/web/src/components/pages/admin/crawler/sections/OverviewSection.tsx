@@ -109,18 +109,20 @@ export default function OverviewSection(props: OverviewSectionProps) {
 	return (
 		<div class="flex flex-col gap-6">
 			{/* Top Bar: Time Range Selector & Refresh */}
-			<div class="flex flex-wrap items-center justify-between gap-4 bg-surface p-4 rounded-lg border border-border">
+			<div class="flex flex-wrap items-center justify-between gap-4 bg-surface p-4 border border-border">
 				<div class="flex items-center gap-3">
-					<span class="ts-caption text-tertiary">{t("overview.timeRange")}:</span>
-					<div class="flex items-center gap-1.5 bg-surface-container-high/40 p-1 rounded-md border border-border">
+					<span class="text-xs uppercase tracking-wider text-tertiary">
+						{t("overview.timeRange")}:
+					</span>
+					<div class="flex items-center border border-border bg-surface-container-low">
 						<For each={WINDOWS}>
 							{(option) => (
 								<button
 									type="button"
 									class={
-										"px-3 py-1 rounded text-xs font-medium transition-colors select-none " +
+										"px-3 py-1 text-xs transition-colors select-none " +
 										(statsWindow() === option
-											? "bg-primary text-display-inverted shadow-xs"
+											? "bg-primary text-display-inverted font-medium"
 											: "text-secondary hover:text-primary hover:bg-hover")
 									}
 									onClick={() => void selectWindow(option)}
@@ -155,10 +157,17 @@ export default function OverviewSection(props: OverviewSectionProps) {
 			<Show
 				when={stats()}
 				fallback={
-					<div class="p-12 text-center text-tertiary border border-border rounded-lg bg-surface">
-						{loadingStats()
-							? t("common.loading")
-							: (statsError() ?? t("common.unknown"))}
+					<div class="p-12 text-center text-tertiary border border-border bg-surface flex flex-col items-center gap-3">
+						<span>
+							{loadingStats()
+								? t("common.loading")
+								: (statsError() ?? "暂无监控数据")}
+						</span>
+						<Show when={!loadingStats()}>
+							<Button size="sm" variant="outlined" onClick={() => void loadStats()}>
+								重试
+							</Button>
+						</Show>
 					</div>
 				}
 			>
@@ -167,7 +176,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						{/* Throughput Metrics Grid */}
 						<section class="flex flex-col gap-3">
 							<div class="flex items-center justify-between">
-								<h3 class="ts-subhead font-semibold text-primary flex items-center gap-2">
+								<h3 class="font-[Outfit] uppercase text-xs font-bold tracking-wider text-primary flex items-center gap-2">
 									<Zap class="w-4 h-4 text-primary" />
 									<span>{t("overview.section.throughput")}</span>
 								</h3>
@@ -238,8 +247,8 @@ export default function OverviewSection(props: OverviewSectionProps) {
 											value={formatPercent(current().retryRate)}
 										/>
 										<MetricCard
-											label={t("overview.totalAttempts")}
-											value={formatMetric(current().totalAttempts)}
+											label="网络请求 (成功 / 总计)"
+											value={`${formatMetric(Math.max(0, current().totalAttempts - current().totalFailures))} / ${formatMetric(current().totalAttempts)}`}
 											hint={`${formatMetric(current().totalFailures)} ${t("overview.totalFailures")}`}
 										/>
 										<MetricCard
@@ -255,17 +264,19 @@ export default function OverviewSection(props: OverviewSectionProps) {
 									</div>
 
 									{/* Failure Breakdown Table */}
-									<div class="overflow-x-auto border border-border rounded-lg">
+									<div class="overflow-x-auto border border-border">
 										<table class="w-full text-left ts-caption">
 											<thead>
-												<tr class="border-b border-border text-tertiary bg-surface-container-high/30">
-													<th class="py-2 px-3 font-medium">
+												<tr class="border-b border-border text-tertiary bg-surface-container-high">
+													<th class="py-2.5 px-3 uppercase text-xs">
 														{t("overview.failureKind")}
 													</th>
-													<th class="py-2 px-3 font-medium">
+													<th class="py-2.5 px-3 uppercase text-xs">
 														{t("overview.failureCount")}
 													</th>
-													<th class="py-2 px-3 font-medium">占比</th>
+													<th class="py-2.5 px-3 uppercase text-xs">
+														占比
+													</th>
 												</tr>
 											</thead>
 											<tbody class="divide-y divide-border">
@@ -284,13 +295,13 @@ export default function OverviewSection(props: OverviewSectionProps) {
 																: "0%";
 														return (
 															<tr class="hover:bg-hover transition-colors">
-																<td class="py-2 px-3 text-secondary">
+																<td class="py-2.5 px-3 text-secondary text-xs">
 																	{row.label}
 																</td>
-																<td class="py-2 px-3 font-mono font-medium text-primary">
+																<td class="py-2.5 px-3 font-medium text-primary">
 																	{count()}
 																</td>
-																<td class="py-2 px-3 font-mono text-tertiary">
+																<td class="py-2.5 px-3 text-tertiary">
 																	{percent()}
 																</td>
 															</tr>
@@ -315,9 +326,9 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								/>
 								<CardContent class="flex flex-col gap-4">
 									{/* Classifier Card */}
-									<div class="p-3.5 rounded-lg border border-border bg-surface-container-high/20 flex flex-col gap-2">
+									<div class="p-3 border border-border bg-surface-container-low flex flex-col gap-2">
 										<div class="flex items-center justify-between">
-											<span class="ts-label font-medium text-primary flex items-center gap-1.5">
+											<span class="font-[Outfit] uppercase text-xs font-semibold text-primary flex items-center gap-1.5">
 												<Cpu class="w-4 h-4 text-primary" />
 												<span>{t("overview.classifier.title")}</span>
 											</span>
@@ -354,17 +365,17 @@ export default function OverviewSection(props: OverviewSectionProps) {
 												)}
 											</Show>
 										</div>
-										<p class="ts-caption text-tertiary text-xs">
-											In-process HuggingFace Tokenizer &amp; ONNX Runtime
+										<p class="text-caption text-tertiary text-xs">
+											分词器与推理引擎就绪
 										</p>
 									</div>
 
 									{/* Adapters Summary */}
-									<div class="p-3.5 rounded-lg border border-border bg-surface-container-high/20 flex flex-col gap-2">
+									<div class="p-3 border border-border bg-surface-container-low flex flex-col gap-2">
 										<div class="flex items-center justify-between">
-											<span class="ts-label font-medium text-primary flex items-center gap-1.5">
+											<span class="font-[Outfit] uppercase text-xs font-semibold text-primary flex items-center gap-1.5">
 												<Layers class="w-4 h-4 text-primary" />
-												<span>Network Adapters</span>
+												<span>网络适配器</span>
 											</span>
 											<Badge
 												variant={
@@ -373,42 +384,41 @@ export default function OverviewSection(props: OverviewSectionProps) {
 												size="sm"
 												dot
 											>
-												{healthyAdapterCount()} / {totalAdapterCount()}{" "}
-												Healthy
+												{healthyAdapterCount()} / {totalAdapterCount()} 健康
 											</Badge>
 										</div>
-										<p class="ts-caption text-tertiary text-xs">
-											Egress routes balanced with circuit-breaker protection
+										<p class="text-caption text-tertiary text-xs">
+											出口路由负载均衡与熔断保护
 										</p>
 									</div>
 
 									{/* Latencies */}
 									<div class="flex flex-col gap-2 pt-2 border-t border-border">
-										<span class="ts-caption text-tertiary font-medium">
-											Latency P95
+										<span class="font-[Outfit] uppercase text-xs font-semibold text-tertiary">
+											P95 延迟
 										</span>
 										<div class="grid grid-cols-3 gap-2 text-center">
-											<div class="p-2 rounded bg-surface-container-high/30 border border-border">
-												<span class="text-[11px] text-tertiary block">
-													API P95
+											<div class="p-2 border border-border bg-surface-container-low">
+												<span class="text-[11px] uppercase text-tertiary block">
+													接口 P95
 												</span>
-												<span class="font-mono text-sm font-medium text-primary">
+												<span class="text-sm font-semibold text-primary">
 													{formatMetric(current().latencyMs.apiP95)} ms
 												</span>
 											</div>
-											<div class="p-2 rounded bg-surface-container-high/30 border border-border">
-												<span class="text-[11px] text-tertiary block">
-													Task P95
+											<div class="p-2 border border-border bg-surface-container-low">
+												<span class="text-[11px] uppercase text-tertiary block">
+													任务 P95
 												</span>
-												<span class="font-mono text-sm font-medium text-primary">
+												<span class="text-sm font-semibold text-primary">
 													{formatMetric(current().latencyMs.taskP95)} ms
 												</span>
 											</div>
-											<div class="p-2 rounded bg-surface-container-high/30 border border-border">
-												<span class="text-[11px] text-tertiary block">
-													Model P95
+											<div class="p-2 border border-border bg-surface-container-low">
+												<span class="text-[11px] uppercase text-tertiary block">
+													模型 P95
 												</span>
-												<span class="font-mono text-sm font-medium text-primary">
+												<span class="text-sm font-semibold text-primary">
 													{formatMetric(current().latencyMs.inferenceP95)}{" "}
 													ms
 												</span>
@@ -422,7 +432,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						{/* Queue Backlog Section */}
 						<section class="flex flex-col gap-3">
 							<div class="flex items-center justify-between">
-								<h3 class="ts-subhead font-semibold text-primary flex items-center gap-2">
+								<h3 class="font-[Outfit] uppercase text-xs font-bold tracking-wider text-primary flex items-center gap-2">
 									<Clock class="w-4 h-4 text-primary" />
 									<span>{t("overview.queues.title")}</span>
 								</h3>

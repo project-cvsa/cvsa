@@ -2,6 +2,7 @@ import { createMemo, createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Switch from "@components/ui/Switch";
 import NumberField from "@components/ui/NumberField";
+import Slider from "@components/ui/Slider";
 import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
@@ -16,7 +17,11 @@ import Save from "lucide-solid/icons/save";
 import AlertTriangle from "lucide-solid/icons/alert-triangle";
 import Cpu from "lucide-solid/icons/cpu";
 
-type KeywordField = "whitelistSingers" | "whitelistSongIndicators" | "blacklistKeywords";
+type KeywordField =
+	| "searchKeywords"
+	| "whitelistSingers"
+	| "whitelistSongIndicators"
+	| "blacklistKeywords";
 
 export default function SettingsSection() {
 	const t = getComponentT("crawler");
@@ -70,15 +75,18 @@ export default function SettingsSection() {
 
 	const addKeyword = (field: KeywordField, value: string): boolean => {
 		const current = config();
-		if (!current || current[field].includes(value)) return false;
-		setConfig({ ...current, [field]: [...current[field], value] });
+		if (!current) return false;
+		const list = current[field] ?? [];
+		if (list.includes(value)) return false;
+		setConfig({ ...current, [field]: [...list, value] });
 		return true;
 	};
 
 	const removeKeyword = (field: KeywordField, value: string) => {
 		const current = config();
 		if (!current) return;
-		setConfig({ ...current, [field]: current[field].filter((item) => item !== value) });
+		const list = current[field] ?? [];
+		setConfig({ ...current, [field]: list.filter((item) => item !== value) });
 	};
 
 	const updateConfig = (updates: Partial<DiscoveryFilterConfigDto>) => {
@@ -93,7 +101,7 @@ export default function SettingsSection() {
 	return (
 		<div class="flex flex-col gap-6">
 			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+			<div class="bg-surface p-5 border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 				<div class="flex flex-col gap-1.5">
 					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
 						<SlidersHorizontal class="w-5 h-5 text-primary" />
@@ -130,7 +138,7 @@ export default function SettingsSection() {
 
 			{/* Unsaved Draft Alert */}
 			<Show when={isDirty()}>
-				<div class="p-4 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
+				<div class="p-4 border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 animate-pulse">
 					<div class="flex items-center gap-2.5 text-amber-700 dark:text-amber-300">
 						<AlertTriangle class="w-4 h-4 shrink-0" />
 						<span class="text-sm font-medium">{t("network.adapters.draftNotice")}</span>
@@ -151,7 +159,7 @@ export default function SettingsSection() {
 			<Show
 				when={config()}
 				fallback={
-					<div class="p-10 text-center text-tertiary border border-border rounded-lg bg-surface">
+					<div class="p-10 text-center text-tertiary border border-border bg-surface">
 						{loading() ? t("common.loading") : t("common.unknown")}
 					</div>
 				}
@@ -159,7 +167,17 @@ export default function SettingsSection() {
 				{(current) => (
 					<fieldset disabled={loading() || saving()} class="min-w-0 border-0 p-0">
 						<div class="flex flex-col gap-6">
-							{/* Keyword Lists */}
+							{/* Search Rover Keywords */}
+							<KeywordListEditor
+								title="搜索发现关键词库 (Search Rover Keywords)"
+								description="定时探索 Rover 在 B 站搜索抓取时轮询使用的关键词列表"
+								items={current().searchKeywords ?? []}
+								placeholder="添加搜索词，如 洛天依 原创、Synthesizer V"
+								onAdd={(val) => addKeyword("searchKeywords", val)}
+								onRemove={(val) => removeKeyword("searchKeywords", val)}
+							/>
+
+							{/* Filter Keyword Lists */}
 							<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 								<KeywordListEditor
 									title={t("settings.singers.title")}
@@ -203,7 +221,7 @@ export default function SettingsSection() {
 								/>
 								<CardContent class="flex flex-col gap-6">
 									{/* Model Enable Toggle */}
-									<div class="p-4 rounded-lg border border-border bg-surface-container-low/50 flex items-center justify-between gap-4">
+									<div class="p-4 border border-border bg-surface-container-low flex items-center justify-between gap-4">
 										<div class="flex flex-col gap-1">
 											<span class="ts-label font-medium text-primary">
 												{t("settings.modelEnabled.title")}
@@ -223,19 +241,41 @@ export default function SettingsSection() {
 										/>
 									</div>
 
-									{/* Numerical Fields Grid */}
-									<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-										<NumberField
-											label={t("settings.threshold.title")}
-											min={0}
-											max={1}
-											step={0.05}
-											value={current().modelThreshold}
-											onChange={(val) =>
-												updateConfig({ modelThreshold: val })
-											}
-											helperText={t("settings.threshold.description")}
-										/>
+									{/* Numerical Fields & Sliders Grid */}
+									<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+										<div class="flex flex-col gap-2">
+											<Slider
+												label={t("settings.threshold.title")}
+												value={current().modelThreshold}
+												min={0.1}
+												max={0.99}
+												step={0.01}
+												formatValue={(val) => `${(val * 100).toFixed(0)}%`}
+												onChange={(val) =>
+													updateConfig({ modelThreshold: val })
+												}
+											/>
+											<span class="text-caption text-tertiary text-xs">
+												{t("settings.threshold.description")}
+											</span>
+										</div>
+
+										<div class="flex flex-col gap-2">
+											<Slider
+												label={t("settings.sampleRate.title")}
+												value={current().rejectionSampleRate}
+												min={0}
+												max={0.5}
+												step={0.01}
+												formatValue={(val) => `${(val * 100).toFixed(1)}%`}
+												onChange={(val) =>
+													updateConfig({ rejectionSampleRate: val })
+												}
+											/>
+											<span class="text-caption text-tertiary text-xs">
+												{t("settings.sampleRate.description")}
+											</span>
+										</div>
 
 										<NumberField
 											label={t("settings.duration.min")}
@@ -255,18 +295,6 @@ export default function SettingsSection() {
 												updateConfig({ maxDurationSeconds: val })
 											}
 											suffix="s"
-										/>
-
-										<NumberField
-											label={t("settings.sampleRate.title")}
-											min={0}
-											max={1}
-											step={0.01}
-											value={current().rejectionSampleRate}
-											onChange={(val) =>
-												updateConfig({ rejectionSampleRate: val })
-											}
-											helperText={t("settings.sampleRate.description")}
 										/>
 									</div>
 								</CardContent>

@@ -2,7 +2,7 @@ import { createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import Tabs, { type TabItem } from "@components/ui/Tabs";
-import { ToastContainer, toast } from "@components/ui/Toast";
+import { ToastContainer } from "@components/ui/Toast";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { CrawlerStatusDto } from "@cvsa/contracts";
@@ -13,6 +13,8 @@ import Compass from "lucide-solid/icons/compass";
 import Network from "lucide-solid/icons/network";
 import Settings from "lucide-solid/icons/settings";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
+import Plus from "lucide-solid/icons/plus";
+import ManualIngestModal from "./crawler/ManualIngestModal";
 import OverviewSection from "./crawler/sections/OverviewSection";
 import TasksSection from "./crawler/sections/TasksSection";
 import VideosSection from "./crawler/sections/VideosSection";
@@ -27,6 +29,7 @@ export default function CrawlerDashboard() {
 	const [activeSection, setActiveSection] = createSignal<SectionId>("overview");
 	const [statusData, setStatusData] = createSignal<CrawlerStatusDto | null>(null);
 	const [loadingStatus, setLoadingStatus] = createSignal(false);
+	const [manualIngestOpen, setManualIngestOpen] = createSignal(false);
 
 	const refreshStatus = async () => {
 		setLoadingStatus(true);
@@ -36,7 +39,6 @@ export default function CrawlerDashboard() {
 			setStatusData(res.data);
 			return;
 		}
-		toast.error(res.ok ? t("common.error") : res.error.message || t("common.error"));
 	};
 
 	onMount(() => {
@@ -72,9 +74,7 @@ export default function CrawlerDashboard() {
 									dot
 									size="md"
 								>
-									{status().ready
-										? "Ready · v" + status().revision
-										: "Starting..."}
+									{status().ready ? "就绪" : "启动中"}
 								</Badge>
 							)}
 						</Show>
@@ -84,13 +84,23 @@ export default function CrawlerDashboard() {
 
 				<div class="flex items-center gap-3">
 					<Show when={statusData()}>
-						<div class="hidden sm:flex items-center gap-2 ts-caption text-secondary bg-surface-container-high/40 px-3 py-1.5 rounded-md border border-border">
-							<span class="text-tertiary">Adapters:</span>
-							<span class="font-mono font-medium text-primary">
-								{healthyAdaptersCount()} / {totalAdaptersCount()} online
+						<div class="hidden sm:flex items-center gap-2 ts-caption text-secondary bg-surface-container-high px-3 py-1.5 border border-border">
+							<span class="text-tertiary">适配器:</span>
+							<span class="font-medium text-primary">
+								{healthyAdaptersCount()} / {totalAdaptersCount()} 在线
 							</span>
 						</div>
 					</Show>
+
+					<Button
+						variant="filled"
+						size="sm"
+						onClick={() => setManualIngestOpen(true)}
+						class="gap-1.5"
+					>
+						<Plus class="w-3.5 h-3.5" />
+						<span>手动收录</span>
+					</Button>
 
 					<Button
 						variant="outlined"
@@ -148,6 +158,12 @@ export default function CrawlerDashboard() {
 					<SettingsSection />
 				</div>
 			</main>
+
+			<ManualIngestModal
+				isOpen={manualIngestOpen()}
+				onClose={() => setManualIngestOpen(false)}
+				onSuccess={() => void refreshStatus()}
+			/>
 		</div>
 	);
 }

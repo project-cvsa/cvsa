@@ -20,6 +20,7 @@ export interface DiscoveryFilterConfig {
 	whitelistSingers: string[];
 	whitelistSongIndicators: string[];
 	blacklistKeywords: string[];
+	searchKeywords?: string[];
 	minDurationSeconds: number;
 	maxDurationSeconds: number;
 	rejectionSampleRate: number; // e.g. 0.05 (5%)
@@ -28,6 +29,19 @@ export interface DiscoveryFilterConfig {
 	/** Minimum `1 - P(not a song)` required to accept. */
 	modelThreshold: number; // e.g. 0.5
 }
+
+export const DEFAULT_SEARCH_KEYWORDS = [
+	"洛天依原创",
+	"言和原创",
+	"乐正绫原创",
+	"星尘原创",
+	"初音未来原创",
+	"Synthesizer V 原创",
+	"VOCALOID中文曲",
+	"VOCALOID",
+	"CeVIO",
+	"ACE Studio",
+];
 
 export const DEFAULT_FILTER_CONFIG: DiscoveryFilterConfig = {
 	whitelistSingers: [
@@ -97,6 +111,7 @@ export const DEFAULT_FILTER_CONFIG: DiscoveryFilterConfig = {
 		"切片",
 		"剪辑",
 	],
+	searchKeywords: DEFAULT_SEARCH_KEYWORDS,
 	minDurationSeconds: 45,
 	maxDurationSeconds: 900,
 	rejectionSampleRate: 0.05,
@@ -157,6 +172,10 @@ export function normalizeFilterConfig(input: unknown): DiscoveryFilterConfig {
 		config.whitelistSongIndicators
 	);
 	config.blacklistKeywords = stringArray(source.blacklistKeywords, config.blacklistKeywords);
+	config.searchKeywords = stringArray(
+		source.searchKeywords,
+		config.searchKeywords ?? DEFAULT_SEARCH_KEYWORDS
+	);
 	config.minDurationSeconds = positiveInt(source.minDurationSeconds, config.minDurationSeconds);
 	config.maxDurationSeconds = positiveInt(source.maxDurationSeconds, config.maxDurationSeconds);
 	if (config.maxDurationSeconds <= config.minDurationSeconds) {

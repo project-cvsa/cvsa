@@ -23,6 +23,52 @@ export const VideoTrackingDtoSchema = z.object({
 	lastError: z.string().nullable().optional(),
 });
 
+export const IngestVideoRequestSchema = z.object({
+	identifier: z.string().min(1).max(100),
+	state: z.enum(["new", "regular", "milestone", "archive"]).optional().default("regular"),
+	priority: z.number().int().min(1).max(5).optional().default(2),
+});
+
+export const IngestVideoResponseSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	title: z.string(),
+	pic: z.string().nullable(),
+	ownerName: z.string().nullable(),
+	state: z.string(),
+	priority: z.number(),
+	alreadyTracked: z.boolean(),
+});
+
+export const TestNetworkAdapterResponseSchema = z.object({
+	adapterId: z.string(),
+	ok: z.boolean(),
+	status: z.number().int().optional(),
+	latencyMs: z.number(),
+	error: z.string().optional(),
+});
+export type TestNetworkAdapterResponse = z.infer<typeof TestNetworkAdapterResponseSchema>;
+
+export const RecommendationGraphNodeSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	title: z.string(),
+	pic: z.string().nullable(),
+	ownerName: z.string().nullable(),
+	duration: z.number().int().optional(),
+	position: z.number().int().optional(),
+	rcmdReason: z.string().optional(),
+	isTracked: z.boolean(),
+	capturedAt: z.string().optional(),
+});
+export type RecommendationGraphNode = z.infer<typeof RecommendationGraphNodeSchema>;
+
+export const RecommendationGraphResponseSchema = z.object({
+	seed: RecommendationGraphNodeSchema,
+	relations: z.array(RecommendationGraphNodeSchema),
+});
+export type RecommendationGraphResponse = z.infer<typeof RecommendationGraphResponseSchema>;
+
 export const RegisterTrackingVideosRequestSchema = z.object({
 	aids: z
 		.array(z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]))
@@ -116,6 +162,7 @@ export const DiscoveryFilterConfigDtoSchema = z.object({
 	whitelistSingers: z.array(z.string()),
 	whitelistSongIndicators: z.array(z.string()),
 	blacklistKeywords: z.array(z.string()),
+	searchKeywords: z.array(z.string()).optional(),
 	minDurationSeconds: z.number().int().positive(),
 	maxDurationSeconds: z.number().int().positive(),
 	rejectionSampleRate: z.number().min(0).max(1),
@@ -134,6 +181,7 @@ export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
 	whitelistSingers: z.array(z.string()).optional(),
 	whitelistSongIndicators: z.array(z.string()).optional(),
 	blacklistKeywords: z.array(z.string()).optional(),
+	searchKeywords: z.array(z.string()).optional(),
 	minDurationSeconds: z.number().int().positive().optional(),
 	maxDurationSeconds: z.number().int().positive().optional(),
 	rejectionSampleRate: z.number().min(0).max(1).optional(),
@@ -238,6 +286,8 @@ export type ReplaceNetworkRuntimeConfigRequest = z.infer<
 	typeof ReplaceNetworkRuntimeConfigRequestSchema
 >;
 export type VideoTrackingDto = z.infer<typeof VideoTrackingDtoSchema>;
+export type IngestVideoRequest = z.infer<typeof IngestVideoRequestSchema>;
+export type IngestVideoResponse = z.infer<typeof IngestVideoResponseSchema>;
 export type RegisterTrackingVideosRequest = z.infer<typeof RegisterTrackingVideosRequestSchema>;
 export type RegisterTrackingVideosResponse = z.infer<typeof RegisterTrackingVideosResponseSchema>;
 export type PromoteTrackingVideoRequest = z.infer<typeof PromoteTrackingVideoRequestSchema>;
@@ -294,6 +344,7 @@ export const DiscoverySampleItemSchema = z.object({
 	tags: z.array(z.string()),
 	decision: z.string(),
 	modelVersion: z.string(),
+	pic: z.string().nullable().optional(),
 	/** Classifier label -> probability. */
 	probabilities: z.record(z.string(), z.number()),
 	songProbability: z.number().min(0).max(1),

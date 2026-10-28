@@ -35,7 +35,7 @@ export const NetworkAdapterRuntimeStatusSchema = z.object({
 
 export const NetworkRuntimeStatusSchema = z.object({
 	ready: z.boolean(),
-	revision: z.number().int().positive().nullable(),
+	revision: z.number().int().nonnegative().nullable(),
 	adapters: z.array(NetworkAdapterRuntimeStatusSchema),
 });
 
