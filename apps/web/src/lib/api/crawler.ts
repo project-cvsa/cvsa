@@ -7,20 +7,31 @@ import type {
 	BilibiliVideoRelationDto,
 	ClassifierHealthDto,
 	CrawlerOverviewStats,
+	CrawlerQueueJobDetail,
+	CrawlerQueueJobsQuery,
+	CrawlerQueueJobsResponse,
 	CrawlerStatusDto,
 	CrawlerStatsWindow,
+	DeleteTrackingVideoResponse,
 	DiscoveryFilterConfigDto,
 	DiscoverySampleItem,
 	DiscoverySampleListQuery,
 	DiscoverySampleListResponse,
+	DiscoveryStatusDto,
 	DiscoverySweepRequest,
-	DiscoverySweepResponse,
+	DiscoveryQueuedResponse,
+	CrawlerQueueName,
+	IngestVideoRequest,
+	IngestVideoResponse,
 	LabelDiscoverySampleRequest,
 	NetworkRuntimeConfigDocument,
+	ProcessRecommendationsResponse,
 	PromoteTrackingVideoRequest,
+	RecommendationGraphResponse,
 	RegisterTrackingVideosRequest,
 	RegisterTrackingVideosResponse,
 	ReplaceNetworkRuntimeConfigRequest,
+	TestNetworkAdapterResponse,
 	TrackingVideoListQuery,
 	TrackingVideoListResponse,
 	UpdateDiscoveryFilterConfigRequest,
@@ -40,15 +51,52 @@ async function getStatus(): Promise<ApiResult<CrawlerStatusDto | null>> {
 }
 
 async function getStats(
-	window: CrawlerStatsWindow = "1h"
+	window: CrawlerStatsWindow = "1h",
+	minutes?: number
 ): Promise<ApiResult<CrawlerOverviewStats | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler.stats.get({ query: { window } }));
+	return settle(await eden.v2.admin.crawler.stats.get({ query: { window, minutes } }));
+}
+
+async function getQueueJobs(
+	query?: CrawlerQueueJobsQuery
+): Promise<ApiResult<CrawlerQueueJobsResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs.get({ query: query ?? { limit: 50 } }));
+}
+
+async function getQueueJobDetail(
+	queue: CrawlerQueueName,
+	id: string
+): Promise<ApiResult<CrawlerQueueJobDetail | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).get());
+}
+
+async function retryQueueJob(
+	queue: CrawlerQueueName,
+	id: string
+): Promise<ApiResult<{ ok: boolean } | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).retries.post());
+}
+
+async function removeQueueJob(
+	queue: CrawlerQueueName,
+	id: string
+): Promise<ApiResult<{ ok: boolean } | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).delete());
 }
 
 async function getClassifierHealth(): Promise<ApiResult<ClassifierHealthDto | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.classifier.get());
+}
+
+async function getDiscoveryStatus(): Promise<ApiResult<DiscoveryStatusDto | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.status.get());
 }
 
 async function getDiscoveryConfig(): Promise<ApiResult<DiscoveryFilterConfigDto | null>> {
@@ -77,12 +125,12 @@ async function updateNetworkConfig(
 
 async function triggerSweep(
 	body: DiscoverySweepRequest
-): Promise<ApiResult<DiscoverySweepResponse | null>> {
+): Promise<ApiResult<DiscoveryQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.sweep.post(body));
 }
 
-async function triggerHotSample(): Promise<ApiResult<DiscoverySweepResponse | null>> {
+async function triggerHotSample(): Promise<ApiResult<DiscoveryQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler["hot-sample"].post());
 }
@@ -92,14 +140,28 @@ async function fetchDetail(aid: string): Promise<ApiResult<ActionQueuedResponse 
 	return settle(await eden.v2.admin.crawler.detail({ aid }).post());
 }
 
+async function refreshMetadata(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
+	return settle(await getEdenClient().v2.admin.crawler.metadata({ aid }).refreshes.post());
+}
+
 async function triggerActive(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.active({ aid }).post());
 }
 
+async function queueSnapshot(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.tracking.videos({ aid }).snapshots.post());
+}
+
 async function getTracking(aid: string): Promise<ApiResult<VideoTrackingDto | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.tracking({ aid }).get());
+}
+
+async function deleteTracking(aid: string): Promise<ApiResult<DeleteTrackingVideoResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.tracking({ aid }).delete());
 }
 
 async function listTrackingVideos(
@@ -111,8 +173,18 @@ async function listTrackingVideos(
 		offset: query.offset ?? 0,
 		...(query.state ? { state: query.state } : {}),
 		...(query.search ? { search: query.search } : {}),
+		...(query.statusFilter ? { statusFilter: query.statusFilter } : {}),
+		...(query.sortBy ? { sortBy: query.sortBy } : {}),
+		...(query.sortOrder ? { sortOrder: query.sortOrder } : {}),
 	};
 	return settle(await eden.v2.admin.crawler.tracking.videos.get({ query: params }));
+}
+
+async function ingestVideo(
+	body: IngestVideoRequest
+): Promise<ApiResult<IngestVideoResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.tracking.ingest.post(body));
 }
 
 async function registerTracking(
@@ -133,6 +205,20 @@ async function promoteTracking(
 async function getRelations(aid: string): Promise<ApiResult<BilibiliVideoRelationDto[] | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.relations({ aid }).get());
+}
+
+async function processVideoRecommendations(
+	aid: string
+): Promise<ApiResult<ProcessRecommendationsResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.recommendations({ aid }).post());
+}
+
+async function getRecommendationGraph(
+	identifier: string
+): Promise<ApiResult<RecommendationGraphResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.graph({ identifier }).get());
 }
 
 async function getMetadata(aid: string): Promise<ApiResult<BilibiliVideoMetadataDto | null>> {
@@ -161,6 +247,12 @@ async function listDiscoverySamples(
 		offset: query.offset ?? 0,
 		...(query.decision ? { decision: query.decision } : {}),
 		...(query.labeled === undefined ? {} : { labeled: query.labeled }),
+		...(query.minConfidence !== undefined ? { minConfidence: query.minConfidence } : {}),
+		...(query.maxConfidence !== undefined ? { maxConfidence: query.maxConfidence } : {}),
+		...(query.search ? { search: query.search } : {}),
+		...(query.source ? { source: query.source } : {}),
+		...(query.sortBy ? { sortBy: query.sortBy } : {}),
+		...(query.sortOrder ? { sortOrder: query.sortOrder } : {}),
 	};
 	return settle(await eden.v2.admin.crawler.discovery.samples.get({ query: params }));
 }
@@ -174,23 +266,42 @@ async function labelDiscoverySample(
 	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).label.post(body));
 }
 
+async function testNetworkAdapter(
+	id: string
+): Promise<ApiResult<TestNetworkAdapterResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.network.adapters({ id }).test.post());
+}
+
 export const crawlerApi = {
 	getStatus,
 	getStats,
+	getQueueJobs,
+	getQueueJobDetail,
+	retryQueueJob,
+	removeQueueJob,
 	getClassifierHealth,
+	getDiscoveryStatus,
 	getDiscoveryConfig,
 	updateDiscoveryConfig,
 	getNetworkConfig,
 	updateNetworkConfig,
+	testNetworkAdapter,
 	triggerSweep,
 	triggerHotSample,
 	fetchDetail,
+	refreshMetadata,
 	triggerActive,
+	queueSnapshot,
 	getTracking,
+	deleteTracking,
 	listTrackingVideos,
+	ingestVideo,
 	registerTracking,
 	promoteTracking,
 	getRelations,
+	processVideoRecommendations,
+	getRecommendationGraph,
 	getMetadata,
 	getMetadataHistory,
 	listDiscoverySamples,

@@ -1,14 +1,26 @@
+import path from "node:path";
 import { defineConfig } from "unocss";
 import presetMini from "@unocss/preset-mini";
 import { getUnoCSSColors } from "@lib/theme";
 
 export default defineConfig({
+	content: {
+		filesystem: [
+			path.resolve(
+				import.meta.dirname,
+				"src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}"
+			),
+			"src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}",
+			"apps/web/src/**/*.{astro,html,js,jsx,md,mdx,svelte,ts,tsx,vue}",
+		],
+	},
 	presets: [
 		presetMini({
 			dark: "media",
 		}),
 	],
 	rules: [
+		["border", { "border-width": "1px", "border-style": "solid" }],
 		[
 			"sr-only",
 			{
@@ -27,6 +39,41 @@ export default defineConfig({
 		["lowercase", { "text-transform": "lowercase" }],
 		["capitalize", { "text-transform": "capitalize" }],
 	],
+	safelist: [
+		"border",
+		"border-border",
+		"border-primary",
+		"border-secondary",
+		"border-transparent",
+		"border-error",
+		"bg-primary",
+		"bg-secondary",
+		"bg-surface",
+		"bg-transparent",
+		"bg-hover",
+		"bg-error",
+		"text-display",
+		"text-display-inverted",
+		"text-primary",
+		"text-secondary",
+		"text-tertiary",
+		"text-quaternary",
+		"text-error",
+		"hover:bg-secondary",
+		"hover:border-secondary",
+		"hover:bg-hover",
+		"hover:border-tertiary",
+		"focus-visible:outline-1",
+		"focus-visible:outline-offset-6",
+		"focus-visible:outline-primary",
+		"focus-within:border-primary",
+		"focus-within:ring-1",
+		"focus-within:ring-primary",
+		"h-[58px]",
+		"pt-[21px]",
+		"pb-1",
+		"w-full",
+	],
 	theme: {
 		colors: getUnoCSSColors(),
 		breakpoints: {
@@ -37,6 +84,11 @@ export default defineConfig({
 			xl: "1280px",
 			"2xl": "1536px",
 		},
+		fontFamily: {
+			body: `"Outfit", "system-ui", "sans-serif"`,
+			code: `"IBM Plex Mono", "monospace"`,
+		},
+
 		fontSize: {
 			"display-large": ["56px", "64px"],
 			"display-medium": ["40px", "48px"],

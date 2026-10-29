@@ -38,7 +38,7 @@ export class DiscoveryScheduler {
 				repeat: {
 					every: intervalMs,
 				},
-				removeOnComplete: true,
+				removeOnComplete: { age: 3600, count: 100 },
 			}
 		);
 
@@ -50,7 +50,7 @@ export class DiscoveryScheduler {
 				repeat: {
 					every: hotSampleIntervalMs,
 				},
-				removeOnComplete: true,
+				removeOnComplete: { age: 3600, count: 100 },
 			}
 		);
 	}
@@ -59,7 +59,7 @@ export class DiscoveryScheduler {
 		await this.discoveryQueue.add(
 			`sweep-manual-${Date.now()}`,
 			{ type: "search-sweep", config },
-			{ removeOnComplete: true }
+			{ removeOnComplete: { age: 3600, count: 100 } }
 		);
 	}
 
@@ -67,7 +67,7 @@ export class DiscoveryScheduler {
 		await this.discoveryQueue.add(
 			`hot-sample-${Date.now()}`,
 			{ type: "hot-sample", limit },
-			{ removeOnComplete: true }
+			{ removeOnComplete: { age: 3600, count: 100 } }
 		);
 	}
 
@@ -83,13 +83,13 @@ export class DiscoveryScheduler {
 				source,
 			},
 			{
-				jobId: `detail-${aid.toString()}`,
-				removeOnComplete: true,
+				deduplication: { id: `detail-${aid.toString()}` },
+				removeOnComplete: { age: 3600, count: 100 },
 			}
 		);
 	}
 
-	async triggerActiveDiscovery(aid: bigint): Promise<void> {
+	async triggerActiveDiscovery(aid: bigint | string): Promise<void> {
 		await this.discoveryQueue.add(
 			`active-${aid.toString()}`,
 			{
@@ -97,8 +97,8 @@ export class DiscoveryScheduler {
 				aid: aid.toString(),
 			},
 			{
-				jobId: `active-${aid.toString()}`,
-				removeOnComplete: true,
+				deduplication: { id: `active-${aid.toString()}` },
+				removeOnComplete: { age: 3600, count: 100 },
 			}
 		);
 	}

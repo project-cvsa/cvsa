@@ -1,3 +1,6 @@
+import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
+import { DiscoveryAdminService } from "./crawler/discovery/adminService";
+import { ManualSnapshotService } from "./crawler/tracking/manualSnapshot";
 import {
 	BilibiliClient,
 	CrawlerStatsCollector,
@@ -15,10 +18,9 @@ import {
 	DiscoveryScheduler,
 	DiscoveryService,
 	VideoClassifierClient,
-	DISCOVERY_QUEUE_NAME,
 	SNAPSHOT_BATCH_QUEUE,
+	createDiscoveryQueue,
 	createDiscoveryWorker,
-	type DiscoveryJobData,
 	type SnapshotBatchJobData,
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
@@ -41,7 +43,8 @@ export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.clien
 export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
 
 export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
-export const discoveryQueue = crawlerMq.createQueue<DiscoveryJobData>(DISCOVERY_QUEUE_NAME);
+export const manualSnapshotService = new ManualSnapshotService(trackingRepository, snapshotQueue);
+export const discoveryQueue = createDiscoveryQueue(crawlerMq);
 
 /**
  * Sliding-window stats + the `crawler_stats_rollup` history.
@@ -71,10 +74,11 @@ export const networkRuntimeConfigRepository = new NetworkRuntimeConfigRepository
 export const networkRuntimeConfigService = new NetworkRuntimeConfigService(
 	networkRuntimeConfigRepository
 );
+export const crawlerAdapterRegistry = createCrawlerAdapterRegistry();
 export const networkRuntime = new NetworkRuntimeConfigManager(
 	networkRuntimeConfigRepository,
 	// Bilibili application-error semantics are injected here, not in the scheduler.
-	createCrawlerAdapterRegistry(),
+	crawlerAdapterRegistry,
 	createRedisRateLimiter(crawlerEnv.REDIS_URL),
 	{
 		// Every HTTP attempt lands in both OTel and the sliding-window counters.
@@ -141,6 +145,16 @@ export const discoveryWorker = createDiscoveryWorker(
 	discoveryPipelineProcessor,
 	3,
 	statsCollector
+);
+export const crawlerAdminStatsService = new CrawlerAdminStatsService(
+	{ tracking: snapshotQueue, discovery: discoveryQueue },
+	statsCollector
+);
+export const discoveryAdminService = new DiscoveryAdminService(
+	discoveryQueue,
+	discoveryRepository,
+	statsCollector,
+	trackingRepository
 );
 export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue);
 export const discoveryService = new DiscoveryService(

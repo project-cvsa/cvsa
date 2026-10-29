@@ -1,3 +1,5 @@
+import { AppError } from "@cvsa/contracts";
+import { snapshotFailureKind } from "../src/crawler/snapshot/worker";
 import { describe, expect, test } from "bun:test";
 import { toInstant, type VideoSnapshot } from "@cvsa/snapshot-db";
 import { BilibiliClient } from "../src/crawler/bilibili";
@@ -44,7 +46,35 @@ function statsClient(payload: unknown): BilibiliClient {
 	});
 }
 
+describe("snapshot failure handling", () => {
+	test("classifies throttling separately from unavailable exits and other errors", () => {
+		expect(snapshotFailureKind(new Error("Bilibili request failed with HTTP 412"))).toBe(
+			"rate_limit"
+		);
+		expect(snapshotFailureKind(new Error("Bilibili request failed with HTTP 429"))).toBe(
+			"rate_limit"
+		);
+		expect(snapshotFailureKind(new AppError("No adapter", "NO_AVAILABLE_ADAPTER", 503))).toBe(
+			"unavailable"
+		);
+		expect(snapshotFailureKind(new Error("HTTP 500"))).toBe("other");
+	});
+});
+
 describe("SnapshotService", () => {
+	test("defers due videos and releases their leases", async () => {
+		const repo = new InMemoryTrackingRepository();
+		await seedDue(repo, 12n, 0);
+		const service = new SnapshotService(statsClient({}), new FakeSnapshotRepository(), repo);
+		const before = Date.now();
+		await service.deferLeases([12n], 60_000, "rate_limit");
+		const tracking = repo.trackings.get(12n);
+		expect(tracking?.leaseUntil).toBeNull();
+		expect(tracking?.consecutiveFails).toBe(1);
+		expect(tracking?.lastError).toBe("network:rate_limited");
+		expect(tracking?.scheduleReason).toBe("retry");
+		expect(tracking?.nextSnapshotAt.epochMilliseconds).toBeGreaterThanOrEqual(before + 60_000);
+	});
 	test("successfully processes a batch, writes snapshots, and settles the lease", async () => {
 		const snapshotRepo = new FakeSnapshotRepository();
 		const trackingRepo = new InMemoryTrackingRepository();

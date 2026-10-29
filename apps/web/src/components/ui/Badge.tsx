@@ -1,17 +1,57 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { JSX } from "solid-js";
 import { Show, splitProps } from "solid-js";
 
-export type BadgeVariant =
-	| "default"
-	| "neutral"
-	| "success"
-	| "warning"
-	| "danger"
-	| "info"
-	| "highlight";
+const badgeVariants = cva(
+	"inline-flex items-center justify-center font-medium border select-none whitespace-nowrap shrink-0 transition-colors",
+	{
+		variants: {
+			variant: {
+				default: "bg-surface-container-medium text-primary border-border",
+				neutral: "bg-surface-container-high text-secondary border-border",
+				success: "bg-primary text-display-inverted border-primary",
+				warning: "bg-highlight text-on-highlight border-highlight",
+				danger: "bg-error text-on-error border-error",
+				info: "bg-surface text-primary border-primary",
+				highlight: "bg-highlight text-on-highlight border-highlight",
+			},
+			size: {
+				sm: "h-5 px-1.5 gap-1 text-caption tracking-caption",
+				md: "h-6 px-2 gap-1.5 text-caption tracking-caption",
+			},
+		},
+		defaultVariants: {
+			variant: "default",
+			size: "md",
+		},
+	}
+);
 
-export type BadgeSize = "sm" | "md";
+const badgeDotVariants = cva("shrink-0", {
+	variants: {
+		variant: {
+			default: "bg-primary",
+			neutral: "bg-secondary",
+			success: "bg-display-inverted",
+			warning: "bg-on-highlight",
+			danger: "bg-on-error",
+			info: "bg-primary",
+			highlight: "bg-on-highlight",
+		},
+		size: {
+			sm: "w-1.5 h-1.5",
+			md: "w-2 h-2",
+		},
+	},
+	defaultVariants: {
+		variant: "default",
+		size: "md",
+	},
+});
+
+export type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
+export type BadgeSize = NonNullable<VariantProps<typeof badgeVariants>["size"]>;
 
 export interface BadgeProps {
 	variant?: BadgeVariant;
@@ -21,48 +61,6 @@ export interface BadgeProps {
 	children?: JSX.Element;
 }
 
-const variantStyles: Record<BadgeVariant, { container: string; dot: string }> = {
-	default: {
-		container: "bg-surface-container-medium text-primary border-border",
-		dot: "bg-primary",
-	},
-	neutral: {
-		container: "bg-surface-container-high text-secondary border-border",
-		dot: "bg-secondary",
-	},
-	success: {
-		container: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-		dot: "bg-emerald-500",
-	},
-	warning: {
-		container: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
-		dot: "bg-amber-500",
-	},
-	danger: {
-		container: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30",
-		dot: "bg-red-500",
-	},
-	info: {
-		container: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30",
-		dot: "bg-sky-500",
-	},
-	highlight: {
-		container: "bg-highlight/30 text-display border-highlight",
-		dot: "bg-display",
-	},
-};
-
-const sizeStyles: Record<BadgeSize, { badge: string; dot: string }> = {
-	sm: {
-		badge: "h-5 px-1.5 text-[11px] gap-1",
-		dot: "w-1.5 h-1.5",
-	},
-	md: {
-		badge: "h-6 px-2.5 text-xs gap-1.5",
-		dot: "w-2 h-2",
-	},
-};
-
 export default function Badge(props: BadgeProps) {
 	const [local, rest] = splitProps(props, ["variant", "size", "dot", "class", "children"]);
 
@@ -71,21 +69,12 @@ export default function Badge(props: BadgeProps) {
 
 	return (
 		<span
-			class={clsx(
-				"inline-flex items-center justify-center font-medium rounded-full border select-none transition-colors",
-				variantStyles[variant()].container,
-				sizeStyles[size()].badge,
-				local.class
-			)}
+			class={cn(badgeVariants({ variant: variant(), size: size() }), local.class)}
 			{...rest}
 		>
 			<Show when={local.dot}>
 				<span
-					class={clsx(
-						"rounded-full shrink-0",
-						sizeStyles[size()].dot,
-						variantStyles[variant()].dot
-					)}
+					class={cn(badgeDotVariants({ variant: variant(), size: size() }))}
 					aria-hidden="true"
 				/>
 			</Show>

@@ -1,358 +1,376 @@
-import { createSignal, For, onMount, Show } from "solid-js";
+import StateBadge from "../StateBadge";
+import DataTable, { type TableColumn } from "@components/ui/DataTable";
+import Pagination from "../TablePagination";
+import { useCrawlerRefresh } from "../refresh";
+import SectionHeader from "../SectionHeader";
+import { createSignal, For, onCleanup, Show } from "solid-js";
 import Button from "@components/ui/Button";
-import Badge from "@components/ui/Badge";
-import TextField from "@components/ui/TextField";
-import { Card, CardHeader, CardContent } from "@components/ui/Card";
+import Modal from "@components/ui/Modal";
+import Select from "@components/ui/Select";
 import { toast } from "@components/ui/Toast";
-import { api, type ApiResult } from "@lib/api";
+import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import type { CrawlerOverviewStats } from "@cvsa/contracts";
-import { formatDateTime, formatMetric, formatWaitSeconds } from "../format";
-import { MetricCard, QueueStatusTable } from "../statsView";
+import type {
+	CrawlerOverviewStats,
+	CrawlerQueueJobDetail,
+	CrawlerQueueJobItem,
+	CrawlerQueueJobsQuery,
+	CrawlerQueueJobsResponse,
+} from "@cvsa/contracts";
+import { formatDateTime } from "../format";
+import { QueueStatusTable } from "../statsView";
 import { createRequestSequence } from "../videoActions";
-import ListTodo from "lucide-solid/icons/list-todo";
-import RefreshCw from "lucide-solid/icons/refresh-cw";
-import Play from "lucide-solid/icons/play";
-import Search from "lucide-solid/icons/search";
-import Camera from "lucide-solid/icons/camera";
-import History from "lucide-solid/icons/history";
 
-type ActionStatus = "queued" | "failed";
+const jobDate = (value: number | null | undefined) =>
+	value ? formatDateTime(new Date(value).toISOString()) : "—";
 
-type ActionRecord = {
-	id: number;
-	label: string;
-	detail: string;
-	status: ActionStatus;
-	at: string;
-};
+function JobDetail(props: { job: CrawlerQueueJobDetail }) {
+	const t = getComponentT("crawler");
+	return (
+		<div class="flex flex-col gap-4 ts-caption">
+			<dl class="grid grid-cols-2 gap-3">
+				<For
+					each={[
+						[t("tasks.jobs.id"), props.job.id],
+						[t("tasks.jobs.queue"), t(`audit.queues.${props.job.queue}`)],
+						[t("tasks.jobs.state"), t(`audit.${props.job.state}`)],
+						[t("tasks.jobs.attempts"), String(props.job.attempts)],
+						[t("tasks.jobs.time"), jobDate(props.job.timestamp)],
+						[t("audit.processed"), jobDate(props.job.processedOn)],
+						[t("audit.finished"), jobDate(props.job.finishedOn)],
+						[t("audit.target"), props.job.target ?? "—"],
+					]}
+				>
+					{(row) => (
+						<div>
+							<dt class="text-tertiary">{row[0]}</dt>
+							<dd class="mt-1 break-all">{row[1]}</dd>
+						</div>
+					)}
+				</For>
+			</dl>
+			<Show when={props.job.failedReason || props.job.stacktrace?.length}>
+				<div>
+					<h3 class="text-error mb-2">{t("audit.stacktrace")}</h3>
+					<pre class="cvsa-scroll max-h-56 overflow-auto whitespace-pre-wrap p-3 bg-surface-container-low text-error font-body">
+						{props.job.failedReason}
+						{"\n"}
+						{props.job.stacktrace?.join("\n")}
+					</pre>
+				</div>
+			</Show>
+			<For
+				each={[
+					[t("audit.payload"), props.job.data],
+					[t("audit.options"), props.job.opts],
+					[t("audit.returnvalue"), props.job.returnvalue],
+				]}
+			>
+				{(entry) => (
+					<div>
+						<h3 class="text-secondary mb-2">{String(entry[0])}</h3>
+						<pre class="cvsa-scroll max-h-64 overflow-auto p-3 bg-surface-container-low font-body">
+							{JSON.stringify(entry[1] ?? null, null, 2)}
+						</pre>
+					</div>
+				)}
+			</For>
+		</div>
+	);
+}
 
 export default function TasksSection() {
 	const t = getComponentT("crawler");
-
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
-	const [loadingStats, setLoadingStats] = createSignal(false);
-	const [statsError, setStatsError] = createSignal<string | null>(null);
-	const [aid, setAid] = createSignal("");
-	const [pending, setPending] = createSignal<string | null>(null);
-	const [actions, setActions] = createSignal<ActionRecord[]>([]);
-	const statsRequests = createRequestSequence();
-	let actionSequence = 0;
-
-	const loadStats = async () => {
-		const request = statsRequests.start();
-		setLoadingStats(true);
-		const res = await api.crawler.getStats("1h");
-		if (!statsRequests.isCurrent(request)) return;
-		setLoadingStats(false);
-		if (res.ok && res.data) {
-			setStats(res.data);
-			setStatsError(null);
-			return;
-		}
-		setStatsError(res.ok ? t("common.unknown") : res.error.message || t("common.error"));
+	const [jobs, setJobs] = createSignal<CrawlerQueueJobsResponse | null>(null);
+	const [loading, setLoading] = createSignal(false);
+	const [error, setError] = createSignal<string | null>(null);
+	const [queue, setQueue] = createSignal<NonNullable<CrawlerQueueJobsQuery["queue"]>>("all");
+	const [state, setState] = createSignal<NonNullable<CrawlerQueueJobsQuery["state"]>>("all");
+	const [page, setPage] = createSignal(0);
+	const [selected, setSelected] = createSignal<CrawlerQueueJobItem | null>(null);
+	const [detail, setDetail] = createSignal<CrawlerQueueJobDetail | null>(null);
+	const [detailError, setDetailError] = createSignal<string | null>(null);
+	const [loadingDetail, setLoadingDetail] = createSignal(false);
+	const [pending, setPending] = createSignal(false);
+	const requests = createRequestSequence();
+	const inspections = createRequestSequence();
+	const PAGE_SIZE = 25;
+	const refresh = async () => {
+		const request = requests.start();
+		setLoading(true);
+		const [overview, result] = await Promise.all([
+			api.crawler.getStats("1h"),
+			api.crawler.getQueueJobs({
+				queue: queue(),
+				state: state(),
+				limit: PAGE_SIZE,
+				offset: page() * PAGE_SIZE,
+			}),
+		]);
+		if (!requests.isCurrent(request)) return;
+		setLoading(false);
+		if (overview.ok && overview.data) setStats(overview.data);
+		if (result.ok && result.data) {
+			setJobs(result.data);
+			setError(overview.ok ? null : overview.error.message || t("common.error"));
+			if (page() > 0 && page() * PAGE_SIZE >= result.data.total) {
+				setPage(Math.max(0, Math.ceil(result.data.total / PAGE_SIZE) - 1));
+				void refresh();
+			}
+		} else setError(result.ok ? t("common.error") : result.error.message || t("common.error"));
 	};
-
-	const recordAction = (label: string, detail: string, status: ActionStatus) => {
-		actionSequence += 1;
-		const record: ActionRecord = {
-			id: actionSequence,
-			label,
-			detail,
-			status,
-			at: new Date().toISOString(),
-		};
-		setActions((current) => [record, ...current].slice(0, 10));
-	};
-
-	const runAction = async (params: {
-		key: string;
-		label: string;
-		detail: string;
-		action: () => Promise<ApiResult<unknown>>;
-	}) => {
+	const close = () => {
 		if (pending()) return;
-		setPending(params.key);
-		const res = await params.action();
-		setPending(null);
-		if (res.ok) {
-			toast.success(t("common.success"));
-			recordAction(params.label, params.detail, "queued");
+		inspections.start();
+		setSelected(null);
+		setDetail(null);
+		setDetailError(null);
+	};
+	const inspect = async (job: CrawlerQueueJobItem) => {
+		const request = inspections.start();
+		setSelected(job);
+		setDetail(null);
+		setDetailError(null);
+		setLoadingDetail(true);
+		const result = await api.crawler.getQueueJobDetail(job.queue, job.id);
+		if (!inspections.isCurrent(request)) return;
+		setLoadingDetail(false);
+		if (result.ok && result.data) setDetail(result.data);
+		else
+			setDetailError(
+				result.ok ? t("common.error") : result.error.message || t("common.error")
+			);
+	};
+	const act = async (action: "retry" | "remove") => {
+		const job = detail();
+		if (!job || pending()) return;
+		if (
+			(action === "retry" && job.state !== "failed") ||
+			(action === "remove" && job.state === "active")
+		)
 			return;
-		}
-		toast.error(res.error.message || t("common.error"));
-		recordAction(params.label, params.detail, "failed");
+		setPending(true);
+		const result =
+			action === "retry"
+				? await api.crawler.retryQueueJob(job.queue, job.id)
+				: await api.crawler.removeQueueJob(job.queue, job.id);
+		setPending(false);
+		if (result.ok) {
+			toast.success(t("common.saved"));
+			close();
+			void refresh();
+		} else toast.error(result.error.message || t("common.error"));
 	};
-
-	const requireAid = (): string | null => {
-		const value = aid().trim();
-		if (!value) {
-			toast.error(t("tasks.manualSnapshot.aidPlaceholder"));
-			return null;
-		}
-		return value;
-	};
-
-	const runSweep = () =>
-		void runAction({
-			key: "sweep",
-			label: t("tasks.actions.sweep"),
-			detail: "Default search keywords",
-			action: () => api.crawler.triggerSweep({}),
-		});
-
-	const runDetailFetch = () => {
-		const value = requireAid();
-		if (!value) return;
-		void runAction({
-			key: "detail",
-			label: t("tasks.actions.detail"),
-			detail: `AID/BVID: ${value}`,
-			action: () => api.crawler.fetchDetail(value),
-		});
-	};
-
-	const runActiveDiscovery = () => {
-		const value = requireAid();
-		if (!value) return;
-		void runAction({
-			key: "active",
-			label: t("tasks.actions.active"),
-			detail: `AID/BVID: ${value}`,
-			action: () => api.crawler.triggerActive(value),
-		});
-	};
-
-	onMount(() => {
-		void loadStats();
+	useCrawlerRefresh("tasks", () => {
+		if (!loading() && !pending()) void refresh();
 	});
+	onCleanup(() => {
+		inspections.start();
+		requests.start();
+	});
+
+	const date = (value: number | null | undefined) =>
+		value ? formatDateTime(new Date(value).toISOString()) : "—";
+	const columns: TableColumn<CrawlerQueueJobItem>[] = [
+		{
+			id: "id",
+			header: t("tasks.jobs.id"),
+			class: "w-48 break-all",
+			cell: (job) => (
+				<button
+					type="button"
+					class="text-primary underline text-left"
+					onClick={(event) => {
+						event.stopPropagation();
+						void inspect(job);
+					}}
+				>
+					{job.id}
+				</button>
+			),
+		},
+		{
+			id: "queue",
+			header: t("tasks.jobs.queue"),
+			class: "w-28",
+			cell: (job) => t(`audit.queues.${job.queue}`),
+		},
+		{
+			id: "type",
+			header: t("tasks.jobs.type"),
+			cell: (job) => (
+				<div>
+					<span>{job.name}</span>
+					<Show when={job.target}>
+						<div class="text-tertiary break-all">{job.target}</div>
+					</Show>
+				</div>
+			),
+		},
+		{
+			id: "state",
+			header: t("tasks.jobs.state"),
+			class: "w-28",
+			cell: (job) => <StateBadge kind="job" state={job.state} />,
+		},
+		{
+			id: "attempts",
+			header: t("tasks.jobs.attempts"),
+			class: "w-20",
+			cell: (job) => job.attempts,
+		},
+		{
+			id: "reason",
+			header: t("tasks.jobs.reason"),
+			class: "max-w-xs break-words text-error",
+			cell: (job) => job.failedReason ?? "—",
+		},
+		{
+			id: "time",
+			header: t("tasks.jobs.time"),
+			class: "w-44 whitespace-nowrap text-secondary",
+			cell: (job) => date(job.timestamp),
+		},
+	];
 
 	return (
 		<div class="flex flex-col gap-6">
-			{/* Page Subtitle & Description */}
-			<div class="bg-surface p-5 rounded-lg border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-				<div class="flex flex-col gap-1.5">
-					<h2 class="ts-heading-2 text-primary flex items-center gap-2">
-						<ListTodo class="w-5 h-5 text-primary" />
-						<span>{t("tasks.title")}</span>
-					</h2>
-					<p class="ts-body text-secondary text-sm leading-relaxed max-w-3xl">
-						{t("tasks.description")}
+			<SectionHeader title={<h2 class="ts-heading-2">{t("tasks.title")}</h2>} />
+			<Show when={error()}>
+				{(message) => (
+					<p role="alert" class="text-error text-label tracking-label">
+						{message()}
 					</p>
-				</div>
-
-				<Button
-					size="sm"
-					variant="outlined"
-					disabled={loadingStats()}
-					onClick={() => void loadStats()}
-					class="gap-1.5 shrink-0 self-start sm:self-auto"
-				>
-					<RefreshCw class={"w-3.5 h-3.5 " + (loadingStats() ? "animate-spin" : "")} />
-					<span>{loadingStats() ? t("common.refreshing") : t("common.refresh")}</span>
-				</Button>
-			</div>
-
-			{/* Queue Status Section */}
-			<div class="flex flex-col gap-4">
-				<Show
-					when={stats()}
-					fallback={
-						<div class="p-8 text-center text-tertiary border border-border rounded-lg bg-surface">
-							{loadingStats()
-								? t("common.loading")
-								: statsError() !== null
-									? statsError()
-									: t("common.unknown")}
-						</div>
-					}
-				>
-					{(current) => (
-						<div class="flex flex-col gap-4">
-							<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-								<MetricCard
-									label={t("tasks.queues.overdue")}
-									value={formatMetric(current().overdueTrackingCount)}
-									hint={`Lag: ${formatWaitSeconds(current().maxOverdueLagSec)}`}
-								/>
-								<MetricCard
-									label={t("tasks.queues.jobsPerMin")}
-									value={formatMetric(current().jobsPerMin)}
-								/>
-								<MetricCard
-									label={t("tasks.queues.requestsPerSec")}
-									value={formatMetric(current().requestsPerSec)}
-								/>
-							</div>
-
-							<Card>
-								<CardHeader title={t("tasks.queues.title")} />
-								<CardContent class="p-0">
-									<QueueStatusTable queues={current().queues} />
-								</CardContent>
-							</Card>
-						</div>
-					)}
-				</Show>
-			</div>
-
-			{/* Manual Operations Card */}
-			<Card>
-				<CardHeader
-					title={
-						<div class="flex items-center gap-2">
-							<Camera class="w-4 h-4 text-primary" />
-							<span>{t("tasks.manualSnapshot.title")}</span>
-						</div>
-					}
-				/>
-				<CardContent class="flex flex-col gap-6">
-					<div class="flex flex-col sm:flex-row items-stretch sm:items-end gap-3">
-						<div class="flex-1">
-							<TextField
-								label={t("tasks.manualSnapshot.aid")}
-								value={aid()}
-								onInput={(e) => setAid(e.currentTarget.value)}
-								helperText={t("tasks.manualSnapshot.aidPlaceholder")}
-							/>
-						</div>
-
-						<div class="flex flex-wrap items-center gap-2 shrink-0">
-							<Button
-								size="md"
-								variant="outlined"
-								disabled={pending() !== null || !aid().trim()}
-								onClick={runDetailFetch}
-								class="gap-1.5"
-							>
-								<Search
-									class={
-										"w-4 h-4 " + (pending() === "detail" ? "animate-spin" : "")
-									}
-								/>
-								<span>{t("tasks.actions.detail")}</span>
-							</Button>
-							<Button
-								size="md"
-								variant="filled"
-								disabled={pending() !== null || !aid().trim()}
-								onClick={runActiveDiscovery}
-								class="gap-1.5"
-							>
-								<Play
-									class={
-										"w-4 h-4 " + (pending() === "active" ? "animate-spin" : "")
-									}
-								/>
-								<span>{t("tasks.actions.active")}</span>
-							</Button>
-						</div>
+				)}
+			</Show>
+			<Show when={stats()}>{(data) => <QueueStatusTable queues={data().queues} />}</Show>
+			<section class="flex flex-col gap-3">
+				<div class="flex flex-wrap items-center gap-2">
+					<h3 class="ts-label mr-auto">{t("tasks.jobs.title")}</h3>
+					<div class="w-40">
+						<Select
+							size="sm"
+							aria-label={t("tasks.jobs.queue")}
+							options={["all", "tracking", "discovery"].map((value) => ({
+								value,
+								label: t(`audit.queues.${value}`),
+							}))}
+							value={queue()}
+							onValueChange={(value) => {
+								if (
+									value === "all" ||
+									value === "tracking" ||
+									value === "discovery"
+								) {
+									setQueue(value);
+									setPage(0);
+									void refresh();
+								}
+							}}
+						/>
 					</div>
-
-					<div class="pt-4 border-t border-border flex items-center justify-between">
-						<div class="flex flex-col gap-0.5">
-							<span class="ts-label font-medium text-primary">
-								{t("tasks.actions.sweep")}
-							</span>
-							<span class="ts-caption text-tertiary">
-								Trigger full rover sweep with default keyword dictionaries
-							</span>
-						</div>
+					<div class="w-36">
+						<Select
+							size="sm"
+							aria-label={t("tasks.jobs.state")}
+							options={[
+								"all",
+								"active",
+								"waiting",
+								"delayed",
+								"failed",
+								"completed",
+							].map((value) => ({ value, label: t(`audit.${value}`) }))}
+							value={state()}
+							onValueChange={(value) => {
+								if (
+									value === "all" ||
+									value === "active" ||
+									value === "waiting" ||
+									value === "delayed" ||
+									value === "failed" ||
+									value === "completed"
+								) {
+									setState(value);
+									setPage(0);
+									void refresh();
+								}
+							}}
+						/>
+					</div>
+				</div>
+				<DataTable
+					columns={columns}
+					items={jobs()?.items ?? []}
+					busy={loading()}
+					onRowClick={(job) => void inspect(job)}
+					empty={loading() ? t("common.loading") : t("tasks.jobs.empty")}
+				/>
+				<Pagination
+					page={page()}
+					total={jobs()?.total ?? 0}
+					pageSize={PAGE_SIZE}
+					busy={loading()}
+					onPageChange={(next) => {
+						setPage(next);
+						void refresh();
+					}}
+				/>
+			</section>
+			<Modal
+				isOpen={Boolean(selected())}
+				onClose={close}
+				title={t("audit.jobDetail")}
+				size="xl"
+				closeLabel={t("common.close")}
+				footer={
+					<>
 						<Button
 							size="sm"
 							variant="outlined"
-							disabled={pending() !== null}
-							onClick={runSweep}
-							class="gap-1.5"
+							class="text-error"
+							disabled={!detail() || detail()?.state === "active" || pending()}
+							onClick={() => void act("remove")}
 						>
-							<RefreshCw
-								class={
-									"w-3.5 h-3.5 " + (pending() === "sweep" ? "animate-spin" : "")
-								}
-							/>
-							<span>
-								{pending() === "sweep"
-									? t("common.loading")
-									: t("tasks.actions.sweep")}
-							</span>
+							{t("common.delete")}
 						</Button>
-					</div>
-				</CardContent>
-			</Card>
-
-			{/* Recent Action History Card */}
-			<Card>
-				<CardHeader
-					title={
-						<div class="flex items-center gap-2">
-							<History class="w-4 h-4 text-primary" />
-							<span>{t("tasks.recentHistory.title")}</span>
+						<Button
+							size="sm"
+							variant="outlined"
+							disabled={detail()?.state !== "failed" || pending()}
+							onClick={() => void act("retry")}
+						>
+							{t("common.retry")}
+						</Button>
+						<Button size="sm" variant="filled" disabled={pending()} onClick={close}>
+							{t("common.close")}
+						</Button>
+					</>
+				}
+			>
+				<Show when={loadingDetail()}>
+					<p class="p-6 text-center">{t("common.loading")}</p>
+				</Show>
+				<Show when={detailError()}>
+					{(message) => (
+						<div role="alert" class="flex items-center gap-3 text-error">
+							<span>{message()}</span>
+							<Button
+								size="sm"
+								variant="outlined"
+								onClick={() => {
+									const job = selected();
+									if (job) void inspect(job);
+								}}
+							>
+								{t("common.retry")}
+							</Button>
 						</div>
-					}
-				/>
-				<CardContent class="p-0">
-					<Show
-						when={actions().length > 0}
-						fallback={
-							<div class="p-8 text-center text-tertiary">
-								{t("tasks.recentHistory.empty")}
-							</div>
-						}
-					>
-						<div class="overflow-x-auto">
-							<table class="w-full text-left ts-caption">
-								<thead>
-									<tr class="border-b border-border text-tertiary bg-surface-container-low/50">
-										<th class="py-3 px-4 font-medium">
-											{t("tasks.history.col.task")}
-										</th>
-										<th class="py-3 px-4 font-medium">
-											{t("tasks.history.col.target")}
-										</th>
-										<th class="py-3 px-4 font-medium">
-											{t("tasks.history.col.status")}
-										</th>
-										<th class="py-3 px-4 font-medium text-right">
-											{t("tasks.history.col.time")}
-										</th>
-									</tr>
-								</thead>
-								<tbody class="divide-y divide-border">
-									<For each={actions()}>
-										{(record) => (
-											<tr class="hover:bg-hover/50 transition-colors">
-												<td class="py-3 px-4 font-medium text-primary">
-													{record.label}
-												</td>
-												<td class="py-3 px-4 font-mono text-secondary">
-													{record.detail}
-												</td>
-												<td class="py-3 px-4">
-													<Badge
-														variant={
-															record.status === "queued"
-																? "success"
-																: "danger"
-														}
-														size="sm"
-													>
-														{record.status === "queued"
-															? t("tasks.history.status.queued")
-															: t("tasks.history.status.failed")}
-													</Badge>
-												</td>
-												<td class="py-3 px-4 text-tertiary text-right font-mono">
-													{formatDateTime(record.at)}
-												</td>
-											</tr>
-										)}
-									</For>
-								</tbody>
-							</table>
-						</div>
-					</Show>
-				</CardContent>
-			</Card>
+					)}
+				</Show>
+				<Show when={detail()}>{(job) => <JobDetail job={job()} />}</Show>
+			</Modal>
 		</div>
 	);
 }

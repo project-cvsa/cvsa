@@ -25,6 +25,12 @@ export interface BatchProcessApiError {
 
 export type BatchProcessResult = BatchProcessSuccess | BatchProcessApiError;
 
+function trackingState(value: string): TrackingState {
+	return value === "new" || value === "regular" || value === "milestone" || value === "archive"
+		? value
+		: "regular";
+}
+
 export class SnapshotService {
 	private readonly stats: StatsRecorder;
 
@@ -48,6 +54,39 @@ export class SnapshotService {
 		await this.trackingRepo.releaseLeases(unique);
 	}
 
+	async deferLeases(
+		aids: Array<number | bigint | string>,
+		delayMs: number,
+		reason: "rate_limit" | "unavailable"
+	): Promise<void> {
+		const unique = [...new Set(aids.map((aid) => BigInt(aid)))];
+		const now = Date.now();
+		const trackings = await this.trackingRepo.getTrackings(unique);
+		for (const tracking of trackings) {
+			const consecutiveFails = tracking.consecutiveFails + 1;
+			const next = evaluateNextSchedule({
+				aid: tracking.aid,
+				currentState: trackingState(tracking.state),
+				currentViews: tracking.lastViews ?? 0,
+				currentTime: now,
+				consecutiveFails,
+			});
+			await this.trackingRepo.updateSchedule(tracking.aid, {
+				nextSnapshotAt: toInstant(
+					new Date(Math.max(now + delayMs, next.nextSnapshotAt.getTime()))
+				),
+				consecutiveFails,
+				priority: next.priority,
+				scheduleReason: toScheduleReason(next),
+				lastError:
+					reason === "rate_limit"
+						? "network:rate_limited"
+						: "network:adapter_unavailable",
+				leaseUntil: null,
+			});
+		}
+	}
+
 	async processBatch(aids: Array<number | bigint | string>): Promise<BatchProcessResult> {
 		return traceTask("snapshot.processBatch", async () => {
 			const uniqueBigIntAids = [...new Set(aids.map((aid) => BigInt(aid)))];
@@ -67,12 +106,6 @@ export class SnapshotService {
 					code: response,
 					batchSize: uniqueBigIntAids.length,
 				});
-				this.stats.recordError(
-					response === -412 || response === -429
-						? "rateLimited412Or429"
-						: "bilibiliBusinessError"
-				);
-
 				const trackings = await this.trackingRepo.getTrackings(uniqueBigIntAids);
 				const trackingMap = new Map(trackings.map((t) => [t.aid, t]));
 				const lastError = `bilibili_api_error:${response}`;

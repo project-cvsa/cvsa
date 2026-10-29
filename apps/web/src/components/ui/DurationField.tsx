@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import { createEffect, createSignal, createUniqueId, Show, splitProps } from "solid-js";
 
 export interface DurationFieldProps {
@@ -125,10 +125,10 @@ export default function DurationField(props: DurationFieldProps) {
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5", local.class)}>
 			<fieldset
 				aria-label={local.label}
-				class={clsx(
+				class={cn(
 					"group relative flex h-[58px] min-w-0 items-center border bg-surface transition-colors",
 					hasError()
 						? "border-error"
@@ -138,7 +138,7 @@ export default function DurationField(props: DurationFieldProps) {
 			>
 				<label
 					for={minuteId()}
-					class={clsx(
+					class={cn(
 						"absolute left-4 top-2 z-1 cursor-text ts-caption",
 						hasError() ? "text-error" : "text-tertiary"
 					)}

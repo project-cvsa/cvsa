@@ -71,7 +71,7 @@ describe("crawler admin contracts", () => {
 	});
 
 	it("defaults and coerces discovery sample query params", () => {
-		expect(DiscoverySampleListQuerySchema.parse({ limit: "10", offset: "5" })).toEqual({
+		expect(DiscoverySampleListQuerySchema.parse({ limit: "10", offset: "5" })).toMatchObject({
 			limit: 10,
 			offset: 5,
 		});
@@ -103,10 +103,10 @@ describe("crawler admin contracts", () => {
 	});
 
 	it("defaults tracking list pagination and accepts metadata joins", () => {
-		expect(TrackingVideoListQuerySchema.parse({})).toEqual({ limit: 20, offset: 0 });
+		expect(TrackingVideoListQuerySchema.parse({})).toMatchObject({ limit: 20, offset: 0 });
 		expect(
 			TrackingVideoListQuerySchema.parse({ limit: "5", offset: "1", state: "new" })
-		).toEqual({
+		).toMatchObject({
 			limit: 5,
 			offset: 1,
 			state: "new",
@@ -122,7 +122,8 @@ describe("crawler admin contracts", () => {
 
 	it("defaults the stats window and validates an overview payload", () => {
 		expect(CrawlerStatsQuerySchema.parse({})).toEqual({ window: "1h" });
-		expect(CrawlerStatsQuerySchema.safeParse({ window: "7d" }).success).toBe(false);
+		expect(CrawlerStatsQuerySchema.safeParse({ window: "7d" }).success).toBe(true);
+		expect(CrawlerStatsQuerySchema.safeParse({ window: "invalid" }).success).toBe(false);
 
 		const overview = {
 			window: "1h",

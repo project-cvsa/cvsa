@@ -69,7 +69,7 @@ export const crawlerEnv = createEnv({
 		/**
 		 * Directory holding the in-process ONNX classifier artifacts:
 		 * `<dir>/embedding/model.onnx` and `<dir>/akari/<version>.onnx`.
-		 * Defaults to `./model` relative to the crawler's working directory.
+		 * Defaults to the repository model directory, independent of the working directory.
 		 * The tokenizer is fetched from HuggingFace, not from this directory.
 		 */
 		CRAWLER_MODEL_DIR: z.string().min(1).optional(),

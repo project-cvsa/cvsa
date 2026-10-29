@@ -1,8 +1,10 @@
 ---
-const { ...attrs } = Astro.props;
+import { cn } from "@lib/cn";
+
+const { class: className, ...attrs } = Astro.props;
 ---
 
 <!-- biome-ignore lint/a11y/useHeadingContent: Utility Component -->
-<h2 class="color-display ts-heading-2 pt-7.5" class:list={[attrs.class]} {...attrs}>
+<h2 class={cn("text-display ts-heading-2 pt-7.5", className)} {...attrs}>
 	<slot />
 </h2>

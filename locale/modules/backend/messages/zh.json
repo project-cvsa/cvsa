@@ -1,4 +1,8 @@
 {
+	"error.crawler.unavailable": "爬虫服务暂不可用，请稍后重试。",
+	"error.crawler.request-failed": "爬虫无法处理此请求。",
+	"error.crawler.rate-limited": "爬虫请求受到限制，请稍后重试。",
+	"error.crawler.conflict": "请求与爬虫当前状态冲突，请刷新后重试。",
 	"error.unauthorized": "未登录",
 	"error.forbidden": "无权访问此资源",
 	"error.song.notfound": "此歌曲不存在",

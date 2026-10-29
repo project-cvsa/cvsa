@@ -1,4 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { DiscoveryFilterService } from "../src/crawler/discovery/filter";
 import {
 	VideoClassifierClient,
@@ -6,7 +7,9 @@ import {
 	type LocalClassifier,
 } from "../src/crawler/discovery/classifier";
 import {
+	defaultModelDir,
 	LocalAkariClassifier,
+	resolveModelDir,
 	type AkariHealth,
 	type AkariPrediction,
 	type AkariStatus,
@@ -152,7 +155,12 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 
 		const health: ClassifierHealth = await clientWith(local).health();
 
-		expect(health).toEqual({ reachable: true, modelsLoaded: true });
+		expect(health).toEqual({
+			reachable: true,
+			modelsLoaded: true,
+			modelVersion: "akari-3.17",
+			error: null,
+		});
 	});
 
 	test("reports degraded models as reachable but not loaded", async () => {
@@ -165,6 +173,8 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 		expect(await clientWith(local).health()).toEqual({
 			reachable: true,
 			modelsLoaded: false,
+			modelVersion: "akari-3.17",
+			error: "files missing",
 		});
 	});
 
@@ -183,7 +193,12 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 			modelLoaded: false,
 			error: "probe failed",
 		});
-		expect(await client.health()).toEqual({ reachable: false, modelsLoaded: null });
+		expect(await client.health()).toEqual({
+			reachable: false,
+			modelsLoaded: null,
+			modelVersion: null,
+			error: "probe failed",
+		});
 	});
 
 	test("the default client wires the in-process ONNX classifier", () => {
@@ -211,6 +226,22 @@ describe("LocalAkariClassifier without ONNX artifacts", () => {
 		expect(health.error).toContain("ONNX model files not found");
 	});
 
+	test("resolves default artifacts from the repository instead of the process working directory", () => {
+		const previous = process.env.CRAWLER_MODEL_DIR;
+		delete process.env.CRAWLER_MODEL_DIR;
+		try {
+			const classifier = new LocalAkariClassifier();
+			expect(classifier.embeddingPath).toBe(
+				new URL("../../../model/embedding/model.onnx", import.meta.url).pathname
+			);
+			expect(classifier.classifierPath).toBe(
+				new URL("../../../model/akari/3.17.onnx", import.meta.url).pathname
+			);
+		} finally {
+			if (previous !== undefined) process.env.CRAWLER_MODEL_DIR = previous;
+		}
+	});
+
 	test("resolves artifacts from CRAWLER_MODEL_DIR", () => {
 		const previous = process.env.CRAWLER_MODEL_DIR;
 		process.env.CRAWLER_MODEL_DIR = "/srv/cvsa/model";
@@ -218,6 +249,34 @@ describe("LocalAkariClassifier without ONNX artifacts", () => {
 			const classifier = new LocalAkariClassifier();
 			expect(classifier.embeddingPath).toBe("/srv/cvsa/model/embedding/model.onnx");
 			expect(classifier.classifierPath).toBe("/srv/cvsa/model/akari/3.17.onnx");
+		} finally {
+			if (previous === undefined) delete process.env.CRAWLER_MODEL_DIR;
+			else process.env.CRAWLER_MODEL_DIR = previous;
+		}
+	});
+
+	test("resolves the container model root from the module URL the image runs", () => {
+		// The production image runs `bun src/index.ts` from /app/apps/crawler, so the
+		// classifier module lives at /app/apps/crawler/src/ml/akari.ts and the mounted
+		// volume is /app/model. `process.cwd()` is not part of this computation.
+		const containerModuleUrl = "file:///app/apps/crawler/src/ml/akari.ts";
+
+		expect(defaultModelDir(containerModuleUrl)).toBe("/app/model");
+		expect(resolveModelDir(undefined, containerModuleUrl)).toBe("/app/model");
+		expect(resolveModelDir("/srv/cvsa/model", containerModuleUrl)).toBe("/srv/cvsa/model");
+	});
+
+	test("prefers an explicit model directory over the environment and module default", () => {
+		const previous = process.env.CRAWLER_MODEL_DIR;
+		delete process.env.CRAWLER_MODEL_DIR;
+		try {
+			expect(defaultModelDir()).toBe(
+				fileURLToPath(new URL("../../../model", import.meta.url))
+			);
+			expect(resolveModelDir("/tmp/explicit-model")).toBe("/tmp/explicit-model");
+
+			process.env.CRAWLER_MODEL_DIR = "/srv/cvsa/model";
+			expect(resolveModelDir(undefined)).toBe("/srv/cvsa/model");
 		} finally {
 			if (previous === undefined) delete process.env.CRAWLER_MODEL_DIR;
 			else process.env.CRAWLER_MODEL_DIR = previous;

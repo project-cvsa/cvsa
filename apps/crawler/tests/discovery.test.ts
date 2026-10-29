@@ -1,3 +1,4 @@
+import type { DiscoveryJobProgress } from "@cvsa/contracts";
 import { describe, expect, test } from "bun:test";
 import { toInstant, type BilibiliVideoMetadata } from "@cvsa/snapshot-db";
 import {
@@ -5,6 +6,9 @@ import {
 	changeTypeForDiff,
 	diffMetadata,
 	DiscoveryFilterService,
+	createDiscoveryQueue,
+	DISCOVERY_QUEUE_NAME,
+	DISCOVERY_QUEUE_JOB_OPTIONS,
 	DiscoveryPipelineProcessor,
 	DiscoveryScheduler,
 	DiscoveryService,
@@ -628,9 +632,8 @@ describe("DiscoveryFilterService", () => {
 		const config = filter.getConfig();
 		expect(config.modelThreshold).toBe(0.5);
 		expect(config.minDurationSeconds).toBe(45);
-		// An emptied blacklist falls back to the default list rather than
-		// disabling the guardrail entirely.
-		expect(config.blacklistKeywords.length).toBeGreaterThan(0);
+		// Default blacklist keywords are removed per user configuration
+		expect(config.blacklistKeywords).toEqual([]);
 	});
 });
 
@@ -650,6 +653,34 @@ describe("normalizeFilterConfig", () => {
 });
 
 describe("DiscoveryPipelineProcessor", () => {
+	test("does not re-add a manually rejected candidate when discovery revisits it", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await repo.upsertSample({
+			aid: 500_001n,
+			bvid: "BV1500001",
+			title: "【洛天依原创】reviewed",
+			decision: "whitelist",
+			modelVersion: "rules",
+			probabilities: [],
+			songProbability: 1,
+			humanLabel: 0,
+		});
+		const processor = new DiscoveryPipelineProcessor(
+			createDetailClient(new Map()),
+			repo,
+			tracking,
+			createFakeMq().createQueue<DiscoveryJobData>("crawler-discovery")
+		);
+		await processor.processJob({
+			type: "fetch-video-details",
+			aid: "500001",
+			source: "search",
+		});
+		expect(await tracking.getTracking(500_001n)).toBeNull();
+		expect((await repo.listSamples({ search: "500001" }))[0]?.humanLabel).toBe(0);
+	});
+
 	test("accepts a candidate, stores structured tags and samples, and enqueues related videos", async () => {
 		const repo = new InMemoryDiscoveryRepository();
 		const tracking = new InMemoryTrackingRepository();
@@ -692,11 +723,18 @@ describe("DiscoveryPipelineProcessor", () => {
 		);
 
 		const processor = new DiscoveryPipelineProcessor(client, repo, tracking, queue);
-		await processor.processJob({
-			type: "fetch-video-details",
-			aid: "500001",
-			source: "search",
-		});
+		const progress: DiscoveryJobProgress[] = [];
+		await processor.processJob(
+			{
+				type: "fetch-video-details",
+				aid: "500001",
+				source: "search",
+			},
+			async (value) => {
+				progress.push(value);
+			}
+		);
+		expect(progress.at(-1)).toMatchObject({ stage: "expanding", candidates: 1, queued: 1 });
 
 		const tracked = await tracking.getTracking(500_001n);
 		expect(tracked?.state).toBe("new");
@@ -764,6 +802,50 @@ describe("DiscoveryPipelineProcessor", () => {
 		expect(samples[0]?.songProbability).toBe(0.2);
 	});
 
+	test("reports queued progress for search sweep candidates that are still untracked", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		tracking.trackings.set(500_003n, createTrackingRow(500_003n));
+		const mq = createFakeMq();
+		const queue = mq.createQueue<DiscoveryJobData>("crawler-discovery");
+		const client = createDetailClient(new Map(), {
+			searchResult: [
+				searchVideo(500_001, "【洛天依原创】a"),
+				searchVideo(500_002, "【洛天依原创】b"),
+				searchVideo(500_003, "【洛天依原创】c"),
+			],
+		});
+		const processor = new DiscoveryPipelineProcessor(client, repo, tracking, queue);
+		const progress: DiscoveryJobProgress[] = [];
+
+		await processor.processJob(
+			{
+				type: "search-sweep",
+				config: { keywords: ["洛天依原创"], orders: ["pubdate"], pagesPerQuery: 1 },
+			},
+			async (value) => {
+				progress.push(value);
+			}
+		);
+
+		expect(progress[0]).toMatchObject({
+			stage: "searching",
+			target: "洛天依原创",
+			candidates: 0,
+			queued: 0,
+		});
+		// The tracked candidate is filtered out, so the queued counter stops at two.
+		expect(progress.at(-1)).toMatchObject({
+			stage: "evaluating",
+			candidates: 3,
+			queued: 2,
+		});
+		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual([
+			"detail-500001",
+			"detail-500002",
+		]);
+	});
+
 	test("expands recommendations for hot sampled videos", async () => {
 		const repo = new InMemoryDiscoveryRepository();
 		repo.hotSampleAids = [800_001n, 800_002n];
@@ -777,7 +859,11 @@ describe("DiscoveryPipelineProcessor", () => {
 			tracking,
 			queue
 		);
-		await processor.processJob({ type: "hot-sample", limit: 5 });
+		const progress: DiscoveryJobProgress[] = [];
+		await processor.processJob({ type: "hot-sample", limit: 5 }, async (value) => {
+			progress.push(value);
+		});
+		expect(progress.at(-1)).toMatchObject({ stage: "sampling", candidates: 2, queued: 2 });
 
 		expect(mq.state.queuedJobs).toHaveLength(2);
 		expect(mq.state.queuedJobs[0]?.data).toEqual({
@@ -804,5 +890,43 @@ describe("DiscoveryScheduler", () => {
 
 		await scheduler.triggerHotSample(3);
 		expect(mq.state.queuedJobs[3]?.name.startsWith("hot-sample-")).toBe(true);
+	});
+});
+
+describe("discovery queue retry policy", () => {
+	test("defers a job long enough for an exhausted adapter pool to recover", async () => {
+		const mq = createFakeMq();
+		const queue = createDiscoveryQueue(mq);
+
+		expect(mq.state.queueOptions[DISCOVERY_QUEUE_NAME]).toEqual(DISCOVERY_QUEUE_JOB_OPTIONS);
+		expect(DISCOVERY_QUEUE_JOB_OPTIONS).toMatchObject({
+			attempts: 5,
+			backoff: { type: "exponential", delay: 60_000 },
+		});
+
+		await queue.add("detail-1", {
+			type: "fetch-video-details",
+			aid: "1",
+			source: "manual",
+		});
+		expect(mq.state.queuedJobs[0]?.opts).toMatchObject({
+			attempts: 5,
+			backoff: { type: "exponential", delay: 60_000 },
+		});
+	});
+
+	test("keeps per-add options on top of the queue retry defaults", async () => {
+		const mq = createFakeMq();
+		const queue = createDiscoveryQueue(mq);
+		await queue.add(
+			"detail-2",
+			{ type: "fetch-video-details", aid: "2", source: "search" },
+			{ deduplication: { id: "detail-2" }, removeOnComplete: { age: 3600, count: 100 } }
+		);
+		expect(mq.state.queuedJobs[0]?.opts).toMatchObject({
+			attempts: 5,
+			backoff: { type: "exponential", delay: 60_000 },
+			deduplication: { id: "detail-2" },
+		});
 	});
 });

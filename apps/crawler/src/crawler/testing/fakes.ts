@@ -7,6 +7,7 @@ import type {
 	VideoTracking,
 } from "@cvsa/snapshot-db";
 import { toInstant, toJson } from "@cvsa/snapshot-db";
+import type { JobType, JobsOptions } from "bullmq";
 import type { IDiscoveryRepository } from "../discovery/repository.interface";
 import type { DiscoveryFilterConfigStore } from "../discovery/filter";
 import type {
@@ -21,6 +22,7 @@ import type {
 	CrawlerMq,
 	CrawlerProcessor,
 	CrawlerQueue,
+	CrawlerQueueJobSnapshot,
 	CrawlerWorker,
 } from "../shared/types";
 import type {
@@ -36,10 +38,82 @@ import type { TrackingState } from "../tracking/types";
 export interface FakeMqState {
 	connected: boolean;
 	closed: boolean;
-	queuedJobs: Array<{ queue: string; name: string; data: unknown }>;
+	queuedJobs: FakeMqJob[];
 	workerNames: string[];
 	/** Counts returned by `getJobCounts`; tests mutate this to simulate depth. */
 	jobCounts: CrawlerJobCounts;
+	/** Default job options each queue was created with. */
+	queueOptions: Record<string, JobsOptions>;
+}
+
+/** One queued job, shaped closely enough to the BullMQ job for admin read models. */
+export interface FakeMqJob {
+	/** Queue-scoped identifier, matching the BullMQ contract for `getJobDetail`. */
+	id: string;
+	queue: string;
+	name: string;
+	data: unknown;
+	state: JobType;
+	attempts: number;
+	failedReason: string | null;
+	timestamp: number;
+	progress: unknown;
+	processedOn: number | null;
+	finishedOn: number | null;
+	opts: JobsOptions | undefined;
+	stacktrace: string[] | null;
+	returnvalue?: unknown;
+}
+
+function isCountsOverride(counts: CrawlerJobCounts): boolean {
+	return Object.values(counts).some((value) => value > 0);
+}
+
+function countJobs(jobs: readonly FakeMqJob[]): CrawlerJobCounts {
+	const counts: CrawlerJobCounts = {
+		waiting: 0,
+		active: 0,
+		delayed: 0,
+		failed: 0,
+		completed: 0,
+	};
+	for (const job of jobs) {
+		switch (job.state) {
+			case "waiting":
+				counts.waiting += 1;
+				break;
+			case "active":
+				counts.active += 1;
+				break;
+			case "delayed":
+				counts.delayed += 1;
+				break;
+			case "failed":
+				counts.failed += 1;
+				break;
+			case "completed":
+				counts.completed += 1;
+				break;
+			default:
+				break;
+		}
+	}
+	return counts;
+}
+
+function jobSnapshot(job: FakeMqJob): CrawlerQueueJobSnapshot {
+	return {
+		id: job.id,
+		name: job.name,
+		data: job.data,
+		state: job.state,
+		attempts: job.attempts,
+		failedReason: job.failedReason,
+		timestamp: job.timestamp,
+		progress: job.progress,
+		processedOn: job.processedOn,
+		finishedOn: job.finishedOn,
+	};
 }
 
 export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
@@ -49,6 +123,7 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 		queuedJobs: [],
 		workerNames: [],
 		jobCounts: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0 },
+		queueOptions: {},
 	};
 
 	return {
@@ -56,13 +131,79 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 		async connect(): Promise<void> {
 			state.connected = true;
 		},
-		createQueue<T>(name: string): CrawlerQueue<T> {
+		createQueue<T>(name: string, options: JobsOptions = {}): CrawlerQueue<T> {
+			state.queueOptions[name] = options;
+			const queueJobs = (): FakeMqJob[] =>
+				state.queuedJobs.filter((job) => job.queue === name);
 			return {
-				async add(jobName: string, data: T): Promise<void> {
-					state.queuedJobs.push({ queue: name, name: jobName, data });
+				async add(jobName: string, data: T, jobOptions: JobsOptions = {}): Promise<void> {
+					// BullMQ merges per-add options over the queue's default options.
+					const effectiveOptions: JobsOptions = { ...options, ...jobOptions };
+					// Queue-scoped ids mirror BullMQ, where a job id is only unique
+					// inside its own queue.
+					state.queuedJobs.push({
+						id: String(queueJobs().length + 1),
+						queue: name,
+						name: jobName,
+						data,
+						state:
+							effectiveOptions.delay !== undefined && effectiveOptions.delay > 0
+								? "delayed"
+								: "waiting",
+						attempts: 0,
+						failedReason: null,
+						timestamp: Date.now(),
+						progress: undefined,
+						processedOn: null,
+						finishedOn: null,
+						opts: effectiveOptions,
+						stacktrace: null,
+					});
 				},
 				async getJobCounts(): Promise<CrawlerJobCounts> {
-					return { ...state.jobCounts };
+					// A test can overwrite `jobCounts` to simulate backlog depth; while it
+					// holds the zero default the fake reports what it actually queued.
+					return isCountsOverride(state.jobCounts)
+						? { ...state.jobCounts }
+						: countJobs(queueJobs());
+				},
+				async getJobs(
+					states: JobType[] = ["active", "waiting", "delayed", "failed"],
+					limit = 50,
+					offset = 0
+				): Promise<CrawlerQueueJobSnapshot[]> {
+					if (limit <= 0) return [];
+					const wanted = new Set<string>(states);
+					// Insertion order, like reading a queue from its oldest entry.
+					return queueJobs()
+						.filter((job) => wanted.has(job.state))
+						.slice(Math.max(0, offset), Math.max(0, offset) + limit)
+						.map(jobSnapshot);
+				},
+				async getJobDetail(id: string) {
+					const job = queueJobs().find((candidate) => candidate.id === id);
+					if (!job) return null;
+					return {
+						...jobSnapshot(job),
+						opts: job.opts,
+						stacktrace: job.stacktrace,
+						returnvalue: job.returnvalue,
+					};
+				},
+				async retryJob(id: string) {
+					const job = queueJobs().find((candidate) => candidate.id === id);
+					if (job?.state !== "failed") return false;
+					job.state = "waiting";
+					job.failedReason = null;
+					return true;
+				},
+				async removeJob(id: string) {
+					const index = state.queuedJobs.findIndex(
+						(candidate) => candidate.queue === name && candidate.id === id
+					);
+					if (index < 0) return false;
+					state.queuedJobs.splice(index, 1);
+					return true;
 				},
 				async close(): Promise<void> {},
 			};
@@ -335,6 +476,10 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 			total: rows.length,
 		};
 	}
+
+	async deleteTracking(aid: bigint): Promise<boolean> {
+		return this.trackings.delete(aid);
+	}
 }
 
 export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
@@ -473,15 +618,52 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		return row;
 	}
 
-	async listSamples(options?: ListDiscoverySamplesOptions): Promise<DiscoverySample[]> {
-		const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
-		const offset = Math.max(options?.offset ?? 0, 0);
+	private filteredSamples(options: ListDiscoverySamplesOptions = {}): DiscoverySample[] {
 		let rows = [...this.samples.values()];
-		if (options?.decision) rows = rows.filter((row) => row.decision === options.decision);
-		if (options?.labeled === true) rows = rows.filter((row) => row.humanLabel !== null);
-		if (options?.labeled === false) rows = rows.filter((row) => row.humanLabel === null);
-		rows.sort((a, b) => b.createdAt.epochMilliseconds - a.createdAt.epochMilliseconds);
-		return rows.slice(offset, offset + limit);
+		if (options.decision) rows = rows.filter((r) => r.decision === options.decision);
+		if (options.labeled !== undefined)
+			rows = rows.filter((r) => (r.humanLabel !== null) === options.labeled);
+		if (options.minConfidence !== undefined)
+			rows = rows.filter((r) => r.songProbability >= (options.minConfidence ?? 0));
+		if (options.maxConfidence !== undefined)
+			rows = rows.filter((r) => r.songProbability <= (options.maxConfidence ?? 1));
+		if (options.source)
+			rows = rows.filter(
+				(r) => this.metadatas.get(r.aid)?.discoverySource === options.source
+			);
+		const search = options.search?.trim();
+		if (search)
+			rows = rows.filter(
+				(r) =>
+					r.aid.toString() === search.replace(/^av/i, "") ||
+					r.bvid === search ||
+					r.title.includes(search)
+			);
+		return rows;
+	}
+
+	async countSamples(options: ListDiscoverySamplesOptions = {}): Promise<number> {
+		return this.filteredSamples(options).length;
+	}
+
+	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
+		const rows = this.filteredSamples(options);
+		const direction = options.sortOrder === "asc" ? 1 : -1;
+		rows.sort((a, b) => {
+			const compared =
+				options.sortBy === "confidence"
+					? a.songProbability - b.songProbability
+					: options.sortBy === "aid"
+						? a.aid < b.aid
+							? -1
+							: a.aid > b.aid
+								? 1
+								: 0
+						: a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds;
+			return compared * direction || (a.aid > b.aid ? -1 : a.aid < b.aid ? 1 : 0);
+		});
+		const offset = options.offset ?? 0;
+		return rows.slice(offset, offset + (options.limit ?? 50));
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {

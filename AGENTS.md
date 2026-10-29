@@ -82,6 +82,16 @@ The browser talks to the backend through Eden Treaty via `@lib/api`, typed by th
 3. `x-locale` and `accept-language` are attached automatically from `<html lang>`, and `credentials: "include"` is always set. Do not pass them per call.
 4. Errors arrive as `ApiResult<...>` with a backend `code`, translated `message` and `traceId`. Map codes to UI states; do not parse response bodies in components.
 
+#### Component Styling & Design Tokens (`apps/web`)
+
+The web design system lives in `apps/web/uno.config.ts` (colors, typography scale, `ts-*` shortcuts) and `apps/web/src/lib/theme.ts` (CSS variables).
+
+1. **[REQUIRED]** Compose classes with `cn()` from `@lib/cn` (clsx + token-aware `tailwind-merge`). Never import `clsx` directly; `cn()` resolves conflicting token utilities so caller `class` props override component defaults deterministically.
+2. **[REQUIRED]** Declare component variants with `cva()` from `class-variance-authority` and derive prop types with `VariantProps`. Do not hand-write `Record<Variant, string>` style maps for new components.
+3. **[REQUIRED]** Use typography tokens: `ts-caption`/`ts-label`/`ts-body`/`ts-subhead`/`ts-heading-*`/`ts-overline` (or `text-<token>` + `tracking-<token>` when a different weight is required). Raw `text-xs`/`text-sm`/`text-[12px]`, `tracking-wide`, `font-[...]` and hex colors are rejected by `apps/web/tests/design-tokens.test.ts`.
+4. **[REQUIRED]** Use semantic colors (`bg-surface`, `text-primary`, `border-border`, `bg-scrim`, ...) and `font-body`/`font-code`; add new values to `lib/theme.ts`/`uno.config.ts` instead of inlining them.
+5. Run `bun scripts/check-design-tokens.ts` from `apps/web` before committing UI changes; it is also enforced by the test suite.
+
 ## 5. Execution Commands & Testing
 
 ALWAYS use `bun` as the package manager and test runner.

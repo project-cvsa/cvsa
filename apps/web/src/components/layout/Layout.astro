@@ -1,5 +1,6 @@
 ---
 import { getThemeColorVariables } from "@lib/theme";
+import "./global.css";
 import {
 	CLIENT_I18N_SCRIPT_ID,
 	serializeClientI18nPayload,
@@ -75,38 +76,71 @@ const clientI18nJson = clientI18n ? serializeClientI18nPayload(clientI18n) : und
 		>
 		<style id="cvsa-color-vars" set:html={themeCSS} is:global>
 		</style>
-		<style is:global>
-		:root {
-			--wireframe-line: oklch(92% 0 0);
-			--highlight-color: oklch(94% 50% 105);
-			--highlight-shadow-color: rgba(67, 46, 18, 0);
-		}
-		@media (prefers-color-scheme: dark) {
-			:root {
-				--wireframe-line: oklch(27% 0 0);
-				--highlight-color: oklch(94% 52% 105deg);
-				--highlight-shadow-color: rgba(67, 46, 18, 0.6);
-			}
-		}
-		body {
-			font-size: 16px;
-			font-weight: 400;
-			font-family: "Outfit", system-ui, sans-serif;
-			background-color: var(--background);
-			background-image:
-				linear-gradient(to right, var(--grid-lines) 1px, transparent 1px),
-				linear-gradient(to bottom, var(--grid-lines) 1px, var(--background) 1px);
-			background-size: 100px 100px;
-		}
-		::selection {
-			background-color: var(--primary);
-			color: var(--background);
-		}
-		</style>
+
 		<slot name="head" />
 	</head>
 
-	<body class="dark:text-white overflow-x-hidden">
+	<body class="overflow-x-hidden">
 		<slot />
+		<script>
+		import { OverlayScrollbars } from "overlayscrollbars";
+
+		const scrollTargets = ".cvsa-scroll, .overflow-auto, .overflow-x-auto, .overflow-y-auto";
+		const instances = new Map<HTMLElement, ReturnType<typeof OverlayScrollbars>>();
+		let observer: MutationObserver | undefined;
+		let scheduled = false;
+		function syncScrollbars() {
+			scheduled = false;
+			for (const [element, instance] of instances) {
+				if (!element.isConnected) {
+					instance.destroy();
+					instances.delete(element);
+				}
+			}
+			document.querySelectorAll<HTMLElement>(scrollTargets).forEach((element) => {
+				if (
+					instances.has(element) ||
+					element.matches(
+						"[data-overlayscrollbars-viewport], [data-overlayscrollbars-content]"
+					)
+				)
+					return;
+				instances.set(
+					element,
+					OverlayScrollbars(element, {
+						scrollbars: {
+							theme: "os-theme-cvsa",
+							autoHide: "leave",
+							autoHideDelay: 300,
+						},
+					})
+				);
+			});
+		}
+		function initScrollbars() {
+			OverlayScrollbars(document.body, {
+				scrollbars: { theme: "os-theme-cvsa", autoHide: "leave", autoHideDelay: 400 },
+			});
+			syncScrollbars();
+			observer?.disconnect();
+			observer = new MutationObserver(() => {
+				if (!scheduled) {
+					scheduled = true;
+					requestAnimationFrame(syncScrollbars);
+				}
+			});
+			observer.observe(document.body, { childList: true, subtree: true });
+		}
+		document.addEventListener("astro:before-swap", () => {
+			observer?.disconnect();
+			for (const instance of instances.values()) instance.destroy();
+			instances.clear();
+			OverlayScrollbars(document.body)?.destroy();
+		});
+		document.addEventListener("astro:page-load", initScrollbars);
+		if (document.readyState === "loading")
+			document.addEventListener("DOMContentLoaded", initScrollbars, { once: true });
+		else initScrollbars();
+		</script>
 	</body>
 </html>

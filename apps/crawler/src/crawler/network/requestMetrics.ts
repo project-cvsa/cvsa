@@ -65,6 +65,7 @@ export function createNetworkRequestMetricRecorder(
 export function networkRequestOutcome(response: NetworkTransportResponse): NetworkRequestOutcome {
 	if (response.errorCode === undefined) return "success";
 	if (response.errorCode === "REQUEST_TIMEOUT") return "timeout";
+	if (response.errorCode === "APPLICATION_RATE_LIMIT") return "rate_limited";
 	if (response.errorCode.startsWith("APPLICATION_")) return "business_error";
 	if (response.errorCode.startsWith("HTTP_")) {
 		// Bilibili signals throttling with 412 as well as 429; both are exit

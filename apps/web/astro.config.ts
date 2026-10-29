@@ -21,7 +21,7 @@ export default defineConfig({
 			include: ["@elysiajs/eden"],
 		},
 		server: {
-			allowedHosts: [".projectcvsa.com"],
+			allowedHosts: true,
 		},
 	},
 	devToolbar: {

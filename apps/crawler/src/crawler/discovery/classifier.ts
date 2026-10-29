@@ -1,3 +1,4 @@
+import type { ClassifierHealthDto } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { LocalAkariClassifier, type AkariHealth, type AkariPrediction } from "../../ml/akari";
@@ -41,10 +42,7 @@ export interface ClassifierPrediction {
 export type LocalClassifier = Pick<LocalAkariClassifier, "classify" | "checkHealth">;
 
 /** Wire shape of `GET /v2/discovery/classifier` (see `ClassifierHealthDtoSchema`). */
-export interface ClassifierHealth {
-	readonly reachable: boolean;
-	readonly modelsLoaded: boolean | null;
-}
+export type ClassifierHealth = ClassifierHealthDto;
 
 export interface ClassifierClientOptions {
 	/** Injected for tests; a real in-process classifier is created otherwise. */
@@ -132,13 +130,11 @@ export class VideoClassifierClient {
 	 */
 	async health(): Promise<ClassifierHealth> {
 		const health = await this.checkHealth();
-		switch (health.status) {
-			case "healthy":
-				return { reachable: true, modelsLoaded: true };
-			case "degraded":
-				return { reachable: true, modelsLoaded: false };
-			default:
-				return { reachable: false, modelsLoaded: null };
-		}
+		return {
+			reachable: health.status !== "unreachable",
+			modelsLoaded: health.status === "unreachable" ? null : health.modelLoaded,
+			modelVersion: health.modelVersion ?? null,
+			error: health.error ?? null,
+		};
 	}
 }

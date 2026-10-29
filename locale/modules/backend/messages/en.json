@@ -1,4 +1,8 @@
 {
+	"error.crawler.unavailable": "Crawler service is unavailable. Try again later.",
+	"error.crawler.request-failed": "The crawler could not process this request.",
+	"error.crawler.rate-limited": "The crawler is rate limited. Try again later.",
+	"error.crawler.conflict": "The request conflicts with the current crawler state. Refresh and try again.",
 	"error.unauthorized": "Unauthorized",
 	"error.forbidden": "You do not have permission to access this resource.",
 	"error.song.notfound": "This song does not exist.",

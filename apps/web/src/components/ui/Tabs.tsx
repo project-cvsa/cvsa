@@ -1,7 +1,25 @@
-import clsx from "clsx";
-import { For, Show, splitProps } from "solid-js";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-solid";
+import { For, Show, splitProps } from "solid-js";
 import Badge from "./Badge";
+
+const tabVariants = cva(
+	"group inline-flex items-center gap-2 whitespace-nowrap border-b-2 uppercase font-semibold transition-all select-none shrink-0 cursor-pointer",
+	{
+		variants: {
+			size: {
+				sm: "px-3 py-2 text-caption tracking-caption",
+				md: "px-4 py-3 text-label tracking-label",
+			},
+		},
+		defaultVariants: {
+			size: "md",
+		},
+	}
+);
+
+type TabSize = NonNullable<VariantProps<typeof tabVariants>["size"]>;
 
 export interface TabItem<T extends string = string> {
 	id: T;
@@ -16,7 +34,7 @@ export interface TabsProps<T extends string = string> {
 	value: T;
 	onChange: (value: T) => void;
 	class?: string;
-	size?: "sm" | "md";
+	size?: TabSize;
 }
 
 export default function Tabs<T extends string = string>(props: TabsProps<T>) {
@@ -26,7 +44,7 @@ export default function Tabs<T extends string = string>(props: TabsProps<T>) {
 
 	return (
 		<div
-			class={clsx(
+			class={cn(
 				"flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar",
 				local.class
 			)}
@@ -43,11 +61,10 @@ export default function Tabs<T extends string = string>(props: TabsProps<T>) {
 							aria-selected={active()}
 							disabled={item.disabled}
 							onClick={() => local.onChange(item.id)}
-							class={clsx(
-								"group inline-flex items-center gap-2 whitespace-nowrap border-b-2 font-medium transition-all select-none shrink-0",
-								size() === "sm" ? "px-3 py-2 text-xs" : "px-4 py-3 text-sm",
+							class={cn(
+								tabVariants({ size: size() }),
 								active()
-									? "border-primary text-primary font-semibold"
+									? "border-primary text-primary"
 									: "border-transparent text-secondary hover:text-primary hover:border-border",
 								item.disabled && "opacity-50 cursor-not-allowed"
 							)}
@@ -57,7 +74,7 @@ export default function Tabs<T extends string = string>(props: TabsProps<T>) {
 									const IconComp = Icon();
 									return (
 										<IconComp
-											class={clsx(
+											class={cn(
 												"w-4 h-4 transition-colors",
 												active()
 													? "text-primary"

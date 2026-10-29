@@ -23,6 +23,52 @@ export const VideoTrackingDtoSchema = z.object({
 	lastError: z.string().nullable().optional(),
 });
 
+export const IngestVideoRequestSchema = z.object({
+	identifier: z.string().min(1).max(100),
+	state: z.enum(["new", "regular", "milestone", "archive"]).optional().default("regular"),
+	priority: z.number().int().min(1).max(5).optional().default(2),
+});
+
+export const IngestVideoResponseSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	title: z.string(),
+	pic: z.string().nullable(),
+	ownerName: z.string().nullable(),
+	state: z.string(),
+	priority: z.number(),
+	alreadyTracked: z.boolean(),
+});
+
+export const TestNetworkAdapterResponseSchema = z.object({
+	adapterId: z.string(),
+	ok: z.boolean(),
+	status: z.number().int().optional(),
+	latencyMs: z.number(),
+	error: z.string().optional(),
+});
+export type TestNetworkAdapterResponse = z.infer<typeof TestNetworkAdapterResponseSchema>;
+
+export const RecommendationGraphNodeSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	title: z.string(),
+	pic: z.string().nullable(),
+	ownerName: z.string().nullable(),
+	duration: z.number().int().optional(),
+	position: z.number().int().optional(),
+	rcmdReason: z.string().optional(),
+	isTracked: z.boolean(),
+	capturedAt: z.string().optional(),
+});
+export type RecommendationGraphNode = z.infer<typeof RecommendationGraphNodeSchema>;
+
+export const RecommendationGraphResponseSchema = z.object({
+	seed: RecommendationGraphNodeSchema,
+	relations: z.array(RecommendationGraphNodeSchema),
+});
+export type RecommendationGraphResponse = z.infer<typeof RecommendationGraphResponseSchema>;
+
 export const RegisterTrackingVideosRequestSchema = z.object({
 	aids: z
 		.array(z.union([z.number().int().positive(), z.string().regex(/^\d+$/)]))
@@ -40,6 +86,12 @@ export const PromoteTrackingVideoRequestSchema = z.object({
 	targetMilestone: z.number().int().positive().optional(),
 	priority: z.number().int().min(1).max(5).optional(),
 });
+
+export const DeleteTrackingVideoResponseSchema = z.object({
+	ok: z.boolean(),
+	aid: z.string(),
+});
+export type DeleteTrackingVideoResponse = z.infer<typeof DeleteTrackingVideoResponseSchema>;
 
 export const DiscoverySweepRequestSchema = z.object({
 	keywords: z.array(z.string().min(1)).min(1).max(50).optional(),
@@ -116,6 +168,7 @@ export const DiscoveryFilterConfigDtoSchema = z.object({
 	whitelistSingers: z.array(z.string()),
 	whitelistSongIndicators: z.array(z.string()),
 	blacklistKeywords: z.array(z.string()),
+	searchKeywords: z.array(z.string()).optional(),
 	minDurationSeconds: z.number().int().positive(),
 	maxDurationSeconds: z.number().int().positive(),
 	rejectionSampleRate: z.number().min(0).max(1),
@@ -128,12 +181,15 @@ export const DiscoveryFilterConfigDtoSchema = z.object({
 export const ClassifierHealthDtoSchema = z.object({
 	reachable: z.boolean(),
 	modelsLoaded: z.boolean().nullable(),
+	modelVersion: z.string().nullable().optional(),
+	error: z.string().nullable().optional(),
 });
 
 export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
 	whitelistSingers: z.array(z.string()).optional(),
 	whitelistSongIndicators: z.array(z.string()).optional(),
 	blacklistKeywords: z.array(z.string()).optional(),
+	searchKeywords: z.array(z.string()).optional(),
 	minDurationSeconds: z.number().int().positive().optional(),
 	maxDurationSeconds: z.number().int().positive().optional(),
 	rejectionSampleRate: z.number().min(0).max(1).optional(),
@@ -153,6 +209,10 @@ export const CrawlerStatusDtoSchema = z.object({
 			effectiveWeight: z.number(),
 			consecutiveFailures: z.number(),
 			openUntil: z.number().nullable(),
+			requests: z.number().nonnegative().optional(),
+			failures: z.number().nonnegative().optional(),
+			rateLimited: z.number().nonnegative().optional(),
+			averageDurationMs: z.number().nonnegative().nullable().optional(),
 		})
 	),
 });
@@ -238,11 +298,14 @@ export type ReplaceNetworkRuntimeConfigRequest = z.infer<
 	typeof ReplaceNetworkRuntimeConfigRequestSchema
 >;
 export type VideoTrackingDto = z.infer<typeof VideoTrackingDtoSchema>;
+export type IngestVideoRequest = z.infer<typeof IngestVideoRequestSchema>;
+export type IngestVideoResponse = z.infer<typeof IngestVideoResponseSchema>;
 export type RegisterTrackingVideosRequest = z.infer<typeof RegisterTrackingVideosRequestSchema>;
 export type RegisterTrackingVideosResponse = z.infer<typeof RegisterTrackingVideosResponseSchema>;
 export type PromoteTrackingVideoRequest = z.infer<typeof PromoteTrackingVideoRequestSchema>;
 export type DiscoverySweepRequest = z.infer<typeof DiscoverySweepRequestSchema>;
 export type DiscoverySweepResponse = z.infer<typeof DiscoverySweepResponseSchema>;
+
 export type ProcessRecommendationsResponse = z.infer<typeof ProcessRecommendationsResponseSchema>;
 export type BilibiliVideoMetadataDto = z.infer<typeof BilibiliVideoMetadataDtoSchema>;
 export type BilibiliVideoRelationDto = z.infer<typeof BilibiliVideoRelationDtoSchema>;
@@ -254,6 +317,15 @@ export type CrawlerStatusDto = z.infer<typeof CrawlerStatusDtoSchema>;
 export type ClassifierHealthDto = z.infer<typeof ClassifierHealthDtoSchema>;
 
 // Admin actions
+
+export const TrackingAidParamsSchema = z.object({
+	aid: z
+		.string()
+		.regex(/^[1-9]\d{0,18}$/)
+		.refine(
+			(value) => /^[1-9]\d{0,18}$/.test(value) && BigInt(value) <= 9_223_372_036_854_775_807n
+		),
+});
 
 /** Returned by control-plane actions that enqueue background work for a video. */
 export const ActionQueuedResponseSchema = z.object({
@@ -294,6 +366,7 @@ export const DiscoverySampleItemSchema = z.object({
 	tags: z.array(z.string()),
 	decision: z.string(),
 	modelVersion: z.string(),
+	pic: z.string().nullable().optional(),
 	/** Classifier label -> probability. */
 	probabilities: z.record(z.string(), z.number()),
 	songProbability: z.number().min(0).max(1),
@@ -313,6 +386,12 @@ export const DiscoverySampleListQuerySchema = z.object({
 	offset: z.coerce.number().int().min(0).default(0),
 	decision: z.string().min(1).optional(),
 	labeled: QueryBooleanSchema.optional(),
+	minConfidence: z.coerce.number().min(0).max(1).optional(),
+	maxConfidence: z.coerce.number().min(0).max(1).optional(),
+	search: z.string().min(1).optional(),
+	source: z.enum(["search", "related", "manual", "hot_sample"]).optional(),
+	sortBy: z.enum(["confidence", "capturedAt", "aid"]).optional(),
+	sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
 export const DiscoverySampleListResponseSchema = z.object({
@@ -336,11 +415,24 @@ export const TrackingVideoListItemSchema = VideoTrackingDtoSchema.extend({
 	discoverySource: z.string().nullable().optional(),
 });
 
+export const TrackingVideoSortFieldSchema = z.enum([
+	"views",
+	"velocity",
+	"nextSnapshotAt",
+	"consecutiveFails",
+	"publishedAt",
+	"updatedAt",
+]);
+export type TrackingVideoSortField = z.infer<typeof TrackingVideoSortFieldSchema>;
+
 export const TrackingVideoListQuerySchema = z.object({
 	limit: z.coerce.number().int().min(1).max(200).default(20),
 	offset: z.coerce.number().int().min(0).default(0),
 	state: z.string().min(1).optional(),
 	search: z.string().min(1).optional(),
+	statusFilter: z.enum(["all", "failing", "highPriority", "normal"]).optional(),
+	sortBy: TrackingVideoSortFieldSchema.optional(),
+	sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
 export const TrackingVideoListResponseSchema = z.object({
@@ -350,10 +442,11 @@ export const TrackingVideoListResponseSchema = z.object({
 
 // Stats & rollups
 
-export const CrawlerStatsWindowSchema = z.enum(["5m", "1h", "24h"]);
+export const CrawlerStatsWindowSchema = z.enum(["5m", "15m", "30m", "1h", "6h", "24h", "7d"]);
 
 export const CrawlerStatsQuerySchema = z.object({
 	window: CrawlerStatsWindowSchema.default("1h"),
+	minutes: z.coerce.number().int().min(1).max(10080).optional(),
 });
 
 /** A single persisted rollup bucket for one metric group. */
@@ -365,6 +458,10 @@ export const CrawlerStatsRollupPointSchema = z.object({
 
 export const CrawlerStatsErrorBreakdownSchema = z.object({
 	timeout: z.number().int().nonnegative(),
+	networkFailure: z.number().int().nonnegative().optional(),
+	httpFailure: z.number().int().nonnegative().optional(),
+	networkOther: z.number().int().nonnegative().optional(),
+	adapterUnavailable: z.number().int().nonnegative().optional(),
 	rateLimited412Or429: z.number().int().nonnegative(),
 	bilibiliBusinessError: z.number().int().nonnegative(),
 	inferenceError: z.number().int().nonnegative(),
@@ -380,6 +477,49 @@ export const CrawlerQueueSnapshotSchema = z.object({
 	oldestWaitSec: z.number().nonnegative(),
 });
 
+export const DiscoveryJobProgressSchema = z.object({
+	stage: z.enum([
+		"starting",
+		"searching",
+		"evaluating",
+		"expanding",
+		"sampling",
+		"completed",
+		"failed",
+	]),
+	target: z.string().nullable(),
+	page: z.number().int().optional(),
+	order: z.string().optional(),
+	candidates: z.number().int().nonnegative(),
+	queued: z.number().int().nonnegative(),
+	updatedAt: z.string(),
+});
+export type DiscoveryJobProgress = z.infer<typeof DiscoveryJobProgressSchema>;
+
+export const DiscoveryActivitySchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	state: z.string(),
+	target: z.string().nullable(),
+	timestamp: z.number(),
+	processedOn: z.number().nullable(),
+	finishedOn: z.number().nullable(),
+	failedReason: z.string().nullable(),
+	progress: DiscoveryJobProgressSchema.nullable(),
+});
+
+export const DiscoveryQueuedResponseSchema = z.object({ queued: z.literal(true) });
+export type DiscoveryQueuedResponse = z.infer<typeof DiscoveryQueuedResponseSchema>;
+
+export const DiscoveryStatusDtoSchema = z.object({
+	active: z.boolean(),
+	counts: CrawlerQueueSnapshotSchema,
+	activeJobs: z.array(DiscoveryActivitySchema),
+	recentJobs: z.array(DiscoveryActivitySchema),
+	candidatesPerMin: z.number().nonnegative(),
+});
+export type DiscoveryStatusDto = z.infer<typeof DiscoveryStatusDtoSchema>;
+
 export const CrawlerLatencyStatsSchema = z.object({
 	taskP95: z.number().nonnegative(),
 	apiP95: z.number().nonnegative(),
@@ -388,6 +528,7 @@ export const CrawlerLatencyStatsSchema = z.object({
 
 export const CrawlerOverviewStatsSchema = z.object({
 	window: CrawlerStatsWindowSchema,
+	minutes: z.number().int().min(1).max(10080).optional(),
 	// Throughput
 	jobsPerSec: z.number().nonnegative(),
 	jobsPerMin: z.number().nonnegative(),
@@ -398,6 +539,7 @@ export const CrawlerOverviewStatsSchema = z.object({
 	// Errors
 	totalAttempts: z.number().int().nonnegative(),
 	totalFailures: z.number().int().nonnegative(),
+	networkFailures: z.number().int().nonnegative().optional(),
 	/** Failure fraction for the window (`failures / attempts`). */
 	errorRate: z.number().min(0),
 	/** Retried-attempt fraction for the window. */
@@ -433,3 +575,48 @@ export type CrawlerStatsErrorBreakdown = z.infer<typeof CrawlerStatsErrorBreakdo
 export type CrawlerQueueSnapshot = z.infer<typeof CrawlerQueueSnapshotSchema>;
 export type CrawlerLatencyStats = z.infer<typeof CrawlerLatencyStatsSchema>;
 export type CrawlerOverviewStats = z.infer<typeof CrawlerOverviewStatsSchema>;
+
+export const CrawlerQueueJobItemSchema = z.object({
+	id: z.string(),
+	queue: z.enum(["tracking", "discovery"]),
+	name: z.string(),
+	target: z.string().nullable().optional(),
+	state: z.string(),
+	attempts: z.number().int().nonnegative(),
+	failedReason: z.string().nullable().optional(),
+	timestamp: z.number(),
+});
+
+export const CrawlerQueueJobDetailSchema = CrawlerQueueJobItemSchema.extend({
+	data: z.unknown(),
+	opts: z.unknown().optional(),
+	stacktrace: z.array(z.string()).nullable().optional(),
+	returnvalue: z.unknown().optional(),
+	processedOn: z.number().nullable().optional(),
+	finishedOn: z.number().nullable().optional(),
+});
+
+export const CrawlerQueueNameSchema = z.enum(["tracking", "discovery"]);
+export type CrawlerQueueName = z.infer<typeof CrawlerQueueNameSchema>;
+export const CrawlerQueueJobParamsSchema = z.object({
+	queue: CrawlerQueueNameSchema,
+	id: z.string().min(1).max(256),
+});
+export const CrawlerJobActionResponseSchema = z.object({ ok: z.literal(true) });
+
+export const CrawlerQueueJobsQuerySchema = z.object({
+	queue: z.enum(["all", "tracking", "discovery"]).optional(),
+	state: z.enum(["all", "active", "waiting", "delayed", "failed", "completed"]).optional(),
+	limit: z.coerce.number().int().min(1).max(100).default(50),
+	offset: z.coerce.number().int().min(0).optional(),
+});
+
+export const CrawlerQueueJobsResponseSchema = z.object({
+	items: z.array(CrawlerQueueJobItemSchema),
+	total: z.number().int().nonnegative(),
+});
+
+export type CrawlerQueueJobItem = z.infer<typeof CrawlerQueueJobItemSchema>;
+export type CrawlerQueueJobDetail = z.infer<typeof CrawlerQueueJobDetailSchema>;
+export type CrawlerQueueJobsQuery = z.infer<typeof CrawlerQueueJobsQuerySchema>;
+export type CrawlerQueueJobsResponse = z.infer<typeof CrawlerQueueJobsResponseSchema>;

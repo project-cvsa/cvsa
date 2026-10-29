@@ -1,4 +1,4 @@
-import { Queue, Worker, type JobsOptions, type WorkerOptions } from "bullmq";
+import { Queue, Worker, type JobType, type JobsOptions, type WorkerOptions } from "bullmq";
 import IORedis from "ioredis";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
@@ -8,6 +8,7 @@ import type {
 	CrawlerMq,
 	CrawlerProcessor,
 	CrawlerQueue,
+	CrawlerQueueJobSnapshot,
 	CrawlerWorker,
 } from "./types";
 
@@ -55,6 +56,67 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 						completed: counts.completed ?? 0,
 					};
 				},
+				getJobs: async (
+					types: JobType[] = ["active", "waiting", "delayed", "failed"],
+					limit = 50,
+					offset = 0
+				): Promise<CrawlerQueueJobSnapshot[]> => {
+					// BullMQ reads a negative range (limit <= 0) as "from the end of the
+					// list", so an explicitly empty page must short-circuit instead of
+					// returning a stray job.
+					if (limit <= 0) return [];
+					const start = Math.max(0, offset);
+					const bullJobs = await queue.getJobs(types, start, start + limit - 1);
+					return Promise.all(
+						bullJobs.map(async (job) => {
+							const state = await job.getState();
+							return {
+								id: job.id ?? "unknown",
+								name: job.name,
+								data: job.data,
+								state,
+								attempts: job.attemptsMade,
+								failedReason: job.failedReason ?? null,
+								timestamp: job.timestamp,
+								progress: job.progress,
+								processedOn: job.processedOn ?? null,
+								finishedOn: job.finishedOn ?? null,
+							};
+						})
+					);
+				},
+				getJobDetail: async (id: string) => {
+					const job = await queue.getJob(id);
+					if (!job) return null;
+					const state = await job.getState();
+					return {
+						id: job.id ?? id,
+						name: job.name,
+						data: job.data,
+						state,
+						attempts: job.attemptsMade,
+						failedReason: job.failedReason ?? null,
+						timestamp: job.timestamp,
+						progress: job.progress,
+						processedOn: job.processedOn ?? null,
+						finishedOn: job.finishedOn ?? null,
+						opts: job.opts,
+						stacktrace: job.stacktrace ?? null,
+						returnvalue: job.returnvalue,
+					};
+				},
+				retryJob: async (id: string): Promise<boolean> => {
+					const job = await queue.getJob(id);
+					if (!job) return false;
+					await job.retry();
+					return true;
+				},
+				removeJob: async (id: string): Promise<boolean> => {
+					const job = await queue.getJob(id);
+					if (!job) return false;
+					await job.remove();
+					return true;
+				},
 				close: () => queue.close(),
 			};
 		},
@@ -67,7 +129,11 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 			const worker = new Worker<T>(
 				name,
 				async (job) => {
-					const crawlerJob: CrawlerJob<T> = { id: job.id ?? undefined, data: job.data };
+					const crawlerJob: CrawlerJob<T> = {
+						id: job.id ?? undefined,
+						data: job.data,
+						updateProgress: (progress) => job.updateProgress(progress),
+					};
 					await processor(crawlerJob);
 				},
 				{ ...options, connection }
@@ -80,13 +146,21 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 					error,
 				});
 			});
-			return { close: () => worker.close() };
+			return { close: (force = true) => worker.close(force) };
 		},
 
 		async close(): Promise<void> {
-			await Promise.all(workers.map((worker) => worker.close()));
+			await Promise.all(workers.map((worker) => worker.close(true)));
 			await Promise.all(queues.map((queue) => queue.close()));
-			await connection.quit();
+			try {
+				await Promise.race([
+					connection.quit(),
+					new Promise((resolve) => setTimeout(resolve, 300)),
+				]);
+			} catch {
+				// ignored
+			}
+			connection.disconnect();
 			appLogger.info("Crawler MQ closed", { component: "crawler-mq" });
 		},
 	};

@@ -1,12 +1,12 @@
 import { Elysia } from "elysia";
-import { AppError, ErrorResponseSchema } from "@cvsa/contracts";
+import { AppError, ErrorResponseSchema, TestNetworkAdapterResponseSchema } from "@cvsa/contracts";
 import {
 	NetworkRuntimeConfigDocumentSchema,
 	NetworkRuntimeStatusSchema,
 	ReplaceNetworkRuntimeConfigRequestSchema,
 	redactNetworkRuntimeConfigDocument,
 } from "../crawler";
-import { networkRuntime, networkRuntimeConfigService } from "../container";
+import { crawlerAdapterRegistry, networkRuntime, networkRuntimeConfigService } from "../container";
 
 export const networkRuntimeRoutes = new Elysia()
 	.get(
@@ -59,4 +59,58 @@ export const networkRuntimeRoutes = new Elysia()
 			200: NetworkRuntimeStatusSchema,
 			401: ErrorResponseSchema,
 		},
-	});
+	})
+	.post(
+		"/adapters/:id/test",
+		async ({ params, status }) => {
+			const configDoc = await networkRuntimeConfigService.get();
+			const adapterConfig = configDoc?.config.adapters.find((a) => a.id === params.id);
+			if (!adapterConfig) {
+				return status(404, {
+					code: "NOT_FOUND",
+					message: `Adapter ${params.id} not found`,
+				});
+			}
+			const adapter = crawlerAdapterRegistry.create(adapterConfig);
+			const start = Date.now();
+			try {
+				const res = await adapter.execute({
+					url: "https://api.bilibili.com/x/web-interface/nav",
+					requestType: "bilibili-api",
+					method: "GET",
+					headers: {
+						"User-Agent":
+							"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+						Referer: "https://www.bilibili.com/",
+					},
+					timeoutMs: 8000,
+				});
+				const latencyMs = Date.now() - start;
+				return {
+					adapterId: params.id,
+					ok: res.status >= 200 && res.status < 400,
+					status: res.status,
+					latencyMs,
+					error:
+						res.status >= 400
+							? `HTTP ${res.status}${res.errorCode ? `: ${res.errorCode}` : ""}`
+							: undefined,
+				};
+			} catch (err) {
+				const latencyMs = Date.now() - start;
+				return {
+					adapterId: params.id,
+					ok: false,
+					latencyMs,
+					error: err instanceof Error ? err.message : String(err),
+				};
+			}
+		},
+		{
+			response: {
+				200: TestNetworkAdapterResponseSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+			},
+		}
+	);

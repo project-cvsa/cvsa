@@ -5,7 +5,7 @@ import type {
 	DatabaseClient,
 	DiscoverySample,
 } from "@cvsa/snapshot-db";
-import { and, toInstant, toJson } from "@cvsa/snapshot-db";
+import { and, or, toInstant, toJson } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { IDiscoveryRepository } from "./repository.interface";
 import type {
@@ -411,34 +411,64 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		});
 	}
 
-	async listSamples(options?: ListDiscoverySamplesOptions): Promise<DiscoverySample[]> {
+	private async sampleCollection(options: ListDiscoverySamplesOptions = {}) {
+		const search = options.search?.trim();
+		const exactAid =
+			search && /^(?:av)?\d+$/i.test(search) ? BigInt(search.replace(/^av/i, "")) : undefined;
+		const sourceRows = options.source
+			? await this.db.orm.public.BilibiliVideoMetadata.where((m) =>
+					m.discoverySource.eq(options.source ?? "")
+				)
+					.select("aid")
+					.all()
+			: undefined;
+		return this.db.orm.public.DiscoverySample.where((s) => {
+			const conditions = [s.aid.gte(0n)];
+			if (options.decision) conditions.push(s.decision.eq(options.decision));
+			if (options.labeled === true) conditions.push(s.humanLabel.isNotNull());
+			if (options.labeled === false) conditions.push(s.humanLabel.isNull());
+			if (options.minConfidence !== undefined)
+				conditions.push(s.songProbability.gte(options.minConfidence));
+			if (options.maxConfidence !== undefined)
+				conditions.push(s.songProbability.lte(options.maxConfidence));
+			if (exactAid !== undefined) conditions.push(s.aid.eq(exactAid));
+			else if (search)
+				conditions.push(
+					or(s.bvid.eq(search), s.title.like(`%${search.replace(/[\\%_]/g, "\\$&")}%`))
+				);
+			if (sourceRows) conditions.push(s.aid.in(sourceRows.map((m) => m.aid)));
+			return and(conditions[0], ...conditions.slice(1));
+		});
+	}
+
+	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
 		return traceTask("discovery.listSamples", async () => {
-			const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
-			const offset = Math.max(options?.offset ?? 0, 0);
-			const decision = options?.decision?.trim();
-			const labeled = options?.labeled;
-
-			// The `labeled` predicate has to run in SQL, not after paginating: a
-			// post-filter would silently return short pages.
-			const collection = this.db.orm.public.DiscoverySample.where((s) => {
-				if (decision && labeled === true) {
-					return and(s.decision.eq(decision), s.humanLabel.isNotNull());
-				}
-				if (decision && labeled === false) {
-					return and(s.decision.eq(decision), s.humanLabel.isNull());
-				}
-				if (decision) return s.decision.eq(decision);
-				if (labeled === true) return s.humanLabel.isNotNull();
-				if (labeled === false) return s.humanLabel.isNull();
-				return s.aid.gte(0n);
-			});
-
-			return collection
-				.orderBy((s) => s.createdAt.desc())
-				.limit(limit)
-				.offset(offset)
+			const collection = await this.sampleCollection(options);
+			const asc = options.sortOrder === "asc";
+			const sorted =
+				options.sortBy === "confidence"
+					? collection.orderBy([
+							(s) => (asc ? s.songProbability.asc() : s.songProbability.desc()),
+							(s) => s.aid.desc(),
+						])
+					: options.sortBy === "aid"
+						? collection.orderBy((s) => (asc ? s.aid.asc() : s.aid.desc()))
+						: collection.orderBy([
+								(s) => (asc ? s.createdAt.asc() : s.createdAt.desc()),
+								(s) => s.aid.desc(),
+							]);
+			return sorted
+				.limit(Math.min(Math.max(options.limit ?? 50, 1), 200))
+				.offset(options.offset ?? 0)
 				.all();
 		});
+	}
+
+	async countSamples(options: ListDiscoverySamplesOptions = {}): Promise<number> {
+		const result = await (await this.sampleCollection(options)).aggregate((agg) => ({
+			total: agg.count(),
+		}));
+		return result.total;
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {

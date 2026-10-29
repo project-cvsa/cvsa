@@ -1,4 +1,7 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
+import type { LucideIcon } from "lucide-solid";
+import X from "lucide-solid/icons/x";
 import {
 	type ComponentProps,
 	createEffect,
@@ -9,12 +12,21 @@ import {
 	splitProps,
 } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import type { LucideIcon } from "lucide-solid";
-import X from "lucide-solid/icons/x";
+import { controlSizeClass } from "./controlStyles";
 
-type TextFieldSize = "sm" | "md" | "lg";
+const textFieldInputVariants = cva("", {
+	variants: {
+		size: {
+			sm: "text-caption tracking-caption",
+			md: "text-label tracking-label",
+			lg: "text-body tracking-body",
+		},
+	},
+});
 
-type TextFieldBaseProps = Omit<ComponentProps<"input">, "placeholder" | "size" | "value"> & {
+type TextFieldSize = NonNullable<VariantProps<typeof textFieldInputVariants>["size"]>;
+
+export type TextFieldProps = Omit<ComponentProps<"input">, "placeholder" | "size" | "value"> & {
 	size?: TextFieldSize;
 	value?: string;
 	defaultValue?: string;
@@ -26,19 +38,6 @@ type TextFieldBaseProps = Omit<ComponentProps<"input">, "placeholder" | "size" |
 	trailingIcon?: LucideIcon;
 	clearable?: boolean;
 	clearLabel?: string;
-};
-
-export type TextFieldProps = TextFieldBaseProps &
-	(
-		| { label: string; placeholder?: undefined; size?: undefined }
-		| { label?: undefined; placeholder?: string; size?: TextFieldSize }
-		| { label?: undefined; placeholder?: undefined; size?: TextFieldSize }
-	);
-
-const heightClass: Record<TextFieldSize, string> = {
-	sm: "h-9",
-	md: "h-11",
-	lg: "h-14",
 };
 
 export default function TextField(props: TextFieldProps) {
@@ -118,16 +117,27 @@ export default function TextField(props: TextFieldProps) {
 	const boxClass = () => {
 		const border = hasError() ? "border-error" : "border-border";
 		const interactive =
-			hasError() || local.disabled ? "" : "hover:border-tertiary focus-within:border-primary";
-		return clsx(border, interactive);
+			hasError() || local.disabled
+				? ""
+				: "hover:border-tertiary focus-within:border-primary focus-within:ring-1 focus-within:ring-primary";
+		return cn(border, interactive);
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5", local.class)}>
+			<Show when={hasLabel() && local.size}>
+				<label for={inputId()} class="ts-caption text-secondary font-medium select-none">
+					{local.label}
+					<Show when={local.required}>
+						<span class="text-error"> *</span>
+					</Show>
+				</label>
+			</Show>
+
 			<div
-				class={clsx(
+				class={cn(
 					"relative flex items-center bg-surface border transition-colors",
-					hasLabel() ? "h-[58px]" : heightClass[local.size ?? "md"],
+					hasLabel() && !local.size ? "h-[58px]" : controlSizeClass(local.size ?? "md"),
 					boxClass(),
 					local.disabled && "opacity-60"
 				)}
@@ -135,16 +145,16 @@ export default function TextField(props: TextFieldProps) {
 				<Show when={local.leadingIcon}>
 					{(icon) => (
 						<span class="flex shrink-0 pl-3 pr-1.5 text-quaternary" aria-hidden="true">
-							<Dynamic component={icon()} size={18} />
+							<Dynamic component={icon()} size={local.size === "sm" ? 14 : 18} />
 						</span>
 					)}
 				</Show>
 
 				<div class="relative h-full min-w-0 flex-1">
-					<Show when={hasLabel()}>
+					<Show when={hasLabel() && !local.size}>
 						<label
 							for={inputId()}
-							class={clsx(
+							class={cn(
 								"absolute cursor-text transition-all duration-150",
 								local.leadingIcon ? "left-2" : "left-4",
 								isFloated()
@@ -167,15 +177,20 @@ export default function TextField(props: TextFieldProps) {
 						value={local.value}
 						disabled={local.disabled}
 						required={local.required}
-						placeholder={hasLabel() ? undefined : local.placeholder}
+						placeholder={hasLabel() && !local.size ? undefined : local.placeholder}
 						aria-invalid={hasError() || undefined}
 						aria-describedby={describedBy()}
-						class={clsx(
-							"box-border h-full w-full min-w-0 appearance-none bg-transparent outline-none text-body",
-							local.leadingIcon ? "pl-1" : "pl-4",
-							local.trailingIcon || local.clearable ? "pr-1" : "pr-4",
+						class={cn(
+							"box-border h-full w-full min-w-0 appearance-none bg-transparent outline-none",
+							local.leadingIcon ? "pl-1" : local.size === "sm" ? "pl-2.5" : "pl-3.5",
+							local.trailingIcon || local.clearable
+								? "pr-1"
+								: local.size === "sm"
+									? "pr-2.5"
+									: "pr-3.5",
 							"placeholder:text-tertiary disabled:cursor-not-allowed",
-							hasLabel() && "pt-[21px] pb-1"
+							hasLabel() && !local.size && "pt-[21px] pb-1 ts-body",
+							textFieldInputVariants({ size: local.size })
 						)}
 					/>
 				</div>
@@ -183,18 +198,24 @@ export default function TextField(props: TextFieldProps) {
 				<Show when={local.clearable}>
 					<button
 						type="button"
-						class="flex shrink-0 p-1.5 mr-2 text-quaternary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
+						class="flex shrink-0 p-1 mr-1 text-quaternary hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50"
 						disabled={local.disabled || !typed()}
 						aria-label={local.clearLabel}
 						onclick={clearValue}
 					>
-						<X size={18} />
+						<X size={local.size === "sm" ? 14 : 18} />
 					</button>
 				</Show>
 				<Show when={!local.clearable && local.trailingIcon}>
 					{(icon) => (
-						<span class="flex shrink-0 pl-1.5 pr-3 text-quaternary" aria-hidden="true">
-							<Dynamic component={icon()} size={18} />
+						<span
+							class={cn(
+								"flex shrink-0 text-quaternary",
+								local.size === "sm" ? "pl-1 pr-2" : "pl-1.5 pr-3"
+							)}
+							aria-hidden="true"
+						>
+							<Dynamic component={icon()} size={local.size === "sm" ? 14 : 18} />
 						</span>
 					)}
 				</Show>

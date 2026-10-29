@@ -1,11 +1,48 @@
+import { cn } from "@lib/cn";
 import { Menu as ArkMenu } from "@ark-ui/solid/menu";
-import clsx from "clsx";
-import { type ComponentProps, For, Show, splitProps } from "solid-js";
-import { Dynamic, Portal } from "solid-js/web";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { LucideIcon } from "lucide-solid";
 import ChevronDown from "lucide-solid/icons/chevron-down";
+import { type ComponentProps, For, Show, splitProps } from "solid-js";
+import { Dynamic, Portal } from "solid-js/web";
+import { controlSizeClass } from "./controlStyles";
 
-export type MenuSize = "sm" | "md" | "lg";
+const menuTriggerVariants = cva(
+	[
+		"group inline-flex items-center text-primary transition-colors select-none",
+		"focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
+		"disabled:cursor-not-allowed disabled:opacity-50",
+	],
+	{
+		variants: {
+			iconOnly: {
+				true: "h-10 w-10 justify-center border border-transparent bg-transparent px-1 hover:border-transparent hover:bg-hover",
+				false: "justify-between gap-2.5 border border-border bg-surface hover:border-tertiary hover:bg-hover active:bg-surface-container-high",
+			},
+			size: {
+				sm: "px-2.5",
+				md: "px-3.5",
+				lg: "px-5",
+			},
+		},
+		defaultVariants: {
+			iconOnly: false,
+			size: "md",
+		},
+	}
+);
+
+const menuContentClass =
+	"min-w-56 border border-border bg-surface p-1.5 select-none shadow-xl outline-none";
+
+const menuItemClass = cn(
+	"group flex items-center gap-2.5 min-h-9 w-full px-2.5 py-1.5",
+	"text-left text-primary outline-none transition-colors cursor-pointer",
+	"data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
+	"data-[highlighted]:bg-hover data-[highlighted]:text-primary"
+);
+
+export type MenuSize = NonNullable<VariantProps<typeof menuTriggerVariants>["size"]>;
 export type MenuPlacement = "bottom-start" | "bottom-end";
 
 export interface MenuItem {
@@ -29,38 +66,6 @@ export interface MenuProps extends Omit<ComponentProps<"div">, "children" | "onS
 	onSelect?: (value: string) => void;
 }
 
-const triggerSizeClass: Record<MenuSize, string> = {
-	sm: "h-8 px-3 ts-caption",
-	md: "h-11 px-4 ts-label",
-	lg: "h-14 px-5 ts-body",
-};
-
-const triggerBaseClass = clsx(
-	"group inline-flex items-center text-primary transition-colors",
-	"focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary",
-	"disabled:cursor-not-allowed disabled:opacity-50"
-);
-
-const standardTriggerClass = clsx(
-	"justify-between gap-3",
-	"border border-border bg-surface",
-	"hover:border-tertiary hover:bg-hover"
-);
-
-const iconOnlyTriggerClass = clsx(
-	"h-11 w-11 justify-center border border-transparent bg-transparent px-1.5",
-	"hover:border-transparent hover:bg-hover"
-);
-
-const contentClass = clsx("min-w-56 border-0 bg-surface p-3 select-none", "shadow-xl outline-none");
-
-const itemClass = clsx(
-	"group grid min-h-12 w-full grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-3",
-	"px-4 text-left text-primary outline-none transition-colors",
-	"data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
-	"data-[highlighted]:bg-hover data-[highlighted]:text-display"
-);
-
 interface MenuTriggerProps {
 	label: string;
 	size: MenuSize;
@@ -76,11 +81,12 @@ function MenuTrigger(props: MenuTriggerProps) {
 			type="button"
 			disabled={props.disabled}
 			aria-label={props.ariaLabel}
-			class={clsx(
-				triggerBaseClass,
-				props.iconOnly
-					? iconOnlyTriggerClass
-					: clsx(standardTriggerClass, triggerSizeClass[props.size])
+			class={cn(
+				menuTriggerVariants({
+					iconOnly: Boolean(props.iconOnly),
+					size: props.iconOnly ? undefined : props.size,
+				}),
+				!props.iconOnly && controlSizeClass(props.size)
 			)}
 		>
 			<Show
@@ -111,7 +117,7 @@ function MenuItemRow(props: MenuItemRowProps) {
 			value={props.item.value}
 			valueText={props.item.label}
 			disabled={props.item.disabled}
-			class={itemClass}
+			class={menuItemClass}
 		>
 			<span
 				class="flex h-8 w-8 shrink-0 items-center justify-center text-quaternary
@@ -169,7 +175,7 @@ function MenuContent(props: MenuContentProps) {
 	return (
 		<Portal>
 			<ArkMenu.Positioner class="z-50!">
-				<ArkMenu.Content class={contentClass}>
+				<ArkMenu.Content class={menuContentClass}>
 					<MenuList items={props.items} />
 				</ArkMenu.Content>
 			</ArkMenu.Positioner>
@@ -195,7 +201,7 @@ export default function Menu(props: MenuProps) {
 	const menuLabel = () => local["aria-label"] ?? local.label;
 
 	return (
-		<div class={clsx("relative inline-flex", local.class)} {...rest}>
+		<div class={cn("relative inline-flex", local.class)} {...rest}>
 			<ArkMenu.Root
 				aria-label={menuLabel()}
 				positioning={{ placement: local.placement ?? "bottom-start", gutter: 8 }}

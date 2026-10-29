@@ -22,6 +22,7 @@ import {
 } from "./contracts";
 
 const SOFT_RESERVE_WINDOW_SECONDS = 1;
+const RATE_LIMIT_COOLDOWN_MS = 60_000;
 
 interface SoftReserveParams {
 	/**
@@ -36,10 +37,19 @@ interface SoftReserveParams {
 }
 
 interface AdapterHealth {
+	degraded: boolean;
 	factor: number;
 	consecutiveFailures: number;
 	openUntil: number | undefined;
 	halfOpenProbeInFlight: boolean;
+}
+
+interface AdapterStatistics {
+	requests: number;
+	failures: number;
+	rateLimited: number;
+	durationMs: number;
+	durationSamples: number;
 }
 
 interface HealthConfig {
@@ -79,6 +89,19 @@ function healthOutcome(errorCode: NetworkErrorCode | undefined): HealthOutcome {
 	return HEALTH_AFFECTING_NETWORK_ERROR_CODES.has(errorCode) ? "failure" : "neutral";
 }
 
+function retryAfterMs(headers: Record<string, string>, now: number): number {
+	const header = Object.entries(headers).find(
+		([key]) => key.toLowerCase() === "retry-after"
+	)?.[1];
+	if (!header) return 0;
+	if (/^\d+$/.test(header.trim())) {
+		const seconds = Number(header);
+		return Number.isSafeInteger(seconds) ? Math.max(0, seconds * 1000) : 0;
+	}
+	const date = Date.parse(header);
+	return Number.isFinite(date) ? Math.max(0, date - now) : 0;
+}
+
 export class NetworkScheduler implements NetworkDelegate {
 	private readonly random: () => number;
 	private readonly metrics: NetworkMetrics;
@@ -86,6 +109,7 @@ export class NetworkScheduler implements NetworkDelegate {
 	private readonly tracer: NetworkSchedulerTracer;
 	private readonly clock: () => number;
 	private state: Readonly<SchedulerState>;
+	private readonly statistics = new Map<string, AdapterStatistics>();
 
 	constructor(
 		config: NetworkRuntimeConfig,
@@ -99,6 +123,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		this.tracer = options.tracer ?? createNoopNetworkSchedulerTracer();
 		this.clock = options.clock ?? Date.now;
 		this.state = this.createState(config, adapters);
+		this.syncStatistics(config);
 	}
 
 	/**
@@ -117,6 +142,23 @@ export class NetworkScheduler implements NetworkDelegate {
 			if (previous) health.set(adapterId, { ...previous });
 		}
 		this.state = this.createState(config, adapters, health);
+		this.syncStatistics(config);
+	}
+
+	private syncStatistics(config: NetworkRuntimeConfig): void {
+		const ids = new Set(config.adapters.map((adapter) => adapter.id));
+		for (const id of this.statistics.keys()) if (!ids.has(id)) this.statistics.delete(id);
+		for (const id of ids) {
+			if (!this.statistics.has(id)) {
+				this.statistics.set(id, {
+					requests: 0,
+					failures: 0,
+					rateLimited: 0,
+					durationMs: 0,
+					durationSamples: 0,
+				});
+			}
+		}
 	}
 
 	/** Diagnostic snapshot of every configured adapter and its current health. */
@@ -125,6 +167,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		return state.config.adapters.map((config) => {
 			const health = this.getHealth(state, config.id);
 			const healthState = this.getHealthState(health);
+			const stats = this.statistics.get(config.id);
 			return {
 				id: config.id,
 				enabled: config.enabled,
@@ -136,6 +179,12 @@ export class NetworkScheduler implements NetworkDelegate {
 						: 0,
 				consecutiveFailures: health.consecutiveFailures,
 				openUntil: health.openUntil ?? null,
+				requests: stats?.requests ?? 0,
+				failures: stats?.failures ?? 0,
+				rateLimited: stats?.rateLimited ?? 0,
+				averageDurationMs: stats?.durationSamples
+					? stats.durationMs / stats.durationSamples
+					: null,
 			};
 		});
 	}
@@ -222,10 +271,27 @@ export class NetworkScheduler implements NetworkDelegate {
 					// codes. If one throws anyway, record the failure so a claimed
 					// half-open probe is never left dangling, then surface the error.
 					this.updateHealth(state, candidate.config.id, "NETWORK_FAILURE");
+					const stats = this.statistics.get(candidate.config.id);
+					if (stats) {
+						stats.requests += 1;
+						stats.failures += 1;
+					}
 					throw error;
 				}
 
-				this.updateHealth(state, candidate.config.id, response.errorCode);
+				const stats = this.statistics.get(candidate.config.id);
+				if (stats) {
+					stats.requests += 1;
+					stats.durationMs += response.durationMs;
+					stats.durationSamples += 1;
+					if (response.errorCode) stats.failures += 1;
+					if (
+						response.errorCode === "HTTP_429" ||
+						response.errorCode === "APPLICATION_RATE_LIMIT"
+					)
+						stats.rateLimited += 1;
+				}
+				this.updateHealth(state, candidate.config.id, response.errorCode, response.headers);
 				this.logger.info("Network request completed", {
 					component: "network-scheduler",
 					adapterId: candidate.adapter.id,
@@ -313,11 +379,11 @@ export class NetworkScheduler implements NetworkDelegate {
 		const configSnapshot: NetworkRuntimeConfig = structuredClone(config);
 		const adaptersSnapshot = new Map(adapters);
 		const healthConfig: HealthConfig = {
-			failurePenalty: configSnapshot.health?.failurePenalty ?? 0.5,
-			recoveryBonus: configSnapshot.health?.recoveryBonus ?? 0.2,
-			minWeightFactor: configSnapshot.health?.minWeightFactor ?? 0.05,
-			failureThreshold: configSnapshot.health?.failureThreshold ?? 3,
-			cooldownMs: configSnapshot.health?.cooldownMs ?? 30_000,
+			failurePenalty: configSnapshot.health?.failurePenalty ?? 0.85,
+			recoveryBonus: configSnapshot.health?.recoveryBonus ?? 0.5,
+			minWeightFactor: configSnapshot.health?.minWeightFactor ?? 0.1,
+			failureThreshold: configSnapshot.health?.failureThreshold ?? 20,
+			cooldownMs: configSnapshot.health?.cooldownMs ?? 10_000,
 		};
 
 		return {
@@ -423,7 +489,8 @@ export class NetworkScheduler implements NetworkDelegate {
 	private updateHealth(
 		state: SchedulerState,
 		adapterId: string,
-		errorCode: NetworkErrorCode | undefined
+		errorCode: NetworkErrorCode | undefined,
+		headers: Record<string, string> = {}
 	): void {
 		const health = this.getHealth(state, adapterId);
 		const outcome = healthOutcome(errorCode);
@@ -436,8 +503,10 @@ export class NetworkScheduler implements NetworkDelegate {
 				// A successful probe closes the circuit completely.
 				health.openUntil = undefined;
 				health.factor = 1;
+				health.degraded = false;
 			} else {
 				health.factor = Math.min(1, health.factor + state.healthConfig.recoveryBonus);
+				if (health.factor >= 0.95) health.degraded = false;
 			}
 			return;
 		}
@@ -449,14 +518,35 @@ export class NetworkScheduler implements NetworkDelegate {
 			return;
 		}
 
-		health.factor = Math.max(
-			state.healthConfig.minWeightFactor,
-			health.factor * state.healthConfig.failurePenalty
-		);
 		health.consecutiveFailures += 1;
-
-		if (wasProbing || health.consecutiveFailures >= state.healthConfig.failureThreshold) {
-			health.openUntil = this.clock() + state.healthConfig.cooldownMs;
+		const throttled = errorCode === "HTTP_429" || errorCode === "APPLICATION_RATE_LIMIT";
+		// Debounce transient failures; throttling and failed probes still isolate immediately.
+		if (
+			health.consecutiveFailures >= 2 ||
+			wasProbing ||
+			throttled ||
+			state.healthConfig.failureThreshold === 1
+		) {
+			health.factor = Math.max(
+				state.healthConfig.minWeightFactor,
+				health.factor * state.healthConfig.failurePenalty
+			);
+			if (health.factor < 0.8) health.degraded = true;
+		}
+		if (
+			wasProbing ||
+			throttled ||
+			health.consecutiveFailures >= state.healthConfig.failureThreshold
+		) {
+			const now = this.clock();
+			const cooldown = throttled
+				? Math.max(
+						state.healthConfig.cooldownMs,
+						RATE_LIMIT_COOLDOWN_MS,
+						retryAfterMs(headers, now)
+					)
+				: state.healthConfig.cooldownMs;
+			health.openUntil = Math.max(health.openUntil ?? 0, now + cooldown);
 		}
 
 		this.logger.warn("Network adapter health changed", {
@@ -474,6 +564,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		if (existing) return existing;
 
 		const created: AdapterHealth = {
+			degraded: false,
 			factor: 1,
 			consecutiveFailures: 0,
 			openUntil: undefined,
@@ -487,7 +578,8 @@ export class NetworkScheduler implements NetworkDelegate {
 		if (health.openUntil !== undefined) {
 			return health.openUntil <= this.clock() ? "half-open" : "open";
 		}
-		return health.factor < 1 ? "degraded" : "healthy";
+		// Enter below 0.8 and recover at 0.95; reading status never changes the state.
+		return health.degraded ? "degraded" : "healthy";
 	}
 
 	/** Claims the single half-open probe slot, or reports that the adapter is unavailable. */

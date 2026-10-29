@@ -34,7 +34,7 @@ export type CandidateEvaluation =
 			metadata: UpsertMetadataInput;
 	  }
 	| { status: "rejected"; decision: FilterDecision; details: VideoDetailsData }
-	| { status: "skipped"; reason: "already_tracked" }
+	| { status: "skipped"; reason: "already_tracked" | "human_rejected" }
 	| {
 			status: "failed";
 			reason: "fetch_failed" | "video_unavailable";
@@ -68,6 +68,13 @@ export class DiscoveryCandidateEvaluator {
 	async evaluate(input: CandidateEvaluationInput): Promise<CandidateEvaluation> {
 		return traceTask("discovery.evaluateCandidate", async () => {
 			const { aid, source } = input;
+
+			const labeled = await this.discoveryRepo.listSamples({
+				search: aid.toString(),
+				limit: 1,
+			});
+			if (labeled[0]?.humanLabel === 0)
+				return { status: "skipped", reason: "human_rejected" };
 
 			if (!input.force) {
 				const existing = await this.trackingRepo.getTracking(aid);

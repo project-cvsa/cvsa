@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 
 /** Matches the Prisma CLI default when `DATABASE_URL` is not configured. */
-const DEFAULT_DATABASE_URL = "postgresql://localhost:5432/cvsa";
+const DEFAULT_DATABASE_URL = "postgresql://cvsa:password@localhost:5432/cvsa";
 
 /**
  * Loads the same `.env` / `.env.test` file the Prisma CLI uses and returns the

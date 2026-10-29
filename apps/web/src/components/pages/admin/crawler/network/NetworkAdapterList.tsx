@@ -1,253 +1,240 @@
-import { For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
+
 import Button from "@components/ui/Button";
-import Badge from "@components/ui/Badge";
+import Badge, { type BadgeVariant } from "@components/ui/Badge";
 import Switch from "@components/ui/Switch";
-import NumberField from "@components/ui/NumberField";
-import { Card, CardHeader, CardContent } from "@components/ui/Card";
+import { Card, CardContent, CardHeader } from "@components/ui/Card";
+import { toast } from "@components/ui/Toast";
+import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import type { CrawlerStatusDto, NetworkAdapterConfig } from "@cvsa/contracts";
-import Trash2 from "lucide-solid/icons/trash-2";
-import Server from "lucide-solid/icons/server";
+import type {
+	CrawlerStatusDto,
+	NetworkAdapterConfig,
+	TestNetworkAdapterResponse,
+} from "@cvsa/contracts";
 
 type NetworkAdapterListProps = {
 	adapters: NetworkAdapterConfig[];
 	status: CrawlerStatusDto | null;
+	configRevision: number;
+	dirty: boolean;
 	onToggle: (id: string) => void;
 	onRemove: (id: string) => void;
-	onWeightChange: (id: string, weight: number) => void;
+	onEdit: (adapter: NetworkAdapterConfig) => void;
+	onAdd: () => void;
 };
+
+function healthPresentation(item: CrawlerStatusDto["adapters"][number]): {
+	variant: BadgeVariant;
+	label: string;
+} {
+	if (!item.enabled) return { variant: "neutral", label: "network.adapters.health.disabled" };
+	switch (item.healthState) {
+		case "healthy":
+			return { variant: "success", label: "network.adapters.health.healthy" };
+		case "degraded":
+			return { variant: "warning", label: "network.adapters.health.degraded" };
+		case "half-open":
+			return { variant: "warning", label: "network.adapters.health.probing" };
+		case "open":
+			return { variant: "danger", label: "network.adapters.health.open" };
+		default:
+			return { variant: "neutral", label: "common.unknown" };
+	}
+}
+
+type AdapterCardProps = {
+	adapter: NetworkAdapterConfig;
+	runtime: CrawlerStatusDto["adapters"][number] | undefined;
+	result: TestNetworkAdapterResponse | undefined;
+	testing: boolean;
+	testDisabled: boolean;
+	onToggle: () => void;
+	onEdit: () => void;
+	onRemove: () => void;
+	onTest: () => void;
+};
+
+function AdapterCard(props: AdapterCardProps) {
+	const t = getComponentT("crawler");
+	const rateLimit = () =>
+		props.adapter.rateLimits.length
+			? props.adapter.rateLimits
+					.map((limit) => `${limit.maxRequests}/${limit.durationSeconds}s`)
+					.join(", ")
+			: t("common.unlimited");
+	const resultLabel = (result: TestNetworkAdapterResponse) =>
+		result.ok ? `${result.latencyMs} ms` : result.error || t("common.error");
+	const metrics = () => [
+		{ label: t("network.adapters.col.weight"), value: props.adapter.baseWeight },
+		{
+			label: t("network.adapters.effectiveWeight"),
+			value: props.runtime?.effectiveWeight.toFixed(2) ?? "—",
+		},
+		{ label: t("network.adapters.col.rateLimit"), value: rateLimit() },
+		{
+			label: t("network.adapters.requests"),
+			value: (
+				<span>
+					{props.runtime?.requests ?? 0}
+					<Show when={props.runtime?.failures}>
+						<span class="text-error ml-1">
+							{t("network.adapters.errorCount").replace(
+								"{count}",
+								String(props.runtime?.failures ?? 0)
+							)}
+						</span>
+					</Show>
+				</span>
+			),
+		},
+		{
+			label: t("network.adapters.averageLatency"),
+			value:
+				props.runtime?.averageDurationMs == null
+					? "—"
+					: `${props.runtime.averageDurationMs.toFixed(0)} ms`,
+		},
+	];
+	return (
+		<Card class="flex flex-col">
+			<CardHeader
+				title={
+					<div class="flex items-center gap-2.5 min-w-0">
+						<Switch
+							size="sm"
+							checked={props.adapter.enabled}
+							onChange={props.onToggle}
+							aria-label={`${t("common.enable")} ${props.adapter.id}`}
+						/>
+						<span class="ts-label text-primary truncate">{props.adapter.id}</span>
+						<span class="ts-caption text-tertiary">
+							{t(`network.adapters.type.${props.adapter.type}`)}
+						</span>
+					</div>
+				}
+				actions={
+					<Show when={props.runtime}>
+						{(runtime) => (
+							<Badge size="sm" variant={healthPresentation(runtime()).variant}>
+								{t(healthPresentation(runtime()).label)}
+							</Badge>
+						)}
+					</Show>
+				}
+			/>
+			<CardContent class="p-4 flex flex-col gap-4 flex-1 justify-between">
+				<dl class="grid grid-cols-2 sm:grid-cols-3 gap-3 ts-caption">
+					<For each={metrics()}>
+						{(metric) => (
+							<div>
+								<dt class="text-tertiary mb-0.5">{metric.label}</dt>
+								<dd class="font-medium text-primary break-words">{metric.value}</dd>
+							</div>
+						)}
+					</For>
+					<Show when={props.result}>
+						{(result) => (
+							<div>
+								<dt class="text-tertiary mb-0.5">
+									{t("network.adapters.latency")}
+								</dt>
+								<dd class={result().ok ? "text-primary" : "text-error"}>
+									{resultLabel(result())}
+								</dd>
+							</div>
+						)}
+					</Show>
+				</dl>
+				<div class="flex items-center justify-end gap-2">
+					<Button
+						size="sm"
+						variant="outlined"
+						disabled={props.testDisabled || props.testing}
+						onClick={props.onTest}
+					>
+						{props.testing ? t("network.adapters.testing") : t("common.test")}
+					</Button>
+					<Button size="sm" variant="outlined" onClick={props.onEdit}>
+						{t("common.edit")}
+					</Button>
+					<Button
+						size="sm"
+						variant="outlined"
+						class="text-error"
+						onClick={props.onRemove}
+					>
+						{t("common.delete")}
+					</Button>
+				</div>
+			</CardContent>
+		</Card>
+	);
+}
 
 export default function NetworkAdapterList(props: NetworkAdapterListProps) {
 	const t = getComponentT("crawler");
+	const [testing, setTesting] = createSignal<Record<string, boolean>>({});
+	const [results, setResults] = createSignal<Record<string, TestNetworkAdapterResponse>>({});
+	const staleRuntime = () => props.status?.revision !== props.configRevision;
+	createEffect(() => {
+		props.status?.revision;
+		props.dirty;
+		setResults({});
+	});
 
-	const endpoint = (adapter: NetworkAdapterConfig) =>
-		adapter.type === "http-proxy" ? adapter.proxyUrl : "direct";
+	const test = async (id: string) => {
+		setTesting((current) => ({ ...current, [id]: true }));
+		const result = await api.crawler.testNetworkAdapter(id);
+		setTesting((current) => ({ ...current, [id]: false }));
+		if (!result.ok || !result.data) {
+			toast.error(result.ok ? t("common.error") : result.error.message || t("common.error"));
+			return;
+		}
+		const data = result.data;
+		setResults((current) => ({ ...current, [id]: data }));
+	};
 
 	return (
-		<Card>
-			<CardHeader
-				title={
-					<div class="flex items-center gap-2">
-						<Server class="w-4 h-4 text-primary" />
-						<span>{t("network.adapters.title")}</span>
-						<Badge variant="neutral" size="sm">
-							{t("network.adapters.count").replace(
-								"{count}",
-								String(props.adapters.length)
-							)}
-						</Badge>
-					</div>
-				}
-			/>
-			<CardContent class="p-0">
-				<Show
-					when={props.adapters.length > 0}
-					fallback={
-						<div class="p-8 text-center text-tertiary">
-							{t("network.adapters.empty")}
-						</div>
-					}
-				>
-					<div class="overflow-x-auto">
-						<table class="w-full text-left ts-caption">
-							<thead>
-								<tr class="border-b border-border text-tertiary bg-surface-container-low/50">
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.enabled")}
-									</th>
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.id")}
-									</th>
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.type")}
-									</th>
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.endpoint")}
-									</th>
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.weight")}
-									</th>
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.rateLimit")}
-									</th>
-									<th class="py-3 px-4 font-medium">
-										{t("network.adapters.col.health")}
-									</th>
-									<th class="py-3 px-4 font-medium text-right">
-										{t("network.adapters.col.action")}
-									</th>
-								</tr>
-							</thead>
-							<tbody class="divide-y divide-border">
-								<For each={props.adapters}>
-									{(adapter) => {
-										const runtime = () =>
-											props.status?.adapters.find(
-												(item) => item.id === adapter.id
-											);
+		<section class="flex flex-col gap-4">
+			<div class="flex flex-wrap items-center justify-between gap-3">
+				<div class="flex items-center gap-3">
+					<h3 class="ts-heading-3 text-primary">{t("network.adapters.title")}</h3>
+					<Badge variant="neutral" size="sm">
+						{props.adapters.length}
+					</Badge>
+				</div>
+				<Button size="sm" variant="filled" onClick={props.onAdd}>
+					{t("common.add")}
+				</Button>
+			</div>
 
-										return (
-											<tr class="hover:bg-hover/50 transition-colors">
-												<td class="py-3 px-4">
-													<Switch
-														checked={adapter.enabled}
-														onChange={() => props.onToggle(adapter.id)}
-														aria-label={
-															t("common.enable") + " " + adapter.id
-														}
-													/>
-												</td>
-												<td class="py-3 px-4 font-mono font-medium text-primary">
-													{adapter.id}
-												</td>
-												<td class="py-3 px-4">
-													<Badge
-														variant={
-															adapter.type === "http-proxy"
-																? "info"
-																: "neutral"
-														}
-														size="sm"
-													>
-														{adapter.type === "http-proxy"
-															? t("network.adapters.type.proxy")
-															: t("network.adapters.type.direct")}
-													</Badge>
-												</td>
-												<td
-													class="py-3 px-4 font-mono text-tertiary max-w-xs truncate"
-													title={endpoint(adapter)}
-												>
-													{endpoint(adapter)}
-												</td>
-												<td class="py-3 px-4">
-													<div class="w-24">
-														<NumberField
-															size="sm"
-															min={0.1}
-															step={0.1}
-															value={adapter.baseWeight}
-															onChange={(val) =>
-																props.onWeightChange(
-																	adapter.id,
-																	val
-																)
-															}
-															aria-label={
-																t("network.adapters.col.weight") +
-																" " +
-																adapter.id
-															}
-														/>
-													</div>
-												</td>
-												<td class="py-3 px-4 text-tertiary">
-													{adapter.rateLimits.length > 0 ? (
-														<Badge variant="neutral" size="sm">
-															{adapter.rateLimits
-																.map(
-																	(limit) =>
-																		`${limit.maxRequests} req / ${limit.durationSeconds}s`
-																)
-																.join(", ")}
-														</Badge>
-													) : (
-														<span class="text-tertiary text-xs">
-															{t("common.unlimited")}
-														</span>
-													)}
-												</td>
-												<td class="py-3 px-4">
-													<Show
-														when={runtime()}
-														fallback={
-															<Badge variant="neutral" size="sm">
-																{t("common.unknown")}
-															</Badge>
-														}
-													>
-														{(item) => {
-															const state = () =>
-																item().healthState.toLowerCase();
-															return (
-																<div class="flex flex-col gap-0.5">
-																	<Show
-																		when={state() === "healthy"}
-																		fallback={
-																			<Show
-																				when={
-																					state() ===
-																					"degraded"
-																				}
-																				fallback={
-																					<Badge
-																						variant="danger"
-																						size="sm"
-																						dot
-																					>
-																						{t(
-																							"network.adapters.health.open"
-																						)}
-																					</Badge>
-																				}
-																			>
-																				<Badge
-																					variant="warning"
-																					size="sm"
-																					dot
-																				>
-																					{t(
-																						"network.adapters.health.degraded"
-																					)}
-																				</Badge>
-																			</Show>
-																		}
-																	>
-																		<Badge
-																			variant="success"
-																			size="sm"
-																			dot
-																		>
-																			{t(
-																				"network.adapters.health.healthy"
-																			)}
-																		</Badge>
-																	</Show>
-																	<span class="text-[11px] font-mono text-tertiary">
-																		eff:{" "}
-																		{item().effectiveWeight.toFixed(
-																			2
-																		)}
-																		{item()
-																			.consecutiveFailures >
-																			0 &&
-																			` (${item().consecutiveFailures} fail)`}
-																	</span>
-																</div>
-															);
-														}}
-													</Show>
-												</td>
-												<td class="py-3 px-4 text-right">
-													<Button
-														size="sm"
-														variant="ghost"
-														class="text-error hover:bg-error/10 gap-1"
-														onClick={() => props.onRemove(adapter.id)}
-													>
-														<Trash2 class="w-3.5 h-3.5" />
-														<span>{t("common.delete")}</span>
-													</Button>
-												</td>
-											</tr>
-										);
-									}}
-								</For>
-							</tbody>
-						</table>
-					</div>
-				</Show>
-			</CardContent>
-		</Card>
+			<Show
+				when={props.adapters.length}
+				fallback={
+					<p class="text-secondary py-8 text-center">{t("network.adapters.empty")}</p>
+				}
+			>
+				<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+					<For each={props.adapters}>
+						{(adapter) => (
+							<AdapterCard
+								adapter={adapter}
+								runtime={props.status?.adapters.find(
+									(item) => item.id === adapter.id
+								)}
+								result={results()[adapter.id]}
+								testing={testing()[adapter.id] ?? false}
+								testDisabled={props.dirty || staleRuntime()}
+								onToggle={() => props.onToggle(adapter.id)}
+								onEdit={() => props.onEdit(adapter)}
+								onRemove={() => props.onRemove(adapter.id)}
+								onTest={() => void test(adapter.id)}
+							/>
+						)}
+					</For>
+				</div>
+			</Show>
+		</section>
 	);
 }

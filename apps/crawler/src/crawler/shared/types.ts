@@ -1,11 +1,34 @@
-import type { JobsOptions, WorkerOptions } from "bullmq";
+import type { JobType, JobsOptions, WorkerOptions } from "bullmq";
+import type { DiscoveryJobProgress } from "@cvsa/contracts";
 
 export interface CrawlerJob<T> {
 	id: string | undefined;
 	data: T;
+	updateProgress?: (progress: DiscoveryJobProgress) => Promise<void>;
 }
 
 export type CrawlerProcessor<T> = (job: CrawlerJob<T>) => Promise<void>;
+
+export type CrawlerQueueJobSnapshot = {
+	id: string;
+	name: string;
+	data: unknown;
+	state: string;
+	attempts: number;
+	failedReason?: string | null;
+	timestamp: number;
+	progress?: unknown;
+	processedOn?: number | null;
+	finishedOn?: number | null;
+};
+
+export type CrawlerQueueJobFullDetail = CrawlerQueueJobSnapshot & {
+	opts?: unknown;
+	stacktrace?: string[] | null;
+	returnvalue?: unknown;
+	processedOn?: number | null;
+	finishedOn?: number | null;
+};
 
 /** BullMQ job-state counts, normalized so callers never deal with partial maps. */
 export interface CrawlerJobCounts {
@@ -19,6 +42,10 @@ export interface CrawlerJobCounts {
 export interface CrawlerQueue<T> {
 	add(name: string, data: T, options?: JobsOptions): Promise<void>;
 	getJobCounts(): Promise<CrawlerJobCounts>;
+	getJobs(types?: JobType[], limit?: number, offset?: number): Promise<CrawlerQueueJobSnapshot[]>;
+	getJobDetail(id: string): Promise<CrawlerQueueJobFullDetail | null>;
+	retryJob(id: string): Promise<boolean>;
+	removeJob(id: string): Promise<boolean>;
 	close(): Promise<void>;
 }
 

@@ -222,41 +222,84 @@ export class TrackingRepository implements ITrackingRepository {
 			let matchingAids: bigint[] | undefined;
 			let exactAid: bigint | undefined;
 			if (search) {
-				if (/^\d+$/.test(search)) {
-					exactAid = BigInt(search);
+				if (/^(?:av)?\d+$/i.test(search)) {
+					exactAid = BigInt(search.replace(/^av/i, ""));
 				} else {
 					const matches = await this.db.orm.public.BilibiliVideoMetadata.where((m) =>
-						m.title.like(`%${search}%`)
-					)
-						.limit(500)
-						.all();
+						/^BV[0-9a-z]{10}$/i.test(search)
+							? m.bvid.eq(search)
+							: m.title.like(`%${search.replace(/[\\%_]/g, "\\$&")}%`)
+					).all();
 					matchingAids = matches.map((metadata) => metadata.aid);
 					if (matchingAids.length === 0) return { items: [], total: 0 };
 				}
 			}
 
 			const collection = this.db.orm.public.VideoTracking.where((t) => {
-				if (state !== undefined && exactAid !== undefined) {
-					return and(t.state.eq(state), t.aid.eq(exactAid));
+				const conditions = [];
+				if (state !== undefined) conditions.push(t.state.eq(state));
+				if (exactAid !== undefined) conditions.push(t.aid.eq(exactAid));
+				else if (matchingAids !== undefined) conditions.push(t.aid.in(matchingAids));
+
+				if (params.statusFilter === "failing") {
+					conditions.push(t.consecutiveFails.gt(0));
+				} else if (params.statusFilter === "highPriority") {
+					conditions.push(t.priority.eq(1));
+				} else if (params.statusFilter === "normal") {
+					conditions.push(t.consecutiveFails.eq(0));
 				}
-				if (state !== undefined && matchingAids !== undefined) {
-					return and(t.state.eq(state), t.aid.in(matchingAids));
-				}
-				if (state !== undefined) return t.state.eq(state);
-				if (exactAid !== undefined) return t.aid.eq(exactAid);
-				if (matchingAids !== undefined) return t.aid.in(matchingAids);
-				return t.aid.gte(0n);
+
+				const first = conditions[0];
+				if (!first) return t.aid.gte(0n);
+				const second = conditions[1];
+				if (!second) return first;
+				return and(first, second, ...conditions.slice(2));
 			});
 
 			const aggregate = await collection.aggregate((agg) => ({ total: agg.count() }));
 
-			const items = await collection
-				.orderBy([(t) => t.priority.asc(), (t) => t.nextSnapshotAt.asc()])
+			const isAsc = params.sortOrder === "asc";
+			const items = await (params.sortBy === "views"
+				? collection.orderBy([(t) => (isAsc ? t.lastViews.asc() : t.lastViews.desc())])
+				: params.sortBy === "velocity"
+					? collection.orderBy([(t) => (isAsc ? t.velocity.asc() : t.velocity.desc())])
+					: params.sortBy === "nextSnapshotAt"
+						? collection.orderBy([
+								(t) => (isAsc ? t.nextSnapshotAt.asc() : t.nextSnapshotAt.desc()),
+							])
+						: params.sortBy === "consecutiveFails"
+							? collection.orderBy([
+									(t) =>
+										isAsc
+											? t.consecutiveFails.asc()
+											: t.consecutiveFails.desc(),
+								])
+							: params.sortBy === "publishedAt"
+								? collection.orderBy([
+										(t) => (isAsc ? t.publishedAt.asc() : t.publishedAt.desc()),
+									])
+								: collection.orderBy([
+										(t) => (isAsc ? t.updatedAt.asc() : t.updatedAt.desc()),
+									])
+			)
+				.orderBy((t) => t.aid.desc())
 				.limit(limit)
 				.offset(offset)
 				.all();
 
 			return { items, total: aggregate.total };
+		});
+	}
+
+	async deleteTracking(aid: bigint): Promise<boolean> {
+		return traceTask("tracking.deleteTracking", async () => {
+			let deleted = false;
+			for await (const _ of this.db.orm.public.VideoTracking.where((t) =>
+				t.aid.eq(aid)
+			).deleteAll()) {
+				deleted = true;
+			}
+			return deleted;
 		});
 	}
 }

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { AutoTokenizer, type PreTrainedTokenizer } from "@huggingface/transformers";
@@ -59,8 +60,31 @@ export interface AkariModelOptions {
 	readonly autoInit?: boolean;
 }
 
-/** Relative to the crawler's working directory unless overridden. */
-const DEFAULT_MODEL_DIR = "./model";
+/**
+ * Directory holding the ONNX artifacts, derived from this module's location
+ * rather than from `process.cwd()`.
+ *
+ * The crawler runs from source in both supported layouts: `apps/crawler/src/ml`
+ * in the monorepo and `/app/apps/crawler/src/ml` in the container image (the
+ * Docker CMD runs `bun src/index.ts`, not a bundle). Four levels up therefore
+ * always lands on the repository / mounted `model` directory.
+ */
+export function defaultModelDir(moduleUrl: string = import.meta.url): string {
+	return path.resolve(fileURLToPath(new URL("../../../../model/", moduleUrl)));
+}
+
+/**
+ * An explicit `modelDir` wins over `CRAWLER_MODEL_DIR`, which wins over the
+ * module-relative default. `process.cwd()` is intentionally never consulted so
+ * `bun run --cwd apps/crawler start` and `bun src/index.ts` resolve the same
+ * directory.
+ */
+export function resolveModelDir(
+	override: string | undefined,
+	moduleUrl: string = import.meta.url
+): string {
+	return path.resolve(override ?? process.env.CRAWLER_MODEL_DIR ?? defaultModelDir(moduleUrl));
+}
 
 /**
  * Canonical model label persisted next to every prediction, e.g. `akari-3.17`.
@@ -80,10 +104,6 @@ function normalizeTags(tags: AkariClassificationInput["tags"]): string {
 	if (typeof tags === "string") return normalizeChannelText(tags, "empty");
 	if (Array.isArray(tags)) return normalizeChannelText(tags.join(" "), "empty");
 	return "empty";
-}
-
-function resolveModelDir(override: string | undefined): string {
-	return path.resolve(override ?? process.env.CRAWLER_MODEL_DIR ?? DEFAULT_MODEL_DIR);
 }
 
 function elapsedMs(startedAt: number): number {
@@ -130,7 +150,7 @@ export function softmax(logits: Float32Array | readonly number[]): number[] {
  * (`alikia2x/jina-embedding-v3-m2v-1024`) — there is no local tokenizer asset
  * and no hash verification: the crawler trusts the published model revision.
  *
- * `modelDir` defaults to `CRAWLER_MODEL_DIR` or `./model`. When the ONNX files
+ * `modelDir` defaults to `CRAWLER_MODEL_DIR` or the repository model directory. When the ONNX files
  * have not been uploaded yet the classifier stays in a pending state and
  * {@link classify} returns `null`, so the discovery pipeline degrades to its
  * deterministic rules instead of failing.

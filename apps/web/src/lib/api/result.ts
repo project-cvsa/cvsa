@@ -61,6 +61,9 @@ export const ERROR_CODES = [
 	"EMAIL_NOT_VERIFIED",
 	"UNAUTHORIZED",
 	"FORBIDDEN",
+	"CRAWLER_UNAVAILABLE",
+	"CRAWLER_REQUEST_FAILED",
+	"CRAWLER_RATE_LIMITED",
 	"NETWORK_ERROR",
 ] as const satisfies readonly ApiErrorCode[];
 

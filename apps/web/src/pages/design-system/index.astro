@@ -10,6 +10,16 @@ import { MenuShowcase } from "@components/pages/design-system/Menus";
 import { TextFieldShowcase } from "@components/pages/design-system/TextFields";
 import { InputExtensionsShowcase } from "@components/pages/design-system/Inputs";
 import { ListShowcase } from "@components/pages/design-system/Lists";
+import {
+	BadgeShowcase,
+	CardShowcase,
+	ModalShowcase,
+	NumberFieldShowcase,
+	RadioShowcase,
+	SliderShowcase,
+	SwitchShowcase,
+	TabsShowcase,
+} from "@components/pages/design-system/Controls";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 
 const { language } = getLocale(Astro.request);
@@ -77,6 +87,54 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 			<Paragraph>{t("designSystem.lists.description")}</Paragraph>
 			<div class="mt-4">
 				<ListShowcase client:load />
+			</div>
+
+			<Heading3>{t("designSystem.badge.title")}</Heading3>
+			<Paragraph>{t("designSystem.badge.description")}</Paragraph>
+			<div class="mt-4">
+				<BadgeShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.slider.title")}</Heading3>
+			<Paragraph>{t("designSystem.slider.description")}</Paragraph>
+			<div class="mt-4">
+				<SliderShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.switch.title")}</Heading3>
+			<Paragraph>{t("designSystem.switch.description")}</Paragraph>
+			<div class="mt-4">
+				<SwitchShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.radio.title")}</Heading3>
+			<Paragraph>{t("designSystem.radio.description")}</Paragraph>
+			<div class="mt-4">
+				<RadioShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.numberField.title")}</Heading3>
+			<Paragraph>{t("designSystem.numberField.description")}</Paragraph>
+			<div class="mt-4">
+				<NumberFieldShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.tabs.title")}</Heading3>
+			<Paragraph>{t("designSystem.tabs.description")}</Paragraph>
+			<div class="mt-4">
+				<TabsShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.card.title")}</Heading3>
+			<Paragraph>{t("designSystem.card.description")}</Paragraph>
+			<div class="mt-4">
+				<CardShowcase client:load />
+			</div>
+
+			<Heading3 class="mt-8">{t("designSystem.modal.title")}</Heading3>
+			<Paragraph>{t("designSystem.modal.description")}</Paragraph>
+			<div class="mt-4">
+				<ModalShowcase client:load />
 			</div>
 		</Surface>
 	</main>

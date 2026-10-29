@@ -110,6 +110,54 @@ function createScheduler(
 }
 
 describe("NetworkScheduler health", () => {
+	for (const code of ["HTTP_429", "APPLICATION_RATE_LIMIT"] satisfies NetworkErrorCode[]) {
+		test(`cools down immediately after ${code} and probes after cooldown`, async () => {
+			const adapter = new ControllableAdapter();
+			adapter.enqueue(failure("direct-a", code), success("direct-a"));
+			const clock = new TestClock();
+			const scheduler = createScheduler(adapter, clock);
+
+			expect((await scheduler.execute(request())).errorCode).toBe(code);
+			expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
+				healthState: "open",
+				openUntil: 60_000,
+			});
+			await expect(scheduler.execute(request())).rejects.toThrow();
+			expect(adapter.startedCount).toBe(1);
+			clock.advance(60_000);
+			expect((await scheduler.execute(request())).errorCode).toBeUndefined();
+			expect(scheduler.getAdapterStatuses()[0].healthState).toBe("healthy");
+		});
+	}
+
+	test("honors a longer Retry-After when throttled", async () => {
+		const adapter = new ControllableAdapter();
+		adapter.enqueue({ ...failure("direct-a", "HTTP_429"), headers: { "Retry-After": "120" } });
+		const clock = new TestClock();
+		const scheduler = createScheduler(adapter, clock);
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0].openUntil).toBe(120_000);
+		clock.advance(60_000);
+		await expect(scheduler.execute(request())).rejects.toThrow();
+	});
+
+	test("reports per-adapter attempts and throttling across configuration reloads", async () => {
+		const adapter = new ControllableAdapter();
+		adapter.enqueue(failure("direct-a", "HTTP_429"), success("direct-a"));
+		const clock = new TestClock();
+		const scheduler = createScheduler(adapter, clock);
+		await scheduler.execute(request());
+		clock.advance(60_000);
+		await scheduler.execute(request());
+		scheduler.reload(config(), new Map([[adapter.id, adapter]]));
+		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
+			requests: 2,
+			failures: 1,
+			rateLimited: 1,
+			averageDurationMs: 1,
+		});
+	});
+
 	test("starts healthy with full effective weight", () => {
 		const adapter = new ControllableAdapter();
 		const scheduler = createScheduler(adapter, new TestClock(), {
@@ -118,7 +166,7 @@ describe("NetworkScheduler health", () => {
 			],
 		});
 
-		expect(scheduler.getAdapterStatuses()).toEqual([
+		expect(scheduler.getAdapterStatuses()).toMatchObject([
 			{
 				id: "direct-a",
 				enabled: true,
@@ -131,7 +179,7 @@ describe("NetworkScheduler health", () => {
 		]);
 	});
 
-	test("degrades without isolating the adapter after a health-affecting failure", async () => {
+	test("ignores one transient failure before applying a weight penalty", async () => {
 		const adapter = new ControllableAdapter();
 		adapter.enqueue(failure("direct-a"));
 		const scheduler = createScheduler(adapter, new TestClock());
@@ -140,11 +188,48 @@ describe("NetworkScheduler health", () => {
 
 		expect(result.errorCode).toBe("NETWORK_FAILURE");
 		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "degraded",
-			healthFactor: 0.5,
-			effectiveWeight: 0.5,
+			healthState: "healthy",
+			healthFactor: 1,
+			effectiveWeight: 1,
 			consecutiveFailures: 1,
 			openUntil: null,
+		});
+	});
+
+	test("uses different thresholds to degrade and recover without flapping", async () => {
+		const adapter = new ControllableAdapter();
+		adapter.enqueue(
+			failure("direct-a"),
+			failure("direct-a"),
+			success("direct-a"),
+			success("direct-a"),
+			success("direct-a")
+		);
+		const scheduler = createScheduler(adapter, new TestClock());
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
+			healthState: "degraded",
+			healthFactor: 0.5,
+		});
+		await scheduler.execute(request());
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("degraded");
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
+	});
+
+	test("alternating isolated failures and successes do not reduce the adapter weight", async () => {
+		const adapter = new ControllableAdapter();
+		for (let index = 0; index < 5; index++)
+			adapter.enqueue(failure("direct-a"), success("direct-a"));
+		const scheduler = createScheduler(adapter, new TestClock());
+		for (let index = 0; index < 10; index++) await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
+			healthState: "healthy",
+			healthFactor: 1,
+			consecutiveFailures: 0,
 		});
 	});
 
@@ -374,7 +459,7 @@ describe("NetworkScheduler health", () => {
 			new Map([["direct-b", replacement]])
 		);
 
-		expect(scheduler.getAdapterStatuses()).toEqual([
+		expect(scheduler.getAdapterStatuses()).toMatchObject([
 			{
 				id: "direct-b",
 				enabled: true,

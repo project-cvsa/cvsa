@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import {
 	type ComponentProps,
 	createEffect,
@@ -99,9 +99,9 @@ export default function TextArea(props: TextAreaProps) {
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5", local.class)}>
 			<div
-				class={clsx(
+				class={cn(
 					"relative bg-surface border transition-colors",
 					hasError()
 						? "border-error"
@@ -113,7 +113,7 @@ export default function TextArea(props: TextAreaProps) {
 					{(label) => (
 						<label
 							for={textareaId()}
-							class={clsx(
+							class={cn(
 								"absolute left-4 top-2 z-1 cursor-text ts-caption",
 								hasError() ? "text-error" : "text-tertiary"
 							)}
@@ -138,7 +138,7 @@ export default function TextArea(props: TextAreaProps) {
 					placeholder={local.placeholder}
 					aria-invalid={hasError() || undefined}
 					aria-describedby={describedBy()}
-					class={clsx(
+					class={cn(
 						"box-border block w-full resize-y bg-transparent px-4 pb-3 outline-none ts-body text-primary",
 						"placeholder:text-tertiary disabled:cursor-not-allowed",
 						local.label ? "pt-7" : "pt-3.5",

@@ -140,6 +140,44 @@ describe("crawler control plane", () => {
 		expect(status).toBe(401);
 	});
 
+	test.serial("answers an unmatched route with a 404 error body instead of 500", async () => {
+		const response = await crawlerControlPlane.handle(
+			new Request("http://localhost/v2/stats", { headers: authorized.headers })
+		);
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toMatchObject({ code: "NOT_FOUND" });
+	});
+
+	test.serial("answers an unmatched route with 404 before any token check", async () => {
+		const response = await crawlerControlPlane.handle(
+			new Request("http://localhost/v2/stats/not-a-route")
+		);
+
+		expect(response.status).toBe(404);
+		expect(await response.json()).toMatchObject({ code: "NOT_FOUND" });
+	});
+
+	test.serial("still rejects a known route without a token", async () => {
+		const response = await crawlerControlPlane.handle(
+			new Request("http://localhost/v2/stats/overview?window=5m")
+		);
+
+		expect(response.status).toBe(401);
+		expect(await response.json()).toMatchObject({ code: "UNAUTHORIZED" });
+	});
+
+	test.serial("maps a malformed query to 422 VALIDATION_ERROR", async () => {
+		const response = await crawlerControlPlane.handle(
+			new Request("http://localhost/v2/stats/overview?window=bogus", {
+				headers: authorized.headers,
+			})
+		);
+
+		expect(response.status).toBe(422);
+		expect(await response.json()).toMatchObject({ code: "VALIDATION_ERROR" });
+	});
+
 	test.serial("returns 404 when no configuration is stored", async () => {
 		const { error, status } = await runtimeApi.config.get(authorized);
 

@@ -16,6 +16,7 @@ const primitives = {
 		540: "#585858",
 		600: "#484848",
 		650: "#3A3A3A",
+		700: "#2E2E2E",
 		740: "#242424",
 		800: "#161616",
 		840: "#0D0D0D",
@@ -59,11 +60,11 @@ const baseVariables = {
 	},
 	"--surface-container-medium": {
 		light: primitives.gray[60],
-		dark: primitives.gray[600],
+		dark: primitives.gray[700],
 	},
 	"--surface-container-low": {
 		light: primitives.gray[100],
-		dark: primitives.gray[460],
+		dark: primitives.gray[650],
 	},
 	"--display": {
 		light: primitives.gray[840],
@@ -97,9 +98,17 @@ const baseVariables = {
 		light: primitives.yellow[60],
 		dark: primitives.yellow[100],
 	},
+	"--on-highlight": {
+		light: primitives.gray[840],
+		dark: primitives.gray[840],
+	},
 	"--shadow": {
 		light: primitives.gray[1000] + "0A",
 		dark: primitives.gray[1000] + "30",
+	},
+	"--scrim": {
+		light: primitives.gray[1000] + "99",
+		dark: primitives.gray[1000] + "B3",
 	},
 } as const;
 

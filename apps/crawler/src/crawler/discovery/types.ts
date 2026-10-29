@@ -108,12 +108,9 @@ export interface MetadataFieldChange {
 
 export type MetadataFieldDiff = Partial<Record<keyof MetadataComparable, MetadataFieldChange>>;
 
-export interface ListDiscoverySamplesOptions {
-	decision?: string;
-	labeled?: boolean;
-	limit?: number;
-	offset?: number;
-}
+export type ListDiscoverySamplesOptions = Partial<
+	import("@cvsa/contracts").DiscoverySampleListQuery
+>;
 
 export interface HotSampleOptions {
 	limit: number;

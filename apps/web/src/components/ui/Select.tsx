@@ -1,11 +1,43 @@
+import { cn } from "@lib/cn";
 import { Select as ArkSelect, createListCollection } from "@ark-ui/solid/select";
-import clsx from "clsx";
-import { type ComponentProps, createMemo, createUniqueId, For, Show, splitProps } from "solid-js";
-import { Dynamic, Portal } from "solid-js/web";
+import { cva, type VariantProps } from "class-variance-authority";
+import type { LucideIcon } from "lucide-solid";
 import Check from "lucide-solid/icons/check";
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import X from "lucide-solid/icons/x";
-import type { LucideIcon } from "lucide-solid";
+import { type ComponentProps, createMemo, createUniqueId, For, Show, splitProps } from "solid-js";
+import { Dynamic, Portal } from "solid-js/web";
+import { CONTROL_HEIGHT } from "./controlStyles";
+
+const selectValueTextVariants = cva(
+	"min-w-0 flex-1 truncate text-primary data-[placeholder-shown]:text-tertiary",
+	{
+		variants: {
+			size: {
+				sm: "text-caption tracking-caption",
+				md: "text-label tracking-label",
+				lg: "text-body tracking-body",
+			},
+		},
+	}
+);
+
+const selectOptionVariants = cva(
+	"group flex cursor-default items-center gap-2.5 outline-none transition-colors",
+	{
+		variants: {
+			size: {
+				sm: "min-h-8 px-2.5 py-1 text-caption tracking-caption",
+				md: "min-h-10 px-3 py-2 text-label tracking-label",
+			},
+		},
+		defaultVariants: {
+			size: "md",
+		},
+	}
+);
+
+export type SelectSize = NonNullable<VariantProps<typeof selectValueTextVariants>["size"]>;
 
 export interface SelectOption {
 	value: string;
@@ -20,7 +52,8 @@ export interface SelectProps extends Omit<ComponentProps<"div">, "onChange" | "o
 	value?: string;
 	defaultValue?: string;
 	name?: string;
-	label: string;
+	label?: string;
+	size?: SelectSize;
 	placeholder?: string;
 	helperText?: string;
 	errorText?: string;
@@ -40,6 +73,7 @@ export default function Select(props: SelectProps) {
 		"defaultValue",
 		"name",
 		"label",
+		"size",
 		"placeholder",
 		"helperText",
 		"errorText",
@@ -49,6 +83,7 @@ export default function Select(props: SelectProps) {
 		"clearLabel",
 		"onValueChange",
 		"aria-describedby",
+		"aria-label",
 	]);
 
 	const uid = createUniqueId();
@@ -56,6 +91,7 @@ export default function Select(props: SelectProps) {
 	const errorId = () => `${selectId()}-error`;
 	const helperId = () => `${selectId()}-helper`;
 	const hasError = () => Boolean(local.errorText);
+	const isFloating = () => Boolean(local.label && !local.size);
 	const collection = createMemo(() =>
 		createListCollection<SelectOption>({
 			items: [...local.options],
@@ -85,51 +121,85 @@ export default function Select(props: SelectProps) {
 			disabled={local.disabled}
 			required={local.required}
 			invalid={hasError()}
-			positioning={{ placement: "bottom-start", gutter: 8, sameWidth: true }}
+			positioning={{ placement: "bottom-start", gutter: 6 }}
 			onValueChange={(details) => local.onValueChange?.(details.value[0])}
-			class={clsx("flex flex-col gap-1.5", local.class)}
+			class={cn("flex flex-col gap-1.5 w-full", local.class)}
 			{...rest}
 		>
-			<ArkSelect.Control
-				class={clsx(
-					"group relative flex h-[58px] items-center border bg-surface transition-colors",
-					hasError()
-						? "border-error"
-						: "border-border hover:border-tertiary focus-within:border-primary",
-					local.disabled && "opacity-60"
-				)}
-			>
-				<ArkSelect.Label
-					class={clsx(
-						"pointer-events-none absolute left-4 top-2 z-1 ts-caption",
-						hasError() ? "text-error" : "text-tertiary"
-					)}
-				>
+			<Show when={local.label && local.size}>
+				<ArkSelect.Label class="ts-caption text-secondary font-medium select-none">
 					{local.label}
 					<Show when={local.required}>
 						<span class="text-error"> *</span>
 					</Show>
 				</ArkSelect.Label>
+			</Show>
+
+			<ArkSelect.Control
+				class={cn(
+					"group relative flex items-center border bg-surface transition-colors w-full",
+					isFloating() ? "h-[58px]" : CONTROL_HEIGHT[local.size ?? "md"],
+					hasError()
+						? "border-error"
+						: "border-border hover:border-tertiary focus-within:border-primary focus-within:ring-1 focus-within:ring-primary",
+					local.disabled && "opacity-60"
+				)}
+			>
+				<Show when={isFloating()}>
+					<ArkSelect.Label
+						class={cn(
+							"pointer-events-none absolute left-4 top-2 z-1 ts-caption",
+							hasError() ? "text-error" : "text-tertiary"
+						)}
+					>
+						{local.label}
+						<Show when={local.required}>
+							<span class="text-error"> *</span>
+						</Show>
+					</ArkSelect.Label>
+				</Show>
 
 				<ArkSelect.Trigger
-					class={clsx(
-						"flex h-full min-w-0 flex-1 items-end bg-transparent py-2 pl-4 pt-6 text-left outline-none disabled:cursor-not-allowed",
-						local.clearable ? "pr-12" : "pr-4"
+					class={cn(
+						"flex h-full min-w-0 flex-1 items-center bg-transparent text-left outline-none disabled:cursor-not-allowed",
+						isFloating()
+							? "items-end py-2 pl-4 pt-6"
+							: local.size === "sm"
+								? "px-2.5"
+								: "px-3.5",
+						local.clearable
+							? local.size === "sm"
+								? "pr-7"
+								: "pr-12"
+							: local.size === "sm"
+								? "pr-6"
+								: "pr-8"
 					)}
 					aria-describedby={describedBy()}
+					aria-label={local["aria-label"]}
 				>
 					<ArkSelect.ValueText
 						placeholder={local.placeholder}
-						class="min-w-0 flex-1 truncate ts-body text-primary data-[placeholder-shown]:text-tertiary"
+						class={cn(
+							isFloating()
+								? "ts-body"
+								: selectValueTextVariants({ size: local.size ?? "md" })
+						)}
 					/>
 					<ArkSelect.Indicator
-						class={clsx(
+						class={cn(
 							"pointer-events-none absolute inset-y-0 flex shrink-0 items-center text-quaternary",
-							local.clearable ? "right-12" : "right-4"
+							local.clearable
+								? local.size === "sm"
+									? "right-6"
+									: "right-10"
+								: local.size === "sm"
+									? "right-2"
+									: "right-3"
 						)}
 					>
 						<ChevronDown
-							size={18}
+							size={local.size === "sm" ? 14 : 18}
 							class="transition-transform group-data-[state=open]:rotate-180"
 						/>
 					</ArkSelect.Indicator>
@@ -138,10 +208,13 @@ export default function Select(props: SelectProps) {
 				<Show when={local.clearable}>
 					<ArkSelect.ClearTrigger
 						type="button"
-						class="mr-2 flex h-9 w-9 shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+						class={cn(
+							"mr-1 flex shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
+							local.size === "sm" ? "h-6 w-6" : "h-9 w-9"
+						)}
 						aria-label={local.clearLabel}
 					>
-						<X size={17} />
+						<X size={local.size === "sm" ? 13 : 17} />
 					</ArkSelect.ClearTrigger>
 				</Show>
 			</ArkSelect.Control>
@@ -159,9 +232,9 @@ export default function Select(props: SelectProps) {
 
 			<Portal>
 				<ArkSelect.Positioner class="z-50">
-					<ArkSelect.Content class="max-h-[min(22rem,var(--available-height))] w-[var(--reference-width)] overflow-y-auto bg-surface p-3 shadow-xl outline-none">
+					<ArkSelect.Content class="z-60 max-h-[min(22rem,var(--available-height))] min-w-[var(--reference-width)] w-max max-w-[min(24rem,calc(100vw-2rem))] overflow-y-auto bg-surface p-1.5 shadow-xl outline-none border border-border transition-all duration-150 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95">
 						<For each={local.options}>
-							{(option) => <SelectOptionRow option={option} />}
+							{(option) => <SelectOptionRow option={option} size={local.size} />}
 						</For>
 					</ArkSelect.Content>
 				</ArkSelect.Positioner>
@@ -171,36 +244,40 @@ export default function Select(props: SelectProps) {
 	);
 }
 
-function SelectOptionRow(props: { option: SelectOption }) {
+function SelectOptionRow(props: { option: SelectOption; size?: SelectSize }) {
+	const variantSize = () => (props.size === "sm" ? "sm" : "md");
+
 	return (
 		<ArkSelect.Item
 			item={props.option}
-			class={clsx(
-				"group flex min-h-12 cursor-default items-center gap-3 px-3 outline-none transition-colors",
+			class={cn(
+				selectOptionVariants({ size: variantSize() }),
 				"data-[highlighted]:bg-hover data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45"
 			)}
 		>
 			<Show when={props.option.icon}>
-				<span class="flex h-8 w-8 items-center justify-center text-quaternary">
+				<span class="flex h-6 w-6 items-center justify-center text-quaternary shrink-0">
 					<Show when={props.option.icon}>
-						{(icon) => <Dynamic component={icon()} size={18} />}
+						{(icon) => (
+							<Dynamic component={icon()} size={props.size === "sm" ? 14 : 18} />
+						)}
 					</Show>
 				</span>
 			</Show>
-			<div class="min-w-0 flex-1 py-2">
-				<ArkSelect.ItemText class="block truncate ts-body text-primary">
+			<div class="min-w-0 flex-1">
+				<ArkSelect.ItemText class="block whitespace-normal break-words text-primary font-normal">
 					{props.option.label}
 				</ArkSelect.ItemText>
 				<Show when={props.option.description}>
 					{(description) => (
-						<span class="mt-0.5 block truncate ts-caption text-tertiary">
+						<span class="mt-0.5 block whitespace-normal break-words ts-caption text-tertiary">
 							{description()}
 						</span>
 					)}
 				</Show>
 			</div>
-			<ArkSelect.ItemIndicator class="text-primary">
-				<Check size={17} />
+			<ArkSelect.ItemIndicator class="text-primary shrink-0">
+				<Check size={props.size === "sm" ? 14 : 17} />
 			</ArkSelect.ItemIndicator>
 		</ArkSelect.Item>
 	);

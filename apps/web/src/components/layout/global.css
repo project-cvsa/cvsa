@@ -1,0 +1,142 @@
+@import "overlayscrollbars/styles/overlayscrollbars.css";
+
+:root {
+	--wireframe-line: var(--grid-lines);
+	--highlight-color: var(--highlight);
+	--highlight-shadow-color: var(--shadow);
+}
+
+body {
+	font-size: 16px;
+	font-weight: 400;
+	font-family: "Outfit", system-ui, sans-serif;
+	background-color: var(--background);
+	background-image:
+		linear-gradient(to right, var(--grid-lines) 1px, transparent 1px),
+		linear-gradient(to bottom, var(--grid-lines) 1px, var(--background) 1px);
+	background-size: 100px 100px;
+	color: var(--display);
+}
+::selection {
+	background-color: var(--primary);
+	color: var(--background);
+}
+/* Hide number input spinners across all browsers */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+	-webkit-appearance: none;
+	margin: 0;
+}
+input[type="number"] {
+	-moz-appearance: textfield;
+}
+/* Prevent Chrome autofill from overriding background with glaring light-blue in dark mode */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+	/* biome-ignore lint/complexity/noImportantStyles: Chrome autofill requires !important to override UA styles */
+	-webkit-box-shadow: 0 0 0 1000px var(--surface) inset !important;
+	/* biome-ignore lint/complexity/noImportantStyles: Chrome autofill requires !important to override UA styles */
+	-webkit-text-fill-color: var(--display) !important;
+	/* biome-ignore lint/complexity/noImportantStyles: Chrome autofill requires !important to override UA styles */
+	caret-color: var(--display) !important;
+	transition: background-color 5000s ease-in-out 0s;
+}
+
+/* OverlayScrollbars Brutalist Industrial Theme */
+.os-theme-cvsa {
+	--os-size: 7px;
+	--os-padding-perpendicular: 0px;
+	--os-padding-axis: 0px;
+	--os-track-border-radius: 0px;
+	--os-handle-border-radius: 0px;
+	--os-handle-bg: var(--tertiary);
+	--os-handle-bg-hover: var(--secondary);
+	--os-handle-bg-active: var(--primary);
+	--os-track-bg: var(--surface);
+	--os-track-bg-hover: var(--surface);
+	--os-track-bg-active: var(--surface);
+}
+
+/* Genuine CSS Keyframe Animations for Popovers, Menus, Modals */
+@keyframes cvsa-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes cvsa-fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes cvsa-zoom-in-95 {
+	from {
+		opacity: 0;
+		transform: scale(0.96) translateY(-2px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+@keyframes cvsa-zoom-out-95 {
+	from {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.96) translateY(-2px);
+	}
+}
+
+:is([data-scope="select"], [data-scope="menu"])[data-part="content"][data-state="open"] {
+	animation: cvsa-zoom-in-95 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+:is([data-scope="select"], [data-scope="menu"])[data-part="content"][data-state="closed"] {
+	animation: cvsa-zoom-out-95 0.09s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cvsa-modal-backdrop {
+	animation: cvsa-fade-in 0.15s ease-out forwards;
+}
+
+.cvsa-modal-content {
+	animation: cvsa-zoom-in-95 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is([data-scope="select"], [data-scope="menu"])[data-part="content"],
+	.cvsa-modal-backdrop,
+	.cvsa-modal-content {
+		animation: none;
+	}
+}
+
+[data-scope="dialog"][data-part="content"][data-state="closed"] {
+	animation: cvsa-zoom-out-95 0.09s ease-in forwards;
+}
+[data-scope="dialog"][data-part="backdrop"][data-state="closed"] {
+	animation: cvsa-fade-out 0.09s ease-in forwards;
+}
+
+.crawler-panel :is(pre, code, kbd) {
+	font-family: inherit;
+}

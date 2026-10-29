@@ -28,4 +28,14 @@ export type { TextAreaProps } from "./TextArea";
 export { default as Select } from "./Select";
 export type { SelectOption } from "./Select";
 
+export { default as Slider } from "./Slider";
+export type { SliderProps } from "./Slider";
+
+export { default as RadioGroup, RadioGroup as Radio } from "./Radio";
+export type { RadioGroupProps, RadioOption } from "./Radio";
+
 export { toast, ToastContainer } from "./Toast";
+
+export { default as Table, type TableProps } from "./Table";
+
+export { default as DataTable, type TableColumn } from "./DataTable";

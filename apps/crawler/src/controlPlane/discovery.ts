@@ -8,29 +8,29 @@ import {
 	DiscoverySampleItemSchema,
 	DiscoverySampleListQuerySchema,
 	DiscoverySampleListResponseSchema,
+	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
+	DiscoveryQueuedResponseSchema,
 	ErrorResponseSchema,
 	LabelDiscoverySampleRequestSchema,
 	ProcessRecommendationsResponseSchema,
+	RecommendationGraphResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
 	type BilibiliVideoMetadataDto,
 	type BilibiliVideoRelationDto,
-	type DiscoverySampleItem,
-	type DiscoverySampleListResponse,
+	type DiscoveryQueuedResponse,
 	type VideoMetadataHistoryItem,
 } from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
-import type {
-	BilibiliVideoMetadata,
-	BilibiliVideoRelation,
-	DiscoverySample,
-} from "@cvsa/snapshot-db";
+import type { BilibiliVideoMetadata, BilibiliVideoRelation } from "@cvsa/snapshot-db";
 import { DEFAULT_HOT_SAMPLE_LIMIT } from "../crawler";
 import {
+	bilibiliClient,
 	discoveryFilterService,
+	discoveryAdminService,
 	discoveryRepository,
 	discoveryScheduler,
 	discoveryService,
@@ -92,32 +92,6 @@ function toRecord(value: unknown): Record<string, unknown> {
 	return Object.fromEntries(Object.entries(value));
 }
 
-function toStringArray(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return value.filter((item): item is string => typeof item === "string");
-}
-
-/**
- * Classifier probabilities are persisted as the model's array output, while the
- * admin contract exposes named probabilities. Indexes are stable for a given
- * model version, so `class_0`, `class_1`, ... is the faithful mapping.
- */
-function toNumberRecord(value: unknown): Record<string, number> {
-	if (Array.isArray(value)) {
-		return Object.fromEntries(
-			value.flatMap((item, index) =>
-				typeof item === "number" && Number.isFinite(item) ? [[`class_${index}`, item]] : []
-			)
-		);
-	}
-	const source = toRecord(value);
-	return Object.fromEntries(
-		Object.entries(source).flatMap(([key, item]) =>
-			typeof item === "number" && Number.isFinite(item) ? [[key, item]] : []
-		)
-	);
-}
-
 function toChangeType(value: string): VideoMetadataHistoryItem["changeType"] {
 	switch (value) {
 		case "created":
@@ -144,24 +118,13 @@ function toHistoryItem(row: {
 	};
 }
 
-function toSampleItem(row: DiscoverySample): DiscoverySampleItem {
-	return {
-		aid: row.aid.toString(),
-		bvid: row.bvid,
-		title: row.title,
-		description: row.description ?? "",
-		tags: toStringArray(row.tags),
-		decision: row.decision,
-		modelVersion: row.modelVersion,
-		probabilities: toNumberRecord(row.probabilities),
-		songProbability: row.songProbability,
-		humanLabel: row.humanLabel,
-		labeledAt: row.labeledAt ? row.labeledAt.toString() : null,
-		capturedAt: row.createdAt.toString(),
-	};
-}
-
 export const discoveryRoutes = new Elysia()
+	.get("/status", () => discoveryAdminService.getStatus(), {
+		response: {
+			200: DiscoveryStatusDtoSchema,
+			401: ErrorResponseSchema,
+		},
+	})
 	.get(
 		"/classifier",
 		() => {
@@ -205,14 +168,14 @@ export const discoveryRoutes = new Elysia()
 	)
 	.post(
 		"/sweep",
-		async ({ body }) => {
-			const result = await discoveryService.runSearchSweep(body);
-			return result;
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			await discoveryScheduler.triggerSearchSweep(body);
+			return { queued: true };
 		},
 		{
 			body: DiscoverySweepRequestSchema,
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 				401: ErrorResponseSchema,
 				422: ErrorResponseSchema,
 			},
@@ -260,10 +223,10 @@ export const discoveryRoutes = new Elysia()
 	.post(
 		"/active/:aid",
 		async ({ params, status }) => {
-			if (!/^\d+$/.test(params.aid)) {
+			if (!/^(?:\d+|BV[0-9a-z]{10})$/i.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			await discoveryScheduler.triggerActiveDiscovery(BigInt(params.aid));
+			await discoveryScheduler.triggerActiveDiscovery(params.aid);
 			return { queued: true, aid: params.aid };
 		},
 		{
@@ -276,18 +239,13 @@ export const discoveryRoutes = new Elysia()
 	)
 	.post(
 		"/hot-sample",
-		async () => {
-			const seeds = await discoveryRepository.listHotSampleCandidates({
-				limit: DEFAULT_HOT_SAMPLE_LIMIT,
-				cooldownMinutes: 60,
-				now: toInstant(new Date()),
-			});
+		async (): Promise<DiscoveryQueuedResponse> => {
 			await discoveryScheduler.triggerHotSample(DEFAULT_HOT_SAMPLE_LIMIT);
-			return { totalDiscovered: seeds.length, newTracked: 0 };
+			return { queued: true };
 		},
 		{
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 				401: ErrorResponseSchema,
 			},
 		}
@@ -393,43 +351,153 @@ export const discoveryRoutes = new Elysia()
 		}
 	)
 	.get(
-		"/samples",
-		async ({ query }): Promise<DiscoverySampleListResponse> => {
-			// The repository exposes no COUNT, so the maximum page is read once and
-			// sliced locally. That keeps `total` truthful for the admin console.
-			const rows = await discoveryRepository.listSamples({
-				limit: 200,
-				offset: 0,
-				decision: query.decision,
-				labeled: query.labeled,
+		"/graph/:identifier",
+		async ({ params, status }) => {
+			let seedAid: bigint | null = null;
+			let seedBvid: string | null = null;
+			let seedTitle = "未知视频";
+			let seedPic: string | null = null;
+			let seedOwnerName: string | null = null;
+			let seedDuration: number | undefined;
+
+			// 1. Resolve seed video
+			if (/^\d+$/.test(params.identifier)) {
+				seedAid = BigInt(params.identifier);
+				const meta = await discoveryRepository.getMetadata(seedAid);
+				if (meta) {
+					seedBvid = meta.bvid;
+					seedTitle = meta.title;
+					seedPic = meta.pic;
+					seedOwnerName = meta.ownerName;
+					seedDuration = meta.duration;
+				}
+			}
+
+			// If not in DB or was BVID, fetch from Bilibili
+			if (!seedAid || !seedBvid) {
+				try {
+					const details = await bilibiliClient.getVideoDetails(params.identifier);
+					seedAid = BigInt(details.View.aid);
+					seedBvid = details.View.bvid;
+					seedTitle = details.View.title;
+					seedPic = details.View.pic;
+					seedOwnerName = details.View.owner?.name ?? null;
+					seedDuration = details.View.duration;
+
+					await discoveryRepository.bulkUpsertMetadata([
+						{
+							aid: seedAid,
+							bvid: seedBvid,
+							title: seedTitle,
+							pic: seedPic,
+							duration: seedDuration ?? 0,
+							ownerName: seedOwnerName,
+							discoverySource: "recommendation-graph-explorer",
+						},
+					]);
+				} catch {
+					return status(404, {
+						code: "NOT_FOUND",
+						message: "Video not found on Bilibili",
+					});
+				}
+			}
+
+			const isSeedTracked = (await trackingRepository.getTracking(seedAid)) !== null;
+
+			// 2. Fetch relations from DB
+			let relations = await discoveryRepository.getRelationsBySource(seedAid);
+
+			// If no relations recorded yet, fetch live from Bilibili and persist!
+			if (relations.length === 0) {
+				try {
+					const relatedVideos = await bilibiliClient.getRelatedVideos(seedAid);
+					if (relatedVideos.length > 0) {
+						await discoveryRepository.bulkUpsertMetadata(
+							relatedVideos.map((item) => ({
+								aid: BigInt(item.aid),
+								bvid: item.bvid,
+								title: item.title,
+								pic: item.pic,
+								duration: item.duration ?? 0,
+								ownerName: item.owner?.name ?? null,
+								discoverySource: "related",
+							}))
+						);
+						await discoveryRepository.saveRelations(
+							relatedVideos.map((item, idx) => ({
+								sourceAid: seedAid ?? 0n,
+								targetAid: BigInt(item.aid),
+								position: idx + 1,
+							}))
+						);
+						relations = await discoveryRepository.getRelationsBySource(seedAid);
+					}
+				} catch {
+					// Fall through with empty relations
+				}
+			}
+
+			// 3. Fetch metadata and tracking state for all target relations
+			const targetAids = relations.map((r) => r.targetAid);
+			const targetMetas = await discoveryRepository.getMetadatas(targetAids);
+			const metaMap = new Map(targetMetas.map((m) => [m.aid, m]));
+
+			const trackedRows = await trackingRepository.getTrackings(targetAids);
+			const trackedSet = new Set(trackedRows.map((r) => r.aid));
+
+			const relationNodes = relations.map((rel) => {
+				const meta = metaMap.get(rel.targetAid);
+				return {
+					aid: rel.targetAid.toString(),
+					bvid: meta?.bvid ?? `av${rel.targetAid}`,
+					title: meta?.title ?? `Video ${rel.targetAid}`,
+					pic: meta?.pic ?? null,
+					ownerName: meta?.ownerName ?? null,
+					duration: meta?.duration,
+					position: rel.position,
+					isTracked: trackedSet.has(rel.targetAid),
+					capturedAt: rel.capturedAt.toString(),
+				};
 			});
-			const start = query.offset;
-			const items = rows.slice(start, start + query.limit).map(toSampleItem);
-			return { items, total: rows.length };
+
+			return {
+				seed: {
+					aid: seedAid.toString(),
+					bvid: seedBvid,
+					title: seedTitle,
+					pic: seedPic,
+					ownerName: seedOwnerName,
+					duration: seedDuration,
+					isTracked: isSeedTracked,
+				},
+				relations: relationNodes,
+			};
 		},
 		{
-			query: DiscoverySampleListQuerySchema,
 			response: {
-				200: DiscoverySampleListResponseSchema,
+				200: RecommendationGraphResponseSchema,
 				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
 				422: ErrorResponseSchema,
 			},
 		}
 	)
+	.get("/samples", ({ query }) => discoveryAdminService.listSamples(query), {
+		query: DiscoverySampleListQuerySchema,
+		response: {
+			200: DiscoverySampleListResponseSchema,
+			401: ErrorResponseSchema,
+			422: ErrorResponseSchema,
+		},
+	})
 	.post(
 		"/samples/:aid/label",
 		async ({ params, body, status }) => {
 			if (!/^\d+$/.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			const updated = await discoveryRepository.labelSample(
-				BigInt(params.aid),
-				body.humanLabel
-			);
-			if (!updated) {
-				return status(404, { code: "NOT_FOUND", message: "Discovery sample not found" });
-			}
-			return toSampleItem(updated);
+			return discoveryAdminService.label(BigInt(params.aid), body.humanLabel);
 		},
 		{
 			body: LabelDiscoverySampleRequestSchema,

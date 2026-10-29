@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import { createEffect, createSignal, For, Show, on, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import type { LucideIcon } from "lucide-solid";
@@ -88,7 +88,11 @@ export default function List(props: ListProps) {
 		for (const animation of animations.values()) animation.cancel();
 		animations.clear();
 		setOrderedItems(next);
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (
+			typeof window !== "undefined" &&
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches
+		)
+			return;
 		for (const row of rows) {
 			if (row.dataset.listItemId === draggedId()) continue;
 			const distance =
@@ -255,7 +259,11 @@ export default function List(props: ListProps) {
 		resetDrag();
 		for (const animation of animations.values()) animation.cancel();
 		animations.clear();
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		if (
+			typeof window !== "undefined" &&
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches
+		)
+			return;
 		for (const row of rows) {
 			const distance =
 				(positions.get(row) ?? row.getBoundingClientRect().top) -
@@ -302,7 +310,7 @@ export default function List(props: ListProps) {
 	return (
 		<ol
 			ref={listRef}
-			class={clsx("relative m-0 flex list-none flex-col p-0", props.class)}
+			class={cn("relative m-0 flex list-none flex-col p-0", props.class)}
 			aria-label={props.ariaLabel}
 		>
 			<For each={orderedItems()}>
@@ -320,7 +328,7 @@ export default function List(props: ListProps) {
 						<li
 							data-list-item-id={item.id}
 							style={{ transform: itemTransform(item.id) }}
-							class={clsx(
+							class={cn(
 								"group relative flex min-h-18 items-stretch bg-surface",
 								item.disabled && "opacity-50",
 								draggedId() === item.id &&
@@ -338,7 +346,7 @@ export default function List(props: ListProps) {
 							<Show when={props.reorderable}>
 								<button
 									type="button"
-									class="flex w-12 shrink-0 touch-none cursor-grab items-center justify-center text-quaternary outline-none active:cursor-grabbing focus-visible:outline-2 focus-visible:outline-offset-[-3px] focus-visible:outline-primary disabled:cursor-not-allowed"
+									class="flex w-12 shrink-0 touch-none cursor-grab items-center justify-center text-quaternary outline-none active:cursor-grabbing focus-visible:outline-1 focus-visible:outline-offset-[-3px] focus-visible:outline-primary disabled:cursor-not-allowed"
 									disabled={item.disabled}
 									aria-label={props.dragLabel?.(item) ?? item.title}
 									aria-roledescription="sortable"
@@ -446,9 +454,9 @@ export function ListItemContent(props: { item: ListItem; onSelect?: (item: ListI
 			<button
 				type="button"
 				disabled={props.item.disabled}
-				class={clsx(
+				class={cn(
 					className,
-					"bg-transparent outline-none focus-visible:outline-2 focus-visible:outline-primary"
+					"bg-transparent outline-none focus-visible:outline-1 focus-visible:outline-primary"
 				)}
 				onclick={() => props.onSelect?.(props.item)}
 			>

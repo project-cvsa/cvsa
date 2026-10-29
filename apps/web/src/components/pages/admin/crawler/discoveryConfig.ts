@@ -11,6 +11,7 @@ export function toDiscoveryConfigUpdatePayload(
 	config: DiscoveryFilterConfigDto
 ): UpdateDiscoveryFilterConfigRequest {
 	return {
+		searchKeywords: config.searchKeywords,
 		whitelistSingers: config.whitelistSingers,
 		whitelistSongIndicators: config.whitelistSongIndicators,
 		blacklistKeywords: config.blacklistKeywords,

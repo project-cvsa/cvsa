@@ -1,6 +1,7 @@
 import { env } from "@cvsa/env";
 import { Temporal } from "temporal-polyfill";
 import { createDatabaseClient } from "./client";
+import { loadDatabaseUrl } from "./databaseUrl";
 
 /**
  * Convert a type to a JSON-serializable version.
@@ -45,5 +46,8 @@ export function transformPrismaResult<T>(obj: T): Serialized<T> {
 
 export const prisma = createDatabaseClient({
 	connectionString:
-		env.DATABASE_URL ?? (typeof process !== "undefined" ? process.env.DATABASE_URL : undefined),
+		env.DATABASE_URL ??
+		(typeof process !== "undefined"
+			? (process.env.DATABASE_URL ?? loadDatabaseUrl())
+			: undefined),
 });

@@ -15,6 +15,6 @@ if (user.roleName !== "OWNER" && user.roleName !== "admin") {
 <Layout title="Crawler Control Panel - CVSA" i18nNamespace="crawler">
 	<Header />
 	<main class="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
-		<CrawlerDashboard client:load />
+		<CrawlerDashboard client:only="@cvsa/solid-i18n" />
 	</main>
 </Layout>

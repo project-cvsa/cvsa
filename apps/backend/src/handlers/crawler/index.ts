@@ -5,21 +5,35 @@ import {
 	BilibiliVideoRelationDtoSchema,
 	ClassifierHealthDtoSchema,
 	CrawlerOverviewStatsSchema,
+	CrawlerQueueJobDetailSchema,
+	CrawlerQueueJobsQuerySchema,
+	CrawlerQueueJobsResponseSchema,
 	CrawlerStatsQuerySchema,
 	CrawlerStatusDtoSchema,
+	DeleteTrackingVideoResponseSchema,
 	DiscoveryFilterConfigDtoSchema,
 	DiscoverySampleItemSchema,
 	DiscoverySampleListQuerySchema,
 	DiscoverySampleListResponseSchema,
+	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
-	DiscoverySweepResponseSchema,
+	DiscoveryQueuedResponseSchema,
+	type DiscoveryQueuedResponse,
+	CrawlerQueueJobParamsSchema,
+	CrawlerJobActionResponseSchema,
+	IngestVideoRequestSchema,
+	IngestVideoResponseSchema,
 	LabelDiscoverySampleRequestSchema,
 	NetworkRuntimeConfigDocumentSchema,
+	ProcessRecommendationsResponseSchema,
 	PromoteTrackingVideoRequestSchema,
+	RecommendationGraphResponseSchema,
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
 	ReplaceNetworkRuntimeConfigRequestSchema,
+	TestNetworkAdapterResponseSchema,
 	TrackingVideoListQuerySchema,
+	TrackingAidParamsSchema,
 	TrackingVideoListResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
 	VideoMetadataHistoryListQuerySchema,
@@ -30,13 +44,20 @@ import {
 	type ClassifierHealthDto,
 	type BilibiliVideoRelationDto,
 	type CrawlerOverviewStats,
+	type CrawlerQueueJobDetail,
+	type CrawlerQueueJobsResponse,
 	type CrawlerStatusDto,
+	type DeleteTrackingVideoResponse,
 	type DiscoveryFilterConfigDto,
 	type DiscoverySampleItem,
 	type DiscoverySampleListResponse,
-	type DiscoverySweepResponse,
+	type DiscoveryStatusDto,
+	type IngestVideoResponse,
 	type NetworkRuntimeConfigDocument,
+	type ProcessRecommendationsResponse,
+	type RecommendationGraphResponse,
 	type RegisterTrackingVideosResponse,
+	type TestNetworkAdapterResponse,
 	type TrackingVideoListResponse,
 	type VideoMetadataHistoryListResponse,
 	type VideoTrackingDto,
@@ -66,6 +87,62 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			query: CrawlerStatsQuerySchema,
 			response: {
 				200: CrawlerOverviewStatsSchema,
+			},
+		}
+	)
+	.get(
+		"/jobs",
+		async ({ query }): Promise<CrawlerQueueJobsResponse> => {
+			return callCrawlerApi<CrawlerQueueJobsResponse>("/stats/jobs", "GET", undefined, query);
+		},
+		{
+			query: CrawlerQueueJobsQuerySchema,
+			response: {
+				200: CrawlerQueueJobsResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/jobs/:queue/:id",
+		async ({ params }): Promise<CrawlerQueueJobDetail> => {
+			return callCrawlerApi<CrawlerQueueJobDetail>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}`
+			);
+		},
+		{
+			params: CrawlerQueueJobParamsSchema,
+			response: {
+				200: CrawlerQueueJobDetailSchema,
+			},
+		}
+	)
+	.post(
+		"/jobs/:queue/:id/retries",
+		async ({ params }): Promise<{ ok: true }> => {
+			return callCrawlerApi<{ ok: true }>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}/retries`,
+				"POST"
+			);
+		},
+		{
+			params: CrawlerQueueJobParamsSchema,
+			response: {
+				200: CrawlerJobActionResponseSchema,
+			},
+		}
+	)
+	.delete(
+		"/jobs/:queue/:id",
+		async ({ params }): Promise<{ ok: true }> => {
+			return callCrawlerApi<{ ok: true }>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}`,
+				"DELETE"
+			);
+		},
+		{
+			params: CrawlerQueueJobParamsSchema,
+			response: {
+				200: CrawlerJobActionResponseSchema,
 			},
 		}
 	)
@@ -118,6 +195,20 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			},
 		}
 	)
+	.post(
+		"/network/adapters/:id/test",
+		async ({ params }): Promise<TestNetworkAdapterResponse> => {
+			return callCrawlerApi<TestNetworkAdapterResponse>(
+				`/network-runtime/adapters/${params.id}/test`,
+				"POST"
+			);
+		},
+		{
+			response: {
+				200: TestNetworkAdapterResponseSchema,
+			},
+		}
+	)
 	.put(
 		"/config/discovery",
 		async ({ body }): Promise<DiscoveryFilterConfigDto> => {
@@ -132,24 +223,24 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/sweep",
-		async ({ body }): Promise<DiscoverySweepResponse> => {
-			return callCrawlerApi<DiscoverySweepResponse>("/discovery/sweep", "POST", body);
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/sweep", "POST", body);
 		},
 		{
 			body: DiscoverySweepRequestSchema,
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 			},
 		}
 	)
 	.post(
 		"/hot-sample",
-		async (): Promise<DiscoverySweepResponse> => {
-			return callCrawlerApi<DiscoverySweepResponse>("/discovery/hot-sample", "POST");
+		async (): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/hot-sample", "POST");
 		},
 		{
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 			},
 		}
 	)
@@ -172,6 +263,20 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		{
 			response: {
 				200: ActionQueuedResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/recommendations/:aid",
+		async ({ params }): Promise<ProcessRecommendationsResponse> => {
+			return callCrawlerApi<ProcessRecommendationsResponse>(
+				`/discovery/recommendations/${params.aid}`,
+				"POST"
+			);
+		},
+		{
+			response: {
+				200: ProcessRecommendationsResponseSchema,
 			},
 		}
 	)
@@ -203,6 +308,32 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			},
 		}
 	)
+	.delete(
+		"/tracking/:aid",
+		async ({ params }): Promise<DeleteTrackingVideoResponse> => {
+			return callCrawlerApi<DeleteTrackingVideoResponse>(
+				`/tracking/videos/${params.aid}`,
+				"DELETE"
+			);
+		},
+		{
+			response: {
+				200: DeleteTrackingVideoResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/tracking/ingest",
+		async ({ body }): Promise<IngestVideoResponse> => {
+			return callCrawlerApi<IngestVideoResponse>("/tracking/ingest", "POST", body);
+		},
+		{
+			body: IngestVideoRequestSchema,
+			response: {
+				200: IngestVideoResponseSchema,
+			},
+		}
+	)
 	.post(
 		"/tracking/videos",
 		async ({ body }): Promise<RegisterTrackingVideosResponse> => {
@@ -214,6 +345,15 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 				200: RegisterTrackingVideosResponseSchema,
 			},
 		}
+	)
+	.post(
+		"/tracking/videos/:aid/snapshots",
+		({ params }): Promise<ActionQueuedResponse> =>
+			callCrawlerApi<ActionQueuedResponse>(
+				`/tracking/videos/${params.aid}/snapshots`,
+				"POST"
+			),
+		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
 	)
 	.post(
 		"/tracking/videos/:aid/promote",
@@ -243,6 +383,28 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		}
 	)
 	.get(
+		"/graph/:identifier",
+		async ({ params }): Promise<RecommendationGraphResponse> => {
+			return callCrawlerApi<RecommendationGraphResponse>(
+				`/discovery/graph/${params.identifier}`
+			);
+		},
+		{
+			response: {
+				200: RecommendationGraphResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/metadata/:aid/refreshes",
+		({ params }): Promise<ActionQueuedResponse> =>
+			callCrawlerApi<ActionQueuedResponse>(
+				`/discovery/metadata/${params.aid}/refresh`,
+				"POST"
+			),
+		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
+	)
+	.get(
 		"/metadata/:aid/history",
 		async ({ params, query }): Promise<VideoMetadataHistoryListResponse> => {
 			return callCrawlerApi<VideoMetadataHistoryListResponse>(
@@ -267,6 +429,17 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		{
 			response: {
 				200: BilibiliVideoMetadataDtoSchema,
+			},
+		}
+	)
+	.get(
+		"/discovery/status",
+		async (): Promise<DiscoveryStatusDto> => {
+			return callCrawlerApi<DiscoveryStatusDto>("/discovery/status");
+		},
+		{
+			response: {
+				200: DiscoveryStatusDtoSchema,
 			},
 		}
 	)
