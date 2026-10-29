@@ -226,7 +226,7 @@ export default function SongEditForm(props: SongEditFormProps) {
 			<div class="flex items-center justify-end gap-3">
 				<a
 					href={`/song/${props.songId}`}
-					class="inline-flex h-11 items-center justify-center border border-border bg-transparent px-6 ts-label color-primary transition-colors hover:bg-surface-container-medium focus-visible:outline-1 focus-visible:outline-offset-6 focus-visible:outline-primary"
+					class="inline-flex h-11 items-center justify-center border border-border bg-transparent px-6 ts-label text-primary transition-colors hover:bg-surface-container-medium focus-visible:outline-1 focus-visible:outline-offset-6 focus-visible:outline-primary"
 				>
 					{t("action.cancel")}
 				</a>

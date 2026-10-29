@@ -40,7 +40,7 @@ function NodeCover(props: { node: RecommendationGraphNode; seed?: boolean }) {
 		>
 			<Show
 				when={props.node.pic}
-				fallback={<span class="text-xs text-tertiary">{t("graphUi.noCover")}</span>}
+				fallback={<span class="ts-caption text-tertiary">{t("graphUi.noCover")}</span>}
 			>
 				{(pic) => (
 					<img
@@ -53,7 +53,7 @@ function NodeCover(props: { node: RecommendationGraphNode; seed?: boolean }) {
 				)}
 			</Show>
 			<Show when={props.node.duration}>
-				<span class="absolute bottom-1 right-1 px-1 bg-surface text-[10px] text-primary">
+				<span class="absolute bottom-1 right-1 px-1 bg-surface text-overline tracking-overline text-primary">
 					{duration()}
 				</span>
 			</Show>
@@ -76,7 +76,7 @@ function GraphNodeCard(
 			<div class="flex items-start gap-3">
 				<NodeCover node={props.node} seed={props.seed} />
 				<div class="flex flex-col gap-1 min-w-0">
-					<div class="flex items-center gap-2 text-xs text-tertiary">
+					<div class="flex items-center gap-2 ts-caption text-tertiary">
 						<Show when={props.seed}>
 							<Badge size="sm">{t("graphUi.seed")}</Badge>
 						</Show>
@@ -89,13 +89,13 @@ function GraphNodeCard(
 						href={`https://www.bilibili.com/video/${props.node.bvid}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="font-medium text-sm text-primary hover:underline line-clamp-2"
+						class="text-label tracking-label font-medium text-primary hover:underline line-clamp-2"
 					>
 						{props.node.title}
 						<ExternalLink class="inline w-3 h-3 ml-1" />
 					</a>
 					<Show when={props.node.ownerName}>
-						<span class="text-xs text-secondary">
+						<span class="ts-caption text-secondary">
 							{t("graphUi.uploader").replace("{name}", props.node.ownerName ?? "")}
 						</span>
 					</Show>
@@ -142,7 +142,7 @@ function GraphResults(props: GraphNodeActions & { graph: RecommendationGraphResp
 				onIngest={props.onIngest}
 				onExpand={props.onExpand}
 			/>
-			<div class="flex items-center justify-between gap-3 text-xs">
+			<div class="flex items-center justify-between gap-3 ts-caption">
 				<h4 class="font-semibold">
 					{t("graphUi.relations")} ({props.graph.relations.length})
 				</h4>
@@ -150,7 +150,9 @@ function GraphResults(props: GraphNodeActions & { graph: RecommendationGraphResp
 			</div>
 			<Show
 				when={props.graph.relations.length}
-				fallback={<p class="p-8 text-center text-tertiary text-xs">{t("graphUi.empty")}</p>}
+				fallback={
+					<p class="p-8 text-center text-tertiary ts-caption">{t("graphUi.empty")}</p>
+				}
 			>
 				<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
 					<For each={props.graph.relations}>
@@ -258,7 +260,7 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 			</form>
 			<Show when={error()}>
 				{(message) => (
-					<p role="alert" class="text-error text-xs">
+					<p role="alert" class="text-error ts-caption">
 						{message()}
 					</p>
 				)}

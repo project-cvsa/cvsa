@@ -1,14 +1,43 @@
-import { CONTROL_HEIGHT } from "./controlStyles";
+import { cn } from "@lib/cn";
 import { Select as ArkSelect, createListCollection } from "@ark-ui/solid/select";
-import clsx from "clsx";
-import { type ComponentProps, createMemo, createUniqueId, For, Show, splitProps } from "solid-js";
-import { Dynamic, Portal } from "solid-js/web";
+import { cva, type VariantProps } from "class-variance-authority";
+import type { LucideIcon } from "lucide-solid";
 import Check from "lucide-solid/icons/check";
 import ChevronDown from "lucide-solid/icons/chevron-down";
 import X from "lucide-solid/icons/x";
-import type { LucideIcon } from "lucide-solid";
+import { type ComponentProps, createMemo, createUniqueId, For, Show, splitProps } from "solid-js";
+import { Dynamic, Portal } from "solid-js/web";
+import { CONTROL_HEIGHT } from "./controlStyles";
 
-export type SelectSize = "sm" | "md" | "lg";
+const selectValueTextVariants = cva(
+	"min-w-0 flex-1 truncate text-primary data-[placeholder-shown]:text-tertiary",
+	{
+		variants: {
+			size: {
+				sm: "text-caption tracking-caption",
+				md: "text-label tracking-label",
+				lg: "text-body tracking-body",
+			},
+		},
+	}
+);
+
+const selectOptionVariants = cva(
+	"group flex cursor-default items-center gap-2.5 outline-none transition-colors",
+	{
+		variants: {
+			size: {
+				sm: "min-h-8 px-2.5 py-1 text-caption tracking-caption",
+				md: "min-h-10 px-3 py-2 text-label tracking-label",
+			},
+		},
+		defaultVariants: {
+			size: "md",
+		},
+	}
+);
+
+export type SelectSize = NonNullable<VariantProps<typeof selectValueTextVariants>["size"]>;
 
 export interface SelectOption {
 	value: string;
@@ -94,7 +123,7 @@ export default function Select(props: SelectProps) {
 			invalid={hasError()}
 			positioning={{ placement: "bottom-start", gutter: 6 }}
 			onValueChange={(details) => local.onValueChange?.(details.value[0])}
-			class={clsx("flex flex-col gap-1.5 w-full", local.class)}
+			class={cn("flex flex-col gap-1.5 w-full", local.class)}
 			{...rest}
 		>
 			<Show when={local.label && local.size}>
@@ -107,7 +136,7 @@ export default function Select(props: SelectProps) {
 			</Show>
 
 			<ArkSelect.Control
-				class={clsx(
+				class={cn(
 					"group relative flex items-center border bg-surface transition-colors w-full",
 					isFloating() ? "h-[58px]" : CONTROL_HEIGHT[local.size ?? "md"],
 					hasError()
@@ -118,7 +147,7 @@ export default function Select(props: SelectProps) {
 			>
 				<Show when={isFloating()}>
 					<ArkSelect.Label
-						class={clsx(
+						class={cn(
 							"pointer-events-none absolute left-4 top-2 z-1 ts-caption",
 							hasError() ? "text-error" : "text-tertiary"
 						)}
@@ -131,7 +160,7 @@ export default function Select(props: SelectProps) {
 				</Show>
 
 				<ArkSelect.Trigger
-					class={clsx(
+					class={cn(
 						"flex h-full min-w-0 flex-1 items-center bg-transparent text-left outline-none disabled:cursor-not-allowed",
 						isFloating()
 							? "items-end py-2 pl-4 pt-6"
@@ -151,13 +180,14 @@ export default function Select(props: SelectProps) {
 				>
 					<ArkSelect.ValueText
 						placeholder={local.placeholder}
-						class={clsx(
-							"min-w-0 flex-1 truncate text-primary data-[placeholder-shown]:text-tertiary",
-							local.size === "sm" ? "text-xs" : isFloating() ? "ts-body" : "text-sm"
+						class={cn(
+							isFloating()
+								? "ts-body"
+								: selectValueTextVariants({ size: local.size ?? "md" })
 						)}
 					/>
 					<ArkSelect.Indicator
-						class={clsx(
+						class={cn(
 							"pointer-events-none absolute inset-y-0 flex shrink-0 items-center text-quaternary",
 							local.clearable
 								? local.size === "sm"
@@ -178,7 +208,7 @@ export default function Select(props: SelectProps) {
 				<Show when={local.clearable}>
 					<ArkSelect.ClearTrigger
 						type="button"
-						class={clsx(
+						class={cn(
 							"mr-1 flex shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
 							local.size === "sm" ? "h-6 w-6" : "h-9 w-9"
 						)}
@@ -215,12 +245,13 @@ export default function Select(props: SelectProps) {
 }
 
 function SelectOptionRow(props: { option: SelectOption; size?: SelectSize }) {
+	const variantSize = () => (props.size === "sm" ? "sm" : "md");
+
 	return (
 		<ArkSelect.Item
 			item={props.option}
-			class={clsx(
-				"group flex cursor-default items-center gap-2.5 outline-none transition-colors",
-				props.size === "sm" ? "min-h-8 px-2.5 py-1 text-xs" : "min-h-10 px-3 py-2 text-sm",
+			class={cn(
+				selectOptionVariants({ size: variantSize() }),
 				"data-[highlighted]:bg-hover data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45"
 			)}
 		>

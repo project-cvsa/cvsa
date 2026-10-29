@@ -146,7 +146,7 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 	return (
 		<section class="flex flex-col gap-3" aria-label={t("audit.trends")}>
 			<div class="flex flex-wrap items-center justify-between gap-3">
-				<h3 class="text-sm font-semibold text-primary">{t("audit.trends")}</h3>
+				<h3 class="ts-label text-primary">{t("audit.trends")}</h3>
 				<div class="w-48">
 					<Select
 						size="sm"
@@ -166,7 +166,7 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 				<Show
 					when={points().length >= 2}
 					fallback={
-						<div class="py-10 border-y border-border text-center text-xs text-tertiary">
+						<div class="py-10 border-y border-border text-center ts-caption text-tertiary">
 							{t("audit.noHistory")}
 						</div>
 					}

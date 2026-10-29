@@ -1,9 +1,16 @@
+---
+import { cn } from "@lib/cn";
+
+const { class: className, ...attrs } = Astro.props;
+---
+
 <svg
 	xmlns="http://www.w3.org/2000/svg"
 	width="5.38em"
 	height="1em"
 	viewBox="0 0 382 71"
-	class="text-xl md:text-2xl lg:text-3xl xl:text-4xl"
+	class={cn("text-heading-3 md:text-heading-2 lg:text-heading-1 xl:text-display-medium", className)}
+	{...attrs}
 >
 	<title>中V档案馆</title>
 	<g fill="currentColor">

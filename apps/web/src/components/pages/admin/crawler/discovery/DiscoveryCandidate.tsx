@@ -1,5 +1,5 @@
 import { Show } from "solid-js";
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import { CONTROL_HEIGHT } from "@components/ui/controlStyles";
@@ -54,7 +54,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 
 	return (
 		<article
-			class={clsx(
+			class={cn(
 				"p-3.5 flex items-center justify-between gap-4 transition-colors",
 				props.focused ? "bg-surface-container-low" : "bg-surface hover:bg-hover"
 			)}
@@ -69,8 +69,8 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 					String(props.index + 1)
 				)}
 				aria-pressed={props.focused}
-				class={clsx(
-					"w-10 shrink-0 flex items-center justify-center text-xs font-semibold border transition-colors select-none",
+				class={cn(
+					"w-10 shrink-0 flex items-center justify-center text-caption tracking-caption font-semibold border transition-colors select-none",
 					CONTROL_HEIGHT.sm,
 					props.focused
 						? "bg-primary text-display-inverted border-primary"
@@ -81,10 +81,15 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 			</button>
 
 			{/* Col 2: Video Cover */}
-			<div class="w-32 h-20 shrink-0 border border-border bg-surface-container-high overflow-hidden flex items-center justify-center">
+			<div
+				class="w-32 h-18 shrink-0 bg-surface-container-high 
+			overflow-hidden flex items-center justify-center"
+			>
 				<Show
 					when={props.item.pic}
-					fallback={<span class="text-xs text-tertiary">{t("discoveryUi.noCover")}</span>}
+					fallback={
+						<span class="ts-caption text-tertiary">{t("discoveryUi.noCover")}</span>
+					}
 				>
 					{(pic) => (
 						<img
@@ -101,34 +106,34 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 			{/* Col 3: Metadata & Title */}
 			<div class="flex-1 min-w-0 pr-4 flex flex-col justify-center gap-1.5">
 				<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<span class="text-xs text-tertiary tabular-nums shrink-0">
+					<span class="ts-caption text-tertiary tabular-nums shrink-0">
 						av{props.item.aid}
 					</span>
 					<a
 						href={`https://www.bilibili.com/video/${props.item.bvid}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="text-xs text-secondary hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0"
+						class="ts-caption text-secondary hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0"
 					>
 						<span>{props.item.bvid}</span>
 						<ExternalLink class="w-3 h-3 text-tertiary" />
 					</a>
-					<div class="shrink-0">{decision()}</div>
 				</div>
 				<a
 					href={`https://www.bilibili.com/video/${props.item.bvid}`}
 					target="_blank"
 					rel="noopener noreferrer"
-					class="font-medium text-sm text-primary hover:underline truncate block"
+					class="text-label tracking-label font-medium text-primary hover:underline truncate block"
 					title={props.item.title}
 				>
 					{props.item.title}
 				</a>
+				<div class="shrink-0">{decision()}</div>
 			</div>
 
 			{/* Col 4: Confidence Score & Visual Meter */}
 			<div class="w-40 shrink-0 flex flex-col justify-center px-4 gap-1.5">
-				<div class="flex items-center justify-between text-xs">
+				<div class="flex items-center justify-between ts-caption">
 					<span class="text-tertiary">{t("discoveryUi.confidence")}</span>
 					<span class="font-semibold text-primary">
 						{formatPercent(props.item.songProbability ?? 0)}
@@ -136,10 +141,10 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 				</div>
 				<div class="w-full bg-surface-container-high h-1.5 overflow-hidden">
 					<div
-						class={clsx(
+						class={cn(
 							"h-full transition-all",
 							(props.item.songProbability ?? 0) >= 0.8
-								? "bg-success"
+								? "bg-primary"
 								: (props.item.songProbability ?? 0) >= 0.5
 									? "bg-warning"
 									: "bg-tertiary"
@@ -158,14 +163,14 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 					variant={props.item.humanLabel === 1 ? "filled" : "outlined"}
 					disabled={props.busy}
 					onClick={() => props.onLabel(true)}
-					class={clsx(
+					class={cn(
 						"w-[110px] px-2 gap-1 whitespace-nowrap",
 						props.item.humanLabel === 1
-							? "bg-success border-success text-display-inverted"
-							: "hover:border-success hover:text-success"
+							? "bg-primary border-primary text-display-inverted"
+							: "hover:border-tertiary hover:text-primary"
 					)}
 				>
-					<span class="inline-flex items-center gap-1 truncate text-xs">
+					<span class="inline-flex items-center gap-1 truncate ts-caption">
 						<Check class="w-3.5 h-3.5 shrink-0" />
 						<span>
 							{props.item.humanLabel === 1
@@ -179,14 +184,14 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 					variant={props.item.humanLabel === 0 ? "filled" : "outlined"}
 					disabled={props.busy}
 					onClick={() => props.onLabel(false)}
-					class={clsx(
+					class={cn(
 						"w-[110px] px-2 gap-1 whitespace-nowrap",
 						props.item.humanLabel === 0
 							? "bg-error border-error text-display-inverted"
 							: "hover:border-error hover:text-error"
 					)}
 				>
-					<span class="inline-flex items-center gap-1 truncate text-xs">
+					<span class="inline-flex items-center gap-1 truncate ts-caption">
 						<X class="w-3.5 h-3.5 shrink-0" />
 						<span>
 							{props.item.humanLabel === 0

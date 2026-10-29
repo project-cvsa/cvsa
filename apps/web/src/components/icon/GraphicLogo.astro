@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1.17em" height="1em" viewBox="0 0 146 125">
+---
+import { cn } from "@lib/cn";
+
+const { class: className, ...attrs } = Astro.props;
+---
+
+<svg
+	xmlns="http://www.w3.org/2000/svg"
+	width="1.17em"
+	height="1em"
+	viewBox="0 0 146 125"
+	class={cn(className)}
+	{...attrs}
+>
 	<title>Logo</title>
 	<path
 		fill="currentColor"

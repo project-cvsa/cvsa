@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import "./Slider.css";
 import { Show, createSignal, splitProps } from "solid-js";
 
@@ -54,13 +54,15 @@ export default function Slider(props: SliderProps) {
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5", local.class)}>
 			<Show when={local.label || local.formatValue}>
-				<div class="flex items-center justify-between text-sm">
+				<div class="flex items-center justify-between text-label tracking-label">
 					<Show when={local.label}>
 						<span class="font-medium text-primary select-none">{local.label}</span>
 					</Show>
-					<span class="text-sm text-primary font-medium select-none">{displayVal()}</span>
+					<span class="text-label tracking-label text-primary font-medium select-none">
+						{displayVal()}
+					</span>
 				</div>
 			</Show>
 
@@ -74,7 +76,7 @@ export default function Slider(props: SliderProps) {
 					value={currentVal()}
 					disabled={local.disabled}
 					onInput={handleInput}
-					class={clsx(
+					class={cn(
 						"w-full h-2 bg-surface-container-medium border border-border appearance-none cursor-pointer focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors cvsa-slider",
 						"focus-visible:border-primary focus-visible:ring-1 focus-visible:ring-primary",
 						local.disabled && "opacity-50 cursor-not-allowed"

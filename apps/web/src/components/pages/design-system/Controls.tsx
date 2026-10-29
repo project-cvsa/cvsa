@@ -217,7 +217,7 @@ export function CardShowcase() {
 						</Button>
 					}
 				/>
-				<CardContent class="p-4 text-xs text-secondary leading-relaxed">
+				<CardContent class="p-4 ts-caption text-secondary">
 					{t("controls.cardBody")}
 				</CardContent>
 			</Card>
@@ -232,7 +232,7 @@ export function CardShowcase() {
 						</Badge>
 					}
 				/>
-				<CardContent class="p-4 text-xs text-secondary leading-relaxed">
+				<CardContent class="p-4 ts-caption text-secondary">
 					{t("controls.metricsBody")}
 				</CardContent>
 			</Card>
@@ -269,7 +269,7 @@ export function ModalShowcase() {
 					) : undefined
 				}
 			>
-				<div class="flex flex-col gap-3 py-2 text-sm text-secondary">
+				<div class="flex flex-col gap-3 py-2 text-label tracking-label text-secondary">
 					<p>
 						{t("controls.videoId")}
 						<span class="text-primary font-medium">BV1xx411c7mD</span>

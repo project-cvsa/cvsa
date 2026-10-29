@@ -125,7 +125,7 @@ export default function LabelingSection(props: { active: boolean }) {
 		values.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
 	return (
 		<div class="flex flex-col gap-6">
-			<SectionHeader title={<h2 class="text-sm">{t("tabs.labeling")}</h2>} />
+			<SectionHeader title={<h2 class="ts-heading-2">{t("tabs.labeling")}</h2>} />
 			<section class="flex flex-col gap-3" aria-label={t("discoveryUi.review")}>
 				<form
 					class="flex flex-wrap items-center gap-2"
@@ -245,7 +245,7 @@ export default function LabelingSection(props: { active: boolean }) {
 				</form>
 				<Show when={error()}>
 					{(message) => (
-						<p role="alert" class="text-error text-sm">
+						<p role="alert" class="text-error text-label tracking-label">
 							{message()}
 						</p>
 					)}
@@ -258,7 +258,7 @@ export default function LabelingSection(props: { active: boolean }) {
 						<For
 							each={samples()?.items}
 							fallback={
-								<p class="p-8 text-center text-tertiary text-sm">
+								<p class="p-8 text-center text-tertiary text-label tracking-label">
 									{loading() ? t("common.loading") : t("discoveryUi.noSamples")}
 								</p>
 							}

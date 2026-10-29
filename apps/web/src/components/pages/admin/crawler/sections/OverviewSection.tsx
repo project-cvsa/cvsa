@@ -52,9 +52,7 @@ function RangeControls(props: RangeControlsProps) {
 	];
 	return (
 		<div class="flex flex-nowrap items-center gap-2.5 whitespace-nowrap">
-			<span class="ts-caption text-xs uppercase tracking-wider text-tertiary font-semibold">
-				{t("overview.timeRange")}
-			</span>
+			<span class="ts-overline text-tertiary">{t("overview.timeRange")}</span>
 			<div class="w-36 shrink-0">
 				<Select
 					size="sm"
@@ -192,7 +190,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 		<div class="flex flex-col gap-6">
 			<SectionHeader
 				nowrap
-				title={<h2 class="text-sm whitespace-nowrap">{t("tabs.overview")}</h2>}
+				title={<h2 class="ts-heading-2 whitespace-nowrap">{t("tabs.overview")}</h2>}
 				actions={
 					<RangeControls
 						rangeMode={rangeMode}
@@ -206,7 +204,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 
 			<Show when={stats() && statsError()}>
 				{(message) => (
-					<p role="alert" class="text-error text-sm">
+					<p role="alert" class="text-error text-label tracking-label">
 						{message()}
 					</p>
 				)}
@@ -231,7 +229,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 				{(current) => (
 					<div class="flex flex-col gap-6">
 						<section class="flex flex-col gap-2.5">
-							<span class="ts-caption text-xs uppercase tracking-wider text-tertiary font-semibold">
+							<span class="ts-overline text-tertiary">
 								{t("overview.section.throughput")}
 							</span>
 							<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
@@ -278,7 +276,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						/>
 
 						<section class="flex flex-col gap-3">
-							<span class="ts-caption text-xs uppercase tracking-wider text-tertiary font-semibold">
+							<span class="ts-overline text-tertiary">
 								{t("overview.section.errors")} ({rangeText()})
 							</span>
 
@@ -292,7 +290,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						</section>
 
 						<section class="flex flex-col gap-2.5">
-							<span class="ts-caption text-xs uppercase tracking-wider text-tertiary font-semibold">
+							<span class="ts-overline text-tertiary">
 								{t("overview.queues.title")}
 							</span>
 							<QueueStatusTable queues={current().queues} />

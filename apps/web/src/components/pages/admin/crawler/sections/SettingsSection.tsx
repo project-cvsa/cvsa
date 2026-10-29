@@ -148,7 +148,7 @@ export default function SettingsSection() {
 	return (
 		<div class="flex flex-col gap-6">
 			<SectionHeader
-				title={<h2 class="text-sm">{t("settings.title")}</h2>}
+				title={<h2 class="ts-heading-2">{t("settings.title")}</h2>}
 				actions={
 					<>
 						<Show when={isDirty()}>

@@ -26,7 +26,7 @@ export default function DiscoverySection() {
 	useCrawlerRefresh("discovery", () => void loadStatus());
 	return (
 		<div class="flex flex-col gap-6">
-			<SectionHeader title={<h2 class="text-sm">{t("tabs.discovery")}</h2>} />
+			<SectionHeader title={<h2 class="ts-heading-2">{t("tabs.discovery")}</h2>} />
 			<DiscoveryActivity status={status()} error={error()} />
 			<DiscoveryActions onQueued={() => void loadStatus()} />
 			<GraphExplorer onIngestSuccess={() => void loadStatus()} />

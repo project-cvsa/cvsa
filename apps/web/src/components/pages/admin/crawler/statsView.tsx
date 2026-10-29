@@ -1,6 +1,6 @@
 import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import { Show, type JSX } from "solid-js";
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import type { CrawlerOverviewStats, CrawlerQueueSnapshot } from "@cvsa/contracts";
 import Badge from "@components/ui/Badge";
 import { getComponentT } from "@lib/i18n/isomorphic";
@@ -16,25 +16,21 @@ export function MetricCard(props: {
 }) {
 	return (
 		<div
-			class={clsx(
+			class={cn(
 				"p-4 bg-surface flex flex-col justify-between gap-1.5",
 				props.variant === "warning" && "border-l-2 border-highlight",
 				props.variant === "danger" && "border-l-2 border-error"
 			)}
 		>
 			<div class="flex items-center justify-between gap-2">
-				<span class="ts-caption text-xs uppercase tracking-wide text-tertiary select-none">
-					{props.label}
-				</span>
+				<span class="ts-overline text-tertiary select-none">{props.label}</span>
 				<Show when={props.icon}>
 					{(Icon) => <div class="text-tertiary shrink-0">{Icon()()}</div>}
 				</Show>
 			</div>
-			<div class="ts-heading-3 font-semibold text-primary tracking-tight mt-0.5">
-				{props.value}
-			</div>
+			<div class="ts-heading-3 text-primary mt-0.5">{props.value}</div>
 			<Show when={props.hint}>
-				<div class="ts-caption text-tertiary text-xs mt-0.5">{props.hint}</div>
+				<div class="ts-caption text-tertiary mt-0.5">{props.hint}</div>
 			</Show>
 		</div>
 	);

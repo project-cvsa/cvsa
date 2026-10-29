@@ -1,5 +1,20 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
 import { For, Show, createUniqueId, splitProps, type JSX } from "solid-js";
+
+const radioGroupVariants = cva("flex", {
+	variants: {
+		direction: {
+			col: "flex-col gap-3",
+			row: "flex-row flex-wrap items-center gap-6",
+		},
+	},
+	defaultVariants: {
+		direction: "col",
+	},
+});
+
+type RadioDirection = NonNullable<VariantProps<typeof radioGroupVariants>["direction"]>;
 
 export interface RadioOption<T extends string = string> {
 	value: T;
@@ -14,7 +29,7 @@ export interface RadioGroupProps<T extends string = string> {
 	options: ReadonlyArray<RadioOption<T>> | RadioOption<T>[];
 	name?: string;
 	label?: string;
-	direction?: "row" | "col";
+	direction?: RadioDirection;
 	disabled?: boolean;
 	class?: string;
 }
@@ -36,19 +51,14 @@ export function RadioGroup<T extends string = string>(props: RadioGroupProps<T>)
 	const direction = () => local.direction ?? "col";
 
 	return (
-		<div class={clsx("flex flex-col gap-2", local.class)} role="radiogroup" {...rest}>
+		<div class={cn("flex flex-col gap-2", local.class)} role="radiogroup" {...rest}>
 			<Show when={local.label}>
-				<span class="ts-label font-medium text-primary select-none">{local.label}</span>
+				<span class="text-label tracking-label font-medium text-primary select-none">
+					{local.label}
+				</span>
 			</Show>
 
-			<div
-				class={clsx(
-					"flex",
-					direction() === "row"
-						? "flex-row flex-wrap items-center gap-6"
-						: "flex-col gap-3"
-				)}
-			>
+			<div class={radioGroupVariants({ direction: direction() })}>
 				<For each={local.options}>
 					{(option) => {
 						const isSelected = () => local.value === option.value;
@@ -56,7 +66,7 @@ export function RadioGroup<T extends string = string>(props: RadioGroupProps<T>)
 
 						return (
 							<label
-								class={clsx(
+								class={cn(
 									"inline-flex items-start gap-2.5 select-none transition-colors",
 									isDisabled()
 										? "opacity-50 cursor-not-allowed"
@@ -74,7 +84,7 @@ export function RadioGroup<T extends string = string>(props: RadioGroupProps<T>)
 										class="sr-only"
 									/>
 									<div
-										class={clsx(
+										class={cn(
 											"w-4 h-4 border flex items-center justify-center transition-colors bg-surface",
 											isSelected()
 												? "border-primary"
@@ -88,11 +98,11 @@ export function RadioGroup<T extends string = string>(props: RadioGroupProps<T>)
 								</div>
 
 								<div class="flex flex-col">
-									<span class="text-sm font-medium text-primary">
+									<span class="text-label tracking-label font-medium text-primary">
 										{option.label}
 									</span>
 									<Show when={option.description}>
-										<span class="text-xs text-tertiary mt-0.5">
+										<span class="text-caption tracking-caption text-tertiary mt-0.5">
 											{option.description}
 										</span>
 									</Show>

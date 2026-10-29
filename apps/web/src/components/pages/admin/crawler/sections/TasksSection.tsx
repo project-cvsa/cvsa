@@ -27,7 +27,7 @@ const jobDate = (value: number | null | undefined) =>
 function JobDetail(props: { job: CrawlerQueueJobDetail }) {
 	const t = getComponentT("crawler");
 	return (
-		<div class="flex flex-col gap-4 text-xs">
+		<div class="flex flex-col gap-4 ts-caption">
 			<dl class="grid grid-cols-2 gap-3">
 				<For
 					each={[
@@ -52,10 +52,7 @@ function JobDetail(props: { job: CrawlerQueueJobDetail }) {
 			<Show when={props.job.failedReason || props.job.stacktrace?.length}>
 				<div>
 					<h3 class="text-error mb-2">{t("audit.stacktrace")}</h3>
-					<pre
-						style={{ "font-family": "inherit" }}
-						class="cvsa-scroll max-h-56 overflow-auto whitespace-pre-wrap p-3 bg-surface-container-low text-error"
-					>
+					<pre class="cvsa-scroll max-h-56 overflow-auto whitespace-pre-wrap p-3 bg-surface-container-low text-error font-body">
 						{props.job.failedReason}
 						{"\n"}
 						{props.job.stacktrace?.join("\n")}
@@ -72,10 +69,7 @@ function JobDetail(props: { job: CrawlerQueueJobDetail }) {
 				{(entry) => (
 					<div>
 						<h3 class="text-secondary mb-2">{String(entry[0])}</h3>
-						<pre
-							style={{ "font-family": "inherit" }}
-							class="cvsa-scroll max-h-64 overflow-auto p-3 bg-surface-container-low"
-						>
+						<pre class="cvsa-scroll max-h-64 overflow-auto p-3 bg-surface-container-low font-body">
 							{JSON.stringify(entry[1] ?? null, null, 2)}
 						</pre>
 					</div>
@@ -242,10 +236,10 @@ export default function TasksSection() {
 
 	return (
 		<div class="flex flex-col gap-6">
-			<SectionHeader title={<h2 class="text-sm">{t("tasks.title")}</h2>} />
+			<SectionHeader title={<h2 class="ts-heading-2">{t("tasks.title")}</h2>} />
 			<Show when={error()}>
 				{(message) => (
-					<p role="alert" class="text-error text-sm">
+					<p role="alert" class="text-error text-label tracking-label">
 						{message()}
 					</p>
 				)}
@@ -253,10 +247,7 @@ export default function TasksSection() {
 			<Show when={stats()}>{(data) => <QueueStatusTable queues={data().queues} />}</Show>
 			<section class="flex flex-col gap-3">
 				<div class="flex flex-wrap items-center gap-2">
-					<h3 class="text-sm font-semibold mr-auto">
-						{t("tasks.jobs.title")}{" "}
-						<span class="text-secondary">{jobs()?.total ?? 0}</span>
-					</h3>
+					<h3 class="ts-label mr-auto">{t("tasks.jobs.title")}</h3>
 					<div class="w-40">
 						<Select
 							size="sm"

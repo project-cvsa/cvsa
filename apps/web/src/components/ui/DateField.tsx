@@ -6,7 +6,7 @@ import {
 	useDatePickerContext,
 } from "@ark-ui/solid/date-picker";
 import { parseDateTime } from "@internationalized/date";
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import { createEffect, createSignal, createUniqueId, For, Index, Show, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
 import CalendarDays from "lucide-solid/icons/calendar-days";
@@ -110,7 +110,7 @@ export default function DateField(props: DateFieldProps) {
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5", local.class)}>
 			<ArkDatePicker.Root
 				id={`${fieldId()}-picker`}
 				value={dates()}
@@ -167,7 +167,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 	const dateInput = useDateInputContext();
 	return (
 		<ArkDateInput.Control
-			class={clsx(
+			class={cn(
 				"group relative flex h-[58px] items-center border bg-surface transition-colors",
 				props.errorText
 					? "border-error"
@@ -176,7 +176,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 			)}
 		>
 			<ArkDateInput.Label
-				class={clsx(
+				class={cn(
 					"absolute left-4 top-2 z-1 ts-caption",
 					props.errorText ? "text-error" : "text-tertiary"
 				)}
@@ -198,7 +198,7 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 						// machine-provided segment directly to preserve `/`, space and `:`.
 						<span
 							{...dateInput().getSegmentProps({ segment: segment() })}
-							class={clsx(
+							class={cn(
 								"min-w-0 rounded-none outline-none ts-body text-primary",
 								segment().type === "literal" ? "px-0" : "px-0.5",
 								segment().type === "hour" && "ml-2",
@@ -310,7 +310,7 @@ function CalendarDay(props: { day: DateValue }) {
 	return (
 		<ArkDatePicker.TableCell value={props.day} class="p-0.5">
 			<ArkDatePicker.TableCellTrigger
-				class={clsx(
+				class={cn(
 					"flex aspect-square w-full items-center justify-center outline-none ts-label text-primary transition-colors",
 					"hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary",
 					"data-[selected]:bg-primary data-[selected]:text-display-inverted",

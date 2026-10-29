@@ -38,7 +38,7 @@ function VideoIdentity(props: { item: TrackingVideo }) {
 			>
 				{props.item.title || `AID ${props.item.aid}`}
 			</a>
-			<div class="flex flex-wrap gap-x-2 text-tertiary text-xs">
+			<div class="flex flex-wrap gap-x-2 text-tertiary ts-caption">
 				<span>AID {props.item.aid}</span>
 				<Show when={props.item.bvid}>
 					{(bvid) => (
@@ -81,7 +81,7 @@ export default function VideosSection() {
 	const listRequests = createRequestSequence();
 
 	const stateOptions: SelectOption[] = [
-		{ value: "all", label: `${t("videos.col.state")}: ${t("videos.state.all")}` },
+		{ value: "all", label: `${t("videos.state.all")}` },
 		{ value: "new", label: t("videos.state.new") },
 		{ value: "regular", label: t("videos.state.regular") },
 		{ value: "milestone", label: t("videos.state.milestone") },
@@ -238,7 +238,7 @@ export default function VideosSection() {
 			<SectionHeader
 				title={
 					<>
-						<h2 class="text-sm">{t("videos.title")}</h2>
+						<h2 class="ts-heading-2">{t("videos.title")}</h2>
 						<Badge size="sm" variant="neutral">
 							{total()}
 						</Badge>

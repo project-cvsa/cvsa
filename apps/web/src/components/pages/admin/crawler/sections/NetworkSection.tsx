@@ -234,7 +234,7 @@ export default function NetworkSection(props: NetworkSectionProps) {
 			<SectionHeader
 				title={
 					<>
-						<h2 class="text-sm">{t("tabs.network")}</h2>
+						<h2 class="ts-heading-2">{t("tabs.network")}</h2>
 						<Show when={networkDoc()}>
 							{(doc) => <RevisionBadge revision={doc().revision} />}
 						</Show>

@@ -1,28 +1,43 @@
-import { controlSizeClass } from "./controlStyles";
-import clsx from "clsx";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
 import { type ComponentProps, Show, splitProps } from "solid-js";
+import { controlSizeClass } from "./controlStyles";
 
-type ButtonVariant = "filled" | "outlined" | "ghost";
-type ButtonSize = "sm" | "md" | "lg";
+const buttonVariants = cva(
+	[
+		"relative inline-flex items-center justify-center font-medium transition-colors select-none",
+		"focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
+		"disabled:cursor-not-allowed disabled:opacity-60",
+	],
+	{
+		variants: {
+			variant: {
+				filled: "bg-primary text-display-inverted border border-primary hover:bg-secondary hover:border-tertiary-inverted active:opacity-90",
+				outlined:
+					"bg-transparent text-primary border border-border hover:bg-hover active:bg-surface-container-high hover:border-tertiary",
+				ghost: "bg-transparent text-primary border border-transparent hover:bg-hover active:bg-surface-container-high",
+			},
+			size: {
+				sm: "px-3",
+				md: "px-4",
+				lg: "px-6",
+			},
+		},
+		defaultVariants: {
+			variant: "filled",
+			size: "md",
+		},
+	}
+);
+
+export type ButtonVariant = NonNullable<VariantProps<typeof buttonVariants>["variant"]>;
+export type ButtonSize = NonNullable<VariantProps<typeof buttonVariants>["size"]>;
 
 export interface ButtonProps extends ComponentProps<"button"> {
 	variant?: ButtonVariant;
 	size?: ButtonSize;
 	loading?: boolean;
 }
-
-const variantClass: Record<ButtonVariant, string> = {
-	filled: "bg-primary text-display-inverted border border-primary hover:bg-secondary hover:border-secondary active:opacity-90",
-	outlined:
-		"bg-transparent text-primary border border-border hover:bg-hover active:bg-surface-container-high",
-	ghost: "bg-transparent text-primary border border-transparent hover:bg-hover active:bg-surface-container-high",
-};
-
-const sizeClass: Record<ButtonSize, string> = {
-	sm: "px-3",
-	md: "px-4",
-	lg: "px-6",
-};
 
 export default function Button(props: ButtonProps) {
 	const [local, rest] = splitProps(props, [
@@ -40,13 +55,9 @@ export default function Button(props: ButtonProps) {
 	return (
 		<button
 			disabled={local.disabled || local.loading}
-			class={clsx(
-				"relative inline-flex items-center justify-center font-medium transition-colors select-none",
-				"focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
-				"disabled:cursor-not-allowed disabled:opacity-60",
-				variantClass[variant()],
+			class={cn(
+				buttonVariants({ variant: variant(), size: size() }),
 				controlSizeClass(size()),
-				sizeClass[size()],
 				local.class
 			)}
 			{...rest}
@@ -76,7 +87,7 @@ export default function Button(props: ButtonProps) {
 				</span>
 			</Show>
 			<span
-				class={clsx(
+				class={cn(
 					"inline-flex items-center justify-center gap-1.5",
 					local.loading && "invisible"
 				)}

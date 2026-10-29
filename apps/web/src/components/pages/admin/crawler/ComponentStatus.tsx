@@ -22,15 +22,15 @@ function ClassifierStatus(props: { health: ClassifierHealthDto | null }) {
 		return { variant: "success", label: t("overview.classifier.status.ready") };
 	};
 	return (
-		<div class="flex flex-col items-start gap-1">
+		<div class="flex items-start gap-1">
 			<Badge size="sm" variant={presentation().variant}>
 				{presentation().label}
 			</Badge>
 			<Show when={props.health?.modelVersion}>
-				{(version) => <span class="text-xs text-secondary">{version()}</span>}
+				{(version) => <span class="ts-caption text-secondary">{version()}</span>}
 			</Show>
 			<Show when={props.health?.error}>
-				{(message) => <p class="text-xs text-error break-words">{message()}</p>}
+				{(message) => <p class="ts-caption text-error break-words">{message()}</p>}
 			</Show>
 		</div>
 	);
@@ -90,7 +90,7 @@ export default function ComponentStatus(props: ComponentStatusProps) {
 	];
 	return (
 		<section class="flex flex-col gap-3">
-			<h3 class="text-sm font-semibold">{t("audit.components")}</h3>
+			<h3 class="ts-label">{t("audit.components")}</h3>
 			<DataTable columns={columns} items={rows()} />
 		</section>
 	);

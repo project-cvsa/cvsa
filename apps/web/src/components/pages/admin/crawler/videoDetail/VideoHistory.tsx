@@ -80,7 +80,7 @@ export default function VideoHistory(props: VideoHistoryProps) {
 	return (
 		<section class="flex flex-col gap-3">
 			<div class="flex flex-wrap items-center justify-between gap-2">
-				<h3 class="text-sm font-semibold text-primary">{t("videoDetail.history")}</h3>
+				<h3 class="ts-label text-primary">{t("videoDetail.history")}</h3>
 				<span class="ts-caption text-tertiary">
 					{t("videoDetail.changes").replace("{count}", String(props.historyTotal()))}
 				</span>

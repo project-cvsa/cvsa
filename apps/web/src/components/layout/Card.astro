@@ -1,20 +1,22 @@
 ---
 import Condition from "@components/Condition.astro";
+import { cn } from "@lib/cn";
 import { getLocale } from "@lib/i18n/server";
 
 const { language: locale } = getLocale(Astro.request);
+const { class: className } = Astro.props;
 ---
 
-<div class="w-full bg-surface shadow-xl">
+<div class={cn("w-full bg-surface shadow-xl", className)}>
 	<div
-		class="h-11 sm:h-13 bg-primary text-display-inverted text-lg sm:text-xl 
+		class="h-11 sm:h-13 bg-primary text-display-inverted text-subhead sm:text-heading-3 tracking-subhead sm:tracking-heading-3 
 		flex items-center justify-between px-4"
 	>
-		<span class="font-[Outfit,system-ui] uppercase">
+		<span class="uppercase">
 			<slot name="title" />
 		</span>
 		<Condition condition={locale !== "en-US"}>
-			<span class="opacity-60 font-[Outfit] uppercase select-none">
+			<span class="opacity-60 uppercase select-none">
 				<slot name="title-en" />
 			</span>
 		</Condition>

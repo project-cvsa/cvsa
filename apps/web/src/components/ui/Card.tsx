@@ -1,6 +1,22 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
 import type { JSX } from "solid-js";
 import { createMemo, Show, splitProps } from "solid-js";
+
+const cardHeaderVariants = cva(
+	"px-4 flex items-center justify-between text-label tracking-label uppercase",
+	{
+		variants: {
+			variant: {
+				inverted: "h-11 sm:h-12 bg-primary text-display-inverted",
+				bordered: "py-3 border-b border-border bg-surface",
+			},
+		},
+		defaultVariants: {
+			variant: "bordered",
+		},
+	}
+);
 
 export interface CardProps {
 	class?: string;
@@ -11,7 +27,7 @@ export function Card(props: CardProps) {
 	const [local, rest] = splitProps(props, ["class", "children"]);
 	return (
 		<div
-			class={clsx(
+			class={cn(
 				"bg-surface border border-border shadow-xl overflow-hidden transition-colors",
 				local.class
 			)}
@@ -25,7 +41,7 @@ export function Card(props: CardProps) {
 export interface CardHeaderProps {
 	title?: string | JSX.Element;
 	actions?: JSX.Element;
-	variant?: "inverted" | "bordered";
+	variant?: NonNullable<VariantProps<typeof cardHeaderVariants>["variant"]>;
 	class?: string;
 	children?: JSX.Element;
 }
@@ -39,10 +55,9 @@ export function CardHeader(props: CardHeaderProps) {
 
 	return (
 		<div
-			class={clsx(
-				isInverted()
-					? "h-11 sm:h-12 bg-primary text-display-inverted px-4 flex items-center justify-between font-[Outfit,system-ui] uppercase text-sm tracking-wide"
-					: "px-4 py-3 border-b border-border bg-surface flex items-center justify-between font-[Outfit,system-ui] uppercase text-sm tracking-wide",
+			class={cn(
+				cardHeaderVariants({ variant: local.variant }),
+				isInverted() ? "text-display-inverted" : "text-primary",
 				local.class
 			)}
 			{...rest}
@@ -50,14 +65,7 @@ export function CardHeader(props: CardHeaderProps) {
 			<Show when={title()} fallback={local.children}>
 				<div class="flex items-center gap-3 min-w-0">
 					<Show when={title()}>
-						<div
-							class={clsx(
-								"font-semibold truncate",
-								isInverted() ? "text-display-inverted" : "text-primary"
-							)}
-						>
-							{title()}
-						</div>
+						<div class="font-semibold truncate">{title()}</div>
 					</Show>
 				</div>
 				<Show when={actions()}>
@@ -76,7 +84,7 @@ export interface CardContentProps {
 export function CardContent(props: CardContentProps) {
 	const [local, rest] = splitProps(props, ["class", "children"]);
 	return (
-		<div class={clsx("p-4 sm:p-5", local.class)} {...rest}>
+		<div class={cn("p-4 sm:p-5", local.class)} {...rest}>
 			{local.children}
 		</div>
 	);
@@ -91,8 +99,8 @@ export function CardFooter(props: CardFooterProps) {
 	const [local, rest] = splitProps(props, ["class", "children"]);
 	return (
 		<div
-			class={clsx(
-				"px-4 py-3 border-t border-border bg-surface-container-high flex items-center justify-between gap-3 text-sm",
+			class={cn(
+				"px-4 py-3 border-t border-border bg-surface-container-high flex items-center justify-between gap-3 text-label tracking-label",
 				local.class
 			)}
 			{...rest}

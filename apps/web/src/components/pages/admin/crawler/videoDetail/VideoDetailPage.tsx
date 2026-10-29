@@ -1,5 +1,6 @@
 import StateBadge from "../StateBadge";
 import { createSignal, onMount, Show } from "solid-js";
+import { cn } from "@lib/cn";
 import Button from "@components/ui/Button";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
@@ -35,10 +36,10 @@ function VideoMetadataSummary(props: { data: BilibiliVideoMetadataDto }) {
 					)}
 				</Show>
 				<div class="flex flex-col gap-1 min-w-0 flex-1">
-					<h3 class="text-base font-semibold text-primary line-clamp-2">
+					<h3 class="text-body tracking-body font-semibold text-primary line-clamp-2">
 						{props.data.title}
 					</h3>
-					<div class="flex items-center gap-2 text-xs text-secondary mt-1">
+					<div class="flex items-center gap-2 ts-caption text-secondary mt-1">
 						<span>{props.data.ownerName ?? "—"}</span>
 						<span class="text-tertiary">·</span>
 						<span>{props.data.tname ?? "—"}</span>
@@ -46,7 +47,7 @@ function VideoMetadataSummary(props: { data: BilibiliVideoMetadataDto }) {
 				</div>
 			</div>
 
-			<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-border text-xs">
+			<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-border ts-caption">
 				<div>
 					<span class="text-tertiary block mb-0.5">MID</span>
 					<span class="font-medium text-primary">{props.data.mid ?? "—"}</span>
@@ -67,13 +68,11 @@ function VideoMetadataSummary(props: { data: BilibiliVideoMetadataDto }) {
 
 			<Show when={props.data.description}>
 				{(desc) => (
-					<div class="pt-3 border-t border-border flex flex-col gap-1 text-xs">
+					<div class="pt-3 border-t border-border flex flex-col gap-1 ts-caption">
 						<span class="text-tertiary font-medium">
 							{t("videoDetail.description")}
 						</span>
-						<p class="text-secondary line-clamp-3 leading-relaxed whitespace-pre-wrap">
-							{desc()}
-						</p>
+						<p class="text-secondary line-clamp-3 whitespace-pre-wrap">{desc()}</p>
 					</div>
 				)}
 			</Show>
@@ -87,42 +86,46 @@ function TrackingSummary(props: { data: VideoTrackingDto }) {
 		<div class="flex flex-col gap-4">
 			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
 				<div class="p-3 bg-surface-container-high border border-border">
-					<span class="text-xs text-tertiary block mb-1">{t("videoDetail.views")}</span>
-					<span class="text-xl font-bold text-primary">
+					<span class="ts-caption text-tertiary block mb-1">
+						{t("videoDetail.views")}
+					</span>
+					<span class="text-heading-3 tracking-heading-3 font-bold text-primary">
 						{formatMetric(props.data.lastViews)}
 					</span>
 				</div>
 				<div class="p-3 bg-surface-container-high border border-border">
-					<span class="text-xs text-tertiary block mb-1">
+					<span class="ts-caption text-tertiary block mb-1">
 						{t("videoDetail.velocity")}
 					</span>
-					<span class="text-xl font-bold text-primary">
+					<span class="text-heading-3 tracking-heading-3 font-bold text-primary">
 						{formatMetric(props.data.velocity)}
-						<span class="text-xs font-normal text-tertiary ml-1">/h</span>
+						<span class="ts-caption text-tertiary ml-1">/h</span>
 					</span>
 				</div>
 				<div class="p-3 bg-surface-container-high border border-border">
-					<span class="text-xs text-tertiary block mb-1">
+					<span class="ts-caption text-tertiary block mb-1">
 						{t("videoDetail.priority")}
 					</span>
-					<span class="text-xl font-bold text-primary">{props.data.priority}</span>
+					<span class="text-heading-3 tracking-heading-3 font-bold text-primary">
+						{props.data.priority}
+					</span>
 				</div>
 				<div class="p-3 bg-surface-container-high border border-border">
-					<span class="text-xs text-tertiary block mb-1">
+					<span class="ts-caption text-tertiary block mb-1">
 						{t("videoDetail.failures")}
 					</span>
 					<span
-						class={
-							"text-xl font-bold " +
-							(props.data.consecutiveFails > 0 ? "text-error" : "text-primary")
-						}
+						class={cn(
+							"text-heading-3 tracking-heading-3 font-bold",
+							props.data.consecutiveFails > 0 ? "text-error" : "text-primary"
+						)}
 					>
 						{props.data.consecutiveFails}
 					</span>
 				</div>
 			</div>
 
-			<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs">
+			<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 ts-caption">
 				<div>
 					<span class="text-tertiary block mb-0.5">
 						{t("videoDetail.scheduleReason")}
@@ -168,9 +171,9 @@ function TrackingSummary(props: { data: VideoTrackingDto }) {
 
 			<Show when={props.data.lastError}>
 				{(err) => (
-					<div class="p-3 bg-error/10 border border-error/30 text-error text-xs flex flex-col gap-1">
+					<div class="p-3 bg-error/10 border border-error/30 text-error ts-caption flex flex-col gap-1">
 						<span class="font-semibold">{t("videoDetail.lastError")}:</span>
-						<span class="break-words text-[11px]">{err()}</span>
+						<span class="break-words text-overline tracking-overline">{err()}</span>
 					</div>
 				)}
 			</Show>
@@ -270,7 +273,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 				<div>
 					<a
 						href={`/admin/crawler?section=videos&search=${encodeURIComponent(props.aid)}`}
-						class="text-xs text-secondary hover:text-primary inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+						class="ts-caption text-secondary hover:text-primary inline-flex items-center gap-1.5 transition-colors cursor-pointer"
 					>
 						<ArrowLeft class="w-3.5 h-3.5" />
 						<span>{t("common.back")}</span>
@@ -286,7 +289,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 									href={`https://www.bilibili.com/video/${bvid()}`}
 									target="_blank"
 									rel="noopener noreferrer"
-									class="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+									class="inline-flex items-center gap-1 text-label tracking-label font-medium text-primary hover:underline"
 								>
 									<span>{bvid()}</span>
 									<ExternalLink class="w-3.5 h-3.5 text-tertiary" />
@@ -347,7 +350,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 
 			<Show when={error()}>
 				{(msg) => (
-					<div class="p-4 border border-error/40 bg-error/10 text-error text-sm">
+					<div class="p-4 border border-error/40 bg-error/10 text-error text-label tracking-label">
 						{msg()}
 					</div>
 				)}
@@ -359,7 +362,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 					<Show
 						when={metadata()}
 						fallback={
-							<div class="py-12 text-center text-tertiary text-sm">
+							<div class="py-12 text-center text-tertiary text-label tracking-label">
 								{loading() ? t("common.loading") : t("common.unknown")}
 							</div>
 						}
@@ -373,7 +376,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 					<Show
 						when={tracking()}
 						fallback={
-							<div class="py-12 text-center text-tertiary text-sm">
+							<div class="py-12 text-center text-tertiary text-label tracking-label">
 								{loading() ? t("common.loading") : t("videoDetail.untracked")}
 							</div>
 						}

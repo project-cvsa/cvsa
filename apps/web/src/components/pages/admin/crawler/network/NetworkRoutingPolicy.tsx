@@ -134,7 +134,7 @@ export default function NetworkRoutingPolicy(props: NetworkRoutingPolicyProps) {
 		{
 			id: "actions",
 			header: t("audit.actions"),
-			class: "text-right w-24",
+			class: "text-right w-30",
 			cell: (binding) => (
 				<Button
 					size="sm"
@@ -156,7 +156,7 @@ export default function NetworkRoutingPolicy(props: NetworkRoutingPolicyProps) {
 					<h3 class="ts-heading-3 text-primary">{t("network.routing.title")}</h3>
 				</div>
 				<div class="flex items-center gap-4">
-					<div class="text-xs text-secondary">
+					<div class="ts-caption text-secondary">
 						{t("network.routing.reservedTotal").replace(
 							"{percent}",
 							String(Math.round(reservedTotal() * 100))

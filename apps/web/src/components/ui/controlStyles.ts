@@ -7,9 +7,9 @@ export const CONTROL_HEIGHT: Record<ControlSize, string> = {
 };
 
 export const CONTROL_TEXT: Record<ControlSize, string> = {
-	sm: "text-xs",
-	md: "text-sm",
-	lg: "text-base",
+	sm: "text-caption tracking-caption",
+	md: "text-label tracking-label",
+	lg: "text-body tracking-body",
 };
 
 export function controlSizeClass(size: ControlSize): string {

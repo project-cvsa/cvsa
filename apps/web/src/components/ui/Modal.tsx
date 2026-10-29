@@ -1,8 +1,26 @@
-import clsx from "clsx";
-import { type JSX, Show, splitProps } from "solid-js";
+import { cn } from "@lib/cn";
 import { Dialog } from "@ark-ui/solid/dialog";
-import { Portal } from "solid-js/web";
+import { cva, type VariantProps } from "class-variance-authority";
 import X from "lucide-solid/icons/x";
+import { type JSX, Show, splitProps } from "solid-js";
+import { Portal } from "solid-js/web";
+
+const modalContentVariants = cva(
+	"cvsa-modal-content pointer-events-auto relative w-full max-h-[calc(100dvh-2rem)] flex flex-col bg-surface shadow-xl overflow-hidden outline-none",
+	{
+		variants: {
+			size: {
+				sm: "max-w-md",
+				md: "max-w-lg",
+				lg: "max-w-2xl",
+				xl: "max-w-4xl",
+			},
+		},
+		defaultVariants: {
+			size: "md",
+		},
+	}
+);
 
 export interface ModalProps {
 	isOpen: boolean;
@@ -10,18 +28,11 @@ export interface ModalProps {
 	closeLabel?: string;
 	title?: string | JSX.Element;
 	description?: string | JSX.Element;
-	size?: "sm" | "md" | "lg" | "xl";
+	size?: NonNullable<VariantProps<typeof modalContentVariants>["size"]>;
 	children?: JSX.Element;
 	footer?: JSX.Element;
 	class?: string;
 }
-
-const sizeStyles = {
-	sm: "max-w-md",
-	md: "max-w-lg",
-	lg: "max-w-2xl",
-	xl: "max-w-4xl",
-};
 
 export default function Modal(props: ModalProps) {
 	const [local, rest] = splitProps(props, [
@@ -48,19 +59,15 @@ export default function Modal(props: ModalProps) {
 			unmountOnExit
 		>
 			<Portal>
-				<Dialog.Backdrop class="cvsa-modal-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+				<Dialog.Backdrop class="cvsa-modal-backdrop fixed inset-0 z-50 bg-scrim backdrop-blur-sm" />
 				<Dialog.Positioner class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
 					<Dialog.Content
-						class={clsx(
-							"cvsa-modal-content pointer-events-auto relative w-full max-h-[calc(100dvh-2rem)] flex flex-col bg-surface shadow-2xl overflow-hidden outline-none",
-							sizeStyles[size()],
-							local.class
-						)}
+						class={cn(modalContentVariants({ size: size() }), local.class)}
 						{...rest}
 					>
-						<div class="h-12 shrink-0 bg-primary text-display-inverted px-6 flex items-center justify-between gap-4 font-[Outfit,system-ui] uppercase text-base">
+						<div class="h-12 shrink-0 bg-primary text-display-inverted px-6 flex items-center justify-between gap-4 uppercase text-body tracking-body">
 							<Show when={local.title}>
-								<Dialog.Title class="font-semibold text-display-inverted truncate text-base">
+								<Dialog.Title class="font-semibold text-display-inverted truncate text-body tracking-body">
 									{local.title}
 								</Dialog.Title>
 							</Show>
@@ -75,7 +82,7 @@ export default function Modal(props: ModalProps) {
 
 						<div class="cvsa-scroll p-6 min-h-0 overflow-y-auto">
 							<Show when={local.description}>
-								<Dialog.Description class="text-sm text-secondary mb-4 leading-relaxed">
+								<Dialog.Description class="text-label tracking-label text-secondary mb-4">
 									{local.description}
 								</Dialog.Description>
 							</Show>

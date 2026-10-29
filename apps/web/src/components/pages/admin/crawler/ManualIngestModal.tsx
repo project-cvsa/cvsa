@@ -20,7 +20,7 @@ function IngestResult(props: { result: IngestVideoResponse }) {
 	const t = getComponentT("crawler");
 	return (
 		<div class="p-4 border border-border bg-surface-container-high flex flex-col gap-3">
-			<div class="flex items-center gap-2 text-primary font-semibold text-sm">
+			<div class="flex items-center gap-2 text-primary ts-label">
 				<CheckCircle class="w-4 h-4 text-primary" />
 				<span>{props.result.alreadyTracked ? t("ingest.updated") : t("ingest.added")}</span>
 			</div>
@@ -40,7 +40,7 @@ function IngestResult(props: { result: IngestVideoResponse }) {
 						href={`https://www.bilibili.com/video/${props.result.bvid}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="font-semibold text-primary hover:underline line-clamp-2 text-sm"
+						class="ts-label text-primary hover:underline line-clamp-2"
 					>
 						{props.result.title}
 					</a>

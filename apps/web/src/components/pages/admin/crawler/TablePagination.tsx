@@ -13,10 +13,8 @@ type PaginationProps = {
 export default function Pagination(props: PaginationProps) {
 	const t = getComponentT("crawler");
 	return (
-		<footer class="flex items-center justify-between gap-3 text-xs text-secondary">
-			<span>
-				{formatPageLabel(props.page, props.total, props.pageSize)} · {props.total}
-			</span>
+		<footer class="flex items-center justify-between gap-3 ts-caption text-secondary">
+			<span>{formatPageLabel(props.page, props.total, props.pageSize)}</span>
 			<div class="flex gap-2">
 				<Button
 					size="sm"

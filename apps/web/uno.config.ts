@@ -84,6 +84,11 @@ export default defineConfig({
 			xl: "1280px",
 			"2xl": "1536px",
 		},
+		fontFamily: {
+			body: `"Outfit", "system-ui", "sans-serif"`,
+			code: `"IBM Plex Mono", "monospace"`,
+		},
+
 		fontSize: {
 			"display-large": ["56px", "64px"],
 			"display-medium": ["40px", "48px"],

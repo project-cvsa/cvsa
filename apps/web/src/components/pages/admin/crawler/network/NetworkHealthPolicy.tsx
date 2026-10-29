@@ -43,9 +43,7 @@ export default function NetworkHealthPolicy(props: NetworkHealthPolicyProps) {
 
 			<div class="flex flex-col gap-3">
 				<div class="flex flex-col gap-1">
-					<h4 class="text-sm font-semibold text-primary">
-						{t("network.policy.circuit.title")}
-					</h4>
+					<h4 class="ts-label text-primary">{t("network.policy.circuit.title")}</h4>
 					<p class="ts-caption text-secondary">
 						{t("network.policy.circuit.description")}
 					</p>
@@ -89,9 +87,7 @@ export default function NetworkHealthPolicy(props: NetworkHealthPolicyProps) {
 
 			<div class="flex flex-col gap-3">
 				<div class="flex flex-col gap-1">
-					<h4 class="text-sm font-semibold text-primary">
-						{t("network.policy.weights.title")}
-					</h4>
+					<h4 class="ts-label text-primary">{t("network.policy.weights.title")}</h4>
 					<p class="ts-caption text-secondary">
 						{t("network.policy.weights.description")}
 					</p>

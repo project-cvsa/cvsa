@@ -1,6 +1,6 @@
-import { createSignal, createUniqueId, For, Show } from "solid-js";
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import X from "lucide-solid/icons/x";
+import { For, Show, createSignal, createUniqueId } from "solid-js";
 
 export interface TagInputProps {
 	tags: string[];
@@ -75,15 +75,15 @@ export default function TagInput(props: TagInputProps) {
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-2", props.class)}>
+		<div class={cn("flex flex-col gap-2", props.class)}>
 			<Show when={props.label || props.description}>
 				<div class="flex items-center justify-between gap-2">
 					<Show when={props.label}>
 						<div class="flex items-center gap-2">
-							<label for={inputId} class="ts-label font-medium text-primary">
+							<label for={inputId} class="ts-label text-primary">
 								{props.label}
 							</label>
-							<span class="px-1.5 py-0.2 bg-surface-container-high border border-border text-[11px] font-mono text-secondary">
+							<span class="px-1.5 py-0.2 bg-surface-container-high border border-border text-overline tracking-overline font-code text-secondary">
 								{props.tags.length}
 							</span>
 						</div>
@@ -92,28 +92,28 @@ export default function TagInput(props: TagInputProps) {
 						<button
 							type="button"
 							onClick={() => props.onChange([])}
-							class="text-[11px] text-tertiary hover:text-error transition-colors cursor-pointer select-none"
+							class="text-overline tracking-overline text-tertiary hover:text-error transition-colors cursor-pointer select-none"
 						>
 							{props.clearLabel ?? "Clear"}
 						</button>
 					</Show>
 				</div>
 				<Show when={props.description}>
-					<p class="text-xs text-tertiary -mt-0.5">{props.description}</p>
+					<p class="ts-caption text-tertiary -mt-0.5">{props.description}</p>
 				</Show>
 			</Show>
 
 			<div
-				class={clsx(
+				class={cn(
 					"w-full bg-surface-container-low border border-border p-2 flex flex-wrap items-center gap-1.5 transition-colors cursor-text min-h-[46px]",
 					props.disabled
-						? "opacity-60 cursor-not-allowed bg-surface-container"
+						? "opacity-60 cursor-not-allowed bg-surface-container-low"
 						: "hover:border-secondary focus-within:border-primary focus-within:bg-surface focus-within:ring-1 focus-within:ring-primary/20"
 				)}
 			>
 				<For each={props.tags}>
 					{(tag, index) => (
-						<span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface border border-border text-xs text-primary font-medium select-none animate-in fade-in zoom-in-95 duration-100">
+						<span class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-surface border border-border text-caption tracking-caption text-primary font-medium select-none animate-in fade-in zoom-in-95 duration-100">
 							<span>{tag}</span>
 							<Show when={!props.disabled}>
 								<button
@@ -150,7 +150,7 @@ export default function TagInput(props: TagInputProps) {
 							? (props.placeholder ?? "")
 							: (props.placeholder ?? "")
 					}
-					class="flex-1 min-w-[140px] bg-transparent text-xs text-primary placeholder:text-tertiary outline-none py-1 px-1 border-0"
+					class="flex-1 min-w-[140px] bg-transparent text-caption tracking-caption text-primary placeholder:text-tertiary outline-none py-1 px-1 border-0"
 				/>
 			</div>
 		</div>

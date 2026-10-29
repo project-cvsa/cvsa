@@ -107,10 +107,8 @@ function AdapterCard(props: AdapterCardProps) {
 							onChange={props.onToggle}
 							aria-label={`${t("common.enable")} ${props.adapter.id}`}
 						/>
-						<span class="font-semibold text-primary truncate text-sm">
-							{props.adapter.id}
-						</span>
-						<span class="text-xs text-tertiary">
+						<span class="ts-label text-primary truncate">{props.adapter.id}</span>
+						<span class="ts-caption text-tertiary">
 							{t(`network.adapters.type.${props.adapter.type}`)}
 						</span>
 					</div>
@@ -126,7 +124,7 @@ function AdapterCard(props: AdapterCardProps) {
 				}
 			/>
 			<CardContent class="p-4 flex flex-col gap-4 flex-1 justify-between">
-				<dl class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+				<dl class="grid grid-cols-2 sm:grid-cols-3 gap-3 ts-caption">
 					<For each={metrics()}>
 						{(metric) => (
 							<div>
@@ -141,7 +139,7 @@ function AdapterCard(props: AdapterCardProps) {
 								<dt class="text-tertiary mb-0.5">
 									{t("network.adapters.latency")}
 								</dt>
-								<dd class={result().ok ? "text-success" : "text-error"}>
+								<dd class={result().ok ? "text-primary" : "text-error"}>
 									{resultLabel(result())}
 								</dd>
 							</div>
@@ -210,12 +208,6 @@ export default function NetworkAdapterList(props: NetworkAdapterListProps) {
 					{t("common.add")}
 				</Button>
 			</div>
-
-			<Show when={props.dirty}>
-				<div class="px-3 py-2 text-xs bg-warning/10 text-warning border border-warning/30">
-					{t("network.adapters.saveBeforeTest")}
-				</div>
-			</Show>
 
 			<Show
 				when={props.adapters.length}

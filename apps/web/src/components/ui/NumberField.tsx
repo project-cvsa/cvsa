@@ -1,8 +1,36 @@
-import { controlSizeClass } from "./controlStyles";
-import clsx from "clsx";
+import { cn } from "@lib/cn";
+import { cva, type VariantProps } from "class-variance-authority";
 import { Show, createUniqueId, splitProps } from "solid-js";
+import { controlSizeClass } from "./controlStyles";
 
-export type NumberFieldSize = "sm" | "md";
+const numberFieldLabelVariants = cva("font-medium text-primary select-none", {
+	variants: {
+		size: {
+			sm: "ts-caption",
+			md: "ts-label",
+		},
+	},
+	defaultVariants: {
+		size: "md",
+	},
+});
+
+const numberFieldInputVariants = cva(
+	"w-full border bg-surface text-primary transition-colors focus-visible:outline-none focus:border-primary",
+	{
+		variants: {
+			size: {
+				sm: "px-2.5",
+				md: "px-3",
+			},
+		},
+		defaultVariants: {
+			size: "md",
+		},
+	}
+);
+
+export type NumberFieldSize = NonNullable<VariantProps<typeof numberFieldInputVariants>["size"]>;
 
 export interface NumberFieldProps {
 	value?: number;
@@ -22,17 +50,6 @@ export interface NumberFieldProps {
 	class?: string;
 	placeholder?: string;
 }
-
-const sizeStyles: Record<NumberFieldSize, { input: string; label: string }> = {
-	sm: {
-		input: "px-2.5",
-		label: "ts-caption",
-	},
-	md: {
-		input: "px-3",
-		label: "ts-label",
-	},
-};
 
 export default function NumberField(props: NumberFieldProps) {
 	const [local, rest] = splitProps(props, [
@@ -69,13 +86,12 @@ export default function NumberField(props: NumberFieldProps) {
 	};
 
 	return (
-		<div class={clsx("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5", local.class)}>
 			<Show when={local.label}>
 				<label
 					for={inputId()}
-					class={clsx(
-						"font-medium text-primary select-none",
-						sizeStyles[size()].label,
+					class={cn(
+						numberFieldLabelVariants({ size: size() }),
 						local.disabled && "opacity-60"
 					)}
 				>
@@ -99,10 +115,9 @@ export default function NumberField(props: NumberFieldProps) {
 						"-moz-appearance": "textfield",
 						margin: "0",
 					}}
-					class={clsx(
-						"w-full border bg-surface text-primary transition-colors focus-visible:outline-none focus:border-primary",
+					class={cn(
+						numberFieldInputVariants({ size: size() }),
 						controlSizeClass(size()),
-						sizeStyles[size()].input,
 						local.errorText
 							? "border-error focus-visible:outline-error"
 							: "border-border hover:border-tertiary",
@@ -112,7 +127,7 @@ export default function NumberField(props: NumberFieldProps) {
 					{...rest}
 				/>
 				<Show when={local.suffix}>
-					<span class="pointer-events-none absolute right-3 text-xs text-tertiary select-none">
+					<span class="pointer-events-none absolute right-3 ts-caption text-tertiary select-none">
 						{local.suffix}
 					</span>
 				</Show>
@@ -120,8 +135,8 @@ export default function NumberField(props: NumberFieldProps) {
 
 			<Show when={local.errorText || local.helperText}>
 				<p
-					class={clsx(
-						"text-xs mt-0.5",
+					class={cn(
+						"ts-caption mt-0.5",
 						local.errorText ? "text-error font-medium" : "text-tertiary"
 					)}
 				>

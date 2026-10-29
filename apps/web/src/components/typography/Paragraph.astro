@@ -1,7 +1,9 @@
 ---
-const { ...attrs } = Astro.props;
+import { cn } from "@lib/cn";
+
+const { class: className, ...attrs } = Astro.props;
 ---
 
-<p class="ts-body color-primary pt-3.5" class:list={[attrs.class]} {...attrs}>
+<p class={cn("ts-body text-primary pt-3.5", className)} {...attrs}>
 	<slot />
 </p>

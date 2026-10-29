@@ -106,6 +106,10 @@ const baseVariables = {
 		light: primitives.gray[1000] + "0A",
 		dark: primitives.gray[1000] + "30",
 	},
+	"--scrim": {
+		light: primitives.gray[1000] + "99",
+		dark: primitives.gray[1000] + "B3",
+	},
 } as const;
 
 const keysToInvert: Array<keyof typeof baseVariables> = [

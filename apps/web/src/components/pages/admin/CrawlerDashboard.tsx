@@ -91,10 +91,6 @@ export default function CrawlerDashboard() {
 		{ id: "settings", label: t("tabs.settings") },
 	];
 
-	const healthyAdaptersCount = () =>
-		statusData()?.adapters.filter((a) => a.enabled && a.healthState.toLowerCase() === "healthy")
-			.length ?? 0;
-	const totalAdaptersCount = () => statusData()?.adapters.length ?? 0;
 	const statusBadgeVariant = (): BadgeVariant => (statusData()?.ready ? "success" : "warning");
 	const statusBadgeLabel = () =>
 		statusData()?.ready ? t("dashboard.ready") : t("dashboard.starting");
@@ -117,17 +113,6 @@ export default function CrawlerDashboard() {
 				</div>
 
 				<div class="flex items-center gap-3">
-					<Show when={statusData()}>
-						<div class="hidden sm:flex items-center gap-2 ts-caption text-secondary bg-surface-container-high px-3 py-1.5 border border-border">
-							<span class="text-tertiary">{t("dashboard.adapters")}:</span>
-							<span class="font-medium text-primary">
-								{t("dashboard.healthyCount")
-									.replace("{healthy}", String(healthyAdaptersCount()))
-									.replace("{total}", String(totalAdaptersCount()))}
-							</span>
-						</div>
-					</Show>
-
 					<Button
 						variant="filled"
 						size="sm"

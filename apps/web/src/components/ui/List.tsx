@@ -1,4 +1,4 @@
-import clsx from "clsx";
+import { cn } from "@lib/cn";
 import { createEffect, createSignal, For, Show, on, onCleanup } from "solid-js";
 import { Dynamic } from "solid-js/web";
 import type { LucideIcon } from "lucide-solid";
@@ -310,7 +310,7 @@ export default function List(props: ListProps) {
 	return (
 		<ol
 			ref={listRef}
-			class={clsx("relative m-0 flex list-none flex-col p-0", props.class)}
+			class={cn("relative m-0 flex list-none flex-col p-0", props.class)}
 			aria-label={props.ariaLabel}
 		>
 			<For each={orderedItems()}>
@@ -328,7 +328,7 @@ export default function List(props: ListProps) {
 						<li
 							data-list-item-id={item.id}
 							style={{ transform: itemTransform(item.id) }}
-							class={clsx(
+							class={cn(
 								"group relative flex min-h-18 items-stretch bg-surface",
 								item.disabled && "opacity-50",
 								draggedId() === item.id &&
@@ -454,7 +454,7 @@ export function ListItemContent(props: { item: ListItem; onSelect?: (item: ListI
 			<button
 				type="button"
 				disabled={props.item.disabled}
-				class={clsx(
+				class={cn(
 					className,
 					"bg-transparent outline-none focus-visible:outline-1 focus-visible:outline-primary"
 				)}

@@ -116,7 +116,7 @@ export default function DiscoveryActions(props: { onQueued: () => void }) {
 						{t("audit.start")}
 					</Button>
 					<Show when={queued()}>
-						<span role="status" class="text-xs text-success">
+						<span role="status" class="ts-caption text-primary">
 							{t("audit.submitted")}
 						</span>
 					</Show>
@@ -127,7 +127,7 @@ export default function DiscoveryActions(props: { onQueued: () => void }) {
 							{(word) => (
 								<button
 									type="button"
-									class="px-2 py-1 text-xs border border-border text-secondary hover:bg-hover"
+									class="px-2 py-1 ts-caption border border-border text-secondary hover:bg-hover"
 									aria-pressed={keyword() === word}
 									onClick={() => setKeyword(word)}
 								>

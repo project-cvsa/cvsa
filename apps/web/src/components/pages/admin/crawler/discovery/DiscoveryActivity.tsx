@@ -74,7 +74,7 @@ export default function DiscoveryActivity(props: {
 	];
 	return (
 		<section class="flex flex-col gap-3" aria-label={t("audit.activity")}>
-			<div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs">
+			<div class="flex flex-wrap items-center gap-x-6 gap-y-2 ts-caption">
 				<h3 class="font-semibold text-primary">{t("audit.activity")}</h3>
 				<Show when={props.status}>
 					{(status) => (
@@ -101,7 +101,7 @@ export default function DiscoveryActivity(props: {
 			</div>
 			<Show when={props.error}>
 				{(message) => (
-					<p role="alert" class="text-error text-xs">
+					<p role="alert" class="text-error ts-caption">
 						{message()}
 					</p>
 				)}

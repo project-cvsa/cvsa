@@ -43,13 +43,13 @@ export default function KeywordListEditor(props: KeywordListEditorProps) {
 	return (
 		<section class="flex flex-col gap-3">
 			<div class="flex items-center gap-2">
-				<h3 class="text-sm font-semibold text-primary">{props.title}</h3>
+				<h3 class="ts-label text-primary">{props.title}</h3>
 				<Badge size="sm" variant="neutral">
 					{props.items.length}
 				</Badge>
 			</div>
 			<Show when={props.description}>
-				<p class="text-xs text-secondary">{props.description}</p>
+				<p class="ts-caption text-secondary">{props.description}</p>
 			</Show>
 			<TagInput
 				tags={props.items}
