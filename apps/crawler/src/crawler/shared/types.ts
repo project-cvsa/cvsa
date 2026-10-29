@@ -1,8 +1,10 @@
-import type { JobsOptions, WorkerOptions } from "bullmq";
+import type { JobType, JobsOptions, WorkerOptions } from "bullmq";
+import type { DiscoveryJobProgress } from "@cvsa/contracts";
 
 export interface CrawlerJob<T> {
 	id: string | undefined;
 	data: T;
+	updateProgress?: (progress: DiscoveryJobProgress) => Promise<void>;
 }
 
 export type CrawlerProcessor<T> = (job: CrawlerJob<T>) => Promise<void>;
@@ -15,6 +17,9 @@ export type CrawlerQueueJobSnapshot = {
 	attempts: number;
 	failedReason?: string | null;
 	timestamp: number;
+	progress?: unknown;
+	processedOn?: number | null;
+	finishedOn?: number | null;
 };
 
 export type CrawlerQueueJobFullDetail = CrawlerQueueJobSnapshot & {
@@ -37,7 +42,7 @@ export interface CrawlerJobCounts {
 export interface CrawlerQueue<T> {
 	add(name: string, data: T, options?: JobsOptions): Promise<void>;
 	getJobCounts(): Promise<CrawlerJobCounts>;
-	getJobs(types?: string[], limit?: number): Promise<CrawlerQueueJobSnapshot[]>;
+	getJobs(types?: JobType[], limit?: number, offset?: number): Promise<CrawlerQueueJobSnapshot[]>;
 	getJobDetail(id: string): Promise<CrawlerQueueJobFullDetail | null>;
 	retryJob(id: string): Promise<boolean>;
 	removeJob(id: string): Promise<boolean>;

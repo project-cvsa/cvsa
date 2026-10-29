@@ -1,4 +1,4 @@
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createUniqueId, For, Show } from "solid-js";
 import clsx from "clsx";
 import X from "lucide-solid/icons/x";
 
@@ -11,15 +11,17 @@ export interface TagInputProps {
 	maxTags?: number;
 	disabled?: boolean;
 	class?: string;
+	clearLabel?: string;
+	removeLabel?: string;
 }
 
 export default function TagInput(props: TagInputProps) {
 	const [input, setInput] = createSignal("");
-	let inputRef!: HTMLInputElement;
+	const inputId = createUniqueId();
 
 	const addTokens = (raw: string) => {
 		const tokens = raw
-			.split(/[,，;\n\r\t]+/)
+			.split(/[,，;；\n\r\t]+/)
 			.map((t) => t.trim())
 			.filter(Boolean);
 
@@ -49,7 +51,13 @@ export default function TagInput(props: TagInputProps) {
 	const handleKeyDown = (e: KeyboardEvent) => {
 		if (props.disabled) return;
 
-		if (e.key === "Enter" || e.key === "," || e.key === "，") {
+		if (
+			e.key === "Enter" ||
+			e.key === "," ||
+			e.key === "，" ||
+			e.key === ";" ||
+			e.key === "；"
+		) {
 			e.preventDefault();
 			addTokens(input());
 		} else if (e.key === "Backspace" && !input() && props.tags.length > 0) {
@@ -60,10 +68,7 @@ export default function TagInput(props: TagInputProps) {
 	const handlePaste = (e: ClipboardEvent) => {
 		if (props.disabled) return;
 		const pasteData = e.clipboardData?.getData("text");
-		if (
-			pasteData &&
-			(pasteData.includes(",") || pasteData.includes("，") || pasteData.includes("\n"))
-		) {
+		if (pasteData && /[,，;；\n\r\t]/.test(pasteData)) {
 			e.preventDefault();
 			addTokens(pasteData);
 		}
@@ -75,7 +80,9 @@ export default function TagInput(props: TagInputProps) {
 				<div class="flex items-center justify-between gap-2">
 					<Show when={props.label}>
 						<div class="flex items-center gap-2">
-							<span class="ts-label font-medium text-primary">{props.label}</span>
+							<label for={inputId} class="ts-label font-medium text-primary">
+								{props.label}
+							</label>
 							<span class="px-1.5 py-0.2 bg-surface-container-high border border-border text-[11px] font-mono text-secondary">
 								{props.tags.length}
 							</span>
@@ -87,7 +94,7 @@ export default function TagInput(props: TagInputProps) {
 							onClick={() => props.onChange([])}
 							class="text-[11px] text-tertiary hover:text-error transition-colors cursor-pointer select-none"
 						>
-							清空全部
+							{props.clearLabel ?? "Clear"}
 						</button>
 					</Show>
 				</div>
@@ -96,7 +103,7 @@ export default function TagInput(props: TagInputProps) {
 				</Show>
 			</Show>
 
-			<label
+			<div
 				class={clsx(
 					"w-full bg-surface-container-low border border-border p-2 flex flex-wrap items-center gap-1.5 transition-colors cursor-text min-h-[46px]",
 					props.disabled
@@ -117,7 +124,7 @@ export default function TagInput(props: TagInputProps) {
 										removeTag(index());
 									}}
 									class="text-tertiary hover:text-error transition-colors cursor-pointer -mr-0.5 p-0.5 rounded-xs"
-									aria-label={`移除 ${tag}`}
+									aria-label={`${props.removeLabel ?? "Remove"} ${tag}`}
 								>
 									<X class="w-3 h-3" />
 								</button>
@@ -127,7 +134,11 @@ export default function TagInput(props: TagInputProps) {
 				</For>
 
 				<input
-					ref={inputRef}
+					id={inputId}
+					aria-label={props.label ?? props.placeholder}
+					onBlur={() => {
+						if (!props.disabled && input().trim()) addTokens(input());
+					}}
 					type="text"
 					value={input()}
 					onInput={(e) => setInput(e.currentTarget.value)}
@@ -136,12 +147,12 @@ export default function TagInput(props: TagInputProps) {
 					disabled={props.disabled}
 					placeholder={
 						props.tags.length === 0
-							? props.placeholder || "输入关键词并回车，支持逗号或换行批量粘贴..."
-							: "+ 添加..."
+							? (props.placeholder ?? "")
+							: (props.placeholder ?? "")
 					}
 					class="flex-1 min-w-[140px] bg-transparent text-xs text-primary placeholder:text-tertiary outline-none py-1 px-1 border-0"
 				/>
-			</label>
+			</div>
 		</div>
 	);
 }

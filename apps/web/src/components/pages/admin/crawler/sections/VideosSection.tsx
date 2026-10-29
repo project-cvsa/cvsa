@@ -1,4 +1,10 @@
-import { createSignal, For, onMount, Show } from "solid-js";
+import StateBadge from "../StateBadge";
+import DataTable, { type TableColumn } from "@components/ui/DataTable";
+import Pagination from "../TablePagination";
+import { useCrawlerRefresh } from "../refresh";
+import SectionHeader from "../SectionHeader";
+import { TrackingVideoSortFieldSchema } from "@cvsa/contracts";
+import { createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import Select, { type SelectOption } from "@components/ui/Select";
@@ -7,10 +13,9 @@ import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { TrackingVideoListResponse, TrackingVideoSortField } from "@cvsa/contracts";
 import { formatDateTime, formatMetric } from "../format";
-import { formatPageLabel, getPageOffset, hasNextPage } from "../pagination";
+import { getPageOffset } from "../pagination";
 import { createRequestSequence } from "../videoActions";
 import Search from "lucide-solid/icons/search";
-import RefreshCw from "lucide-solid/icons/refresh-cw";
 import ExternalLink from "lucide-solid/icons/external-link";
 import Eye from "lucide-solid/icons/eye";
 import ArrowUpDown from "lucide-solid/icons/arrow-up-down";
@@ -20,7 +25,41 @@ import ArrowDown from "lucide-solid/icons/arrow-down";
 const PAGE_SIZE = 10;
 
 type StateFilter = "all" | "new" | "regular" | "milestone" | "archive";
+type TrackingVideo = TrackingVideoListResponse["items"][number];
+
 type StatusFilter = "all" | "failing" | "highPriority" | "normal";
+
+function VideoIdentity(props: { item: TrackingVideo }) {
+	return (
+		<div class="flex flex-col items-start gap-1">
+			<a
+				href={`/admin/crawler/video/${props.item.aid}`}
+				class="text-left font-medium text-primary hover:underline cursor-pointer"
+			>
+				{props.item.title || `AID ${props.item.aid}`}
+			</a>
+			<div class="flex flex-wrap gap-x-2 text-tertiary text-xs">
+				<span>AID {props.item.aid}</span>
+				<Show when={props.item.bvid}>
+					{(bvid) => (
+						<a
+							href={`https://www.bilibili.com/video/${bvid()}`}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-1 text-secondary hover:underline"
+						>
+							{bvid()}
+							<ExternalLink class="w-3 h-3" />
+						</a>
+					)}
+				</Show>
+				<Show when={props.item.ownerName}>
+					<span>{props.item.ownerName}</span>
+				</Show>
+			</div>
+		</div>
+	);
+}
 
 export default function VideosSection() {
 	const t = getComponentT("crawler");
@@ -46,10 +85,10 @@ export default function VideosSection() {
 	];
 
 	const statusOptions: SelectOption[] = [
-		{ value: "all", label: "健康状况: 全部" },
-		{ value: "failing", label: "仅查看抓取失败" },
-		{ value: "highPriority", label: "高优初采重点" },
-		{ value: "normal", label: "正常运行中" },
+		{ value: "all", label: t("audit.videoHealth.all") },
+		{ value: "failing", label: t("audit.videoHealth.failing") },
+		{ value: "highPriority", label: t("audit.videoHealth.highPriority") },
+		{ value: "normal", label: t("audit.videoHealth.normal") },
 	];
 
 	const loadList = async () => {
@@ -96,7 +135,12 @@ export default function VideosSection() {
 	};
 
 	onMount(() => {
-		void loadList();
+		const search = new URLSearchParams(window.location.search).get("search") ?? "";
+		setSearchInput(search);
+		setAppliedSearch(search);
+	});
+	useCrawlerRefresh("videos", () => {
+		if (!loadingList()) void loadList();
 	});
 
 	const renderSortIcon = (field: TrackingVideoSortField) => {
@@ -110,129 +154,183 @@ export default function VideosSection() {
 		);
 	};
 
-	const stateBadge = (state: string) => {
-		switch (state) {
-			case "new":
-				return (
-					<Badge variant="warning" size="sm" dot>
-						{t("videos.state.new")}
-					</Badge>
-				);
-			case "milestone":
-				return (
-					<Badge variant="neutral" size="sm" dot>
-						{t("videos.state.milestone")}
-					</Badge>
-				);
-			case "archive":
-				return (
-					<Badge variant="neutral" size="sm">
-						{t("videos.state.archive")}
-					</Badge>
-				);
-			default:
-				return (
-					<Badge variant="success" size="sm" dot>
-						{t("videos.state.regular")}
-					</Badge>
-				);
-		}
-	};
-
 	const total = () => list()?.total ?? 0;
+
+	const sortHeader = (label: string, field: TrackingVideoSortField) => (
+		<button
+			type="button"
+			class="inline-flex items-center gap-1.5 group hover:text-primary"
+			onClick={() => toggleSort(field)}
+		>
+			{label}
+			{renderSortIcon(field)}
+		</button>
+	);
+	const columns: TableColumn<TrackingVideo>[] = [
+		{
+			id: "video",
+			header: t("videos.col.video"),
+			class: "min-w-60",
+			cell: (item) => <VideoIdentity item={item} />,
+		},
+		{
+			id: "state",
+			header: t("videos.col.state"),
+			class: "whitespace-nowrap",
+			cell: (item) => <StateBadge kind="tracking" state={item.state} />,
+		},
+		{
+			id: "views",
+			header: sortHeader(t("videos.col.views"), "views"),
+			class: "whitespace-nowrap",
+			cell: (item) => (item.lastViews === null ? "—" : formatMetric(item.lastViews)),
+		},
+		{
+			id: "velocity",
+			header: sortHeader(t("videos.col.velocity"), "velocity"),
+			class: "whitespace-nowrap text-secondary",
+			cell: (item) =>
+				typeof item.velocity === "number" ? `${item.velocity.toFixed(1)}/h` : "—",
+		},
+		{
+			id: "next",
+			header: sortHeader(t("videos.col.nextSnapshot"), "nextSnapshotAt"),
+			class: "whitespace-nowrap text-tertiary",
+			cell: (item) => formatDateTime(item.nextSnapshotAt),
+		},
+		{
+			id: "fails",
+			header: sortHeader(t("audit.videoSort.consecutiveFails"), "consecutiveFails"),
+			class: "whitespace-nowrap",
+			cell: (item) => (
+				<Show
+					when={item.consecutiveFails > 0}
+					fallback={<span class="text-tertiary">0</span>}
+				>
+					<Badge variant="danger" size="sm">
+						{item.consecutiveFails}
+					</Badge>
+				</Show>
+			),
+		},
+		{
+			id: "action",
+			header: t("videos.col.action"),
+			class: "text-right whitespace-nowrap",
+			cell: (item) => (
+				<a
+					href={`/admin/crawler/video/${item.aid}`}
+					class="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-medium border border-border bg-surface text-primary hover:bg-hover transition-colors"
+				>
+					<Eye class="w-3.5 h-3.5" />
+					{t("videos.action.detail")}
+				</a>
+			),
+		},
+	];
+	const emptyLabel = () => {
+		if (loadingList()) return t("common.loading");
+		if (listError()) return listError();
+		return t("videos.empty");
+	};
 
 	return (
 		<div class="flex flex-col gap-6">
-			{/* Top Operational Toolbar */}
-			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-				<div class="flex items-center gap-2">
-					<span class="ts-caption text-xs uppercase tracking-wider text-tertiary font-semibold">
-						{t("videos.title")}
-					</span>
-					<Show when={total() > 0}>
-						<Badge variant="neutral" size="sm">
+			<SectionHeader
+				title={
+					<>
+						<h2 class="text-sm">{t("videos.title")}</h2>
+						<Badge size="sm" variant="neutral">
 							{total()}
 						</Badge>
-					</Show>
+					</>
+				}
+			/>
+			<div class="flex flex-wrap items-center gap-2">
+				<div class="w-44">
+					<Select
+						size="sm"
+						options={statusOptions}
+						value={statusFilter()}
+						onValueChange={(val) => {
+							if (
+								val === "all" ||
+								val === "failing" ||
+								val === "highPriority" ||
+								val === "normal"
+							) {
+								setStatusFilter(val);
+								setPage(0);
+								void loadList();
+							}
+						}}
+					/>
 				</div>
 
-				<div class="flex flex-wrap items-center gap-2">
-					<div class="w-44">
-						<Select
+				<div class="w-36">
+					<Select
+						size="sm"
+						options={stateOptions}
+						value={stateFilter()}
+						onValueChange={(val) => {
+							if (
+								val === "all" ||
+								val === "new" ||
+								val === "regular" ||
+								val === "milestone" ||
+								val === "archive"
+							) {
+								setStateFilter(val);
+								setPage(0);
+								void loadList();
+							}
+						}}
+					/>
+				</div>
+
+				<div class="w-64 flex items-center gap-1.5">
+					<div class="flex-1">
+						<TextField
 							size="sm"
-							options={statusOptions}
-							value={statusFilter()}
-							onValueChange={(val) => {
-								if (
-									val === "all" ||
-									val === "failing" ||
-									val === "highPriority" ||
-									val === "normal"
-								) {
-									setStatusFilter(val);
-									setPage(0);
-									void loadList();
-								}
+							placeholder={t("audit.search")}
+							aria-label={t("audit.search")}
+							value={searchInput()}
+							onInput={(e) => setSearchInput(e.currentTarget.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter") runSearch();
 							}}
 						/>
 					</div>
-
-					<div class="w-36">
-						<Select
-							size="sm"
-							options={stateOptions}
-							value={stateFilter()}
-							onValueChange={(val) => {
-								if (
-									val === "all" ||
-									val === "new" ||
-									val === "regular" ||
-									val === "milestone" ||
-									val === "archive"
-								) {
-									setStateFilter(val);
-									setPage(0);
-									void loadList();
-								}
-							}}
-						/>
-					</div>
-
-					<div class="w-64 flex items-center gap-1.5">
-						<div class="flex-1">
-							<TextField
-								size="sm"
-								placeholder="按 AID / BVID / 标题精准查找..."
-								value={searchInput()}
-								onInput={(e) => setSearchInput(e.currentTarget.value)}
-								onKeyDown={(e) => {
-									if (e.key === "Enter") runSearch();
-								}}
-							/>
-						</div>
-						<Button
-							size="sm"
-							variant="filled"
-							disabled={loadingList()}
-							onClick={runSearch}
-							class="px-2.5"
-							title={t("common.search")}
-						>
-							<Search class="w-3.5 h-3.5" />
-						</Button>
-					</div>
-
 					<Button
 						size="sm"
-						variant="outlined"
-						loading={loadingList()}
-						onClick={() => void loadList()}
-						class="gap-1.5 shrink-0"
+						variant="filled"
+						disabled={loadingList()}
+						onClick={runSearch}
+						class="px-2.5"
+						title={t("common.search")}
 					>
-						<RefreshCw class="w-3.5 h-3.5" />
-						<span>{t("common.refresh")}</span>
+						<Search class="w-3.5 h-3.5" />
 					</Button>
 				</div>
+			</div>
+			<div class="w-48">
+				<Select
+					size="sm"
+					aria-label={t("audit.sort")}
+					value={sortBy()}
+					options={[
+						"views",
+						"velocity",
+						"nextSnapshotAt",
+						"consecutiveFails",
+						"publishedAt",
+						"updatedAt",
+					].map((value) => ({ value, label: t(`audit.videoSort.${value}`) }))}
+					onValueChange={(value) => {
+						const field = TrackingVideoSortFieldSchema.safeParse(value);
+						if (field.success) toggleSort(field.data);
+					}}
+				/>
 			</div>
 
 			<Show when={listError() && list()}>
@@ -241,203 +339,22 @@ export default function VideosSection() {
 				</p>
 			</Show>
 
-			{/* Main Video Tracking Table (Direct, no outer card wrap) */}
-			<div class="border border-border bg-surface">
-				<Show
-					when={list()}
-					fallback={
-						<div class="p-10 text-center text-tertiary">
-							{loadingList()
-								? t("common.loading")
-								: listError() !== null
-									? listError()
-									: t("common.unknown")}
-						</div>
-					}
-				>
-					{(current) => (
-						<div>
-							<Show
-								when={current().items.length > 0}
-								fallback={
-									<div class="p-10 text-center text-tertiary">
-										{t("videos.empty")}
-									</div>
-								}
-							>
-								<div class="cvsa-scroll overflow-x-auto">
-									<table class="w-full text-left ts-caption">
-										<thead>
-											<tr class="border-b border-border text-tertiary bg-surface-container-high uppercase tracking-wider text-xs select-none">
-												<th class="py-2.5 px-4 font-semibold">
-													{t("videos.col.video")}
-												</th>
-												<th class="py-2.5 px-4 font-semibold whitespace-nowrap">
-													{t("videos.col.state")}
-												</th>
-												<th
-													class="py-2.5 px-4 font-semibold whitespace-nowrap cursor-pointer hover:text-primary transition-colors group"
-													onClick={() => toggleSort("views")}
-												>
-													<div class="flex items-center gap-1.5">
-														<span>{t("videos.col.views")}</span>
-														{renderSortIcon("views")}
-													</div>
-												</th>
-												<th
-													class="py-2.5 px-4 font-semibold whitespace-nowrap cursor-pointer hover:text-primary transition-colors group"
-													onClick={() => toggleSort("velocity")}
-												>
-													<div class="flex items-center gap-1.5">
-														<span>{t("videos.col.velocity")}</span>
-														{renderSortIcon("velocity")}
-													</div>
-												</th>
-												<th
-													class="py-2.5 px-4 font-semibold whitespace-nowrap cursor-pointer hover:text-primary transition-colors group"
-													onClick={() => toggleSort("nextSnapshotAt")}
-												>
-													<div class="flex items-center gap-1.5">
-														<span>{t("videos.col.nextSnapshot")}</span>
-														{renderSortIcon("nextSnapshotAt")}
-													</div>
-												</th>
-												<th
-													class="py-2.5 px-4 font-semibold whitespace-nowrap cursor-pointer hover:text-primary transition-colors group"
-													onClick={() => toggleSort("consecutiveFails")}
-												>
-													<div class="flex items-center gap-1.5">
-														<span>失败数</span>
-														{renderSortIcon("consecutiveFails")}
-													</div>
-												</th>
-												<th class="py-2.5 px-4 font-semibold text-right whitespace-nowrap">
-													{t("videos.col.action")}
-												</th>
-											</tr>
-										</thead>
-										<tbody class="divide-y divide-border text-sm">
-											<For each={current().items}>
-												{(item) => (
-													<tr class="hover:bg-hover transition-colors">
-														<td class="py-3 px-4 min-w-60">
-															<div class="flex flex-col items-start gap-1">
-																<a
-																	href={`/admin/crawler/video/${item.aid}`}
-																	class="text-left font-medium text-primary hover:underline cursor-pointer"
-																>
-																	{item.title ||
-																		`AID ${item.aid}`}
-																</a>
-																<div class="flex flex-wrap gap-x-2 text-tertiary text-xs">
-																	<span>AID {item.aid}</span>
-																	<Show when={item.bvid}>
-																		{(bvid) => (
-																			<a
-																				href={`https://www.bilibili.com/video/${bvid()}`}
-																				target="_blank"
-																				rel="noopener noreferrer"
-																				class="inline-flex items-center gap-1 text-secondary hover:underline"
-																			>
-																				{bvid()}
-																				<ExternalLink class="w-3 h-3" />
-																			</a>
-																		)}
-																	</Show>
-																	<Show when={item.ownerName}>
-																		<span>
-																			{item.ownerName}
-																		</span>
-																	</Show>
-																</div>
-															</div>
-														</td>
-														<td class="py-3 px-4 whitespace-nowrap">
-															{stateBadge(item.state)}
-														</td>
-														<td class="py-3 px-4 font-medium text-primary whitespace-nowrap">
-															{item.lastViews !== null
-																? formatMetric(item.lastViews)
-																: "—"}
-														</td>
-														<td class="py-3 px-4 text-secondary whitespace-nowrap">
-															{typeof item.velocity === "number"
-																? `${item.velocity.toFixed(1)}/h`
-																: "—"}
-														</td>
-														<td class="py-3 px-4 text-tertiary whitespace-nowrap text-xs">
-															{formatDateTime(item.nextSnapshotAt)}
-														</td>
-														<td class="py-3 px-4 whitespace-nowrap text-xs">
-															<Show
-																when={item.consecutiveFails > 0}
-																fallback={
-																	<span class="text-tertiary">
-																		0
-																	</span>
-																}
-															>
-																<Badge variant="danger" size="sm">
-																	{item.consecutiveFails}
-																</Badge>
-															</Show>
-														</td>
-														<td class="py-3 px-4 text-right whitespace-nowrap">
-															<a
-																href={`/admin/crawler/video/${item.aid}`}
-																class="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-medium border border-border bg-surface text-primary hover:bg-hover transition-colors"
-															>
-																<Eye class="w-3.5 h-3.5" />
-																<span>
-																	{t("videos.action.detail")}
-																</span>
-															</a>
-														</td>
-													</tr>
-												)}
-											</For>
-										</tbody>
-									</table>
-								</div>
-							</Show>
-
-							{/* Pagination */}
-							<div class="px-5 py-3 border-t border-border flex items-center justify-between">
-								<span class="ts-caption text-tertiary text-xs">
-									{formatPageLabel(page(), current().total, PAGE_SIZE)}
-								</span>
-								<div class="flex items-center gap-2">
-									<Button
-										size="sm"
-										variant="outlined"
-										disabled={page() === 0 || loadingList()}
-										onClick={() => {
-											setPage((p) => Math.max(0, p - 1));
-											void loadList();
-										}}
-									>
-										{t("common.previous")}
-									</Button>
-									<Button
-										size="sm"
-										variant="outlined"
-										disabled={
-											!hasNextPage(page(), current().total, PAGE_SIZE) ||
-											loadingList()
-										}
-										onClick={() => {
-											setPage((p) => p + 1);
-											void loadList();
-										}}
-									>
-										{t("common.next")}
-									</Button>
-								</div>
-							</div>
-						</div>
-					)}
-				</Show>
-			</div>
+			<DataTable
+				columns={columns}
+				items={list()?.items ?? []}
+				busy={loadingList()}
+				empty={emptyLabel()}
+			/>
+			<Pagination
+				page={page()}
+				total={total()}
+				pageSize={PAGE_SIZE}
+				busy={loadingList()}
+				onPageChange={(next) => {
+					setPage(next);
+					void loadList();
+				}}
+			/>
 		</div>
 	);
 }

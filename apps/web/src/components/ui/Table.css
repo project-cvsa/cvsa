@@ -1,0 +1,29 @@
+.cvsa-table {
+	width: 100%;
+	border-collapse: collapse;
+	background-color: var(--surface);
+	text-align: left;
+	font-size: 0.875rem;
+}
+
+.cvsa-table > thead {
+	border-bottom: 1px solid var(--border);
+	background-color: var(--surface-container-high);
+	color: var(--tertiary);
+	font-size: 0.75rem;
+}
+
+.cvsa-table > thead > tr > th,
+.cvsa-table > tbody > tr > td {
+	padding: 0.625rem 1rem;
+	vertical-align: middle;
+}
+
+.cvsa-table > thead > tr > th {
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.cvsa-table > tbody > tr:hover {
+	background-color: var(--hover);
+}

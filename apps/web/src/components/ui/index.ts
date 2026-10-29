@@ -35,3 +35,7 @@ export { default as RadioGroup, RadioGroup as Radio } from "./Radio";
 export type { RadioGroupProps, RadioOption } from "./Radio";
 
 export { toast, ToastContainer } from "./Toast";
+
+export { default as Table, type TableProps } from "./Table";
+
+export { default as DataTable, type TableColumn } from "./DataTable";

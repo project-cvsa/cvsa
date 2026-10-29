@@ -1,3 +1,4 @@
+import type { DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -133,7 +134,10 @@ export class SearchRover {
 		});
 	}
 
-	async runSearchSweep(config: Partial<SearchRoverConfig> = {}): Promise<DiscoveredCandidate[]> {
+	async runSearchSweep(
+		config: Partial<SearchRoverConfig> = {},
+		onProgress?: (progress: DiscoveryJobProgress) => Promise<void>
+	): Promise<DiscoveredCandidate[]> {
 		return traceTask("discovery.searchRover.sweep", async () => {
 			const keywords = config.keywords ?? DEFAULT_KEYWORDS;
 			const orders = config.orders ?? DEFAULT_ORDERS;
@@ -146,6 +150,15 @@ export class SearchRover {
 				for (const order of orders) {
 					for (let page = 1; page <= pagesPerQuery; page++) {
 						try {
+							await onProgress?.({
+								stage: "searching",
+								target: keyword,
+								order,
+								page,
+								candidates: allCandidates.length,
+								queued: 0,
+								updatedAt: new Date().toISOString(),
+							});
 							const results = await this.runSearchQuery(keyword, {
 								order,
 								page,
@@ -177,6 +190,13 @@ export class SearchRover {
 				uniqueDiscovered: allCandidates.length,
 			});
 
+			await onProgress?.({
+				stage: "searching",
+				target: null,
+				candidates: allCandidates.length,
+				queued: 0,
+				updatedAt: new Date().toISOString(),
+			});
 			return allCandidates;
 		});
 	}

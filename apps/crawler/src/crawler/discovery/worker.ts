@@ -1,3 +1,4 @@
+import { AppError, type DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -57,29 +58,56 @@ export class DiscoveryPipelineProcessor {
 		);
 	}
 
-	async processJob(data: DiscoveryJobData): Promise<void> {
+	async processJob(
+		data: DiscoveryJobData,
+		report?: (progress: DiscoveryJobProgress) => Promise<void>
+	): Promise<void> {
+		const target =
+			"aid" in data
+				? data.aid
+				: data.type === "search-sweep"
+					? (data.config?.keywords?.join(", ") ?? null)
+					: null;
+		await report?.({
+			stage:
+				data.type === "search-sweep"
+					? "searching"
+					: data.type === "hot-sample"
+						? "sampling"
+						: data.type === "active-discovery"
+							? "expanding"
+							: "evaluating",
+			target,
+			candidates: 0,
+			queued: 0,
+			updatedAt: new Date().toISOString(),
+		});
 		switch (data.type) {
 			case "search-sweep":
-				await this.handleSearchSweep(data.config);
+				await this.handleSearchSweep(data.config, report);
 				break;
 			case "fetch-video-details":
 				await this.handleFetchVideoDetails(
 					data.aid,
 					data.source,
 					data.sourceAid,
-					data.position
+					data.position,
+					report
 				);
 				break;
 			case "active-discovery":
-				await this.handleActiveDiscovery(data.aid);
+				await this.handleActiveDiscovery(data.aid, report);
 				break;
 			case "hot-sample":
-				await this.handleHotSample(data.limit);
+				await this.handleHotSample(data.limit, report);
 				break;
 		}
 	}
 
-	private async handleSearchSweep(config?: Partial<SearchRoverConfig>): Promise<void> {
+	private async handleSearchSweep(
+		config?: Partial<SearchRoverConfig>,
+		report?: (progress: DiscoveryJobProgress) => Promise<void>
+	): Promise<void> {
 		await traceTask("discovery.worker.searchSweep", async () => {
 			appLogger.info("Executing scheduled search sweep", {
 				component: "discovery-worker",
@@ -87,10 +115,13 @@ export class DiscoveryPipelineProcessor {
 
 			const effectiveKeywords =
 				config?.keywords ?? this.filterService.getConfig().searchKeywords;
-			const candidates = await this.searchRover.runSearchSweep({
-				...config,
-				keywords: effectiveKeywords,
-			});
+			const candidates = await this.searchRover.runSearchSweep(
+				{
+					...config,
+					keywords: effectiveKeywords,
+				},
+				report
+			);
 			if (candidates.length === 0) return;
 
 			// Filter out already tracked aids before queuing detail fetch
@@ -103,6 +134,13 @@ export class DiscoveryPipelineProcessor {
 				if (!trackedSet.has(cand.aid)) {
 					await this.enqueueDetailFetch(cand.aid, "search");
 					queued++;
+					await report?.({
+						stage: "evaluating",
+						target: cand.aid.toString(),
+						candidates: candidates.length,
+						queued,
+						updatedAt: new Date().toISOString(),
+					});
 				}
 			}
 
@@ -120,7 +158,10 @@ export class DiscoveryPipelineProcessor {
 	 * their recommendation graph. This is what keeps discovery moving when the
 	 * search sweep keeps returning the same results.
 	 */
-	private async handleHotSample(limit = DEFAULT_HOT_SAMPLE_LIMIT): Promise<void> {
+	private async handleHotSample(
+		limit = DEFAULT_HOT_SAMPLE_LIMIT,
+		report?: (progress: DiscoveryJobProgress) => Promise<void>
+	): Promise<void> {
 		await traceTask("discovery.worker.hotSample", async () => {
 			const seeds = await this.discoveryRepo.listHotSampleCandidates({
 				limit,
@@ -134,12 +175,24 @@ export class DiscoveryPipelineProcessor {
 				return;
 			}
 
+			let queued = 0;
 			for (const aid of seeds) {
 				await this.discoveryQueue.add(
 					`active-${aid.toString()}`,
 					{ type: "active-discovery", aid: aid.toString() },
-					{ jobId: `active-${aid.toString()}`, removeOnComplete: true }
+					{
+						deduplication: { id: `active-${aid.toString()}` },
+						removeOnComplete: { age: 3600, count: 100 },
+					}
 				);
+				queued++;
+				await report?.({
+					stage: "sampling",
+					target: aid.toString(),
+					candidates: seeds.length,
+					queued,
+					updatedAt: new Date().toISOString(),
+				});
 			}
 
 			appLogger.info("Queued hot sample recommendation expansions", {
@@ -153,11 +206,26 @@ export class DiscoveryPipelineProcessor {
 		aidStr: string,
 		source: "search" | "related" | "manual" | "hot_sample",
 		_sourceAid?: string,
-		_position?: number
+		_position?: number,
+		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
 		await traceTask("discovery.worker.fetchVideoDetails", async () => {
 			const aid = BigInt(aidStr);
 			const evaluation = await this.evaluator.evaluate({ aid, source });
+			if (evaluation.status === "failed" && evaluation.reason === "fetch_failed")
+				throw new AppError(
+					evaluation.errorMessage ?? "Video detail fetch failed",
+					"UPSTREAM_ERROR",
+					502
+				);
+			await report?.({
+				stage: "evaluating",
+				target: aidStr,
+				candidates:
+					evaluation.status === "skipped" || evaluation.status === "failed" ? 0 : 1,
+				queued: 0,
+				updatedAt: new Date().toISOString(),
+			});
 
 			if (evaluation.status !== "accepted") return;
 
@@ -166,23 +234,43 @@ export class DiscoveryPipelineProcessor {
 			const related = evaluation.details.Related ?? [];
 			if (related.length === 0) return;
 
-			await this.enqueueRelatedCandidates(aid, related);
+			const queued = await this.enqueueRelatedCandidates(aid, related);
+			await report?.({
+				stage: "expanding",
+				target: aidStr,
+				candidates: related.length,
+				queued,
+				updatedAt: new Date().toISOString(),
+			});
 		});
 	}
 
-	private async handleActiveDiscovery(aidStr: string): Promise<void> {
+	private async handleActiveDiscovery(
+		aidStr: string,
+		report?: (progress: DiscoveryJobProgress) => Promise<void>
+	): Promise<void> {
 		await traceTask("discovery.worker.activeDiscovery", async () => {
-			const aid = BigInt(aidStr);
+			const aid = /^BV/i.test(aidStr)
+				? BigInt((await this.bilibiliClient.getVideoDetails(aidStr)).View.aid)
+				: BigInt(aidStr);
 			try {
 				const related = await this.bilibiliClient.getRelatedVideos(aid);
 				if (related.length === 0) return;
-				await this.enqueueRelatedCandidates(aid, related);
+				const queued = await this.enqueueRelatedCandidates(aid, related);
+				await report?.({
+					stage: "expanding",
+					target: aid.toString(),
+					candidates: related.length,
+					queued,
+					updatedAt: new Date().toISOString(),
+				});
 			} catch (error) {
 				appLogger.warn("Active discovery failed for aid", {
 					component: "discovery-worker",
 					aid: aidStr,
 					error,
 				});
+				throw error;
 			}
 		});
 	}
@@ -190,7 +278,7 @@ export class DiscoveryPipelineProcessor {
 	private async enqueueRelatedCandidates(
 		sourceAid: bigint,
 		related: Parameters<RelationExtractor["extractAndPersist"]>[1]
-	): Promise<void> {
+	): Promise<number> {
 		const now = toInstant(new Date());
 		const extraction = await this.relationExtractor.extractAndPersist(sourceAid, related, now);
 
@@ -198,10 +286,13 @@ export class DiscoveryPipelineProcessor {
 		const existing = await this.trackingRepo.getTrackings(candidateAids);
 		const trackedSet = new Set(existing.map((t) => t.aid));
 
+		let queued = 0;
 		for (const cand of extraction.candidates) {
 			if (trackedSet.has(cand.aid)) continue;
 			await this.enqueueDetailFetch(cand.aid, "related", sourceAid, cand.position);
+			queued++;
 		}
+		return queued;
 	}
 
 	private async enqueueDetailFetch(
@@ -220,7 +311,7 @@ export class DiscoveryPipelineProcessor {
 				...(sourceAid !== undefined ? { sourceAid: sourceAid.toString() } : {}),
 				...(position !== undefined ? { position } : {}),
 			},
-			{ jobId, removeOnComplete: true }
+			{ deduplication: { id: jobId }, removeOnComplete: { age: 3600, count: 100 } }
 		);
 	}
 }
@@ -235,10 +326,29 @@ export function createDiscoveryWorker(
 		DISCOVERY_QUEUE_NAME,
 		async (job) => {
 			const startedAt = performance.now();
+			let latest: DiscoveryJobProgress = {
+				stage: "starting",
+				target: null,
+				candidates: 0,
+				queued: 0,
+				updatedAt: new Date().toISOString(),
+			};
+			const report = async (progress: DiscoveryJobProgress) => {
+				latest = progress;
+				await job.updateProgress?.(progress);
+			};
 			try {
-				await processor.processJob(job.data);
-			} finally {
+				await processor.processJob(job.data, report);
+				await report({
+					...latest,
+					stage: "completed",
+					updatedAt: new Date().toISOString(),
+				});
 				stats.recordJobCompleted();
+			} catch (error) {
+				await report({ ...latest, stage: "failed", updatedAt: new Date().toISOString() });
+				throw error;
+			} finally {
 				stats.recordTask(performance.now() - startedAt);
 			}
 		},

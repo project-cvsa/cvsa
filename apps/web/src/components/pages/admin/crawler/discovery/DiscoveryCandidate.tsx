@@ -35,6 +35,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 						{t("discoveryUi.modelAccepted")}
 					</Badge>
 				);
+			case "model_rejected":
 			case "model_rejected_sampled":
 				return (
 					<Badge variant="warning" size="sm">
@@ -53,7 +54,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 	return (
 		<article
 			class={clsx(
-				"p-3.5 flex items-center justify-between gap-4 transition-colors border-b border-border last:border-b-0",
+				"p-3.5 flex items-center justify-between gap-4 transition-colors ",
 				props.focused ? "bg-surface-container-low" : "bg-surface hover:bg-hover"
 			)}
 		>
@@ -68,7 +69,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 				)}
 				aria-pressed={props.focused}
 				class={clsx(
-					"w-10 h-8 shrink-0 flex items-center justify-center font-mono text-xs font-semibold border transition-colors select-none",
+					"w-10 h-8 shrink-0 flex items-center justify-center text-xs font-semibold border transition-colors select-none",
 					props.focused
 						? "bg-primary text-display-inverted border-primary"
 						: "bg-surface-container-high border-border text-tertiary hover:border-secondary hover:text-primary"
@@ -97,15 +98,15 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 
 			{/* Col 3: Metadata & Title */}
 			<div class="flex-1 min-w-0 pr-4 flex flex-col justify-center gap-1.5">
-				<div class="flex items-center gap-3">
-					<span class="font-mono text-xs text-tertiary tabular-nums shrink-0">
+				<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+					<span class="text-xs text-tertiary tabular-nums shrink-0">
 						av{props.item.aid}
 					</span>
 					<a
 						href={`https://www.bilibili.com/video/${props.item.bvid}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="font-mono text-xs text-secondary hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0"
+						class="text-xs text-secondary hover:text-primary hover:underline inline-flex items-center gap-1 shrink-0"
 					>
 						<span>{props.item.bvid}</span>
 						<ExternalLink class="w-3 h-3 text-tertiary" />
@@ -124,10 +125,10 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 			</div>
 
 			{/* Col 4: Confidence Score & Visual Meter */}
-			<div class="w-40 shrink-0 flex flex-col justify-center px-4 border-l border-border/40 gap-1.5">
+			<div class="w-40 shrink-0 flex flex-col justify-center px-4  gap-1.5">
 				<div class="flex items-center justify-between text-xs">
 					<span class="text-tertiary">{t("discoveryUi.confidence")}</span>
-					<span class="font-mono font-semibold text-primary">
+					<span class="font-semibold text-primary">
 						{formatPercent(props.item.songProbability ?? 0)}
 					</span>
 				</div>
@@ -149,14 +150,14 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 			</div>
 
 			{/* Col 5: Actions - Fixed width to prevent any layout jitter */}
-			<div class="w-64 shrink-0 flex items-center justify-end gap-2 border-l border-border/40 pl-4">
+			<div class="w-64 shrink-0 flex items-center justify-end gap-2  pl-4">
 				<Button
 					size="sm"
 					variant={props.item.humanLabel === 1 ? "filled" : "outlined"}
 					disabled={props.busy}
 					onClick={() => props.onLabel(true)}
 					class={clsx(
-						"w-[110px] justify-between px-2.5 gap-1.5 whitespace-nowrap",
+						"w-[110px] px-2 gap-1 whitespace-nowrap",
 						props.item.humanLabel === 1
 							? "bg-success border-success text-display-inverted"
 							: "hover:border-success hover:text-success"
@@ -170,9 +171,6 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 								: t("discovery.samples.label.markSong")}
 						</span>
 					</span>
-					<kbd class="shrink-0 px-1 py-0.2 text-[10px] font-mono bg-surface-container-high border border-border text-secondary">
-						1
-					</kbd>
 				</Button>
 				<Button
 					size="sm"
@@ -180,7 +178,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 					disabled={props.busy}
 					onClick={() => props.onLabel(false)}
 					class={clsx(
-						"w-[110px] justify-between px-2.5 gap-1.5 whitespace-nowrap",
+						"w-[110px] px-2 gap-1 whitespace-nowrap",
 						props.item.humanLabel === 0
 							? "bg-error border-error text-display-inverted"
 							: "hover:border-error hover:text-error"
@@ -194,9 +192,6 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 								: t("discovery.samples.label.markNonSong")}
 						</span>
 					</span>
-					<kbd class="shrink-0 px-1 py-0.2 text-[10px] font-mono bg-surface-container-high border border-border text-secondary">
-						2
-					</kbd>
 				</Button>
 			</div>
 		</article>

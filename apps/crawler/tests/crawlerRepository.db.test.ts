@@ -166,7 +166,7 @@ describe("TrackingRepository", () => {
 		});
 		await discovery.upsertMetadata({
 			aid: first,
-			bvid: `BV${first}`,
+			bvid: "BV1xx411c7mD",
 			title: "洛天依原创 唯一标题",
 		});
 
@@ -184,6 +184,28 @@ describe("TrackingRepository", () => {
 			search: "唯一标题",
 		});
 		expect(byTitle.items.map((row) => row.aid)).toEqual([first]);
+
+		const byBvid = await tracking.listTrackingVideos({
+			limit: 20,
+			offset: 0,
+			search: "BV1xx411c7mD",
+		});
+		expect(byBvid.items.map((row) => row.aid)).toEqual([first]);
+		await snapshotDb.client.orm.public.VideoTracking.where({ aid: first }).update({
+			lastViews: 100,
+		});
+		await snapshotDb.client.orm.public.VideoTracking.where({ aid: second }).update({
+			lastViews: 10,
+		});
+		const byViews = await tracking.listTrackingVideos({
+			limit: 200,
+			offset: 0,
+			sortBy: "views",
+			sortOrder: "desc",
+		});
+		expect(byViews.items.findIndex((row) => row.aid === first)).toBeLessThan(
+			byViews.items.findIndex((row) => row.aid === second)
+		);
 
 		const byAid = await tracking.listTrackingVideos({
 			limit: 50,
@@ -294,6 +316,37 @@ describe("DiscoveryRepository samples", () => {
 		if (humanLabel !== null) await discovery.labelSample(sampleAid, humanLabel);
 		return sampleAid;
 	}
+
+	test("combines source, confidence and title filters before ordering and counting", async () => {
+		const first = await sample(50, "model_rejected", null);
+		const second = await sample(51, "model_rejected", null);
+		await discovery.upsertMetadata({
+			aid: first,
+			bvid: `BV${first}`,
+			title: "sample 50",
+			duration: 100,
+			discoverySource: "search",
+		});
+		await discovery.upsertMetadata({
+			aid: second,
+			bvid: `BV${second}`,
+			title: "sample 51",
+			duration: 100,
+			discoverySource: "related",
+		});
+		const query = {
+			source: "related",
+			minConfidence: 0.8,
+			search: "sample 5",
+			limit: 1,
+			offset: 0,
+			sortBy: "confidence",
+			sortOrder: "asc",
+		} satisfies import("@cvsa/contracts").DiscoverySampleListQuery;
+		expect((await discovery.listSamples(query)).map((row) => row.aid)).toEqual([second]);
+		expect(await discovery.countSamples(query)).toBe(1);
+		expect(await discovery.countSamples({ ...query, minConfidence: 0.95 })).toBe(0);
+	});
 
 	test("applies the labeled filter before paginating", async () => {
 		const unlabeledA = await sample(20, "model_rejected", null);

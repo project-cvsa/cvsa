@@ -1,5 +1,6 @@
 import clsx from "clsx";
-import { type JSX, Show, onCleanup, onMount, splitProps } from "solid-js";
+import { type JSX, Show, splitProps } from "solid-js";
+import { Dialog } from "@ark-ui/solid/dialog";
 import { Portal } from "solid-js/web";
 import X from "lucide-solid/icons/x";
 
@@ -37,72 +38,58 @@ export default function Modal(props: ModalProps) {
 
 	const size = () => local.size ?? "md";
 
-	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.key === "Escape" && local.isOpen && !event.defaultPrevented) {
-			local.onClose();
-		}
-	};
-
-	onMount(() => {
-		if (typeof window === "undefined") return;
-		window.addEventListener("keydown", handleKeyDown);
-		onCleanup(() => {
-			if (typeof window !== "undefined") {
-				window.removeEventListener("keydown", handleKeyDown);
-			}
-		});
-	});
-
 	return (
-		<Show when={local.isOpen}>
+		<Dialog.Root
+			open={local.isOpen}
+			onOpenChange={(details) => {
+				if (!details.open) local.onClose();
+			}}
+			lazyMount
+			unmountOnExit
+		>
 			<Portal>
-				<div
-					class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
-					role="dialog"
-					aria-modal="true"
-					tabIndex={-1}
-				>
-					<div
+				<Dialog.Backdrop class="cvsa-modal-backdrop fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+				<Dialog.Positioner class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
+					<Dialog.Content
 						class={clsx(
-							"relative w-full bg-surface shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150",
+							"cvsa-modal-content pointer-events-auto relative w-full max-h-[calc(100dvh-2rem)] flex flex-col bg-surface shadow-2xl overflow-hidden outline-none",
 							sizeStyles[size()],
 							local.class
 						)}
 						{...rest}
 					>
-						<div class="h-12 bg-primary text-display-inverted px-6 flex items-center justify-between font-[Outfit,system-ui] uppercase text-base">
+						<div class="h-12 shrink-0 bg-primary text-display-inverted px-6 flex items-center justify-between gap-4 font-[Outfit,system-ui] uppercase text-base">
 							<Show when={local.title}>
-								<h2 class="font-semibold text-display-inverted truncate text-base">
+								<Dialog.Title class="font-semibold text-display-inverted truncate text-base">
 									{local.title}
-								</h2>
+								</Dialog.Title>
 							</Show>
-							<button
+							<Dialog.CloseTrigger
 								type="button"
 								class="w-8 h-8 -mr-2 inline-flex items-center justify-center text-display-inverted/80 hover:text-display-inverted hover:bg-display-inverted/15 transition-colors cursor-pointer focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-display-inverted"
-								onClick={() => local.onClose()}
 								aria-label={local.closeLabel ?? "Close"}
 							>
 								<X class="w-5 h-5" />
-							</button>
+							</Dialog.CloseTrigger>
 						</div>
 
-						<div class="p-6 max-h-[75vh] overflow-y-auto">
+						<div class="cvsa-scroll p-6 min-h-0 overflow-y-auto">
 							<Show when={local.description}>
-								<p class="text-sm text-secondary mb-4 leading-relaxed">
+								<Dialog.Description class="text-sm text-secondary mb-4 leading-relaxed">
 									{local.description}
-								</p>
+								</Dialog.Description>
 							</Show>
 							{local.children}
 						</div>
 
 						<Show when={local.footer}>
-							<div class="px-6 py-4 border-t border-border bg-surface flex items-center justify-end gap-3">
+							<div class="shrink-0 px-6 py-4 border-t border-border bg-surface flex items-center justify-end gap-3">
 								{local.footer}
 							</div>
 						</Show>
-					</div>
-				</div>
+					</Dialog.Content>
+				</Dialog.Positioner>
 			</Portal>
-		</Show>
+		</Dialog.Root>
 	);
 }

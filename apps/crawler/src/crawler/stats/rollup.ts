@@ -1,5 +1,5 @@
 import type { DatabaseClient, Temporal } from "@cvsa/snapshot-db";
-import { toJson } from "@cvsa/snapshot-db";
+import { and, toJson } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { OverdueTrackingSummary } from "../tracking/repository.interface";
 import {
@@ -155,10 +155,10 @@ export class CrawlerStatsRepository implements StatsRollupStore {
 	): Promise<StatsRollupRow[]> {
 		return traceTask("stats.listRollup", async () => {
 			const rows = await this.db.orm.public.CrawlerStatsRollup.where((row) =>
-				row.metricGroup.eq(metricGroup)
+				and(row.metricGroup.eq(metricGroup), row.bucketTime.gte(since))
 			)
 				.orderBy((row) => row.bucketTime.desc())
-				.limit(Math.min(Math.max(limit, 1), 2_000))
+				.limit(Math.min(Math.max(limit, 1), 10_080))
 				.all();
 
 			return rows

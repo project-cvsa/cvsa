@@ -1,4 +1,6 @@
-import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { useCrawlerRefresh } from "../refresh";
+import SectionHeader from "../SectionHeader";
+import { createMemo, createSignal, Show } from "solid-js";
 import type { Accessor } from "solid-js";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
@@ -18,12 +20,10 @@ import NetworkAdapterList from "../network/NetworkAdapterList";
 import NetworkHealthPolicy from "../network/NetworkHealthPolicy";
 import NetworkRoutingPolicy from "../network/NetworkRoutingPolicy";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
-import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Save from "lucide-solid/icons/save";
 
 type NetworkSectionProps = {
 	statusData: Accessor<CrawlerStatusDto | null>;
-	loadingStatus: Accessor<boolean>;
 	refreshStatus: () => Promise<void>;
 };
 
@@ -218,60 +218,47 @@ export default function NetworkSection(props: NetworkSectionProps) {
 		});
 	};
 
-	onMount(() => {
-		void loadConfig();
-	});
+	useCrawlerRefresh("network", () => void loadConfig());
 
 	return (
 		<div class="flex flex-col gap-6">
-			{/* Top Operational Toolbar */}
-			<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-				<div class="flex items-center gap-2">
-					<Show when={networkDoc()}>
-						{(doc) => (
-							<div class="flex items-center gap-2 text-xs text-secondary font-mono">
-								<span class="text-tertiary">配置版本:</span>
-								<Badge variant="neutral" size="sm">
-									Rev {doc().revision}
-								</Badge>
-							</div>
-						)}
-					</Show>
-				</div>
-
-				<div class="flex items-center gap-2 shrink-0">
-					<Show when={isDirty()}>
-						<span class="ts-caption text-secondary">
-							{t("network.adapters.draftNotice")}
-						</span>
-					</Show>
-					<Button
-						size="sm"
-						variant="outlined"
-						loading={loading()}
-						disabled={saving() || isDirty()}
-						onClick={() => {
-							void loadConfig();
-							void props.refreshStatus();
-						}}
-						class="gap-1.5"
-					>
-						<RefreshCw class="w-3.5 h-3.5" />
-						<span>{t("common.refresh")}</span>
-					</Button>
-					<Button
-						size="sm"
-						variant="filled"
-						loading={saving()}
-						disabled={loading() || !networkDoc() || !isDirty()}
-						onClick={() => void saveConfig()}
-						class="gap-1.5"
-					>
-						<Save class="w-3.5 h-3.5" />
-						<span>{t("common.save")}</span>
-					</Button>
-				</div>
-			</div>
+			<SectionHeader
+				title={
+					<>
+						<h2 class="text-sm">{t("tabs.network")}</h2>
+						<Show when={networkDoc()}>
+							{(doc) => (
+								<div class="flex items-center gap-2 text-xs text-secondary">
+									<span class="text-tertiary">{t("audit.revision")}:</span>
+									<Badge variant="neutral" size="sm">
+										Rev {doc().revision}
+									</Badge>
+								</div>
+							)}
+						</Show>
+					</>
+				}
+				actions={
+					<>
+						<Show when={isDirty()}>
+							<span class="ts-caption text-secondary">
+								{t("network.adapters.draftNotice")}
+							</span>
+						</Show>
+						<Button
+							size="sm"
+							variant="filled"
+							loading={saving()}
+							disabled={loading() || !networkDoc() || !isDirty()}
+							onClick={() => void saveConfig()}
+							class="gap-1.5"
+						>
+							<Save class="w-3.5 h-3.5" />
+							<span>{t("common.save")}</span>
+						</Button>
+					</>
+				}
+			/>
 
 			<Show
 				when={networkDoc()}

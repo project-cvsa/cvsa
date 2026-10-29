@@ -1,5 +1,4 @@
 import { Elysia } from "elysia";
-import { z } from "zod";
 import {
 	ActionQueuedResponseSchema,
 	BilibiliVideoMetadataDtoSchema,
@@ -18,7 +17,10 @@ import {
 	DiscoverySampleListResponseSchema,
 	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
-	DiscoverySweepResponseSchema,
+	DiscoveryQueuedResponseSchema,
+	type DiscoveryQueuedResponse,
+	CrawlerQueueJobParamsSchema,
+	CrawlerJobActionResponseSchema,
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
 	LabelDiscoverySampleRequestSchema,
@@ -50,7 +52,6 @@ import {
 	type DiscoverySampleItem,
 	type DiscoverySampleListResponse,
 	type DiscoveryStatusDto,
-	type DiscoverySweepResponse,
 	type IngestVideoResponse,
 	type NetworkRuntimeConfigDocument,
 	type ProcessRecommendationsResponse,
@@ -105,43 +106,43 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 		"/jobs/:queue/:id",
 		async ({ params }): Promise<CrawlerQueueJobDetail> => {
 			return callCrawlerApi<CrawlerQueueJobDetail>(
-				`/stats/jobs/${params.queue}/${params.id}`
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}`
 			);
 		},
 		{
-			params: z.object({ queue: z.string(), id: z.string() }),
+			params: CrawlerQueueJobParamsSchema,
 			response: {
 				200: CrawlerQueueJobDetailSchema,
 			},
 		}
 	)
 	.post(
-		"/jobs/:queue/:id/retry",
-		async ({ params }): Promise<{ ok: boolean }> => {
-			return callCrawlerApi<{ ok: boolean }>(
-				`/stats/jobs/${params.queue}/${params.id}/retry`,
+		"/jobs/:queue/:id/retries",
+		async ({ params }): Promise<{ ok: true }> => {
+			return callCrawlerApi<{ ok: true }>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}/retries`,
 				"POST"
 			);
 		},
 		{
-			params: z.object({ queue: z.string(), id: z.string() }),
+			params: CrawlerQueueJobParamsSchema,
 			response: {
-				200: z.object({ ok: z.boolean() }),
+				200: CrawlerJobActionResponseSchema,
 			},
 		}
 	)
 	.delete(
 		"/jobs/:queue/:id",
-		async ({ params }): Promise<{ ok: boolean }> => {
-			return callCrawlerApi<{ ok: boolean }>(
-				`/stats/jobs/${params.queue}/${params.id}`,
+		async ({ params }): Promise<{ ok: true }> => {
+			return callCrawlerApi<{ ok: true }>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}`,
 				"DELETE"
 			);
 		},
 		{
-			params: z.object({ queue: z.string(), id: z.string() }),
+			params: CrawlerQueueJobParamsSchema,
 			response: {
-				200: z.object({ ok: z.boolean() }),
+				200: CrawlerJobActionResponseSchema,
 			},
 		}
 	)
@@ -222,24 +223,24 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/sweep",
-		async ({ body }): Promise<DiscoverySweepResponse> => {
-			return callCrawlerApi<DiscoverySweepResponse>("/discovery/sweep", "POST", body);
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/sweep", "POST", body);
 		},
 		{
 			body: DiscoverySweepRequestSchema,
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 			},
 		}
 	)
 	.post(
 		"/hot-sample",
-		async (): Promise<DiscoverySweepResponse> => {
-			return callCrawlerApi<DiscoverySweepResponse>("/discovery/hot-sample", "POST");
+		async (): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/hot-sample", "POST");
 		},
 		{
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 			},
 		}
 	)
@@ -393,6 +394,15 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 				200: RecommendationGraphResponseSchema,
 			},
 		}
+	)
+	.post(
+		"/metadata/:aid/refreshes",
+		({ params }): Promise<ActionQueuedResponse> =>
+			callCrawlerApi<ActionQueuedResponse>(
+				`/discovery/metadata/${params.aid}/refresh`,
+				"POST"
+			),
+		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
 	)
 	.get(
 		"/metadata/:aid/history",

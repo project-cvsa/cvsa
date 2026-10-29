@@ -11,6 +11,7 @@ import {
 	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
+	DiscoveryQueuedResponseSchema,
 	ErrorResponseSchema,
 	LabelDiscoverySampleRequestSchema,
 	ProcessRecommendationsResponseSchema,
@@ -20,22 +21,16 @@ import {
 	VideoMetadataHistoryListResponseSchema,
 	type BilibiliVideoMetadataDto,
 	type BilibiliVideoRelationDto,
-	type DiscoverySampleItem,
-	type DiscoverySampleListResponse,
-	type DiscoveryStatusDto,
+	type DiscoveryQueuedResponse,
 	type VideoMetadataHistoryItem,
 } from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
-import type {
-	BilibiliVideoMetadata,
-	BilibiliVideoRelation,
-	DiscoverySample,
-} from "@cvsa/snapshot-db";
+import type { BilibiliVideoMetadata, BilibiliVideoRelation } from "@cvsa/snapshot-db";
 import { DEFAULT_HOT_SAMPLE_LIMIT } from "../crawler";
 import {
 	bilibiliClient,
 	discoveryFilterService,
-	discoveryQueue,
+	discoveryAdminService,
 	discoveryRepository,
 	discoveryScheduler,
 	discoveryService,
@@ -97,32 +92,6 @@ function toRecord(value: unknown): Record<string, unknown> {
 	return Object.fromEntries(Object.entries(value));
 }
 
-function toStringArray(value: unknown): string[] {
-	if (!Array.isArray(value)) return [];
-	return value.filter((item): item is string => typeof item === "string");
-}
-
-/**
- * Classifier probabilities are persisted as the model's array output, while the
- * admin contract exposes named probabilities. Indexes are stable for a given
- * model version, so `class_0`, `class_1`, ... is the faithful mapping.
- */
-function toNumberRecord(value: unknown): Record<string, number> {
-	if (Array.isArray(value)) {
-		return Object.fromEntries(
-			value.flatMap((item, index) =>
-				typeof item === "number" && Number.isFinite(item) ? [[`class_${index}`, item]] : []
-			)
-		);
-	}
-	const source = toRecord(value);
-	return Object.fromEntries(
-		Object.entries(source).flatMap(([key, item]) =>
-			typeof item === "number" && Number.isFinite(item) ? [[key, item]] : []
-		)
-	);
-}
-
 function toChangeType(value: string): VideoMetadataHistoryItem["changeType"] {
 	switch (value) {
 		case "created":
@@ -149,77 +118,13 @@ function toHistoryItem(row: {
 	};
 }
 
-function toSampleItem(row: DiscoverySample, pic?: string | null): DiscoverySampleItem {
-	return {
-		aid: row.aid.toString(),
-		bvid: row.bvid,
-		title: row.title,
-		description: row.description ?? "",
-		tags: toStringArray(row.tags),
-		decision: row.decision,
-		modelVersion: row.modelVersion,
-		pic: pic ?? null,
-		probabilities: toNumberRecord(row.probabilities),
-		songProbability: row.songProbability,
-		humanLabel: row.humanLabel,
-		labeledAt: row.labeledAt ? row.labeledAt.toString() : null,
-		capturedAt: row.createdAt.toString(),
-	};
-}
-
 export const discoveryRoutes = new Elysia()
-	.get(
-		"/status",
-		async (): Promise<DiscoveryStatusDto> => {
-			const counts = await discoveryQueue.getJobCounts();
-			const activeJobs = await discoveryQueue.getJobs(["active", "waiting"], 5);
-			const firstActive = activeJobs[0];
-			let target: string | null = null;
-			let currentStage = counts.active > 0 ? "深度发现任务处理中" : "就绪 (待命)";
-			if (firstActive?.data && typeof firstActive.data === "object") {
-				if ("keyword" in firstActive.data) {
-					target = `关键词: ${String(firstActive.data.keyword)}`;
-					currentStage = `正在扫描关键词 [${String(firstActive.data.keyword)}]`;
-				} else if ("aid" in firstActive.data) {
-					target = `AID ${String(firstActive.data.aid)}`;
-					currentStage = `正在抓取种子推荐拓扑 [AID ${String(firstActive.data.aid)}]`;
-				}
-			}
-			return {
-				active: counts.active > 0,
-				counts: {
-					waiting: counts.waiting,
-					active: counts.active,
-					delayed: counts.delayed,
-					failed: counts.failed,
-					oldestWaitSec: 0,
-				},
-				currentStage,
-				currentTarget: target,
-				candidatesScannedCount: counts.completed,
-				activeJobs: activeJobs.map((j) => {
-					let jobTarget: string | null = null;
-					if (j.data && typeof j.data === "object") {
-						if ("keyword" in j.data) jobTarget = `关键词: ${String(j.data.keyword)}`;
-						else if ("aid" in j.data) jobTarget = `AID ${String(j.data.aid)}`;
-					}
-					return {
-						id: j.id,
-						name: j.name,
-						state: j.state,
-						target: jobTarget,
-						timestamp: j.timestamp,
-					};
-				}),
-			};
+	.get("/status", () => discoveryAdminService.getStatus(), {
+		response: {
+			200: DiscoveryStatusDtoSchema,
+			401: ErrorResponseSchema,
 		},
-		{
-			response: {
-				200: DiscoveryStatusDtoSchema,
-				401: ErrorResponseSchema,
-			},
-		}
-	)
+	})
 	.get(
 		"/classifier",
 		() => {
@@ -263,14 +168,14 @@ export const discoveryRoutes = new Elysia()
 	)
 	.post(
 		"/sweep",
-		async ({ body }) => {
-			const result = await discoveryService.runSearchSweep(body);
-			return result;
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			await discoveryScheduler.triggerSearchSweep(body);
+			return { queued: true };
 		},
 		{
 			body: DiscoverySweepRequestSchema,
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 				401: ErrorResponseSchema,
 				422: ErrorResponseSchema,
 			},
@@ -318,10 +223,10 @@ export const discoveryRoutes = new Elysia()
 	.post(
 		"/active/:aid",
 		async ({ params, status }) => {
-			if (!/^\d+$/.test(params.aid)) {
+			if (!/^(?:\d+|BV[0-9a-z]{10})$/i.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			await discoveryScheduler.triggerActiveDiscovery(BigInt(params.aid));
+			await discoveryScheduler.triggerActiveDiscovery(params.aid);
 			return { queued: true, aid: params.aid };
 		},
 		{
@@ -334,18 +239,13 @@ export const discoveryRoutes = new Elysia()
 	)
 	.post(
 		"/hot-sample",
-		async () => {
-			const seeds = await discoveryRepository.listHotSampleCandidates({
-				limit: DEFAULT_HOT_SAMPLE_LIMIT,
-				cooldownMinutes: 60,
-				now: toInstant(new Date()),
-			});
+		async (): Promise<DiscoveryQueuedResponse> => {
 			await discoveryScheduler.triggerHotSample(DEFAULT_HOT_SAMPLE_LIMIT);
-			return { totalDiscovered: seeds.length, newTracked: 0 };
+			return { queued: true };
 		},
 		{
 			response: {
-				200: DiscoverySweepResponseSchema,
+				200: DiscoveryQueuedResponseSchema,
 				401: ErrorResponseSchema,
 			},
 		}
@@ -583,90 +483,21 @@ export const discoveryRoutes = new Elysia()
 			},
 		}
 	)
-	.get(
-		"/samples",
-		async ({ query }): Promise<DiscoverySampleListResponse> => {
-			// The repository exposes no COUNT, so the maximum page is read once and
-			// sliced locally. That keeps `total` truthful for the admin console.
-			const rows = await discoveryRepository.listSamples({
-				limit: 200,
-				offset: 0,
-				decision: query.decision,
-				labeled: query.labeled,
-			});
-
-			let filtered = rows;
-			const minConf = query.minConfidence;
-			if (minConf !== undefined) {
-				filtered = filtered.filter((r) => r.songProbability >= minConf);
-			}
-			const maxConf = query.maxConfidence;
-			if (maxConf !== undefined) {
-				filtered = filtered.filter((r) => r.songProbability <= maxConf);
-			}
-			if (query.search?.trim()) {
-				const s = query.search.trim().toLowerCase();
-				filtered = filtered.filter(
-					(r) =>
-						r.title.toLowerCase().includes(s) ||
-						r.bvid.toLowerCase().includes(s) ||
-						r.aid.toString().includes(s)
-				);
-			}
-
-			const isAsc = query.sortOrder === "asc";
-			if (query.sortBy === "confidence") {
-				filtered.sort((a, b) =>
-					isAsc
-						? a.songProbability - b.songProbability
-						: b.songProbability - a.songProbability
-				);
-			} else if (query.sortBy === "aid") {
-				filtered.sort((a, b) =>
-					isAsc ? (a.aid < b.aid ? -1 : 1) : a.aid > b.aid ? -1 : 1
-				);
-			} else {
-				filtered.sort((a, b) =>
-					isAsc
-						? a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds
-						: b.createdAt.epochMilliseconds - a.createdAt.epochMilliseconds
-				);
-			}
-
-			const start = query.offset;
-			const sliced = filtered.slice(start, start + query.limit);
-			const targetAids = sliced.map((r) => r.aid);
-			const metas = await discoveryRepository.getMetadatas(targetAids);
-			const picMap = new Map(metas.map((m) => [m.aid, m.pic]));
-			const items = sliced.map((row) => toSampleItem(row, picMap.get(row.aid)));
-			return { items, total: filtered.length };
+	.get("/samples", ({ query }) => discoveryAdminService.listSamples(query), {
+		query: DiscoverySampleListQuerySchema,
+		response: {
+			200: DiscoverySampleListResponseSchema,
+			401: ErrorResponseSchema,
+			422: ErrorResponseSchema,
 		},
-		{
-			query: DiscoverySampleListQuerySchema,
-			response: {
-				200: DiscoverySampleListResponseSchema,
-				401: ErrorResponseSchema,
-				422: ErrorResponseSchema,
-			},
-		}
-	)
+	})
 	.post(
 		"/samples/:aid/label",
 		async ({ params, body, status }) => {
 			if (!/^\d+$/.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			const updated = await discoveryRepository.labelSample(
-				BigInt(params.aid),
-				body.humanLabel
-			);
-			if (!updated) {
-				return status(404, { code: "NOT_FOUND", message: "Discovery sample not found" });
-			}
-			if (body.humanLabel === 0) {
-				await trackingRepository.deleteTracking(BigInt(params.aid));
-			}
-			return toSampleItem(updated);
+			return discoveryAdminService.label(BigInt(params.aid), body.humanLabel);
 		},
 		{
 			body: LabelDiscoverySampleRequestSchema,

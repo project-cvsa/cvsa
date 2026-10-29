@@ -106,11 +106,11 @@ select:-webkit-autofill:focus {
 	}
 }
 
-[data-state="open"] {
+:is([data-scope="select"], [data-scope="menu"])[data-part="content"][data-state="open"] {
 	animation: cvsa-zoom-in-95 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-[data-state="closed"] {
+:is([data-scope="select"], [data-scope="menu"])[data-part="content"][data-state="closed"] {
 	animation: cvsa-zoom-out-95 0.09s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -120,4 +120,23 @@ select:-webkit-autofill:focus {
 
 .cvsa-modal-content {
 	animation: cvsa-zoom-in-95 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:is([data-scope="select"], [data-scope="menu"])[data-part="content"],
+	.cvsa-modal-backdrop,
+	.cvsa-modal-content {
+		animation: none;
+	}
+}
+
+[data-scope="dialog"][data-part="content"][data-state="closed"] {
+	animation: cvsa-zoom-out-95 0.09s ease-in forwards;
+}
+[data-scope="dialog"][data-part="backdrop"][data-state="closed"] {
+	animation: cvsa-fade-out 0.09s ease-in forwards;
+}
+
+.crawler-panel :is(pre, code, kbd) {
+	font-family: inherit;
 }

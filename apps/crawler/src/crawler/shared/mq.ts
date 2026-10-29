@@ -1,4 +1,4 @@
-import { Queue, Worker, type JobsOptions, type WorkerOptions } from "bullmq";
+import { Queue, Worker, type JobType, type JobsOptions, type WorkerOptions } from "bullmq";
 import IORedis from "ioredis";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
@@ -57,11 +57,15 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 					};
 				},
 				getJobs: async (
-					types: string[] = ["active", "waiting", "delayed", "failed"],
-					limit = 50
+					types: JobType[] = ["active", "waiting", "delayed", "failed"],
+					limit = 50,
+					offset = 0
 				): Promise<CrawlerQueueJobSnapshot[]> => {
-					// eslint-disable-next-line @typescript-eslint/no-explicit-any
-					const bullJobs = await queue.getJobs(types as never, 0, Math.max(0, limit - 1));
+					const bullJobs = await queue.getJobs(
+						types,
+						offset,
+						offset + Math.max(0, limit - 1)
+					);
 					return Promise.all(
 						bullJobs.map(async (job) => {
 							const state = await job.getState();
@@ -73,6 +77,9 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 								attempts: job.attemptsMade,
 								failedReason: job.failedReason ?? null,
 								timestamp: job.timestamp,
+								progress: job.progress,
+								processedOn: job.processedOn ?? null,
+								finishedOn: job.finishedOn ?? null,
 							};
 						})
 					);
@@ -89,11 +96,12 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 						attempts: job.attemptsMade,
 						failedReason: job.failedReason ?? null,
 						timestamp: job.timestamp,
+						progress: job.progress,
+						processedOn: job.processedOn ?? null,
+						finishedOn: job.finishedOn ?? null,
 						opts: job.opts,
 						stacktrace: job.stacktrace ?? null,
 						returnvalue: job.returnvalue,
-						processedOn: job.processedOn ?? null,
-						finishedOn: job.finishedOn ?? null,
 					};
 				},
 				retryJob: async (id: string): Promise<boolean> => {
@@ -120,7 +128,11 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 			const worker = new Worker<T>(
 				name,
 				async (job) => {
-					const crawlerJob: CrawlerJob<T> = { id: job.id ?? undefined, data: job.data };
+					const crawlerJob: CrawlerJob<T> = {
+						id: job.id ?? undefined,
+						data: job.data,
+						updateProgress: (progress) => job.updateProgress(progress),
+					};
 					await processor(crawlerJob);
 				},
 				{ ...options, connection }

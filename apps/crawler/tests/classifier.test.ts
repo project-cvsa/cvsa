@@ -152,7 +152,12 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 
 		const health: ClassifierHealth = await clientWith(local).health();
 
-		expect(health).toEqual({ reachable: true, modelsLoaded: true });
+		expect(health).toEqual({
+			reachable: true,
+			modelsLoaded: true,
+			modelVersion: "akari-3.17",
+			error: null,
+		});
 	});
 
 	test("reports degraded models as reachable but not loaded", async () => {
@@ -165,6 +170,8 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 		expect(await clientWith(local).health()).toEqual({
 			reachable: true,
 			modelsLoaded: false,
+			modelVersion: "akari-3.17",
+			error: "files missing",
 		});
 	});
 
@@ -183,7 +190,12 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 			modelLoaded: false,
 			error: "probe failed",
 		});
-		expect(await client.health()).toEqual({ reachable: false, modelsLoaded: null });
+		expect(await client.health()).toEqual({
+			reachable: false,
+			modelsLoaded: null,
+			modelVersion: null,
+			error: "probe failed",
+		});
 	});
 
 	test("the default client wires the in-process ONNX classifier", () => {
@@ -209,6 +221,22 @@ describe("LocalAkariClassifier without ONNX artifacts", () => {
 		expect(health.modelLoaded).toBe(false);
 		expect(health.modelVersion).toBe("akari-3.17");
 		expect(health.error).toContain("ONNX model files not found");
+	});
+
+	test("resolves default artifacts from the repository instead of the process working directory", () => {
+		const previous = process.env.CRAWLER_MODEL_DIR;
+		delete process.env.CRAWLER_MODEL_DIR;
+		try {
+			const classifier = new LocalAkariClassifier();
+			expect(classifier.embeddingPath).toBe(
+				new URL("../../../model/embedding/model.onnx", import.meta.url).pathname
+			);
+			expect(classifier.classifierPath).toBe(
+				new URL("../../../model/akari/3.17.onnx", import.meta.url).pathname
+			);
+		} finally {
+			if (previous !== undefined) process.env.CRAWLER_MODEL_DIR = previous;
+		}
 	});
 
 	test("resolves artifacts from CRAWLER_MODEL_DIR", () => {

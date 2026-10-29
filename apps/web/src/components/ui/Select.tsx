@@ -1,3 +1,4 @@
+import { CONTROL_HEIGHT } from "./controlStyles";
 import { Select as ArkSelect, createListCollection } from "@ark-ui/solid/select";
 import clsx from "clsx";
 import { type ComponentProps, createMemo, createUniqueId, For, Show, splitProps } from "solid-js";
@@ -53,6 +54,7 @@ export default function Select(props: SelectProps) {
 		"clearLabel",
 		"onValueChange",
 		"aria-describedby",
+		"aria-label",
 	]);
 
 	const uid = createUniqueId();
@@ -96,24 +98,18 @@ export default function Select(props: SelectProps) {
 			{...rest}
 		>
 			<Show when={local.label && local.size}>
-				<label for={selectId()} class="ts-caption text-secondary font-medium select-none">
+				<ArkSelect.Label class="ts-caption text-secondary font-medium select-none">
 					{local.label}
 					<Show when={local.required}>
 						<span class="text-error"> *</span>
 					</Show>
-				</label>
+				</ArkSelect.Label>
 			</Show>
 
 			<ArkSelect.Control
 				class={clsx(
 					"group relative flex items-center border bg-surface transition-colors w-full",
-					isFloating()
-						? "h-[58px]"
-						: local.size === "sm"
-							? "h-8"
-							: local.size === "lg"
-								? "h-14"
-								: "h-10",
+					isFloating() ? "h-[58px]" : CONTROL_HEIGHT[local.size ?? "md"],
 					hasError()
 						? "border-error"
 						: "border-border hover:border-tertiary focus-within:border-primary focus-within:ring-1 focus-within:ring-primary",
@@ -151,6 +147,7 @@ export default function Select(props: SelectProps) {
 								: "pr-8"
 					)}
 					aria-describedby={describedBy()}
+					aria-label={local["aria-label"]}
 				>
 					<ArkSelect.ValueText
 						placeholder={local.placeholder}

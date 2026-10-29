@@ -16,6 +16,52 @@ interface ManualIngestModalProps {
 	onSuccess?: (result: IngestVideoResponse) => void;
 }
 
+function IngestResult(props: { result: IngestVideoResponse }) {
+	const t = getComponentT("crawler");
+	return (
+		<div class="p-4 border border-border bg-surface-container-high flex flex-col gap-3">
+			<div class="flex items-center gap-2 text-primary font-semibold text-sm">
+				<CheckCircle class="w-4 h-4 text-primary" />
+				<span>{props.result.alreadyTracked ? t("ingest.updated") : t("ingest.added")}</span>
+			</div>
+
+			<div class="flex items-start gap-4">
+				<Show when={props.result.pic}>
+					{(pic) => (
+						<img
+							src={pic()}
+							alt={props.result.title}
+							class="w-28 h-18 object-cover border border-border shrink-0"
+						/>
+					)}
+				</Show>
+				<div class="flex flex-col gap-1 min-w-0">
+					<a
+						href={`https://www.bilibili.com/video/${props.result.bvid}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="font-semibold text-primary hover:underline line-clamp-2 text-sm"
+					>
+						{props.result.title}
+					</a>
+					<div class="flex items-center gap-2 ts-caption text-secondary">
+						<span>{props.result.bvid}</span>
+						<span>·</span>
+						<span>
+							{t("videoDetail.uploader")}:{" "}
+							{props.result.ownerName ?? t("ingest.unknown")}
+						</span>
+						<span>·</span>
+						<span>
+							{t("videoDetail.videoStatus")}: {props.result.state}
+						</span>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export default function ManualIngestModal(props: ManualIngestModalProps) {
 	const t = getComponentT("crawler");
 
@@ -114,7 +160,7 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 						disabled={submitting()}
 					/>
 
-					<div class="flex items-center justify-end gap-3 pt-2 border-t border-border">
+					<div class="flex items-center justify-end gap-3 pt-2">
 						<Button
 							type="button"
 							variant="outlined"
@@ -138,54 +184,7 @@ export default function ManualIngestModal(props: ManualIngestModalProps) {
 				</form>
 
 				{/* Ingest Result Preview */}
-				<Show when={ingestResult()}>
-					{(item) => (
-						<div class="p-4 border border-border bg-surface-container-high flex flex-col gap-3">
-							<div class="flex items-center gap-2 text-primary font-semibold text-sm">
-								<CheckCircle class="w-4 h-4 text-primary" />
-								<span>
-									{item().alreadyTracked
-										? t("ingest.updated")
-										: t("ingest.added")}
-								</span>
-							</div>
-
-							<div class="flex items-start gap-4">
-								<Show when={item().pic}>
-									{(pic) => (
-										<img
-											src={pic()}
-											alt={item().title}
-											class="w-28 h-18 object-cover border border-border shrink-0"
-										/>
-									)}
-								</Show>
-								<div class="flex flex-col gap-1 min-w-0">
-									<a
-										href={`https://www.bilibili.com/video/${item().bvid}`}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="font-semibold text-primary hover:underline line-clamp-2 text-sm"
-									>
-										{item().title}
-									</a>
-									<div class="flex items-center gap-2 ts-caption text-secondary">
-										<span>{item().bvid}</span>
-										<span>·</span>
-										<span>
-											{t("videoDetail.uploader")}:{" "}
-											{item().ownerName ?? t("ingest.unknown")}
-										</span>
-										<span>·</span>
-										<span>
-											{t("videoDetail.videoStatus")}: {item().state}
-										</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					)}
-				</Show>
+				<Show when={ingestResult()}>{(item) => <IngestResult result={item()} />}</Show>
 			</div>
 		</Modal>
 	);

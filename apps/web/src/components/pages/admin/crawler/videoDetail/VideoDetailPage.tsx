@@ -1,6 +1,6 @@
+import StateBadge from "../StateBadge";
 import { createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
-import Badge, { type BadgeVariant } from "@components/ui/Badge";
 import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
@@ -19,6 +19,165 @@ import ArrowLeft from "lucide-solid/icons/arrow-left";
 import Trash2 from "lucide-solid/icons/trash-2";
 
 const HISTORY_PAGE_SIZE = 10;
+
+function VideoMetadataSummary(props: { data: BilibiliVideoMetadataDto }) {
+	const t = getComponentT("crawler");
+	return (
+		<div class="flex flex-col gap-4">
+			<div class="flex gap-4">
+				<Show when={props.data.pic}>
+					{(pic) => (
+						<img
+							src={pic()}
+							alt={props.data.title}
+							class="w-36 h-24 object-cover border border-border shrink-0 bg-surface-container-high"
+							referrerPolicy="no-referrer"
+						/>
+					)}
+				</Show>
+				<div class="flex flex-col gap-1 min-w-0 flex-1">
+					<h3 class="text-base font-semibold text-primary line-clamp-2">
+						{props.data.title}
+					</h3>
+					<div class="flex items-center gap-2 text-xs text-secondary mt-1">
+						<span>{props.data.ownerName ?? "—"}</span>
+						<span class="text-tertiary">·</span>
+						<span>{props.data.tname ?? "—"}</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-border text-xs">
+				<div>
+					<span class="text-tertiary block mb-0.5">MID</span>
+					<span class="font-medium text-primary">{props.data.mid ?? "—"}</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">{t("videoDetail.duration")}</span>
+					<span class="font-medium text-primary">
+						{props.data.duration ? `${props.data.duration}s` : "—"}
+					</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">{t("videoDetail.pubdate")}</span>
+					<span class="font-medium text-primary">
+						{props.data.pubdate ? formatDateTime(props.data.pubdate) : "—"}
+					</span>
+				</div>
+			</div>
+
+			<Show when={props.data.description}>
+				{(desc) => (
+					<div class="pt-3 border-t border-border flex flex-col gap-1 text-xs">
+						<span class="text-tertiary font-medium">
+							{t("videoDetail.description")}
+						</span>
+						<p class="text-secondary line-clamp-3 leading-relaxed whitespace-pre-wrap">
+							{desc()}
+						</p>
+					</div>
+				)}
+			</Show>
+		</div>
+	);
+}
+
+function TrackingSummary(props: { data: VideoTrackingDto }) {
+	const t = getComponentT("crawler");
+	return (
+		<div class="flex flex-col gap-4">
+			<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+				<div class="p-3 bg-surface-container-high border border-border">
+					<span class="text-xs text-tertiary block mb-1">{t("videoDetail.views")}</span>
+					<span class="text-xl font-bold text-primary">
+						{formatMetric(props.data.lastViews)}
+					</span>
+				</div>
+				<div class="p-3 bg-surface-container-high border border-border">
+					<span class="text-xs text-tertiary block mb-1">
+						{t("videoDetail.velocity")}
+					</span>
+					<span class="text-xl font-bold text-primary">
+						{formatMetric(props.data.velocity)}
+						<span class="text-xs font-normal text-tertiary ml-1">/h</span>
+					</span>
+				</div>
+				<div class="p-3 bg-surface-container-high border border-border">
+					<span class="text-xs text-tertiary block mb-1">
+						{t("videoDetail.priority")}
+					</span>
+					<span class="text-xl font-bold text-primary">{props.data.priority}</span>
+				</div>
+				<div class="p-3 bg-surface-container-high border border-border">
+					<span class="text-xs text-tertiary block mb-1">
+						{t("videoDetail.failures")}
+					</span>
+					<span
+						class={
+							"text-xl font-bold " +
+							(props.data.consecutiveFails > 0 ? "text-error" : "text-primary")
+						}
+					>
+						{props.data.consecutiveFails}
+					</span>
+				</div>
+			</div>
+
+			<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs">
+				<div>
+					<span class="text-tertiary block mb-0.5">
+						{t("videoDetail.scheduleReason")}
+					</span>
+					<span class="font-medium text-primary">{props.data.scheduleReason ?? "—"}</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">
+						{t("videoDetail.targetMilestone")}
+					</span>
+					<span class="font-medium text-primary">
+						{(() => {
+							const m = props.data.targetMilestone;
+							return m !== null && m !== undefined ? formatMetric(m) : "—";
+						})()}
+					</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">{t("videoDetail.eta")}</span>
+					<span class="font-medium text-primary">
+						{props.data.etaHours != null ? `${props.data.etaHours?.toFixed(1)} h` : "—"}
+					</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">{t("videoDetail.nextSnapshot")}</span>
+					<span class="font-medium text-primary">
+						{formatDateTime(props.data.nextSnapshotAt)}
+					</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">{t("videoDetail.lastCaptured")}</span>
+					<span class="font-medium text-primary">
+						{formatDateTime(props.data.lastCapturedAt)}
+					</span>
+				</div>
+				<div>
+					<span class="text-tertiary block mb-0.5">{t("videoDetail.leaseUntil")}</span>
+					<span class="font-medium text-primary">
+						{formatDateTime(props.data.leaseUntil)}
+					</span>
+				</div>
+			</div>
+
+			<Show when={props.data.lastError}>
+				{(err) => (
+					<div class="p-3 bg-error/10 border border-error/30 text-error text-xs flex flex-col gap-1">
+						<span class="font-semibold">{t("videoDetail.lastError")}:</span>
+						<span class="break-words text-[11px]">{err()}</span>
+					</div>
+				)}
+			</Show>
+		</div>
+	);
+}
 
 export default function VideoDetailPage(props: { aid: string }) {
 	const t = getComponentT("crawler");
@@ -41,8 +200,10 @@ export default function VideoDetailPage(props: { aid: string }) {
 		]);
 		setLoading(false);
 
-		if (metaRes.ok && metaRes.data) setMetadata(metaRes.data);
-		if (trackRes.ok && trackRes.data) setTracking(trackRes.data);
+		if (metaRes.ok) setMetadata(metaRes.data ?? null);
+		else if (metaRes.status === 404) setMetadata(null);
+		if (trackRes.ok) setTracking(trackRes.data ?? null);
+		else if (trackRes.status === 404) setTracking(null);
 
 		if (!metaRes.ok && !trackRes.ok) {
 			setError(metaRes.error.message || trackRes.error.message || t("common.error"));
@@ -73,7 +234,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 		const res =
 			type === "snapshot"
 				? await api.crawler.queueSnapshot(props.aid)
-				: await api.crawler.fetchDetail(props.aid);
+				: await api.crawler.refreshMetadata(props.aid);
 		setPendingAction(null);
 		if (res.ok) {
 			toast.success(t("videoDetail.actionQueued"));
@@ -89,7 +250,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 		const res = await api.crawler.deleteTracking(props.aid);
 		setPendingAction(null);
 		if (res.ok) {
-			toast.success("已将该视频移出追踪队列");
+			toast.success(t("audit.untracked"));
 			setTracking(null);
 		} else {
 			toast.error(res.error.message || t("common.error"));
@@ -100,31 +261,16 @@ export default function VideoDetailPage(props: { aid: string }) {
 		void loadDetail(props.aid);
 	});
 
-	const statePresentation = (state: string): { label: string; variant: BadgeVariant } => {
-		switch (state) {
-			case "new":
-				return { label: t("videos.state.new"), variant: "info" };
-			case "regular":
-				return { label: t("videos.state.regular"), variant: "neutral" };
-			case "milestone":
-				return { label: t("videos.state.milestone"), variant: "warning" };
-			case "archive":
-				return { label: t("videos.state.archive"), variant: "default" };
-			default:
-				return { label: state, variant: "neutral" };
-		}
-	};
-
 	const historyTotal = () => history()?.total ?? 0;
 	const historyPage = () => Math.floor(historyOffset() / HISTORY_PAGE_SIZE);
 
 	return (
-		<div class="flex flex-col gap-6">
+		<div class="crawler-panel flex flex-col gap-6">
 			{/* Breadcrumb Navigation & Action Toolbar */}
 			<div class="flex flex-col gap-3">
 				<div>
 					<a
-						href="/admin/crawler"
+						href={`/admin/crawler?section=videos&search=${encodeURIComponent(props.aid)}`}
 						class="text-xs text-secondary hover:text-primary inline-flex items-center gap-1.5 transition-colors cursor-pointer"
 					>
 						<ArrowLeft class="w-3.5 h-3.5" />
@@ -149,11 +295,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 							)}
 						</Show>
 						<Show when={tracking()?.state}>
-							{(st) => (
-								<Badge variant={statePresentation(st()).variant} size="md">
-									{statePresentation(st()).label}
-								</Badge>
-							)}
+							{(st) => <StateBadge kind="tracking" state={st()} size="md" />}
 						</Show>
 					</div>
 
@@ -233,72 +375,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 								</div>
 							}
 						>
-							{(meta) => (
-								<div class="flex flex-col gap-4">
-									<div class="flex gap-4">
-										<Show when={meta().pic}>
-											{(pic) => (
-												<img
-													src={pic()}
-													alt={meta().title}
-													class="w-36 h-24 object-cover border border-border shrink-0 bg-surface-container-high"
-													referrerPolicy="no-referrer"
-												/>
-											)}
-										</Show>
-										<div class="flex flex-col gap-1 min-w-0 flex-1">
-											<h3 class="text-base font-semibold text-primary line-clamp-2">
-												{meta().title}
-											</h3>
-											<div class="flex items-center gap-2 text-xs text-secondary mt-1">
-												<span>{meta().ownerName ?? "—"}</span>
-												<span class="text-tertiary">·</span>
-												<span>{meta().tname ?? "—"}</span>
-											</div>
-										</div>
-									</div>
-
-									<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3 border-t border-border text-xs">
-										<div>
-											<span class="text-tertiary block mb-0.5">MID</span>
-											<span class="font-medium text-primary">
-												{meta().mid ?? "—"}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.duration")}
-											</span>
-											<span class="font-medium text-primary">
-												{meta().duration ? `${meta().duration}s` : "—"}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.pubdate")}
-											</span>
-											<span class="font-medium text-primary">
-												{meta().pubdate
-													? formatDateTime(meta().pubdate)
-													: "—"}
-											</span>
-										</div>
-									</div>
-
-									<Show when={meta().description}>
-										{(desc) => (
-											<div class="pt-3 border-t border-border flex flex-col gap-1 text-xs">
-												<span class="text-tertiary font-medium">
-													{t("videoDetail.description")}
-												</span>
-												<p class="text-secondary line-clamp-3 leading-relaxed whitespace-pre-wrap">
-													{desc()}
-												</p>
-											</div>
-										)}
-									</Show>
-								</div>
-							)}
+							{(meta) => <VideoMetadataSummary data={meta()} />}
 						</Show>
 					</CardContent>
 				</Card>
@@ -322,125 +399,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 								</div>
 							}
 						>
-							{(track) => (
-								<div class="flex flex-col gap-4">
-									<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-										<div class="p-3 bg-surface-container-high border border-border">
-											<span class="text-xs text-tertiary block mb-1">
-												{t("videoDetail.views")}
-											</span>
-											<span class="text-xl font-bold text-primary">
-												{formatMetric(track().lastViews)}
-											</span>
-										</div>
-										<div class="p-3 bg-surface-container-high border border-border">
-											<span class="text-xs text-tertiary block mb-1">
-												{t("videoDetail.velocity")}
-											</span>
-											<span class="text-xl font-bold text-primary">
-												{formatMetric(track().velocity)}
-												<span class="text-xs font-normal text-tertiary ml-1">
-													/h
-												</span>
-											</span>
-										</div>
-										<div class="p-3 bg-surface-container-high border border-border">
-											<span class="text-xs text-tertiary block mb-1">
-												{t("videoDetail.priority")}
-											</span>
-											<span class="text-xl font-bold text-primary">
-												{track().priority}
-											</span>
-										</div>
-										<div class="p-3 bg-surface-container-high border border-border">
-											<span class="text-xs text-tertiary block mb-1">
-												{t("videoDetail.failures")}
-											</span>
-											<span
-												class={
-													"text-xl font-bold " +
-													(track().consecutiveFails > 0
-														? "text-error"
-														: "text-primary")
-												}
-											>
-												{track().consecutiveFails}
-											</span>
-										</div>
-									</div>
-
-									<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2 text-xs">
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.scheduleReason")}
-											</span>
-											<span class="font-medium text-primary">
-												{track().scheduleReason ?? "—"}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.targetMilestone")}
-											</span>
-											<span class="font-medium text-primary">
-												{(() => {
-													const m = track().targetMilestone;
-													return m !== null && m !== undefined
-														? formatMetric(m)
-														: "—";
-												})()}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.eta")}
-											</span>
-											<span class="font-medium text-primary">
-												{track().etaHours != null
-													? `${track().etaHours?.toFixed(1)} h`
-													: "—"}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.nextSnapshot")}
-											</span>
-											<span class="font-medium text-primary">
-												{formatDateTime(track().nextSnapshotAt)}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.lastCaptured")}
-											</span>
-											<span class="font-medium text-primary">
-												{formatDateTime(track().lastCapturedAt)}
-											</span>
-										</div>
-										<div>
-											<span class="text-tertiary block mb-0.5">
-												{t("videoDetail.leaseUntil")}
-											</span>
-											<span class="font-medium text-primary">
-												{formatDateTime(track().leaseUntil)}
-											</span>
-										</div>
-									</div>
-
-									<Show when={track().lastError}>
-										{(err) => (
-											<div class="p-3 bg-error/10 border border-error/30 text-error text-xs flex flex-col gap-1">
-												<span class="font-semibold">
-													{t("videoDetail.lastError")}:
-												</span>
-												<span class="break-words font-mono text-[11px]">
-													{err()}
-												</span>
-											</div>
-										)}
-									</Show>
-								</div>
-							)}
+							{(track) => <TrackingSummary data={track()} />}
 						</Show>
 					</CardContent>
 				</Card>

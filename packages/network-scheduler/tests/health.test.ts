@@ -179,7 +179,7 @@ describe("NetworkScheduler health", () => {
 		]);
 	});
 
-	test("degrades without isolating the adapter after a health-affecting failure", async () => {
+	test("ignores one transient failure before applying a weight penalty", async () => {
 		const adapter = new ControllableAdapter();
 		adapter.enqueue(failure("direct-a"));
 		const scheduler = createScheduler(adapter, new TestClock());
@@ -188,11 +188,48 @@ describe("NetworkScheduler health", () => {
 
 		expect(result.errorCode).toBe("NETWORK_FAILURE");
 		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "degraded",
-			healthFactor: 0.5,
-			effectiveWeight: 0.5,
+			healthState: "healthy",
+			healthFactor: 1,
+			effectiveWeight: 1,
 			consecutiveFailures: 1,
 			openUntil: null,
+		});
+	});
+
+	test("uses different thresholds to degrade and recover without flapping", async () => {
+		const adapter = new ControllableAdapter();
+		adapter.enqueue(
+			failure("direct-a"),
+			failure("direct-a"),
+			success("direct-a"),
+			success("direct-a"),
+			success("direct-a")
+		);
+		const scheduler = createScheduler(adapter, new TestClock());
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
+			healthState: "degraded",
+			healthFactor: 0.5,
+		});
+		await scheduler.execute(request());
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("degraded");
+		await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
+	});
+
+	test("alternating isolated failures and successes do not reduce the adapter weight", async () => {
+		const adapter = new ControllableAdapter();
+		for (let index = 0; index < 5; index++)
+			adapter.enqueue(failure("direct-a"), success("direct-a"));
+		const scheduler = createScheduler(adapter, new TestClock());
+		for (let index = 0; index < 10; index++) await scheduler.execute(request());
+		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
+			healthState: "healthy",
+			healthFactor: 1,
+			consecutiveFailures: 0,
 		});
 	});
 

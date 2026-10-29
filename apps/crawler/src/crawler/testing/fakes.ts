@@ -65,9 +65,15 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 				async getJobCounts(): Promise<CrawlerJobCounts> {
 					return { ...state.jobCounts };
 				},
-				async getJobs(): Promise<CrawlerQueueJobSnapshot[]> {
+				async getJobs(
+					states = ["waiting"],
+					limit = 50,
+					offset = 0
+				): Promise<CrawlerQueueJobSnapshot[]> {
+					if (!states.includes("waiting")) return [];
 					return state.queuedJobs
 						.filter((j) => j.queue === name)
+						.slice(offset, offset + limit)
 						.map((j, idx) => ({
 							id: String(idx + 1),
 							name: j.name,
@@ -510,15 +516,52 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		return row;
 	}
 
-	async listSamples(options?: ListDiscoverySamplesOptions): Promise<DiscoverySample[]> {
-		const limit = Math.min(Math.max(options?.limit ?? 50, 1), 200);
-		const offset = Math.max(options?.offset ?? 0, 0);
+	private filteredSamples(options: ListDiscoverySamplesOptions = {}): DiscoverySample[] {
 		let rows = [...this.samples.values()];
-		if (options?.decision) rows = rows.filter((row) => row.decision === options.decision);
-		if (options?.labeled === true) rows = rows.filter((row) => row.humanLabel !== null);
-		if (options?.labeled === false) rows = rows.filter((row) => row.humanLabel === null);
-		rows.sort((a, b) => b.createdAt.epochMilliseconds - a.createdAt.epochMilliseconds);
-		return rows.slice(offset, offset + limit);
+		if (options.decision) rows = rows.filter((r) => r.decision === options.decision);
+		if (options.labeled !== undefined)
+			rows = rows.filter((r) => (r.humanLabel !== null) === options.labeled);
+		if (options.minConfidence !== undefined)
+			rows = rows.filter((r) => r.songProbability >= (options.minConfidence ?? 0));
+		if (options.maxConfidence !== undefined)
+			rows = rows.filter((r) => r.songProbability <= (options.maxConfidence ?? 1));
+		if (options.source)
+			rows = rows.filter(
+				(r) => this.metadatas.get(r.aid)?.discoverySource === options.source
+			);
+		const search = options.search?.trim();
+		if (search)
+			rows = rows.filter(
+				(r) =>
+					r.aid.toString() === search.replace(/^av/i, "") ||
+					r.bvid === search ||
+					r.title.includes(search)
+			);
+		return rows;
+	}
+
+	async countSamples(options: ListDiscoverySamplesOptions = {}): Promise<number> {
+		return this.filteredSamples(options).length;
+	}
+
+	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
+		const rows = this.filteredSamples(options);
+		const direction = options.sortOrder === "asc" ? 1 : -1;
+		rows.sort((a, b) => {
+			const compared =
+				options.sortBy === "confidence"
+					? a.songProbability - b.songProbability
+					: options.sortBy === "aid"
+						? a.aid < b.aid
+							? -1
+							: a.aid > b.aid
+								? 1
+								: 0
+						: a.createdAt.epochMilliseconds - b.createdAt.epochMilliseconds;
+			return compared * direction || (a.aid > b.aid ? -1 : a.aid < b.aid ? 1 : 0);
+		});
+		const offset = options.offset ?? 0;
+		return rows.slice(offset, offset + (options.limit ?? 50));
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {

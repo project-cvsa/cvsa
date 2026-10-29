@@ -1,4 +1,5 @@
-import { For, Show, type JSX } from "solid-js";
+import DataTable, { type TableColumn } from "@components/ui/DataTable";
+import { Show, type JSX } from "solid-js";
 import clsx from "clsx";
 import type { CrawlerOverviewStats, CrawlerQueueSnapshot } from "@cvsa/contracts";
 import Badge from "@components/ui/Badge";
@@ -47,185 +48,99 @@ export function QueueStatusTable(props: {
 	const t = getComponentT("crawler");
 	const rows = () => Object.entries(props.queues).map(([name, snapshot]) => ({ name, snapshot }));
 
-	return (
-		<Show
-			when={rows().length > 0}
-			fallback={
-				<div class="p-8 text-center text-tertiary border border-border bg-surface text-sm">
-					{props.emptyLabel ?? t("queue.empty")}
-				</div>
-			}
-		>
-			<div class="cvsa-scroll overflow-x-auto border border-border bg-surface">
-				<table class="w-full text-left ts-caption">
-					<thead>
-						<tr class="border-b border-border text-tertiary bg-surface-container-high uppercase tracking-wider text-xs">
-							<th class="py-2.5 px-4 font-semibold">{t("queue.name")}</th>
-							<th class="py-2.5 px-4 font-semibold">{t("queue.active")}</th>
-							<th class="py-2.5 px-4 font-semibold">{t("queue.waiting")}</th>
-							<th class="py-2.5 px-4 font-semibold">{t("queue.delayed")}</th>
-							<th class="py-2.5 px-4 font-semibold">{t("queue.failed")}</th>
-							<th class="py-2.5 px-4 font-semibold">{t("queue.oldest")}</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-border text-sm">
-						<For each={rows()}>
-							{(row) => (
-								<tr class="hover:bg-hover transition-colors">
-									<td class="py-2.5 px-4 font-medium text-primary flex items-center gap-2">
-										<div class="w-2 h-2 bg-primary" />
-										<span>{row.name}</span>
-									</td>
-									<td class="py-2.5 px-4">
-										<Show
-											when={row.snapshot.active > 0}
-											fallback={<span class="text-tertiary">0</span>}
-										>
-											<Badge variant="info" size="sm">
-												{row.snapshot.active}
-											</Badge>
-										</Show>
-									</td>
-									<td class="py-2.5 px-4">
-										<Show
-											when={row.snapshot.waiting > 0}
-											fallback={<span class="text-tertiary">0</span>}
-										>
-											<Badge variant="neutral" size="sm">
-												{row.snapshot.waiting}
-											</Badge>
-										</Show>
-									</td>
-									<td class="py-2.5 px-4">
-										<Show
-											when={row.snapshot.delayed > 0}
-											fallback={<span class="text-tertiary">0</span>}
-										>
-											<Badge variant="warning" size="sm">
-												{row.snapshot.delayed}
-											</Badge>
-										</Show>
-									</td>
-									<td class="py-2.5 px-4">
-										<Show
-											when={row.snapshot.failed > 0}
-											fallback={<span class="text-tertiary">0</span>}
-										>
-											<Badge variant="danger" size="sm">
-												{row.snapshot.failed}
-											</Badge>
-										</Show>
-									</td>
-									<td class="py-2.5 px-4 text-secondary">
-										{formatWaitSeconds(row.snapshot.oldestWaitSec)}
-									</td>
-								</tr>
-							)}
-						</For>
-					</tbody>
-				</table>
-			</div>
+	type QueueRow = { name: string; snapshot: CrawlerQueueSnapshot };
+	const count = (value: number, variant: "info" | "neutral" | "warning" | "danger") => (
+		<Show when={value > 0} fallback={<span class="text-tertiary">0</span>}>
+			<Badge variant={variant} size="sm">
+				{value}
+			</Badge>
 		</Show>
+	);
+	const columns: TableColumn<QueueRow>[] = [
+		{
+			id: "name",
+			header: t("queue.name"),
+			class: "font-medium text-primary",
+			cell: (row) => row.name,
+		},
+		{
+			id: "active",
+			header: t("queue.active"),
+			cell: (row) => count(row.snapshot.active, "info"),
+		},
+		{
+			id: "waiting",
+			header: t("queue.waiting"),
+			cell: (row) => count(row.snapshot.waiting, "neutral"),
+		},
+		{
+			id: "delayed",
+			header: t("queue.delayed"),
+			cell: (row) => count(row.snapshot.delayed, "warning"),
+		},
+		{
+			id: "failed",
+			header: t("queue.failed"),
+			cell: (row) => count(row.snapshot.failed, "danger"),
+		},
+		{
+			id: "oldest",
+			header: t("queue.oldest"),
+			class: "text-secondary",
+			cell: (row) => formatWaitSeconds(row.snapshot.oldestWaitSec),
+		},
+	];
+	return (
+		<DataTable columns={columns} items={rows()} empty={props.emptyLabel ?? t("queue.empty")} />
 	);
 }
 
 /** Isomorphic failure status table matching QueueStatusTable styling */
+
 export function FailureStatusTable(props: {
 	breakdown: CrawlerOverviewStats["breakdown"];
 	totalFailures: number;
 	windowLabel: string;
 }) {
 	const t = getComponentT("crawler");
-
-	const categories = (): ReadonlyArray<{
-		key: keyof CrawlerOverviewStats["breakdown"];
-		label: string;
-	}> => [
-		{ key: "timeout", label: t("overview.err.timeout") },
-		{ key: "rateLimited412Or429", label: t("overview.err.rateLimited") },
-		{ key: "networkFailure", label: t("overview.err.networkFailure") },
-		{ key: "httpFailure", label: t("overview.err.httpFailure") },
-		{ key: "networkOther", label: t("overview.err.networkOther") },
-		{ key: "adapterUnavailable", label: t("overview.err.adapterUnavailable") },
-		{ key: "bilibiliBusinessError", label: t("overview.err.bilibiliBusiness") },
-		{ key: "inferenceError", label: t("overview.err.inference") },
-		{ key: "dbError", label: t("overview.err.db") },
-		{ key: "other", label: t("overview.err.other") },
+	const categories: Array<{ key: keyof CrawlerOverviewStats["breakdown"]; label: string }> = [
+		{ key: "timeout", label: "timeout" },
+		{ key: "networkFailure", label: "networkFailure" },
+		{ key: "httpFailure", label: "httpFailure" },
+		{ key: "networkOther", label: "networkOther" },
+		{ key: "adapterUnavailable", label: "adapterUnavailable" },
+		{ key: "rateLimited412Or429", label: "rateLimited" },
+		{ key: "bilibiliBusinessError", label: "bilibiliBusiness" },
+		{ key: "inferenceError", label: "inference" },
+		{ key: "dbError", label: "db" },
+		{ key: "other", label: "other" },
 	];
-
-	const rows = () => {
-		const total = props.totalFailures;
-		const all = categories().map((cat) => {
-			const count = props.breakdown[cat.key] ?? 0;
-			const ratio = total > 0 ? count / total : 0;
-			return {
-				key: cat.key,
-				label: cat.label,
-				count,
-				ratio,
-			};
-		});
-		if (total === 0) return all;
-		// When failures exist, sort active ones to the top
-		return all.sort((a, b) => b.count - a.count);
-	};
-
-	return (
-		<div class="cvsa-scroll overflow-x-auto border border-border bg-surface">
-			<table class="w-full text-left ts-caption">
-				<thead>
-					<tr class="border-b border-border text-tertiary bg-surface-container-high uppercase tracking-wider text-xs">
-						<th class="py-2.5 px-4 font-semibold">{t("overview.failures.category")}</th>
-						<th class="py-2.5 px-4 font-semibold">{t("overview.failures.count")}</th>
-						<th class="py-2.5 px-4 font-semibold">{t("overview.failures.ratio")}</th>
-						<th class="py-2.5 px-4 font-semibold">{t("overview.failures.status")}</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-border text-sm">
-					<For each={rows()}>
-						{(row) => (
-							<tr class="hover:bg-hover transition-colors">
-								<td class="py-2.5 px-4 font-medium text-primary flex items-center gap-2">
-									<div
-										class={clsx(
-											"w-2 h-2",
-											row.count > 0 ? "bg-error" : "bg-success"
-										)}
-									/>
-									<span>{row.label}</span>
-								</td>
-								<td class="py-2.5 px-4">
-									<Show
-										when={row.count > 0}
-										fallback={<span class="text-tertiary">0</span>}
-									>
-										<Badge variant="danger" size="sm">
-											{row.count}
-										</Badge>
-									</Show>
-								</td>
-								<td class="py-2.5 px-4 text-secondary">
-									{formatPercent(row.ratio)}
-								</td>
-								<td class="py-2.5 px-4">
-									<Show
-										when={row.count > 0}
-										fallback={
-											<Badge variant="success" size="sm" dot>
-												{t("common.normal")}
-											</Badge>
-										}
-									>
-										<Badge variant="danger" size="sm" dot>
-											{t("common.error")}
-										</Badge>
-									</Show>
-								</td>
-							</tr>
-						)}
-					</For>
-				</tbody>
-			</table>
-		</div>
-	);
+	const rows = () =>
+		categories
+			.map((category) => ({ ...category, count: props.breakdown[category.key] ?? 0 }))
+			.filter((row) => row.count > 0)
+			.sort((a, b) => b.count - a.count);
+	type FailureRow = ReturnType<typeof rows>[number];
+	const columns: TableColumn<FailureRow>[] = [
+		{
+			id: "category",
+			header: t("overview.failures.category"),
+			class: "w-1/2 text-primary",
+			cell: (row) => t(`overview.err.${row.label}`),
+		},
+		{
+			id: "count",
+			header: t("overview.failures.count"),
+			class: "text-right text-error",
+			cell: (row) => row.count,
+		},
+		{
+			id: "ratio",
+			header: t("overview.failures.ratio"),
+			class: "text-right text-secondary",
+			cell: (row) =>
+				formatPercent(props.totalFailures > 0 ? row.count / props.totalFailures : 0),
+		},
+	];
+	return <DataTable columns={columns} items={rows()} empty={t("audit.noErrors")} />;
 }

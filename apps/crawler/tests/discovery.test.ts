@@ -1,3 +1,4 @@
+import type { DiscoveryJobProgress } from "@cvsa/contracts";
 import { describe, expect, test } from "bun:test";
 import { toInstant, type BilibiliVideoMetadata } from "@cvsa/snapshot-db";
 import {
@@ -649,6 +650,34 @@ describe("normalizeFilterConfig", () => {
 });
 
 describe("DiscoveryPipelineProcessor", () => {
+	test("does not re-add a manually rejected candidate when discovery revisits it", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await repo.upsertSample({
+			aid: 500_001n,
+			bvid: "BV1500001",
+			title: "【洛天依原创】reviewed",
+			decision: "whitelist",
+			modelVersion: "rules",
+			probabilities: [],
+			songProbability: 1,
+			humanLabel: 0,
+		});
+		const processor = new DiscoveryPipelineProcessor(
+			createDetailClient(new Map()),
+			repo,
+			tracking,
+			createFakeMq().createQueue<DiscoveryJobData>("crawler-discovery")
+		);
+		await processor.processJob({
+			type: "fetch-video-details",
+			aid: "500001",
+			source: "search",
+		});
+		expect(await tracking.getTracking(500_001n)).toBeNull();
+		expect((await repo.listSamples({ search: "500001" }))[0]?.humanLabel).toBe(0);
+	});
+
 	test("accepts a candidate, stores structured tags and samples, and enqueues related videos", async () => {
 		const repo = new InMemoryDiscoveryRepository();
 		const tracking = new InMemoryTrackingRepository();
@@ -691,11 +720,18 @@ describe("DiscoveryPipelineProcessor", () => {
 		);
 
 		const processor = new DiscoveryPipelineProcessor(client, repo, tracking, queue);
-		await processor.processJob({
-			type: "fetch-video-details",
-			aid: "500001",
-			source: "search",
-		});
+		const progress: DiscoveryJobProgress[] = [];
+		await processor.processJob(
+			{
+				type: "fetch-video-details",
+				aid: "500001",
+				source: "search",
+			},
+			async (value) => {
+				progress.push(value);
+			}
+		);
+		expect(progress.at(-1)).toMatchObject({ stage: "expanding", candidates: 1, queued: 1 });
 
 		const tracked = await tracking.getTracking(500_001n);
 		expect(tracked?.state).toBe("new");
@@ -776,7 +812,11 @@ describe("DiscoveryPipelineProcessor", () => {
 			tracking,
 			queue
 		);
-		await processor.processJob({ type: "hot-sample", limit: 5 });
+		const progress: DiscoveryJobProgress[] = [];
+		await processor.processJob({ type: "hot-sample", limit: 5 }, async (value) => {
+			progress.push(value);
+		});
+		expect(progress.at(-1)).toMatchObject({ stage: "sampling", candidates: 2, queued: 2 });
 
 		expect(mq.state.queuedJobs).toHaveLength(2);
 		expect(mq.state.queuedJobs[0]?.data).toEqual({

@@ -37,6 +37,7 @@ interface SoftReserveParams {
 }
 
 interface AdapterHealth {
+	degraded: boolean;
 	factor: number;
 	consecutiveFailures: number;
 	openUntil: number | undefined;
@@ -502,8 +503,10 @@ export class NetworkScheduler implements NetworkDelegate {
 				// A successful probe closes the circuit completely.
 				health.openUntil = undefined;
 				health.factor = 1;
+				health.degraded = false;
 			} else {
 				health.factor = Math.min(1, health.factor + state.healthConfig.recoveryBonus);
+				if (health.factor >= 0.95) health.degraded = false;
 			}
 			return;
 		}
@@ -515,13 +518,21 @@ export class NetworkScheduler implements NetworkDelegate {
 			return;
 		}
 
-		health.factor = Math.max(
-			state.healthConfig.minWeightFactor,
-			health.factor * state.healthConfig.failurePenalty
-		);
 		health.consecutiveFailures += 1;
-
 		const throttled = errorCode === "HTTP_429" || errorCode === "APPLICATION_RATE_LIMIT";
+		// Debounce transient failures; throttling and failed probes still isolate immediately.
+		if (
+			health.consecutiveFailures >= 2 ||
+			wasProbing ||
+			throttled ||
+			state.healthConfig.failureThreshold === 1
+		) {
+			health.factor = Math.max(
+				state.healthConfig.minWeightFactor,
+				health.factor * state.healthConfig.failurePenalty
+			);
+			if (health.factor < 0.8) health.degraded = true;
+		}
 		if (
 			wasProbing ||
 			throttled ||
@@ -553,6 +564,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		if (existing) return existing;
 
 		const created: AdapterHealth = {
+			degraded: false,
 			factor: 1,
 			consecutiveFailures: 0,
 			openUntil: undefined,
@@ -566,9 +578,8 @@ export class NetworkScheduler implements NetworkDelegate {
 		if (health.openUntil !== undefined) {
 			return health.openUntil <= this.clock() ? "half-open" : "open";
 		}
-		// Hysteresis threshold: isolated transient hiccups (e.g. factor 0.85) do not
-		// cause the adapter to flap between healthy and degraded every few requests.
-		return health.factor < 0.8 ? "degraded" : "healthy";
+		// Enter below 0.8 and recover at 0.95; reading status never changes the state.
+		return health.degraded ? "degraded" : "healthy";
 	}
 
 	/** Claims the single half-open probe slot, or reports that the adapter is unavailable. */

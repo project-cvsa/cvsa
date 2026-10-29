@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { AutoTokenizer, type PreTrainedTokenizer } from "@huggingface/transformers";
@@ -59,8 +60,8 @@ export interface AkariModelOptions {
 	readonly autoInit?: boolean;
 }
 
-/** Relative to the crawler's working directory unless overridden. */
-const DEFAULT_MODEL_DIR = "./model";
+/** Stable for both monorepo development and /app container layouts. */
+const DEFAULT_MODEL_DIR = fileURLToPath(new URL("../../../../model/", import.meta.url));
 
 /**
  * Canonical model label persisted next to every prediction, e.g. `akari-3.17`.
@@ -130,7 +131,7 @@ export function softmax(logits: Float32Array | readonly number[]): number[] {
  * (`alikia2x/jina-embedding-v3-m2v-1024`) — there is no local tokenizer asset
  * and no hash verification: the crawler trusts the published model revision.
  *
- * `modelDir` defaults to `CRAWLER_MODEL_DIR` or `./model`. When the ONNX files
+ * `modelDir` defaults to `CRAWLER_MODEL_DIR` or the repository model directory. When the ONNX files
  * have not been uploaded yet the classifier stays in a pending state and
  * {@link classify} returns `null`, so the discovery pipeline degrades to its
  * deterministic rules instead of failing.

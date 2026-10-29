@@ -1,3 +1,4 @@
+import { controlSizeClass } from "./controlStyles";
 import clsx from "clsx";
 import { type ComponentProps, Show, splitProps } from "solid-js";
 
@@ -18,9 +19,9 @@ const variantClass: Record<ButtonVariant, string> = {
 };
 
 const sizeClass: Record<ButtonSize, string> = {
-	sm: "px-3 h-8 text-xs",
-	md: "px-4 h-10 text-sm",
-	lg: "px-6 h-14 text-base",
+	sm: "px-3",
+	md: "px-4",
+	lg: "px-6",
 };
 
 export default function Button(props: ButtonProps) {
@@ -44,6 +45,7 @@ export default function Button(props: ButtonProps) {
 				"focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-primary",
 				"disabled:cursor-not-allowed disabled:opacity-60",
 				variantClass[variant()],
+				controlSizeClass(size()),
 				sizeClass[size()],
 				local.class
 			)}

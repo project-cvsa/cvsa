@@ -222,14 +222,14 @@ export class TrackingRepository implements ITrackingRepository {
 			let matchingAids: bigint[] | undefined;
 			let exactAid: bigint | undefined;
 			if (search) {
-				if (/^\d+$/.test(search)) {
-					exactAid = BigInt(search);
+				if (/^(?:av)?\d+$/i.test(search)) {
+					exactAid = BigInt(search.replace(/^av/i, ""));
 				} else {
 					const matches = await this.db.orm.public.BilibiliVideoMetadata.where((m) =>
-						m.title.like(`%${search}%`)
-					)
-						.limit(500)
-						.all();
+						/^BV[0-9a-z]{10}$/i.test(search)
+							? m.bvid.eq(search)
+							: m.title.like(`%${search.replace(/[\\%_]/g, "\\$&")}%`)
+					).all();
 					matchingAids = matches.map((metadata) => metadata.aid);
 					if (matchingAids.length === 0) return { items: [], total: 0 };
 				}
@@ -282,6 +282,7 @@ export class TrackingRepository implements ITrackingRepository {
 										(t) => (isAsc ? t.updatedAt.asc() : t.updatedAt.desc()),
 									])
 			)
+				.orderBy((t) => t.aid.desc())
 				.limit(limit)
 				.offset(offset)
 				.all();

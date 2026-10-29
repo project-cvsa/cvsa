@@ -1,5 +1,6 @@
 import { Menu as ArkMenu } from "@ark-ui/solid/menu";
 import clsx from "clsx";
+import { controlSizeClass } from "./controlStyles";
 import { type ComponentProps, For, Show, splitProps } from "solid-js";
 import { Dynamic, Portal } from "solid-js/web";
 import type { LucideIcon } from "lucide-solid";
@@ -30,9 +31,9 @@ export interface MenuProps extends Omit<ComponentProps<"div">, "children" | "onS
 }
 
 const triggerSizeClass: Record<MenuSize, string> = {
-	sm: "h-8 px-2.5 text-xs",
-	md: "h-10 px-3.5 text-sm",
-	lg: "h-14 px-5 text-base",
+	sm: "px-2.5",
+	md: "px-3.5",
+	lg: "px-5",
 };
 
 const triggerBaseClass = clsx(
@@ -83,7 +84,11 @@ function MenuTrigger(props: MenuTriggerProps) {
 				triggerBaseClass,
 				props.iconOnly
 					? iconOnlyTriggerClass
-					: clsx(standardTriggerClass, triggerSizeClass[props.size])
+					: clsx(
+							standardTriggerClass,
+							controlSizeClass(props.size),
+							triggerSizeClass[props.size]
+						)
 			)}
 		>
 			<Show

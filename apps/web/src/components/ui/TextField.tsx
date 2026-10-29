@@ -1,3 +1,4 @@
+import { controlSizeClass } from "./controlStyles";
 import clsx from "clsx";
 import {
 	type ComponentProps,
@@ -26,12 +27,6 @@ export type TextFieldProps = Omit<ComponentProps<"input">, "placeholder" | "size
 	trailingIcon?: LucideIcon;
 	clearable?: boolean;
 	clearLabel?: string;
-};
-
-const heightClass: Record<TextFieldSize, string> = {
-	sm: "h-8 text-xs",
-	md: "h-10 text-sm",
-	lg: "h-14 text-base",
 };
 
 export default function TextField(props: TextFieldProps) {
@@ -131,7 +126,7 @@ export default function TextField(props: TextFieldProps) {
 			<div
 				class={clsx(
 					"relative flex items-center bg-surface border transition-colors",
-					hasLabel() && !local.size ? "h-[58px]" : heightClass[local.size ?? "md"],
+					hasLabel() && !local.size ? "h-[58px]" : controlSizeClass(local.size ?? "md"),
 					boxClass(),
 					local.disabled && "opacity-60"
 				)}

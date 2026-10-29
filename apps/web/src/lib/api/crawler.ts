@@ -19,7 +19,8 @@ import type {
 	DiscoverySampleListResponse,
 	DiscoveryStatusDto,
 	DiscoverySweepRequest,
-	DiscoverySweepResponse,
+	DiscoveryQueuedResponse,
+	CrawlerQueueName,
 	IngestVideoRequest,
 	IngestVideoResponse,
 	LabelDiscoverySampleRequest,
@@ -50,10 +51,11 @@ async function getStatus(): Promise<ApiResult<CrawlerStatusDto | null>> {
 }
 
 async function getStats(
-	window: CrawlerStatsWindow = "1h"
+	window: CrawlerStatsWindow = "1h",
+	minutes?: number
 ): Promise<ApiResult<CrawlerOverviewStats | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler.stats.get({ query: { window } }));
+	return settle(await eden.v2.admin.crawler.stats.get({ query: { window, minutes } }));
 }
 
 async function getQueueJobs(
@@ -64,7 +66,7 @@ async function getQueueJobs(
 }
 
 async function getQueueJobDetail(
-	queue: string,
+	queue: CrawlerQueueName,
 	id: string
 ): Promise<ApiResult<CrawlerQueueJobDetail | null>> {
 	const eden = getEdenClient();
@@ -72,15 +74,15 @@ async function getQueueJobDetail(
 }
 
 async function retryQueueJob(
-	queue: string,
+	queue: CrawlerQueueName,
 	id: string
 ): Promise<ApiResult<{ ok: boolean } | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).retry.post());
+	return settle(await eden.v2.admin.crawler.jobs({ queue })({ id }).retries.post());
 }
 
 async function removeQueueJob(
-	queue: string,
+	queue: CrawlerQueueName,
 	id: string
 ): Promise<ApiResult<{ ok: boolean } | null>> {
 	const eden = getEdenClient();
@@ -123,12 +125,12 @@ async function updateNetworkConfig(
 
 async function triggerSweep(
 	body: DiscoverySweepRequest
-): Promise<ApiResult<DiscoverySweepResponse | null>> {
+): Promise<ApiResult<DiscoveryQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.sweep.post(body));
 }
 
-async function triggerHotSample(): Promise<ApiResult<DiscoverySweepResponse | null>> {
+async function triggerHotSample(): Promise<ApiResult<DiscoveryQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler["hot-sample"].post());
 }
@@ -136,6 +138,10 @@ async function triggerHotSample(): Promise<ApiResult<DiscoverySweepResponse | nu
 async function fetchDetail(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
 	const eden = getEdenClient();
 	return settle(await eden.v2.admin.crawler.detail({ aid }).post());
+}
+
+async function refreshMetadata(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
+	return settle(await getEdenClient().v2.admin.crawler.metadata({ aid }).refreshes.post());
 }
 
 async function triggerActive(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
@@ -244,6 +250,7 @@ async function listDiscoverySamples(
 		...(query.minConfidence !== undefined ? { minConfidence: query.minConfidence } : {}),
 		...(query.maxConfidence !== undefined ? { maxConfidence: query.maxConfidence } : {}),
 		...(query.search ? { search: query.search } : {}),
+		...(query.source ? { source: query.source } : {}),
 		...(query.sortBy ? { sortBy: query.sortBy } : {}),
 		...(query.sortOrder ? { sortOrder: query.sortOrder } : {}),
 	};
@@ -283,6 +290,7 @@ export const crawlerApi = {
 	triggerSweep,
 	triggerHotSample,
 	fetchDetail,
+	refreshMetadata,
 	triggerActive,
 	queueSnapshot,
 	getTracking,

@@ -85,34 +85,62 @@ const clientI18nJson = clientI18n ? serializeClientI18nPayload(clientI18n) : und
 		<script>
 		import { OverlayScrollbars } from "overlayscrollbars";
 
-		function initScrollbars() {
-			if (typeof window === "undefined") return;
-			OverlayScrollbars(document.body, {
-				scrollbars: {
-					theme: "os-theme-cvsa",
-					autoHide: "leave",
-					autoHideDelay: 400,
-				},
-			});
-
-			document.querySelectorAll<HTMLElement>(".cvsa-scroll").forEach((el) => {
-				if (!OverlayScrollbars(el)) {
-					OverlayScrollbars(el, {
+		const scrollTargets = ".cvsa-scroll, .overflow-auto, .overflow-x-auto, .overflow-y-auto";
+		const instances = new Map<HTMLElement, ReturnType<typeof OverlayScrollbars>>();
+		let observer: MutationObserver | undefined;
+		let scheduled = false;
+		function syncScrollbars() {
+			scheduled = false;
+			for (const [element, instance] of instances) {
+				if (!element.isConnected) {
+					instance.destroy();
+					instances.delete(element);
+				}
+			}
+			document.querySelectorAll<HTMLElement>(scrollTargets).forEach((element) => {
+				if (
+					instances.has(element) ||
+					element.matches(
+						"[data-overlayscrollbars-viewport], [data-overlayscrollbars-content]"
+					)
+				)
+					return;
+				instances.set(
+					element,
+					OverlayScrollbars(element, {
 						scrollbars: {
 							theme: "os-theme-cvsa",
-							autoHide: "scroll",
+							autoHide: "leave",
 							autoHideDelay: 300,
 						},
-					});
-				}
+					})
+				);
 			});
 		}
-
-		if (document.readyState === "loading") {
-			document.addEventListener("DOMContentLoaded", initScrollbars);
-		} else {
-			initScrollbars();
+		function initScrollbars() {
+			OverlayScrollbars(document.body, {
+				scrollbars: { theme: "os-theme-cvsa", autoHide: "leave", autoHideDelay: 400 },
+			});
+			syncScrollbars();
+			observer?.disconnect();
+			observer = new MutationObserver(() => {
+				if (!scheduled) {
+					scheduled = true;
+					requestAnimationFrame(syncScrollbars);
+				}
+			});
+			observer.observe(document.body, { childList: true, subtree: true });
 		}
+		document.addEventListener("astro:before-swap", () => {
+			observer?.disconnect();
+			for (const instance of instances.values()) instance.destroy();
+			instances.clear();
+			OverlayScrollbars(document.body)?.destroy();
+		});
+		document.addEventListener("astro:page-load", initScrollbars);
+		if (document.readyState === "loading")
+			document.addEventListener("DOMContentLoaded", initScrollbars, { once: true });
+		else initScrollbars();
 		</script>
 	</body>
 </html>

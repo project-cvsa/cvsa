@@ -181,6 +181,8 @@ export const DiscoveryFilterConfigDtoSchema = z.object({
 export const ClassifierHealthDtoSchema = z.object({
 	reachable: z.boolean(),
 	modelsLoaded: z.boolean().nullable(),
+	modelVersion: z.string().nullable().optional(),
+	error: z.string().nullable().optional(),
 });
 
 export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
@@ -387,6 +389,7 @@ export const DiscoverySampleListQuerySchema = z.object({
 	minConfidence: z.coerce.number().min(0).max(1).optional(),
 	maxConfidence: z.coerce.number().min(0).max(1).optional(),
 	search: z.string().min(1).optional(),
+	source: z.enum(["search", "related", "manual", "hot_sample"]).optional(),
 	sortBy: z.enum(["confidence", "capturedAt", "aid"]).optional(),
 	sortOrder: z.enum(["asc", "desc"]).optional(),
 });
@@ -443,6 +446,7 @@ export const CrawlerStatsWindowSchema = z.enum(["5m", "15m", "30m", "1h", "6h", 
 
 export const CrawlerStatsQuerySchema = z.object({
 	window: CrawlerStatsWindowSchema.default("1h"),
+	minutes: z.coerce.number().int().min(1).max(10080).optional(),
 });
 
 /** A single persisted rollup bucket for one metric group. */
@@ -473,21 +477,46 @@ export const CrawlerQueueSnapshotSchema = z.object({
 	oldestWaitSec: z.number().nonnegative(),
 });
 
+export const DiscoveryJobProgressSchema = z.object({
+	stage: z.enum([
+		"starting",
+		"searching",
+		"evaluating",
+		"expanding",
+		"sampling",
+		"completed",
+		"failed",
+	]),
+	target: z.string().nullable(),
+	page: z.number().int().optional(),
+	order: z.string().optional(),
+	candidates: z.number().int().nonnegative(),
+	queued: z.number().int().nonnegative(),
+	updatedAt: z.string(),
+});
+export type DiscoveryJobProgress = z.infer<typeof DiscoveryJobProgressSchema>;
+
+export const DiscoveryActivitySchema = z.object({
+	id: z.string(),
+	name: z.string(),
+	state: z.string(),
+	target: z.string().nullable(),
+	timestamp: z.number(),
+	processedOn: z.number().nullable(),
+	finishedOn: z.number().nullable(),
+	failedReason: z.string().nullable(),
+	progress: DiscoveryJobProgressSchema.nullable(),
+});
+
+export const DiscoveryQueuedResponseSchema = z.object({ queued: z.literal(true) });
+export type DiscoveryQueuedResponse = z.infer<typeof DiscoveryQueuedResponseSchema>;
+
 export const DiscoveryStatusDtoSchema = z.object({
 	active: z.boolean(),
 	counts: CrawlerQueueSnapshotSchema,
-	activeJobs: z.array(
-		z.object({
-			id: z.string(),
-			name: z.string(),
-			state: z.string(),
-			target: z.string().nullable().optional(),
-			timestamp: z.number(),
-		})
-	),
-	currentStage: z.string().optional(),
-	currentTarget: z.string().nullable().optional(),
-	candidatesScannedCount: z.number().int().nonnegative().optional(),
+	activeJobs: z.array(DiscoveryActivitySchema),
+	recentJobs: z.array(DiscoveryActivitySchema),
+	candidatesPerMin: z.number().nonnegative(),
 });
 export type DiscoveryStatusDto = z.infer<typeof DiscoveryStatusDtoSchema>;
 
@@ -499,6 +528,7 @@ export const CrawlerLatencyStatsSchema = z.object({
 
 export const CrawlerOverviewStatsSchema = z.object({
 	window: CrawlerStatsWindowSchema,
+	minutes: z.number().int().min(1).max(10080).optional(),
 	// Throughput
 	jobsPerSec: z.number().nonnegative(),
 	jobsPerMin: z.number().nonnegative(),
@@ -548,7 +578,7 @@ export type CrawlerOverviewStats = z.infer<typeof CrawlerOverviewStatsSchema>;
 
 export const CrawlerQueueJobItemSchema = z.object({
 	id: z.string(),
-	queue: z.string(),
+	queue: z.enum(["tracking", "discovery"]),
 	name: z.string(),
 	target: z.string().nullable().optional(),
 	state: z.string(),
@@ -566,10 +596,19 @@ export const CrawlerQueueJobDetailSchema = CrawlerQueueJobItemSchema.extend({
 	finishedOn: z.number().nullable().optional(),
 });
 
+export const CrawlerQueueNameSchema = z.enum(["tracking", "discovery"]);
+export type CrawlerQueueName = z.infer<typeof CrawlerQueueNameSchema>;
+export const CrawlerQueueJobParamsSchema = z.object({
+	queue: CrawlerQueueNameSchema,
+	id: z.string().min(1).max(256),
+});
+export const CrawlerJobActionResponseSchema = z.object({ ok: z.literal(true) });
+
 export const CrawlerQueueJobsQuerySchema = z.object({
-	queue: z.string().optional(),
-	state: z.string().optional(),
+	queue: z.enum(["all", "tracking", "discovery"]).optional(),
+	state: z.enum(["all", "active", "waiting", "delayed", "failed", "completed"]).optional(),
 	limit: z.coerce.number().int().min(1).max(100).default(50),
+	offset: z.coerce.number().int().min(0).optional(),
 });
 
 export const CrawlerQueueJobsResponseSchema = z.object({

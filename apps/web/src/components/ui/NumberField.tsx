@@ -1,3 +1,4 @@
+import { controlSizeClass } from "./controlStyles";
 import clsx from "clsx";
 import { Show, createUniqueId, splitProps } from "solid-js";
 
@@ -24,11 +25,11 @@ export interface NumberFieldProps {
 
 const sizeStyles: Record<NumberFieldSize, { input: string; label: string }> = {
 	sm: {
-		input: "h-8 px-2.5 text-xs",
+		input: "px-2.5",
 		label: "ts-caption",
 	},
 	md: {
-		input: "h-10 px-3 text-sm",
+		input: "px-3",
 		label: "ts-label",
 	},
 };
@@ -100,6 +101,7 @@ export default function NumberField(props: NumberFieldProps) {
 					}}
 					class={clsx(
 						"w-full border bg-surface text-primary transition-colors focus-visible:outline-none focus:border-primary",
+						controlSizeClass(size()),
 						sizeStyles[size()].input,
 						local.errorText
 							? "border-error focus-visible:outline-error"

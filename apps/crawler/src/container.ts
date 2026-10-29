@@ -1,3 +1,5 @@
+import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
+import { DiscoveryAdminService } from "./crawler/discovery/adminService";
 import { ManualSnapshotService } from "./crawler/tracking/manualSnapshot";
 import {
 	BilibiliClient,
@@ -144,6 +146,16 @@ export const discoveryWorker = createDiscoveryWorker(
 	discoveryPipelineProcessor,
 	3,
 	statsCollector
+);
+export const crawlerAdminStatsService = new CrawlerAdminStatsService(
+	{ tracking: snapshotQueue, discovery: discoveryQueue },
+	statsCollector
+);
+export const discoveryAdminService = new DiscoveryAdminService(
+	discoveryQueue,
+	discoveryRepository,
+	statsCollector,
+	trackingRepository
 );
 export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue);
 export const discoveryService = new DiscoveryService(

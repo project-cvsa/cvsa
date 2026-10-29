@@ -28,6 +28,47 @@ function isValidProxyUrl(value: string): boolean {
 	}
 }
 
+function RateLimitRow(props: {
+	limit: NetworkRateLimit;
+	onChange: (update: Partial<NetworkRateLimit>) => void;
+	onRemove: () => void;
+}) {
+	const t = getComponentT("crawler");
+	return (
+		<div class="flex items-end gap-3 p-3 bg-surface-container-low border border-border">
+			<NumberField
+				class="flex-1 min-w-0"
+				size="sm"
+				label={t("network.form.rateLimitDuration")}
+				min={1}
+				max={3600}
+				value={props.limit.durationSeconds}
+				onChange={(durationSeconds) => props.onChange({ durationSeconds })}
+				suffix="s"
+			/>
+			<NumberField
+				class="flex-1 min-w-0"
+				size="sm"
+				label={t("network.form.rateLimitMax")}
+				min={1}
+				max={1000000}
+				value={props.limit.maxRequests}
+				onChange={(maxRequests) => props.onChange({ maxRequests })}
+			/>
+			<Button
+				variant="outlined"
+				size="sm"
+				class="text-error shrink-0 w-8 p-0"
+				aria-label={t("common.delete")}
+				title={t("common.delete")}
+				onClick={props.onRemove}
+			>
+				<Trash2 class="w-4 h-4" />
+			</Button>
+		</div>
+	);
+}
+
 export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 	const t = getComponentT("crawler");
 
@@ -148,7 +189,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				/>
 			</Show>
 
-			<section class="flex flex-col gap-3 pt-2 border-t border-border">
+			<section class="flex flex-col gap-3 pt-2">
 				<div class="flex items-center justify-between gap-3">
 					<h3 class="ts-label text-primary font-medium">
 						{t("network.adapters.col.rateLimit")}
@@ -174,53 +215,21 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				<div class="flex flex-col gap-2.5">
 					<Index each={limits()}>
 						{(limit, index) => (
-							<div class="flex items-end gap-3 p-3 bg-surface-container-low border border-border">
-								<div class="flex-1 min-w-0">
-									<NumberField
-										size="sm"
-										label={t("network.form.rateLimitDuration")}
-										min={1}
-										max={3600}
-										value={limit().durationSeconds}
-										onChange={(value) =>
-											updateLimit(index, { durationSeconds: value })
-										}
-										suffix="s"
-									/>
-								</div>
-								<div class="flex-1 min-w-0">
-									<NumberField
-										size="sm"
-										label={t("network.form.rateLimitMax")}
-										min={1}
-										max={1000000}
-										value={limit().maxRequests}
-										onChange={(value) =>
-											updateLimit(index, { maxRequests: value })
-										}
-									/>
-								</div>
-								<Button
-									variant="outlined"
-									size="sm"
-									class="text-error border-error/30 hover:border-error hover:bg-error/10 shrink-0 h-9 w-9 p-0 flex items-center justify-center mb-0.5"
-									aria-label={t("common.delete")}
-									title={t("common.delete")}
-									onClick={() =>
-										setLimits((current) =>
-											current.filter((_, position) => position !== index)
-										)
-									}
-								>
-									<Trash2 class="w-4 h-4" />
-								</Button>
-							</div>
+							<RateLimitRow
+								limit={limit()}
+								onChange={(update) => updateLimit(index, update)}
+								onRemove={() =>
+									setLimits((current) =>
+										current.filter((_, position) => position !== index)
+									)
+								}
+							/>
 						)}
 					</Index>
 				</div>
 			</section>
 
-			<div class="flex items-center justify-end gap-3 pt-4 border-t border-border">
+			<div class="flex items-center justify-end gap-3 pt-4">
 				<Button variant="ghost" size="md" onClick={props.onCancel}>
 					{t("common.cancel")}
 				</Button>

@@ -216,8 +216,8 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	}
 
 	/** Fold every bucket inside `window` into a single snapshot. */
-	getWindow(window: StatsWindow, nowMs = this.now()): StatsWindowMetrics {
-		const from = nowMs - WINDOW_MS[window];
+	getWindow(window: StatsWindow, nowMs = this.now(), minutes?: number): StatsWindowMetrics {
+		const from = nowMs - (minutes === undefined ? WINDOW_MS[window] : minutes * BUCKET_MS);
 		const counters = emptyCounters();
 		const errors = emptyErrors();
 		const latency: Record<StatsLatencyKind, number[][]> = { task: [], api: [], inference: [] };
@@ -248,9 +248,9 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	 * tracking backlog. Both probes are optional so the collector still answers
 	 * when no queue or repository is wired (tests, tooling).
 	 */
-	async getOverviewStats(window: StatsWindow): Promise<StatsOverview> {
+	async getOverviewStats(window: StatsWindow, minutes?: number): Promise<StatsOverview> {
 		const nowMs = this.now();
-		const metrics = this.getWindow(window, nowMs);
+		const metrics = this.getWindow(window, nowMs, minutes);
 
 		let queueCounts: CrawlerJobCounts[] = [];
 		if (this.overviewDeps.queueCounts) {
@@ -376,9 +376,16 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		const rows = await this.rollup.listRollup(
 			`${STATS_ROLLUP_METRIC_GROUP}:${window}`,
 			toInstant(since),
-			limit
+			10080
 		);
-		return rows.map((row) => ({
+		const sampled =
+			rows.length <= limit
+				? rows
+				: Array.from(
+						{ length: limit },
+						(_, index) => rows[Math.round((index * (rows.length - 1)) / (limit - 1))]
+					).filter((row) => row !== undefined);
+		return sampled.map((row) => ({
 			bucketTime: row.bucketTime.toString(),
 			metrics: row.metrics,
 		}));
