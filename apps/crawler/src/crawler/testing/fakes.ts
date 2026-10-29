@@ -7,6 +7,7 @@ import type {
 	VideoTracking,
 } from "@cvsa/snapshot-db";
 import { toInstant, toJson } from "@cvsa/snapshot-db";
+import type { JobType, JobsOptions } from "bullmq";
 import type { IDiscoveryRepository } from "../discovery/repository.interface";
 import type { DiscoveryFilterConfigStore } from "../discovery/filter";
 import type {
@@ -37,10 +38,82 @@ import type { TrackingState } from "../tracking/types";
 export interface FakeMqState {
 	connected: boolean;
 	closed: boolean;
-	queuedJobs: Array<{ queue: string; name: string; data: unknown }>;
+	queuedJobs: FakeMqJob[];
 	workerNames: string[];
 	/** Counts returned by `getJobCounts`; tests mutate this to simulate depth. */
 	jobCounts: CrawlerJobCounts;
+	/** Default job options each queue was created with. */
+	queueOptions: Record<string, JobsOptions>;
+}
+
+/** One queued job, shaped closely enough to the BullMQ job for admin read models. */
+export interface FakeMqJob {
+	/** Queue-scoped identifier, matching the BullMQ contract for `getJobDetail`. */
+	id: string;
+	queue: string;
+	name: string;
+	data: unknown;
+	state: JobType;
+	attempts: number;
+	failedReason: string | null;
+	timestamp: number;
+	progress: unknown;
+	processedOn: number | null;
+	finishedOn: number | null;
+	opts: JobsOptions | undefined;
+	stacktrace: string[] | null;
+	returnvalue?: unknown;
+}
+
+function isCountsOverride(counts: CrawlerJobCounts): boolean {
+	return Object.values(counts).some((value) => value > 0);
+}
+
+function countJobs(jobs: readonly FakeMqJob[]): CrawlerJobCounts {
+	const counts: CrawlerJobCounts = {
+		waiting: 0,
+		active: 0,
+		delayed: 0,
+		failed: 0,
+		completed: 0,
+	};
+	for (const job of jobs) {
+		switch (job.state) {
+			case "waiting":
+				counts.waiting += 1;
+				break;
+			case "active":
+				counts.active += 1;
+				break;
+			case "delayed":
+				counts.delayed += 1;
+				break;
+			case "failed":
+				counts.failed += 1;
+				break;
+			case "completed":
+				counts.completed += 1;
+				break;
+			default:
+				break;
+		}
+	}
+	return counts;
+}
+
+function jobSnapshot(job: FakeMqJob): CrawlerQueueJobSnapshot {
+	return {
+		id: job.id,
+		name: job.name,
+		data: job.data,
+		state: job.state,
+		attempts: job.attempts,
+		failedReason: job.failedReason,
+		timestamp: job.timestamp,
+		progress: job.progress,
+		processedOn: job.processedOn,
+		finishedOn: job.finishedOn,
+	};
 }
 
 export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
@@ -50,6 +123,7 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 		queuedJobs: [],
 		workerNames: [],
 		jobCounts: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0 },
+		queueOptions: {},
 	};
 
 	return {
@@ -57,50 +131,78 @@ export function createFakeMq(): CrawlerMq & { state: FakeMqState } {
 		async connect(): Promise<void> {
 			state.connected = true;
 		},
-		createQueue<T>(name: string): CrawlerQueue<T> {
+		createQueue<T>(name: string, options: JobsOptions = {}): CrawlerQueue<T> {
+			state.queueOptions[name] = options;
+			const queueJobs = (): FakeMqJob[] =>
+				state.queuedJobs.filter((job) => job.queue === name);
 			return {
-				async add(jobName: string, data: T): Promise<void> {
-					state.queuedJobs.push({ queue: name, name: jobName, data });
+				async add(jobName: string, data: T, jobOptions: JobsOptions = {}): Promise<void> {
+					// BullMQ merges per-add options over the queue's default options.
+					const effectiveOptions: JobsOptions = { ...options, ...jobOptions };
+					// Queue-scoped ids mirror BullMQ, where a job id is only unique
+					// inside its own queue.
+					state.queuedJobs.push({
+						id: String(queueJobs().length + 1),
+						queue: name,
+						name: jobName,
+						data,
+						state:
+							effectiveOptions.delay !== undefined && effectiveOptions.delay > 0
+								? "delayed"
+								: "waiting",
+						attempts: 0,
+						failedReason: null,
+						timestamp: Date.now(),
+						progress: undefined,
+						processedOn: null,
+						finishedOn: null,
+						opts: effectiveOptions,
+						stacktrace: null,
+					});
 				},
 				async getJobCounts(): Promise<CrawlerJobCounts> {
-					return { ...state.jobCounts };
+					// A test can overwrite `jobCounts` to simulate backlog depth; while it
+					// holds the zero default the fake reports what it actually queued.
+					return isCountsOverride(state.jobCounts)
+						? { ...state.jobCounts }
+						: countJobs(queueJobs());
 				},
 				async getJobs(
-					states = ["waiting"],
+					states: JobType[] = ["active", "waiting", "delayed", "failed"],
 					limit = 50,
 					offset = 0
 				): Promise<CrawlerQueueJobSnapshot[]> {
-					if (!states.includes("waiting")) return [];
-					return state.queuedJobs
-						.filter((j) => j.queue === name)
-						.slice(offset, offset + limit)
-						.map((j, idx) => ({
-							id: String(idx + 1),
-							name: j.name,
-							data: j.data,
-							state: "waiting",
-							attempts: 0,
-							timestamp: Date.now(),
-						}));
+					if (limit <= 0) return [];
+					const wanted = new Set<string>(states);
+					// Insertion order, like reading a queue from its oldest entry.
+					return queueJobs()
+						.filter((job) => wanted.has(job.state))
+						.slice(Math.max(0, offset), Math.max(0, offset) + limit)
+						.map(jobSnapshot);
 				},
 				async getJobDetail(id: string) {
-					const matched = state.queuedJobs
-						.map((j, idx) => ({ j, idx }))
-						.find(({ idx }) => String(idx + 1) === id);
-					if (!matched) return null;
+					const job = queueJobs().find((candidate) => candidate.id === id);
+					if (!job) return null;
 					return {
-						id,
-						name: matched.j.name,
-						data: matched.j.data,
-						state: "waiting",
-						attempts: 0,
-						timestamp: Date.now(),
+						...jobSnapshot(job),
+						opts: job.opts,
+						stacktrace: job.stacktrace,
+						returnvalue: job.returnvalue,
 					};
 				},
-				async retryJob(_id: string) {
+				async retryJob(id: string) {
+					const job = queueJobs().find((candidate) => candidate.id === id);
+					if (job?.state !== "failed") return false;
+					job.state = "waiting";
+					job.failedReason = null;
 					return true;
 				},
-				async removeJob(_id: string) {
+				async removeJob(id: string) {
+					const index = state.queuedJobs.findIndex(
+						(candidate) => candidate.queue === name && candidate.id === id
+					);
+					if (index < 0) return false;
+					state.queuedJobs.splice(index, 1);
 					return true;
 				},
 				async close(): Promise<void> {},

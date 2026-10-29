@@ -107,20 +107,26 @@ export function seriesMetrics(
 	};
 }
 
+/** Effective window duration: an explicit `minutes` range overrides the preset. */
+function windowSecondsFor(window: CrawlerStatsWindow, minutes?: number): number {
+	return minutes === undefined ? WINDOW_SECONDS[window] : minutes * 60;
+}
+
 async function readSeries(
 	statsCollector: CrawlerStatsCollector,
 	window: CrawlerStatsWindow,
 	minutes?: number
 ): Promise<CrawlerStatsRollupPoint[]> {
-	const since = new Date(
-		Date.now() - (minutes === undefined ? WINDOW_SECONDS[window] : minutes * 60) * 1_000
-	);
+	const windowSeconds = windowSecondsFor(window, minutes);
+	const since = new Date(Date.now() - windowSeconds * 1_000);
 	try {
 		const rows = await statsCollector.getHistory(window, since);
 		return rows.map((row) => ({
 			bucketTime: row.bucketTime,
 			metricGroup: `crawler:${window}`,
-			metrics: seriesMetrics(flattenMetrics(row.metrics), WINDOW_SECONDS[window]),
+			// Chart rates must divide by the range the operator actually asked for;
+			// reusing the preset width mislabels custom ranges (e.g. 90 minutes).
+			metrics: seriesMetrics(flattenMetrics(row.metrics), windowSeconds),
 		}));
 	} catch {
 		// Rollup history is a chart nicety; the live counters must still answer.
@@ -171,7 +177,7 @@ export class CrawlerAdminStatsService {
 			readSeries(this.collector, window, minutes),
 		]);
 
-		const windowSeconds = minutes === undefined ? WINDOW_SECONDS[window] : minutes * 60;
+		const windowSeconds = windowSecondsFor(window, minutes);
 		const windowMinutes = windowSeconds / 60;
 		const counters = overview.metrics.counters;
 		const errors = overview.metrics.errors;

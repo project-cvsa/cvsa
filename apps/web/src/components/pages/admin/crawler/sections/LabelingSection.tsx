@@ -250,7 +250,10 @@ export default function LabelingSection(props: { active: boolean }) {
 						</p>
 					)}
 				</Show>
-				<div class="cvsa-scroll overflow-x-auto bg-surface" aria-busy={loading()}>
+				<div
+					class="cvsa-scroll overflow-x-auto border border-border bg-surface"
+					aria-busy={loading()}
+				>
 					<div class="min-w-[1000px]">
 						<For
 							each={samples()?.items}

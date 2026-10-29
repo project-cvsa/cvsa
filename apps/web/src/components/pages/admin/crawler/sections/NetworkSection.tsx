@@ -27,6 +27,15 @@ type NetworkSectionProps = {
 	refreshStatus: () => Promise<void>;
 };
 
+function RevisionBadge(props: { revision: number }) {
+	const t = getComponentT("crawler");
+	return (
+		<Badge variant="neutral" size="sm">
+			{t("network.adapters.revision").replace("{revision}", String(props.revision))}
+		</Badge>
+	);
+}
+
 export default function NetworkSection(props: NetworkSectionProps) {
 	const t = getComponentT("crawler");
 
@@ -227,14 +236,7 @@ export default function NetworkSection(props: NetworkSectionProps) {
 					<>
 						<h2 class="text-sm">{t("tabs.network")}</h2>
 						<Show when={networkDoc()}>
-							{(doc) => (
-								<div class="flex items-center gap-2 text-xs text-secondary">
-									<span class="text-tertiary">{t("audit.revision")}:</span>
-									<Badge variant="neutral" size="sm">
-										Rev {doc().revision}
-									</Badge>
-								</div>
-							)}
+							{(doc) => <RevisionBadge revision={doc().revision} />}
 						</Show>
 					</>
 				}

@@ -2,6 +2,7 @@ import { Show } from "solid-js";
 import clsx from "clsx";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
+import { CONTROL_HEIGHT } from "@components/ui/controlStyles";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { DiscoverySampleItem } from "@cvsa/contracts";
 import { formatPercent } from "../format";
@@ -54,7 +55,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 	return (
 		<article
 			class={clsx(
-				"p-3.5 flex items-center justify-between gap-4 transition-colors ",
+				"p-3.5 flex items-center justify-between gap-4 transition-colors",
 				props.focused ? "bg-surface-container-low" : "bg-surface hover:bg-hover"
 			)}
 		>
@@ -69,7 +70,8 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 				)}
 				aria-pressed={props.focused}
 				class={clsx(
-					"w-10 h-8 shrink-0 flex items-center justify-center text-xs font-semibold border transition-colors select-none",
+					"w-10 shrink-0 flex items-center justify-center text-xs font-semibold border transition-colors select-none",
+					CONTROL_HEIGHT.sm,
 					props.focused
 						? "bg-primary text-display-inverted border-primary"
 						: "bg-surface-container-high border-border text-tertiary hover:border-secondary hover:text-primary"
@@ -125,7 +127,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 			</div>
 
 			{/* Col 4: Confidence Score & Visual Meter */}
-			<div class="w-40 shrink-0 flex flex-col justify-center px-4  gap-1.5">
+			<div class="w-40 shrink-0 flex flex-col justify-center px-4 gap-1.5">
 				<div class="flex items-center justify-between text-xs">
 					<span class="text-tertiary">{t("discoveryUi.confidence")}</span>
 					<span class="font-semibold text-primary">
@@ -150,7 +152,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 			</div>
 
 			{/* Col 5: Actions - Fixed width to prevent any layout jitter */}
-			<div class="w-64 shrink-0 flex items-center justify-end gap-2  pl-4">
+			<div class="w-64 shrink-0 flex items-center justify-end gap-2 pl-4">
 				<Button
 					size="sm"
 					variant={props.item.humanLabel === 1 ? "filled" : "outlined"}

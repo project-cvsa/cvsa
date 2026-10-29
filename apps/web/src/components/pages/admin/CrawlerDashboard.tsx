@@ -1,6 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
-import Badge from "@components/ui/Badge";
+import Badge, { type BadgeVariant } from "@components/ui/Badge";
 import Tabs, { type TabItem } from "@components/ui/Tabs";
 import { ToastContainer } from "@components/ui/Toast";
 import { api } from "@lib/api";
@@ -95,6 +95,9 @@ export default function CrawlerDashboard() {
 		statusData()?.adapters.filter((a) => a.enabled && a.healthState.toLowerCase() === "healthy")
 			.length ?? 0;
 	const totalAdaptersCount = () => statusData()?.adapters.length ?? 0;
+	const statusBadgeVariant = (): BadgeVariant => (statusData()?.ready ? "success" : "warning");
+	const statusBadgeLabel = () =>
+		statusData()?.ready ? t("dashboard.ready") : t("dashboard.starting");
 
 	return (
 		<div class="crawler-panel flex flex-col gap-6">
@@ -106,17 +109,9 @@ export default function CrawlerDashboard() {
 					<div class="flex items-center gap-3">
 						<h1 class="ts-heading-1 text-primary">{t("title")}</h1>
 						<Show when={statusData()}>
-							{(status) => (
-								<Badge
-									variant={status().ready ? "success" : "warning"}
-									dot
-									size="md"
-								>
-									{status().ready
-										? t("dashboard.ready")
-										: t("dashboard.starting")}
-								</Badge>
-							)}
+							<Badge variant={statusBadgeVariant()} dot size="md">
+								{statusBadgeLabel()}
+							</Badge>
 						</Show>
 					</div>
 				</div>

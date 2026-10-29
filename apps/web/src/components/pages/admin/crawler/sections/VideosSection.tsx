@@ -3,12 +3,12 @@ import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import Pagination from "../TablePagination";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
-import { TrackingVideoSortFieldSchema } from "@cvsa/contracts";
-import { createSignal, onMount, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import Select, { type SelectOption } from "@components/ui/Select";
 import TextField from "@components/ui/TextField";
+import { controlSizeClass } from "@components/ui/controlStyles";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { TrackingVideoListResponse, TrackingVideoSortField } from "@cvsa/contracts";
@@ -63,13 +63,17 @@ function VideoIdentity(props: { item: TrackingVideo }) {
 
 export default function VideosSection() {
 	const t = getComponentT("crawler");
+	const deepLinkSearch =
+		new URLSearchParams(typeof window === "undefined" ? "" : window.location.search).get(
+			"search"
+		) ?? "";
 
 	const [stateFilter, setStateFilter] = createSignal<StateFilter>("all");
 	const [statusFilter, setStatusFilter] = createSignal<StatusFilter>("all");
 	const [sortBy, setSortBy] = createSignal<TrackingVideoSortField>("updatedAt");
 	const [sortOrder, setSortOrder] = createSignal<"asc" | "desc">("desc");
-	const [searchInput, setSearchInput] = createSignal("");
-	const [appliedSearch, setAppliedSearch] = createSignal("");
+	const [searchInput, setSearchInput] = createSignal(deepLinkSearch);
+	const [appliedSearch, setAppliedSearch] = createSignal(deepLinkSearch);
 	const [page, setPage] = createSignal(0);
 	const [list, setList] = createSignal<TrackingVideoListResponse | null>(null);
 	const [loadingList, setLoadingList] = createSignal(false);
@@ -134,11 +138,6 @@ export default function VideosSection() {
 		void loadList();
 	};
 
-	onMount(() => {
-		const search = new URLSearchParams(window.location.search).get("search") ?? "";
-		setSearchInput(search);
-		setAppliedSearch(search);
-	});
 	useCrawlerRefresh("videos", () => {
 		if (!loadingList()) void loadList();
 	});
@@ -220,7 +219,7 @@ export default function VideosSection() {
 			cell: (item) => (
 				<a
 					href={`/admin/crawler/video/${item.aid}`}
-					class="inline-flex items-center gap-1.5 px-3 h-8 text-xs font-medium border border-border bg-surface text-primary hover:bg-hover transition-colors"
+					class={`inline-flex items-center gap-1.5 px-3 ${controlSizeClass("sm")} font-medium border border-border bg-surface text-primary hover:bg-hover transition-colors`}
 				>
 					<Eye class="w-3.5 h-3.5" />
 					{t("videos.action.detail")}
@@ -312,25 +311,6 @@ export default function VideosSection() {
 						<Search class="w-3.5 h-3.5" />
 					</Button>
 				</div>
-			</div>
-			<div class="w-48">
-				<Select
-					size="sm"
-					aria-label={t("audit.sort")}
-					value={sortBy()}
-					options={[
-						"views",
-						"velocity",
-						"nextSnapshotAt",
-						"consecutiveFails",
-						"publishedAt",
-						"updatedAt",
-					].map((value) => ({ value, label: t(`audit.videoSort.${value}`) }))}
-					onValueChange={(value) => {
-						const field = TrackingVideoSortFieldSchema.safeParse(value);
-						if (field.success) toggleSort(field.data);
-					}}
-				/>
 			</div>
 
 			<Show when={listError() && list()}>

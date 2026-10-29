@@ -61,11 +61,12 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 					limit = 50,
 					offset = 0
 				): Promise<CrawlerQueueJobSnapshot[]> => {
-					const bullJobs = await queue.getJobs(
-						types,
-						offset,
-						offset + Math.max(0, limit - 1)
-					);
+					// BullMQ reads a negative range (limit <= 0) as "from the end of the
+					// list", so an explicitly empty page must short-circuit instead of
+					// returning a stray job.
+					if (limit <= 0) return [];
+					const start = Math.max(0, offset);
+					const bullJobs = await queue.getJobs(types, start, start + limit - 1);
 					return Promise.all(
 						bullJobs.map(async (job) => {
 							const state = await job.getState();

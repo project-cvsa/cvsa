@@ -63,6 +63,8 @@ function AdapterCard(props: AdapterCardProps) {
 					.map((limit) => `${limit.maxRequests}/${limit.durationSeconds}s`)
 					.join(", ")
 			: t("common.unlimited");
+	const resultLabel = (result: TestNetworkAdapterResponse) =>
+		result.ok ? `${result.latencyMs} ms` : result.error || t("common.error");
 	const metrics = () => [
 		{ label: t("network.adapters.col.weight"), value: props.adapter.baseWeight },
 		{
@@ -76,7 +78,12 @@ function AdapterCard(props: AdapterCardProps) {
 				<span>
 					{props.runtime?.requests ?? 0}
 					<Show when={props.runtime?.failures}>
-						<span class="text-error ml-1">({props.runtime?.failures} err)</span>
+						<span class="text-error ml-1">
+							{t("network.adapters.errorCount").replace(
+								"{count}",
+								String(props.runtime?.failures ?? 0)
+							)}
+						</span>
 					</Show>
 				</span>
 			),
@@ -135,9 +142,7 @@ function AdapterCard(props: AdapterCardProps) {
 									{t("network.adapters.latency")}
 								</dt>
 								<dd class={result().ok ? "text-success" : "text-error"}>
-									{result().ok
-										? `${result().latencyMs} ms`
-										: result().error || t("common.error")}
+									{resultLabel(result())}
 								</dd>
 							</div>
 						)}

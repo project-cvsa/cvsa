@@ -1,83 +1,60 @@
-/** Display labels for crawler state values the console renders as prose. */
-
-const DECISION_LABELS: Record<string, string> = {
-	whitelist: "Whitelist",
-	model_accepted: "Model accepted",
-	model_rejected: "Model rejected (sampled)",
-	model_rejected_sampled: "Model rejected (sampled)",
-};
-
-/** Label for a stored discovery `decision`; unknown values render as-is. */
-export function describeDecision(decision: string): string {
-	return DECISION_LABELS[decision] ?? decision;
-}
+/** Message keys for crawler values the console renders as prose. */
 
 /**
- * Label for the tracking row's `filterDecision` (`accepted` / `rejected`),
- * which records whether the video entered tracking.
+ * Locale keys for the metadata fields the crawler records in history. Covers
+ * both the currently tracked fields and the extended v2 fields the API may
+ * return, so a future tracked field still renders a translated label.
  */
-export function describeFilterDecision(decision: string): string {
-	if (decision === "accepted") return "Accepted";
-	if (decision === "rejected") return "Rejected";
-	return decision;
-}
-
-/** Label for a sample's `humanLabel` column. */
-export function describeHumanLabel(humanLabel: number | null): string {
-	if (humanLabel === 1) return "Song";
-	if (humanLabel === 0) return "Not song";
-	return "Unlabeled";
-}
-
-/** Label for a tracking state. */
-export function describeTrackingState(state: string): string {
-	switch (state) {
-		case "new":
-			return "New";
-		case "regular":
-			return "Regular";
-		case "milestone":
-			return "Milestone";
-		case "archive":
-			return "Archive";
-		default:
-			return state;
-	}
-}
-
-/** Title-case label for an arbitrary status token (`healthy` -> `Healthy`). */
-export function describeStatus(status: string): string {
-	if (!status) return "Unknown";
-	return status.charAt(0).toUpperCase() + status.slice(1);
-}
-
-const METADATA_CHANGE_LABELS: Record<string, string> = {
-	created: "Created",
-	updated: "Updated",
-	status_changed: "Status changed",
+const METADATA_FIELD_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+	title: "videoDetail.field.title",
+	description: "videoDetail.field.description",
+	pic: "videoDetail.field.pic",
+	tid: "videoDetail.field.tid",
+	tname: "videoDetail.field.tname",
+	ownerName: "videoDetail.field.ownerName",
+	duration: "videoDetail.field.duration",
+	state: "videoDetail.field.state",
+	videoStatus: "videoDetail.field.videoStatus",
+	tags: "videoDetail.field.tags",
+	pages: "videoDetail.field.pages",
+	staff: "videoDetail.field.staff",
+	tidV2: "videoDetail.field.tidV2",
+	tnameV2: "videoDetail.field.tnameV2",
+	cid: "videoDetail.field.cid",
+	videos: "videoDetail.field.videos",
+	dynamic: "videoDetail.field.dynamic",
+	dimension: "videoDetail.field.dimension",
+	rights: "videoDetail.field.rights",
+	honorReply: "videoDetail.field.honorReply",
+	descV2: "videoDetail.field.descV2",
+	modelScore: "videoDetail.field.modelScore",
+	modelVersion: "videoDetail.field.modelVersion",
+	filterDecision: "videoDetail.field.filterDecision",
+	discoverySource: "videoDetail.field.discoverySource",
 };
 
-/** Label for a metadata history row's `changeType`. */
-export function describeMetadataChange(changeType: string): string {
-	return METADATA_CHANGE_LABELS[changeType] ?? changeType;
+/** Locale key for a metadata history field, or `null` when it has no translation. */
+export function metadataFieldMessageKey(field: string): string | null {
+	return METADATA_FIELD_MESSAGE_KEYS[field] ?? null;
 }
 
-const METADATA_FIELD_LABELS: Record<string, string> = {
-	title: "Title",
-	description: "Description",
-	pic: "Cover",
-	tid: "Category ID",
-	tname: "Category",
-	ownerName: "Uploader",
-	duration: "Duration",
-	state: "State",
-	videoStatus: "Video status",
-	tags: "Tags",
-	pages: "Pages",
-	staff: "Staff",
+const METADATA_CHANGE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+	created: "videoDetail.changeType.created",
+	updated: "videoDetail.changeType.updated",
+	status_changed: "videoDetail.statusChanged",
 };
 
-/** Label for a changed metadata field inside the history diff. */
-export function describeMetadataField(field: string): string {
-	return METADATA_FIELD_LABELS[field] ?? field;
+/** Locale key for a metadata history `changeType`, or `null` when unknown. */
+export function metadataChangeMessageKey(changeType: string): string | null {
+	return METADATA_CHANGE_MESSAGE_KEYS[changeType] ?? null;
+}
+
+const FILTER_DECISION_MESSAGE_KEYS: Readonly<Record<string, string>> = {
+	accepted: "videoDetail.accepted",
+	rejected: "videoDetail.rejected",
+};
+
+/** Locale key for a stored `filterDecision` value, or `null` when unknown. */
+export function filterDecisionMessageKey(decision: string): string | null {
+	return FILTER_DECISION_MESSAGE_KEYS[decision] ?? null;
 }

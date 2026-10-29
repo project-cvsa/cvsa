@@ -2,6 +2,7 @@ import { AppError, type DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
+import type { JobsOptions } from "bullmq";
 import type { BilibiliClient } from "../bilibili";
 import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { CrawlerMq, CrawlerQueue, CrawlerWorker } from "../shared/types";
@@ -27,6 +28,29 @@ export type DiscoveryJobData =
 	| { type: "hot-sample"; limit?: number };
 
 export const DISCOVERY_QUEUE_NAME = "crawler-discovery";
+
+/**
+ * Retry policy for every discovery job.
+ *
+ * When the network pool is temporarily exhausted (all adapters circuit-open
+ * after 429 throttling) the scheduler answers `NO_AVAILABLE_ADAPTER` and the
+ * job throws. The shared defaults (3 attempts, 1s exponential) burn out within
+ * seconds, so a short outage permanently failed the whole detail backlog. The
+ * throttle cooldown keeps an adapter open for at least 60s, therefore the first
+ * retry waits 60s and the exponential ladder (60/120/240/480s) keeps deferring
+ * long enough for the pool to recover before the job is finally failed.
+ *
+ * Tracking (`snapshot-batch`) queue defaults are intentionally untouched.
+ */
+export const DISCOVERY_QUEUE_JOB_OPTIONS: JobsOptions = {
+	attempts: 5,
+	backoff: { type: "exponential", delay: 60_000 },
+};
+
+/** Builds the discovery queue with the retry policy above applied as its default. */
+export function createDiscoveryQueue(mq: CrawlerMq): CrawlerQueue<DiscoveryJobData> {
+	return mq.createQueue<DiscoveryJobData>(DISCOVERY_QUEUE_NAME, DISCOVERY_QUEUE_JOB_OPTIONS);
+}
 
 const DEFAULT_HOT_SAMPLE_LIMIT = 10;
 

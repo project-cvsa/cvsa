@@ -6,6 +6,9 @@ import {
 	changeTypeForDiff,
 	diffMetadata,
 	DiscoveryFilterService,
+	createDiscoveryQueue,
+	DISCOVERY_QUEUE_NAME,
+	DISCOVERY_QUEUE_JOB_OPTIONS,
 	DiscoveryPipelineProcessor,
 	DiscoveryScheduler,
 	DiscoveryService,
@@ -799,6 +802,50 @@ describe("DiscoveryPipelineProcessor", () => {
 		expect(samples[0]?.songProbability).toBe(0.2);
 	});
 
+	test("reports queued progress for search sweep candidates that are still untracked", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		tracking.trackings.set(500_003n, createTrackingRow(500_003n));
+		const mq = createFakeMq();
+		const queue = mq.createQueue<DiscoveryJobData>("crawler-discovery");
+		const client = createDetailClient(new Map(), {
+			searchResult: [
+				searchVideo(500_001, "【洛天依原创】a"),
+				searchVideo(500_002, "【洛天依原创】b"),
+				searchVideo(500_003, "【洛天依原创】c"),
+			],
+		});
+		const processor = new DiscoveryPipelineProcessor(client, repo, tracking, queue);
+		const progress: DiscoveryJobProgress[] = [];
+
+		await processor.processJob(
+			{
+				type: "search-sweep",
+				config: { keywords: ["洛天依原创"], orders: ["pubdate"], pagesPerQuery: 1 },
+			},
+			async (value) => {
+				progress.push(value);
+			}
+		);
+
+		expect(progress[0]).toMatchObject({
+			stage: "searching",
+			target: "洛天依原创",
+			candidates: 0,
+			queued: 0,
+		});
+		// The tracked candidate is filtered out, so the queued counter stops at two.
+		expect(progress.at(-1)).toMatchObject({
+			stage: "evaluating",
+			candidates: 3,
+			queued: 2,
+		});
+		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual([
+			"detail-500001",
+			"detail-500002",
+		]);
+	});
+
 	test("expands recommendations for hot sampled videos", async () => {
 		const repo = new InMemoryDiscoveryRepository();
 		repo.hotSampleAids = [800_001n, 800_002n];
@@ -843,5 +890,43 @@ describe("DiscoveryScheduler", () => {
 
 		await scheduler.triggerHotSample(3);
 		expect(mq.state.queuedJobs[3]?.name.startsWith("hot-sample-")).toBe(true);
+	});
+});
+
+describe("discovery queue retry policy", () => {
+	test("defers a job long enough for an exhausted adapter pool to recover", async () => {
+		const mq = createFakeMq();
+		const queue = createDiscoveryQueue(mq);
+
+		expect(mq.state.queueOptions[DISCOVERY_QUEUE_NAME]).toEqual(DISCOVERY_QUEUE_JOB_OPTIONS);
+		expect(DISCOVERY_QUEUE_JOB_OPTIONS).toMatchObject({
+			attempts: 5,
+			backoff: { type: "exponential", delay: 60_000 },
+		});
+
+		await queue.add("detail-1", {
+			type: "fetch-video-details",
+			aid: "1",
+			source: "manual",
+		});
+		expect(mq.state.queuedJobs[0]?.opts).toMatchObject({
+			attempts: 5,
+			backoff: { type: "exponential", delay: 60_000 },
+		});
+	});
+
+	test("keeps per-add options on top of the queue retry defaults", async () => {
+		const mq = createFakeMq();
+		const queue = createDiscoveryQueue(mq);
+		await queue.add(
+			"detail-2",
+			{ type: "fetch-video-details", aid: "2", source: "search" },
+			{ deduplication: { id: "detail-2" }, removeOnComplete: { age: 3600, count: 100 } }
+		);
+		expect(mq.state.queuedJobs[0]?.opts).toMatchObject({
+			attempts: 5,
+			backoff: { type: "exponential", delay: 60_000 },
+			deduplication: { id: "detail-2" },
+		});
 	});
 });

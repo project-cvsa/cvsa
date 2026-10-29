@@ -1,7 +1,6 @@
 import StateBadge from "../StateBadge";
 import { createSignal, onMount, Show } from "solid-js";
 import Button from "@components/ui/Button";
-import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
@@ -339,7 +338,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 								class="gap-1.5 border-error/40 text-error hover:bg-error/10 hover:border-error"
 							>
 								<Trash2 class="w-4 h-4" />
-								<span>移出追踪</span>
+								<span>{t("videoDetail.untrack")}</span>
 							</Button>
 						</Show>
 					</div>
@@ -354,55 +353,34 @@ export default function VideoDetailPage(props: { aid: string }) {
 				)}
 			</Show>
 
-			{/* Main Grid: Left Video Meta, Right Tracking State */}
 			<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-				{/* Video Metadata Card */}
-				<Card>
-					<CardHeader
-						variant="bordered"
-						title={
-							<span class="font-semibold text-primary">
-								{t("videoDetail.metadataTitle")}
-							</span>
+				<section class="flex flex-col gap-3">
+					<h3 class="ts-heading-3 text-primary">{t("videoDetail.metadataTitle")}</h3>
+					<Show
+						when={metadata()}
+						fallback={
+							<div class="py-12 text-center text-tertiary text-sm">
+								{loading() ? t("common.loading") : t("common.unknown")}
+							</div>
 						}
-					/>
-					<CardContent class="p-4 flex flex-col gap-4">
-						<Show
-							when={metadata()}
-							fallback={
-								<div class="py-12 text-center text-tertiary text-sm">
-									{loading() ? t("common.loading") : t("common.unknown")}
-								</div>
-							}
-						>
-							{(meta) => <VideoMetadataSummary data={meta()} />}
-						</Show>
-					</CardContent>
-				</Card>
+					>
+						{(meta) => <VideoMetadataSummary data={meta()} />}
+					</Show>
+				</section>
 
-				{/* Tracking & Lifecycle Metrics Card */}
-				<Card>
-					<CardHeader
-						variant="bordered"
-						title={
-							<span class="font-semibold text-primary">
-								{t("videoDetail.tracking")}
-							</span>
+				<section class="flex flex-col gap-3">
+					<h3 class="ts-heading-3 text-primary">{t("videoDetail.tracking")}</h3>
+					<Show
+						when={tracking()}
+						fallback={
+							<div class="py-12 text-center text-tertiary text-sm">
+								{loading() ? t("common.loading") : t("videoDetail.untracked")}
+							</div>
 						}
-					/>
-					<CardContent class="p-4 flex flex-col gap-4">
-						<Show
-							when={tracking()}
-							fallback={
-								<div class="py-12 text-center text-tertiary text-sm">
-									{loading() ? t("common.loading") : t("videoDetail.untracked")}
-								</div>
-							}
-						>
-							{(track) => <TrackingSummary data={track()} />}
-						</Show>
-					</CardContent>
-				</Card>
+					>
+						{(track) => <TrackingSummary data={track()} />}
+					</Show>
+				</section>
 			</div>
 
 			{/* History Table */}
@@ -413,8 +391,6 @@ export default function VideoDetailPage(props: { aid: string }) {
 				historyError={historyError}
 				loadingHistory={loadingHistory}
 				loadHistoryPage={(offset) => loadHistory(props.aid, offset)}
-				changeLabel={(v) => v}
-				fieldLabel={(v) => v}
 				pageSize={HISTORY_PAGE_SIZE}
 			/>
 		</div>

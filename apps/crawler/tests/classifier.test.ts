@@ -1,4 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import { DiscoveryFilterService } from "../src/crawler/discovery/filter";
 import {
 	VideoClassifierClient,
@@ -6,7 +7,9 @@ import {
 	type LocalClassifier,
 } from "../src/crawler/discovery/classifier";
 import {
+	defaultModelDir,
 	LocalAkariClassifier,
+	resolveModelDir,
 	type AkariHealth,
 	type AkariPrediction,
 	type AkariStatus,
@@ -246,6 +249,34 @@ describe("LocalAkariClassifier without ONNX artifacts", () => {
 			const classifier = new LocalAkariClassifier();
 			expect(classifier.embeddingPath).toBe("/srv/cvsa/model/embedding/model.onnx");
 			expect(classifier.classifierPath).toBe("/srv/cvsa/model/akari/3.17.onnx");
+		} finally {
+			if (previous === undefined) delete process.env.CRAWLER_MODEL_DIR;
+			else process.env.CRAWLER_MODEL_DIR = previous;
+		}
+	});
+
+	test("resolves the container model root from the module URL the image runs", () => {
+		// The production image runs `bun src/index.ts` from /app/apps/crawler, so the
+		// classifier module lives at /app/apps/crawler/src/ml/akari.ts and the mounted
+		// volume is /app/model. `process.cwd()` is not part of this computation.
+		const containerModuleUrl = "file:///app/apps/crawler/src/ml/akari.ts";
+
+		expect(defaultModelDir(containerModuleUrl)).toBe("/app/model");
+		expect(resolveModelDir(undefined, containerModuleUrl)).toBe("/app/model");
+		expect(resolveModelDir("/srv/cvsa/model", containerModuleUrl)).toBe("/srv/cvsa/model");
+	});
+
+	test("prefers an explicit model directory over the environment and module default", () => {
+		const previous = process.env.CRAWLER_MODEL_DIR;
+		delete process.env.CRAWLER_MODEL_DIR;
+		try {
+			expect(defaultModelDir()).toBe(
+				fileURLToPath(new URL("../../../model", import.meta.url))
+			);
+			expect(resolveModelDir("/tmp/explicit-model")).toBe("/tmp/explicit-model");
+
+			process.env.CRAWLER_MODEL_DIR = "/srv/cvsa/model";
+			expect(resolveModelDir(undefined)).toBe("/srv/cvsa/model");
 		} finally {
 			if (previous === undefined) delete process.env.CRAWLER_MODEL_DIR;
 			else process.env.CRAWLER_MODEL_DIR = previous;

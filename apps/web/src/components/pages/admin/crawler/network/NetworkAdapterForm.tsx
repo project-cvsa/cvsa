@@ -90,6 +90,9 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 			current.map((limit, position) => (position === index ? { ...limit, ...update } : limit))
 		);
 	};
+	const removeLimit = (index: number) => {
+		setLimits((current) => current.filter((_, position) => position !== index));
+	};
 
 	const typeOptions: SelectOption[] = [
 		{ value: "http-proxy", label: t("network.adapters.type.proxy") },
@@ -218,11 +221,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 							<RateLimitRow
 								limit={limit()}
 								onChange={(update) => updateLimit(index, update)}
-								onRemove={() =>
-									setLimits((current) =>
-										current.filter((_, position) => position !== index)
-									)
-								}
+								onRemove={() => removeLimit(index)}
 							/>
 						)}
 					</Index>

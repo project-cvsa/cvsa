@@ -19,9 +19,9 @@ import {
 	formatWaitSeconds,
 } from "../src/components/pages/admin/crawler/format";
 import {
-	describeDecision,
-	describeHumanLabel,
-	describeMetadataField,
+	filterDecisionMessageKey,
+	metadataChangeMessageKey,
+	metadataFieldMessageKey,
 } from "../src/components/pages/admin/crawler/labels";
 import {
 	formatFieldValue,
@@ -154,9 +154,9 @@ describe("metadata history diff", () => {
 		expect(formatFieldValue(7)).toBe("7");
 	});
 
-	test("labels known metadata fields and keeps unknown ones", () => {
-		expect(describeMetadataField("ownerName")).toBe("Uploader");
-		expect(describeMetadataField("customField")).toBe("customField");
+	test("maps metadata fields to locale message keys", () => {
+		expect(metadataFieldMessageKey("ownerName")).toBe("videoDetail.field.ownerName");
+		expect(metadataFieldMessageKey("customField")).toBeNull();
 	});
 });
 
@@ -205,11 +205,14 @@ describe("console formatting", () => {
 		expect(formatTags(null)).toEqual([]);
 	});
 
-	test("labels decisions and human labels", () => {
-		expect(describeDecision("model_rejected")).toBe("Model rejected (sampled)");
-		expect(describeHumanLabel(1)).toBe("Song");
-		expect(describeHumanLabel(0)).toBe("Not song");
-		expect(describeHumanLabel(null)).toBe("Unlabeled");
+	test("maps history change types and filter decisions to locale keys", () => {
+		expect(metadataChangeMessageKey("status_changed")).toBe("videoDetail.statusChanged");
+		expect(metadataChangeMessageKey("created")).toBe("videoDetail.changeType.created");
+		expect(metadataChangeMessageKey("updated")).toBe("videoDetail.changeType.updated");
+		expect(metadataChangeMessageKey("renamed")).toBeNull();
+		expect(filterDecisionMessageKey("accepted")).toBe("videoDetail.accepted");
+		expect(filterDecisionMessageKey("rejected")).toBe("videoDetail.rejected");
+		expect(filterDecisionMessageKey("pending")).toBeNull();
 	});
 });
 

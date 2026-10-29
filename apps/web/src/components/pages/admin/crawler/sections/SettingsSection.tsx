@@ -4,7 +4,6 @@ import { createMemo, createSignal, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Switch from "@components/ui/Switch";
 import Slider from "@components/ui/Slider";
-import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
@@ -22,64 +21,51 @@ function ModelParameters(props: {
 }) {
 	const t = getComponentT("crawler");
 	return (
-		<Card>
-			<CardHeader title={t("settings.parameters.title")} />
-			<CardContent class="flex flex-col gap-6">
-				{/* Model Enable Toggle */}
-				<div class="p-4 border border-border bg-surface-container-low flex items-center justify-between gap-4">
-					<div class="flex flex-col gap-1">
-						<span class="ts-label font-medium text-primary">
-							{t("settings.modelEnabled.title")}
-						</span>
-						<span class="ts-caption text-secondary">
-							{t("settings.modelEnabled.description")}
-						</span>
-					</div>
-					<Switch
-						checked={props.config.modelEnabled}
-						onChange={() =>
-							props.onChange({
-								modelEnabled: !props.config.modelEnabled,
-							})
-						}
-						aria-label={t("settings.modelEnabled.title")}
-					/>
-				</div>
+		<section class="flex flex-col gap-4">
+			<h3 class="ts-heading-3 text-primary">{t("settings.parameters.title")}</h3>
 
-				{/* Model Sliders */}
-				<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<div class="flex flex-col gap-2">
-						<Slider
-							label={t("settings.threshold.title")}
-							value={props.config.modelThreshold}
-							min={0.1}
-							max={0.99}
-							step={0.01}
-							formatValue={(val) => `${(val * 100).toFixed(0)}%`}
-							onChange={(val) => props.onChange({ modelThreshold: val })}
-						/>
-						<span class="text-caption text-tertiary text-xs">
-							{t("settings.threshold.description")}
-						</span>
-					</div>
-
-					<div class="flex flex-col gap-2">
-						<Slider
-							label={t("settings.sampleRate.title")}
-							value={props.config.rejectionSampleRate}
-							min={0}
-							max={0.5}
-							step={0.01}
-							formatValue={(val) => `${(val * 100).toFixed(1)}%`}
-							onChange={(val) => props.onChange({ rejectionSampleRate: val })}
-						/>
-						<span class="text-caption text-tertiary text-xs">
-							{t("settings.sampleRate.description")}
-						</span>
-					</div>
+			<div class="flex flex-wrap items-center justify-between gap-4">
+				<div class="flex flex-col gap-1">
+					<span class="ts-label font-medium text-primary">
+						{t("settings.modelEnabled.title")}
+					</span>
+					<span class="ts-caption text-secondary">
+						{t("settings.modelEnabled.description")}
+					</span>
 				</div>
-			</CardContent>
-		</Card>
+				<Switch
+					checked={props.config.modelEnabled}
+					onChange={() =>
+						props.onChange({
+							modelEnabled: !props.config.modelEnabled,
+						})
+					}
+					aria-label={t("settings.modelEnabled.title")}
+				/>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+				<Slider
+					label={t("settings.threshold.title")}
+					value={props.config.modelThreshold}
+					min={0.1}
+					max={0.99}
+					step={0.01}
+					formatValue={(val) => `${(val * 100).toFixed(0)}%`}
+					onChange={(val) => props.onChange({ modelThreshold: val })}
+				/>
+
+				<Slider
+					label={t("settings.sampleRate.title")}
+					value={props.config.rejectionSampleRate}
+					min={0}
+					max={0.5}
+					step={0.01}
+					formatValue={(val) => `${(val * 100).toFixed(1)}%`}
+					onChange={(val) => props.onChange({ rejectionSampleRate: val })}
+				/>
+			</div>
+		</section>
 	);
 }
 
@@ -154,6 +140,9 @@ export default function SettingsSection() {
 		if (current) setConfig({ ...current, ...updates });
 	};
 
+	const addIndicator = (value: string) => addKeyword("whitelistSongIndicators", value);
+	const removeIndicator = (value: string) => removeKeyword("whitelistSongIndicators", value);
+
 	useCrawlerRefresh("settings", () => void loadConfig());
 
 	return (
@@ -193,7 +182,6 @@ export default function SettingsSection() {
 				{(current) => (
 					<fieldset disabled={loading() || saving()} class="min-w-0 border-0 p-0">
 						<div class="flex flex-col gap-6">
-							{/* Search Rover Keywords */}
 							<KeywordListEditor
 								title={t("settings.searchKeywords.title")}
 								items={current().searchKeywords ?? []}
@@ -202,7 +190,6 @@ export default function SettingsSection() {
 								onRemove={(val) => removeKeyword("searchKeywords", val)}
 							/>
 
-							{/* Whitelist Lexicons */}
 							<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 								<KeywordListEditor
 									title={t("settings.singers.title")}
@@ -216,14 +203,11 @@ export default function SettingsSection() {
 									title={t("settings.indicators.title")}
 									items={current().whitelistSongIndicators}
 									placeholder={t("settings.indicators.title")}
-									onAdd={(val) => addKeyword("whitelistSongIndicators", val)}
-									onRemove={(val) =>
-										removeKeyword("whitelistSongIndicators", val)
-									}
+									onAdd={addIndicator}
+									onRemove={removeIndicator}
 								/>
 							</div>
 
-							{/* AI Model Parameters */}
 							<ModelParameters config={current()} onChange={updateConfig} />
 						</div>
 					</fieldset>

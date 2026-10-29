@@ -60,8 +60,31 @@ export interface AkariModelOptions {
 	readonly autoInit?: boolean;
 }
 
-/** Stable for both monorepo development and /app container layouts. */
-const DEFAULT_MODEL_DIR = fileURLToPath(new URL("../../../../model/", import.meta.url));
+/**
+ * Directory holding the ONNX artifacts, derived from this module's location
+ * rather than from `process.cwd()`.
+ *
+ * The crawler runs from source in both supported layouts: `apps/crawler/src/ml`
+ * in the monorepo and `/app/apps/crawler/src/ml` in the container image (the
+ * Docker CMD runs `bun src/index.ts`, not a bundle). Four levels up therefore
+ * always lands on the repository / mounted `model` directory.
+ */
+export function defaultModelDir(moduleUrl: string = import.meta.url): string {
+	return path.resolve(fileURLToPath(new URL("../../../../model/", moduleUrl)));
+}
+
+/**
+ * An explicit `modelDir` wins over `CRAWLER_MODEL_DIR`, which wins over the
+ * module-relative default. `process.cwd()` is intentionally never consulted so
+ * `bun run --cwd apps/crawler start` and `bun src/index.ts` resolve the same
+ * directory.
+ */
+export function resolveModelDir(
+	override: string | undefined,
+	moduleUrl: string = import.meta.url
+): string {
+	return path.resolve(override ?? process.env.CRAWLER_MODEL_DIR ?? defaultModelDir(moduleUrl));
+}
 
 /**
  * Canonical model label persisted next to every prediction, e.g. `akari-3.17`.
@@ -81,10 +104,6 @@ function normalizeTags(tags: AkariClassificationInput["tags"]): string {
 	if (typeof tags === "string") return normalizeChannelText(tags, "empty");
 	if (Array.isArray(tags)) return normalizeChannelText(tags.join(" "), "empty");
 	return "empty";
-}
-
-function resolveModelDir(override: string | undefined): string {
-	return path.resolve(override ?? process.env.CRAWLER_MODEL_DIR ?? DEFAULT_MODEL_DIR);
 }
 
 function elapsedMs(startedAt: number): number {

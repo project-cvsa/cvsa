@@ -24,11 +24,11 @@ export default function NetworkHealthPolicy(props: NetworkHealthPolicyProps) {
 	const update = (partial: Partial<HealthConfig>) => props.onChange({ ...health(), ...partial });
 
 	return (
-		<section class="flex flex-col gap-4">
+		<section class="flex flex-col gap-5">
 			<div class="flex flex-wrap items-center justify-between gap-3">
-				<div>
+				<div class="flex flex-col gap-1">
 					<h3 class="ts-heading-3 text-primary">{t("network.policy.title")}</h3>
-					<p class="ts-caption text-secondary mt-1">{t("network.policy.description")}</p>
+					<p class="ts-caption text-secondary">{t("network.policy.description")}</p>
 				</div>
 				<Button
 					variant="outlined"
@@ -41,93 +41,89 @@ export default function NetworkHealthPolicy(props: NetworkHealthPolicyProps) {
 				</Button>
 			</div>
 
-			<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-				{/* Card 1: Circuit breaker & isolation */}
-				<div class="border border-border bg-surface p-4 flex flex-col gap-4">
-					<div class="border-b border-border pb-2">
-						<h4 class="text-xs uppercase tracking-wider font-semibold text-primary">
-							熔断判定与隔离探测
-						</h4>
-						<span class="text-xs text-tertiary">
-							遇限流立即暂停；其他连续故障达到阈值后熔断隔离
-						</span>
-					</div>
-
-					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-						<NumberField
-							size="sm"
-							label={t("network.policy.failureThreshold")}
-							value={health().failureThreshold}
-							min={1}
-							max={100}
-							step={1}
-							suffix="次"
-							onChange={(value) =>
-								update({
-									failureThreshold: Math.max(1, Math.min(100, Math.round(value))),
-								})
-							}
-						/>
-						<NumberField
-							size="sm"
-							label={t("network.policy.cooldown")}
-							value={health().cooldownMs / 1000}
-							min={1}
-							max={3600}
-							step={1}
-							suffix="s"
-							onChange={(value) =>
-								update({
-									cooldownMs: Math.max(
-										1000,
-										Math.min(3600000, Math.round(value * 1000))
-									),
-								})
-							}
-						/>
-					</div>
+			<div class="flex flex-col gap-3">
+				<div class="flex flex-col gap-1">
+					<h4 class="text-sm font-semibold text-primary">
+						{t("network.policy.circuit.title")}
+					</h4>
+					<p class="ts-caption text-secondary">
+						{t("network.policy.circuit.description")}
+					</p>
 				</div>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<NumberField
+						size="sm"
+						label={t("network.policy.failureThreshold")}
+						helperText={t("network.policy.failureThresholdHelp")}
+						value={health().failureThreshold}
+						min={1}
+						max={100}
+						step={1}
+						suffix={t("network.policy.failureThresholdUnit")}
+						onChange={(value) =>
+							update({
+								failureThreshold: Math.max(1, Math.min(100, Math.round(value))),
+							})
+						}
+					/>
+					<NumberField
+						size="sm"
+						label={t("network.policy.cooldown")}
+						helperText={t("network.policy.cooldownHelp")}
+						value={health().cooldownMs / 1000}
+						min={1}
+						max={3600}
+						step={1}
+						suffix="s"
+						onChange={(value) =>
+							update({
+								cooldownMs: Math.max(
+									1000,
+									Math.min(3600000, Math.round(value * 1000))
+								),
+							})
+						}
+					/>
+				</div>
+			</div>
 
-				{/* Card 2: Dynamic weight adjustment */}
-				<div class="border border-border bg-surface p-4 flex flex-col gap-4">
-					<div class="border-b border-border pb-2">
-						<h4 class="text-xs uppercase tracking-wider font-semibold text-primary">
-							动态权重衰减与阶梯恢复
-						</h4>
-						<span class="text-xs text-tertiary">
-							根据连续请求成败实时缩放分流承载能力
-						</span>
-					</div>
-
-					<div class="flex flex-col gap-3">
-						<Slider
-							label={t("network.policy.minimumWeight")}
-							value={health().minWeightFactor}
-							min={0}
-							max={0.95}
-							step={0.05}
-							formatValue={(value) => `${Math.round(value * 100)}%`}
-							onChange={(value) => update({ minWeightFactor: value })}
-						/>
-						<Slider
-							label={t("network.policy.failureFactor")}
-							value={health().failurePenalty}
-							min={0.05}
-							max={0.95}
-							step={0.05}
-							formatValue={(value) => `${Math.round(value * 100)}%`}
-							onChange={(value) => update({ failurePenalty: value })}
-						/>
-						<Slider
-							label={t("network.policy.recoveryBonus")}
-							value={health().recoveryBonus}
-							min={0.05}
-							max={0.95}
-							step={0.05}
-							formatValue={(value) => `+${Math.round(value * 100)}%`}
-							onChange={(value) => update({ recoveryBonus: value })}
-						/>
-					</div>
+			<div class="flex flex-col gap-3">
+				<div class="flex flex-col gap-1">
+					<h4 class="text-sm font-semibold text-primary">
+						{t("network.policy.weights.title")}
+					</h4>
+					<p class="ts-caption text-secondary">
+						{t("network.policy.weights.description")}
+					</p>
+				</div>
+				<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<Slider
+						label={t("network.policy.minimumWeight")}
+						value={health().minWeightFactor}
+						min={0}
+						max={0.95}
+						step={0.05}
+						formatValue={(value) => `${Math.round(value * 100)}%`}
+						onChange={(value) => update({ minWeightFactor: value })}
+					/>
+					<Slider
+						label={t("network.policy.failureFactor")}
+						value={health().failurePenalty}
+						min={0.05}
+						max={0.95}
+						step={0.05}
+						formatValue={(value) => `${Math.round(value * 100)}%`}
+						onChange={(value) => update({ failurePenalty: value })}
+					/>
+					<Slider
+						label={t("network.policy.recoveryBonus")}
+						value={health().recoveryBonus}
+						min={0.05}
+						max={0.95}
+						step={0.05}
+						formatValue={(value) => `+${Math.round(value * 100)}%`}
+						onChange={(value) => update({ recoveryBonus: value })}
+					/>
 				</div>
 			</div>
 		</section>

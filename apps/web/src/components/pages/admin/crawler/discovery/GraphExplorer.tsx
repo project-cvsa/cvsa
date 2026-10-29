@@ -2,7 +2,6 @@ import { createSignal, For, Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Badge from "@components/ui/Badge";
 import TextField from "@components/ui/TextField";
-import { Card, CardHeader, CardContent } from "@components/ui/Card";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
@@ -96,7 +95,9 @@ function GraphNodeCard(
 						<ExternalLink class="inline w-3 h-3 ml-1" />
 					</a>
 					<Show when={props.node.ownerName}>
-						<span class="text-xs text-secondary">UP: {props.node.ownerName}</span>
+						<span class="text-xs text-secondary">
+							{t("graphUi.uploader").replace("{name}", props.node.ownerName ?? "")}
+						</span>
 					</Show>
 				</div>
 			</div>
@@ -234,50 +235,44 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 	};
 
 	return (
-		<Card>
-			<CardHeader title={t("graphUi.title")} />
-			<CardContent class="flex flex-col gap-6">
-				<form
-					class="flex items-end gap-3"
-					onSubmit={(event) => {
-						event.preventDefault();
-						void searchGraph();
-					}}
-				>
-					<TextField
-						class="flex-1"
-						placeholder={t("graphUi.input")}
-						value={identifier()}
-						onInput={(event) => setIdentifier(event.currentTarget.value)}
-						disabled={loading()}
+		<section class="flex flex-col gap-6">
+			<h3 class="ts-heading-3 text-primary">{t("graphUi.title")}</h3>
+			<form
+				class="flex items-end gap-3"
+				onSubmit={(event) => {
+					event.preventDefault();
+					void searchGraph();
+				}}
+			>
+				<TextField
+					class="flex-1"
+					placeholder={t("graphUi.input")}
+					value={identifier()}
+					onInput={(event) => setIdentifier(event.currentTarget.value)}
+					disabled={loading()}
+				/>
+				<Button type="submit" variant="filled" disabled={loading() || !identifier().trim()}>
+					<Compass class="w-4 h-4" />
+					{loading() ? t("graphUi.searching") : t("graphUi.search")}
+				</Button>
+			</form>
+			<Show when={error()}>
+				{(message) => (
+					<p role="alert" class="text-error text-xs">
+						{message()}
+					</p>
+				)}
+			</Show>
+			<Show when={graph()}>
+				{(current) => (
+					<GraphResults
+						graph={current()}
+						ingesting={ingestingAid() !== null}
+						onIngest={(node) => void quickIngest(node.bvid, node.aid)}
+						onExpand={(node) => void searchGraph(node.bvid)}
 					/>
-					<Button
-						type="submit"
-						variant="filled"
-						disabled={loading() || !identifier().trim()}
-					>
-						<Compass class="w-4 h-4" />
-						{loading() ? t("graphUi.searching") : t("graphUi.search")}
-					</Button>
-				</form>
-				<Show when={error()}>
-					{(message) => (
-						<p role="alert" class="text-error text-xs">
-							{message()}
-						</p>
-					)}
-				</Show>
-				<Show when={graph()}>
-					{(current) => (
-						<GraphResults
-							graph={current()}
-							ingesting={ingestingAid() !== null}
-							onIngest={(node) => void quickIngest(node.bvid, node.aid)}
-							onExpand={(node) => void searchGraph(node.bvid)}
-						/>
-					)}
-				</Show>
-			</CardContent>
-		</Card>
+				)}
+			</Show>
+		</section>
 	);
 }

@@ -18,10 +18,9 @@ import {
 	DiscoveryScheduler,
 	DiscoveryService,
 	VideoClassifierClient,
-	DISCOVERY_QUEUE_NAME,
 	SNAPSHOT_BATCH_QUEUE,
+	createDiscoveryQueue,
 	createDiscoveryWorker,
-	type DiscoveryJobData,
 	type SnapshotBatchJobData,
 	NetworkRuntimeConfigManager,
 	NetworkRuntimeConfigRepository,
@@ -45,7 +44,7 @@ export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.cli
 
 export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
 export const manualSnapshotService = new ManualSnapshotService(trackingRepository, snapshotQueue);
-export const discoveryQueue = crawlerMq.createQueue<DiscoveryJobData>(DISCOVERY_QUEUE_NAME);
+export const discoveryQueue = createDiscoveryQueue(crawlerMq);
 
 /**
  * Sliding-window stats + the `crawler_stats_rollup` history.
