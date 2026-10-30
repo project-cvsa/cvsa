@@ -48,7 +48,7 @@ cp .env.example .env
 ### 2. Start Backing Services
 
 ```bash
-docker compose up -d db snapshot-db redis meili
+docker compose up -d db snapshot-db redis redis-cache meili
 ```
 
 ### 3. Install & Initialize Databases

@@ -4,7 +4,7 @@
 #   docker compose up -d
 #
 # Development (backing services only):
-#   docker compose up -d db snapshot-db redis meili
+#   docker compose up -d db snapshot-db redis redis-cache meili
 #
 # All variables and ports are configurable via `.env` with sensible defaults.
 # Every service automatically loads `.env` if present.
@@ -31,6 +31,7 @@ services:
       PORT: ${WEB_PORT:-10199}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
@@ -50,6 +51,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redis-cache:
         condition: service_healthy
       backend:
         condition: service_healthy
@@ -74,6 +77,7 @@ services:
       PORT: ${BACKEND_PORT:-16412}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
       MEILI_API_URL: ${MEILI_API_URL:-http://meili:7700}
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-cvsa_meili_master_key_16bytes}
       EMBEDDING_API_URL: ${EMBEDDING_API_URL:-http://embedding:${EMBEDDING_PORT:-14900}}
@@ -90,6 +94,8 @@ services:
       db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redis-cache:
         condition: service_healthy
       meili:
         condition: service_healthy
@@ -113,6 +119,7 @@ services:
     environment:
       NODE_ENV: production
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
       SNAPSHOT_DATABASE_URL: ${SNAPSHOT_DATABASE_URL:-postgres://${SNAPSHOT_DB_USER:-cvsa}:${SNAPSHOT_DB_PASSWORD:-password}@snapshot-db:5432/${SNAPSHOT_DB_NAME:-cvsa_snapshot}}
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: ${CRAWLER_PORT:-16413}
@@ -125,6 +132,8 @@ services:
       snapshot-db:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redis-cache:
         condition: service_healthy
 
   embedding:
@@ -238,14 +247,41 @@ services:
       - "${REDIS_BIND_IP:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
     command:
       - redis-server
+      - --save
+      - "900"
+      - "1"
+      - "300"
+      - "10"
+      - "60"
+      - "10000"
       - --appendonly
-      - "yes"
-      - --maxmemory
-      - ${REDIS_MAXMEMORY:-512mb}
+      - "no"
       - --maxmemory-policy
       - noeviction
     volumes:
       - redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: cvsa-redis-cache
+    restart: always
+    ports:
+      - "${REDIS_CACHE_BIND_IP:-127.0.0.1}:${REDIS_CACHE_PORT:-6380}:6379"
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${REDIS_CACHE_MAXMEMORY:-512mb}
+      - --maxmemory-policy
+      - allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
