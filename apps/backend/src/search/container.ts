@@ -1,5 +1,5 @@
 import { treaty } from "@elysiajs/eden";
-import type { EmbeddingApp } from "@cvsa/embedding";
+import type { EmbeddingApp } from "@embedding-contract";
 import { artistReader, artistRoleReader, singerReader, songReader } from "@cvsa/catalog";
 import { SongDetailsResponseSchema } from "@cvsa/contracts";
 import { transformPrismaResult } from "@cvsa/db";

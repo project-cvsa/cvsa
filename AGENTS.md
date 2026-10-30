@@ -16,7 +16,7 @@
 - `packages/db`: Primary Prisma schema and generated database client
 - `packages/snapshot-db`: TimescaleDB snapshot and tracking Prisma 8 client
 - `packages/network-scheduler`: Resilient HTTP client, rate-limiting, and network adapters
-- `packages/embedding`: Standalone vector embedding REST service
+- `apps/embedding`: Standalone vector embedding REST service
 - `packages/logger`: Shared Pino logger configuration
 - `packages/observability`: OpenTelemetry SDK and span instrumentation
 - `packages/env`: Type-safe environment variable validation (`@t3-oss/env-core`)
@@ -34,7 +34,7 @@ When developing backend features, you MUST adhere to the Layered Architecture: `
 ### Deployment & Operations
 - **Single Compose Stack**: Production and development backing services are defined in a single `docker-compose.yml` controlled via `.env`.
 - **Database Migrations**: Handled automatically on container boot via `CMD` in `Dockerfile`.
-- **Deployment**: Production deployment is performed via standard Docker commands (`docker compose pull && docker compose up -d`) or `./scripts/deploy.sh`. Never create ad-hoc background servers or mutating script daemons.
+- **Deployment**: Production deployment is performed via standard Docker commands (`docker compose pull && docker compose up -d`) or the `apps/deploy` deployment service. Never create ad-hoc background servers or mutating script daemons.
 
 ## 3. Strict Constraints & Safety
 

@@ -1,110 +1,88 @@
 # CVSA
 
-The official monorepo for the **Chinese Vocal Synthesizer Archive (CVSA)** – a unified platform that aggregates and preserves information about the Chinese vocal synthesizer community.
+The official monorepo for the **Chinese Vocal Synthesizer Archive (CVSA)** — an open archive and platform for aggregating, cataloging, and preserving Chinese vocal synthesizer music and culture.
 
-## Overview
-
-CVSA is a community-driven archive that consolidates scattered information about Chinese singing voice synthesis community.
-
-This monorepo contains all core components of the CVSA platform, managed with [Turborepo](https://turbo.build/repo) and [Bun](https://bun.sh).
-
-See [our docs](https://docs.projectcvsa.com) for more details.
-
-## Project Structure
+## Workspace Overview
 
 ```
 cvsa/
 ├── apps/
-│   ├── backend/          # Core REST API service (Elysia + Prisma)
-│   └── frontend/         # Astro SSR application with React islands (Not implemented yet)
+│   ├── web/              # Astro + Solid SSR frontend
+│   ├── backend/          # Elysia REST API & outbox service
+│   ├── crawler/          # Bilibili video tracker, scheduler & crawler daemon
+│   │   └── ml/           # Akari classifier training & ONNX export pipeline
+│   ├── embedding/        # Standalone vector embedding REST service
+│   ├── deploy/           # Production host deployment service
+│   └── docs/             # Documentation site
 ├── packages/
-│   ├── config/           # Shared configuration (TypeScript, etc.)
-│   └── db/               # Prisma schema and database client
-├── .github/              # GitHub workflows and issue templates
-└── turbo.json            # Turborepo configuration
+│   ├── contracts/        # Shared API schemas (Zod), DTOs, error taxonomy
+│   ├── catalog/          # Core catalog domain logic (songs, artists, singers)
+│   ├── authentication/   # User authentication and RBAC (Better Auth)
+│   ├── db/               # Primary PostgreSQL Prisma client & migrations
+│   ├── snapshot-db/      # TimescaleDB snapshot & tracking Prisma client
+│   ├── network-scheduler/# HTTP client, rate limiter & proxy scheduler
+│   ├── logger/           # Shared Pino logger
+│   ├── observability/    # OpenTelemetry tracing instrumentation
+│   ├── env/              # Type-safe environment validation
+│   └── typescript-config/# Shared tsconfig presets
+└── docker-compose.yml    # Single Compose stack for backing services & apps
 ```
 
-## Tech Stack
-
-| Layer          | Technology                                            | Purpose                                               |
-| -------------- | ----------------------------------------------------- | ----------------------------------------------------- |
-| **Runtime**    | [Bun](https://bun.sh)                                 | Fast JavaScript runtime, package manager, test runner |
-| **Monorepo**   | [Turborepo](https://turbo.build)                      | Build system and task orchestration                   |
-| **Frontend**   | [Astro](https://astro.build) + React                  | SSR with partial hydration (islands architecture)     |
-| **Backend**    | [Elysia](https://elysiajs.com)                        | High-performance, type-safe API framework             |
-| **Database**   | PostgreSQL + [TimescaleDB](https://www.timescale.com) | Core storage with time-series optimization            |
-| **ORM**        | [Prisma](https://www.prisma.io)                       | Type-safe database client and migrations              |
-
-## Getting Started
+## Quickstart
 
 ### Prerequisites
 
--   [Bun](https://bun.sh) >= 1.4.2
--   [PostgreSQL](https://www.postgresql.org) >= 18
+- [Bun](https://bun.sh) >= 1.4.2
+- [Docker Compose](https://docs.docker.com/compose/) (for Postgres, TimescaleDB, Redis, and Meilisearch)
 
-### Initial Setup
+### 1. Clone & Configure
 
-1. **Clone the repository**
+```bash
+git clone https://github.com/project-cvsa/cvsa.git
+cd cvsa
 
-    ```bash
-    git clone https://github.com/project-cvsa/cvsa
-    cd cvsa
-    ```
+# Initialize local environment variables
+cp .env.example .env
+```
 
-2. **Install dependencies**
+### 2. Start Backing Services
 
-    ```bash
-    bun i
-    ```
+```bash
+docker compose up -d db snapshot-db redis meili
+```
 
-3. **Set up environment variables**
+### 3. Install & Initialize Databases
 
-    Create `.env` and `.env.test` files in each service directory following their `.env.example` templates:
+```bash
+bun install --frozen-lockfile
 
-    ```bash
-    cp apps/frontend/.env.example apps/frontend/.env
-    cp apps/frontend/.env.example apps/frontend/.env.test
-    cp packages/db/.env.example packages/db/.env
-    cp packages/db/.env.example packages/db/.env.test
-    ```
+# Generate Prisma clients and prepare test databases
+bun run setup
+```
 
-4. **Initialize the database**
-
-    ```bash
-    cd packages/db
-
-    # Generate Prisma client
-    bun db:gen
-
-    # Run migrations
-    bun db:migrate:dev
-    ```
-
-### Development
-
-Start all services in development mode:
+### 4. Run Development Servers
 
 ```bash
 bun dev
 ```
 
-## Available Scripts
+- Web App: `http://localhost:10199`
+- Backend API: `http://localhost:16412/v2`
+- Crawler Control Plane: `http://localhost:16413/v2`
+- Embedding Service: `http://localhost:14900`
 
-| Command                 | Description                                      |
-| ----------------------- | ------------------------------------------------ |
-| `bun run dev`           | Start all services in development mode           |
-| `bun run build`         | Build all applications                           |
-| `bun run lint`          | Run Biome linter across the codebase             |
-| `bun run lint:fix`      | Fix linting issues automatically                 |
-| `bun run format`        | Format code with Biome                           |
-| `bun run test`          | Run tests across all packages                    |
-| `bun run test:coverage` | Run tests with coverage across all packages      |
-| `bun run typecheck`     | Run TypeScript type checking across all packages |
+## Common Commands
 
-### Package-Specific Scripts
-
-See each package's `README.md` for available scripts.
+| Command | Description |
+| --- | --- |
+| `bun dev` | Start all services concurrently in watch mode |
+| `bun run build` | Build all workspace packages and apps |
+| `bun run ci` | Verify formatting and linting across the monorepo (Biome) |
+| `bun run format` | Auto-format all files via Biome |
+| `bun run typecheck` | Run TypeScript type checks across all workspaces |
+| `bun run test` | Run unit, contract, and integration tests |
+| `bun run setup` | Bootstrap Prisma clients and initialize databases |
 
 ## License
 
-This project is licensed under the **GNU Affero General Public License v3.0** – see the [LICENSE](LICENSE) file for details.
+Licensed under the **GNU Affero General Public License v3.0** — see [LICENSE](LICENSE) for details.

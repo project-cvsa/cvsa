@@ -10,6 +10,7 @@
 			// sole supported entry point and must always be imported with `import type`.
 			// The wildcard entries mirror the backend's own `paths` so the compiler can
 			// walk the contract's type graph; nothing in `src` may import them.
+			"@embedding-contract": ["../embedding/src/apiContract.ts"],
 			"@api-contract": ["../backend/src/apiContract.ts"],
 			"@handlers/*": ["../backend/src/handlers/*"],
 			"@common/*": ["../backend/src/common/*"],

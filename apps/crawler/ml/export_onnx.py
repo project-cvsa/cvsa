@@ -53,7 +53,7 @@ def main() -> None:
     parser.add_argument(
         "--version",
         default="3.17",
-        help="Target Akari model version (writes to ../model/akari/<version>.onnx by default)",
+        help="Target Akari model version (writes to ../../../model/akari/<version>.onnx by default)",
     )
     parser.add_argument(
         "--output",
@@ -62,7 +62,7 @@ def main() -> None:
     )
     args = parser.parse_args()
     output_path = args.output or os.path.join(
-        os.path.dirname(__file__), f"../model/akari/{args.version}.onnx"
+        os.path.dirname(__file__), f"../../../model/akari/{args.version}.onnx"
     )
     export_onnx(args.checkpoint, output_path)
 

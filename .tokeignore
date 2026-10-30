@@ -1,4 +1,8 @@
-bruno/
+*.svg
 *.json
 *.sql
 *.md
+*.txt
+*.toml
+*.yml
+packages/db/prisma/

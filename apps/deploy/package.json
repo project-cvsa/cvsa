@@ -1,0 +1,17 @@
+{
+	"name": "@cvsa/deploy",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "bun src/index.ts",
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@cvsa/contracts": "workspace:*",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@cvsa/typescript-config": "workspace:*"
+	}
+}

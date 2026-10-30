@@ -37,6 +37,12 @@ jobs:
         # `setup:ci` runs instead of racing their first-boot initialization.
         run: docker compose up -d --wait --wait-timeout 240 db snapshot-db redis meili
 
+      - uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 

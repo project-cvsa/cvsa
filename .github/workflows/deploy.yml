@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      service:
+        description: Service to release
+        type: choice
+        default: affected
+        options: [affected, all, backend, crawler, embedding, web]
 
 concurrency:
   group: production-deploy-${{ github.ref }}
@@ -12,70 +18,40 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}
-  # Every application image built from the layered Dockerfile. Keep in sync with
-  # the targets in `Dockerfile` and the services in `docker-compose.prod.yml`.
-  IMAGE_TARGETS: backend crawler embedding web
 
 jobs:
-  verify:
-    name: Contract Tests, Typecheck & Build Verification
+  plan:
     runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.plan.outputs.services }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
-
-      - name: Prepare .env files
-        run: |
-          cp .env.example .env
-          cp packages/db/.env.example packages/db/.env
-          cp packages/db/.env.test.example packages/db/.env.test
-          cp apps/backend/.env.test.example apps/backend/.env.test
-          cp apps/crawler/.env.example apps/crawler/.env.test
-
-      - name: Start backing services
-        # `--wait` blocks until every container reports healthy, so Postgres,
-        # TimescaleDB, Redis and Meilisearch are accepting connections before
-        # `setup:ci` runs instead of racing their first-boot initialization.
-        run: docker compose up -d --wait --wait-timeout 240 db snapshot-db redis meili
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Setup test databases & emit contracts
-        run: bun run setup:ci
-
-      - name: Lint & Format Check
-        run: bun run ci
-
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Run Contract & Integration Tests
-        run: bun run test
-
-      - name: Verify Production Web Build
-        run: bun run --cwd apps/web build
-
-      - name: Validate compose file
-        run: docker compose config --quiet
-
-      - name: Stop backing services
-        if: always()
-        run: docker compose down -v
+      - run: bun install --frozen-lockfile
+      - id: plan
+        env:
+          RELEASE_SERVICE: ${{ inputs.service || 'affected' }}
+          TURBO_SCM_BASE: ${{ github.event.before || 'HEAD^' }}
+          TURBO_SCM_HEAD: ${{ github.sha }}
+        run: bun apps/deploy/src/plan.ts
 
   build-and-push:
     name: Build & Push Layered Images
-    needs: verify
+    needs: plan
+    if: needs.plan.outputs.services != '[]'
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(needs.plan.outputs.services) }}
     permissions:
       contents: read
       packages: write
-    outputs:
-      image_tag: ${{ steps.meta.outputs.sha_tag }}
     steps:
       - uses: actions/checkout@v6
 
@@ -98,20 +74,18 @@ jobs:
           SHA_TAG: ${{ steps.meta.outputs.sha_tag }}
         run: |
           set -euo pipefail
-          for target in ${IMAGE_TARGETS}; do
-            docker buildx build \
-              --target "$target" \
-              --cache-from type=gha,scope="cvsa-$target" \
-              --cache-to type=gha,mode=max,scope="cvsa-$target" \
-              --tag "${IMAGE_PREFIX}/cvsa-${target}:${SHA_TAG}" \
-              --tag "${IMAGE_PREFIX}/cvsa-${target}:latest" \
-              --push \
-              .
-          done
+          target="${{ matrix.target }}"
+          docker buildx build \
+            --target "$target" \
+            --cache-from type=gha,scope="cvsa-$target" \
+            --cache-to type=gha,mode=max,scope="cvsa-$target" \
+            --tag "${IMAGE_PREFIX}/cvsa-${target}:${SHA_TAG}" \
+            --tag "${IMAGE_PREFIX}/cvsa-${target}:latest" \
+            --push .
 
   deploy:
     name: Deploy to Server
-    needs: build-and-push
+    needs: [plan, build-and-push]
     if: github.ref == 'refs/heads/main' && vars.ENABLE_VPS_DEPLOY == 'true'
     runs-on: ubuntu-latest
     environment: production
@@ -120,7 +94,8 @@ jobs:
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
           DEPLOY_WEBHOOK_SECRET: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}
-          IMAGE_TAG: ${{ needs.build-and-push.outputs.image_tag }}
+          IMAGE_TAG: ${{ needs.plan.outputs.tag }}
+          SERVICES: ${{ needs.plan.outputs.services }}
         run: |
           set -euo pipefail
           if [ -z "${DEPLOY_WEBHOOK_URL}" ]; then
@@ -136,7 +111,7 @@ jobs:
           echo "Triggering webhook: ${DEPLOY_WEBHOOK_URL} with tag: ${IMAGE_TAG}"
           HTTP_STATUS=$(curl -fsS --max-time 15 -o /tmp/deploy-response.json -w "%{http_code}" -X POST "${AUTH_HEADER[@]}" \
             -H "Content-Type: application/json" \
-            -d "{\"tag\":\"${IMAGE_TAG}\"}" \
+            -d "$(jq -cn --arg tag "$IMAGE_TAG" --argjson services "$SERVICES" '{tag:$tag,services:$services}')" \
             "${DEPLOY_WEBHOOK_URL}")
 
           echo "Webhook response status: ${HTTP_STATUS}"
@@ -148,6 +123,7 @@ jobs:
             exit 1
           fi
 
+          DEPLOY_ID=$(jq -r .id /tmp/deploy-response.json)
           STATUS_URL="${DEPLOY_WEBHOOK_URL}"
           case "${STATUS_URL}" in
             */deploy) STATUS_URL="${STATUS_URL%/deploy}/status" ;;
@@ -175,7 +151,7 @@ jobs:
 
             echo "[${ELAPSED}s] Deployment status: ${DEPLOY_STATUS} (tag: ${DEPLOY_TAG})"
 
-            if [ "${DEPLOY_TAG}" = "${IMAGE_TAG}" ]; then
+            if [ "$(echo "$STATUS_BODY" | jq -r .id)" = "$DEPLOY_ID" ]; then
               if [ "${DEPLOY_STATUS}" = "success" ]; then
                 echo "Deployment for tag ${IMAGE_TAG} completed successfully in ${ELAPSED}s."
                 exit 0

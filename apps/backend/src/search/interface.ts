@@ -3,7 +3,7 @@ export interface IRepositoryWithGetDetails<T> {
 }
 import type { SearchManager } from "./manager";
 import type { SearchResponse } from "meilisearch";
-import type { EmbeddingAppApi } from "@cvsa/embedding";
+import type { EmbeddingAppApi } from "@embedding-contract";
 import { unique, keys } from "remeda";
 import { appLogger } from "@cvsa/logger";
 

@@ -20,7 +20,6 @@
 		"@cvsa/catalog": "workspace:*",
 		"@cvsa/contracts": "workspace:*",
 		"@cvsa/db": "workspace:*",
-		"@cvsa/embedding": "workspace:*",
 		"@cvsa/env": "workspace:*",
 		"@cvsa/logger": "workspace:*",
 		"@cvsa/observability": "workspace:*",

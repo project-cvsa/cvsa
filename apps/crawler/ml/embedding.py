@@ -7,7 +7,7 @@ from transformers import AutoTokenizer
 
 DEFAULT_TOKENIZER = "alikia2x/jina-embedding-v3-m2v-1024"
 DEFAULT_EMBEDDING_ONNX = os.path.join(
-    os.path.dirname(__file__), "../model/embedding/model.onnx"
+    os.path.dirname(__file__), "../../../model/embedding/model.onnx"
 )
 
 
