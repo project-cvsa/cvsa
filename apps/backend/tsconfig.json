@@ -4,7 +4,8 @@
 		"paths": {
 			"@/*": ["./src/*"],
 			"@handlers/*": ["./src/handlers/*"],
-			"@common/*": ["./src/common/*"]
+			"@common/*": ["./src/common/*"],
+			"@embedding-contract": ["../embedding/src/apiContract.ts"]
 		}
 	},
 	"include": ["./src/**/*", "./tests/**/*"],

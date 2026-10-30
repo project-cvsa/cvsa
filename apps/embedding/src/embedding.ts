@@ -4,7 +4,7 @@ import { fileDownloadInfo } from "@huggingface/hub";
 import * as ort from "onnxruntime-node";
 import { appLogger } from "@cvsa/logger";
 
-const modelDir = path.join(import.meta.dir, "../../../model/");
+const modelDir = process.env.EMBEDDING_MODEL_DIR ?? path.resolve(import.meta.dir, "../../../model");
 
 // TODO: More formalized config
 const modelName = "alikia2x/potion-multilingual-128M-int8-strip";

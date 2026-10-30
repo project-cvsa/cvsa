@@ -1,5 +1,9 @@
 import { Elysia } from "elysia";
-import z from "zod";
+import {
+	EmbeddingRequestSchema,
+	EmbeddingResponseSchema,
+	EmbeddingErrorSchema,
+} from "@cvsa/contracts";
 import { embeddingManager } from "./embedding";
 import type { treaty } from "@elysiajs/eden";
 
@@ -23,17 +27,8 @@ export const app = new Elysia()
 			});
 		},
 		{
-			body: z.object({
-				texts: z.string().array(),
-			}),
-			response: {
-				200: z.object({
-					embeddings: z.number().array().array(),
-				}),
-				500: z.object({
-					message: z.string(),
-				}),
-			},
+			body: EmbeddingRequestSchema,
+			response: { 200: EmbeddingResponseSchema, 500: EmbeddingErrorSchema },
 		}
 	);
 

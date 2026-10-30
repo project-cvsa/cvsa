@@ -1,4 +1,4 @@
-# CVSA Video Classifier ML Pipeline (`ml/`)
+# CVSA Video Classifier ML Pipeline (`apps/crawler/ml/`)
 
 This directory contains the Python training, evaluation, and ONNX export pipeline for the CVSA discovery video classifier (`akari`).
 

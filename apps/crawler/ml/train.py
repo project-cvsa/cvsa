@@ -138,7 +138,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--embedding-onnx",
-        default=os.path.join(os.path.dirname(__file__), "../model/embedding/model.onnx"),
+        default=os.path.join(os.path.dirname(__file__), "../../../model/embedding/model.onnx"),
         help="Path to Jina 1024-d ONNX model",
     )
     parser.add_argument("--epochs", type=int, default=8)

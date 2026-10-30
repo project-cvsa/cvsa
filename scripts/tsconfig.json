@@ -10,7 +10,7 @@
 			"@cvsa/env": ["../packages/env/src"],
 			"@cvsa/logger": ["../packages/logger/src"],
 			"@cvsa/observability": ["../packages/observability/src"],
-			"@cvsa/embedding": ["../packages/embedding/src"]
+			"@cvsa/embedding": ["../apps/embedding/src"]
 		}
 	},
 	"include": ["./**/*.ts"]

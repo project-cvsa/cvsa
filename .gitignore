@@ -51,3 +51,7 @@ model
 .next
 .vercel
 next-env.d.ts
+
+# Local deployment state
+docker-compose.override.yml
+.deploy.*

@@ -6,11 +6,14 @@ Requires=docker.service
 [Service]
 Type=simple
 User=%USER%
+Group=%GROUP%
 WorkingDirectory=%WORKING_DIR%
 EnvironmentFile=-%WORKING_DIR%/.env
-ExecStart=%BUN_PATH% run scripts/deploy-daemon.ts
+Environment="PATH=%PATH%:/usr/local/bin:/usr/bin:/bin"
+ExecStart=%BUN_PATH% run apps/deploy/src/index.ts
 Restart=always
 RestartSec=5s
+TimeoutStopSec=30
 StandardOutput=journal
 StandardError=journal
 
