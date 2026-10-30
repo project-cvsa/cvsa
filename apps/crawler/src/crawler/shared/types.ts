@@ -57,6 +57,7 @@ export interface CrawlerWorker {
 }
 
 export interface CrawlerMq {
+	setOperationTimeout?: (timeoutMs: number) => void;
 	connect(): Promise<void>;
 	createQueue<T>(name: string, options?: JobsOptions): CrawlerQueue<T>;
 	createWorker<T>(

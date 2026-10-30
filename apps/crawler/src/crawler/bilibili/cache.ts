@@ -22,6 +22,9 @@ export class MemoryBilibiliCache implements IBilibiliCache {
 		});
 	}
 
+	async delete(key: string): Promise<void> {
+		this.store.delete(key);
+	}
 	clear(): void {
 		this.store.clear();
 	}
@@ -29,6 +32,10 @@ export class MemoryBilibiliCache implements IBilibiliCache {
 
 export class RedisBilibiliCache implements IBilibiliCache {
 	constructor(private readonly redis: IORedis) {}
+
+	async delete(key: string): Promise<void> {
+		await this.redis.del(key);
+	}
 
 	async get(key: string): Promise<string | null> {
 		try {
@@ -50,8 +57,8 @@ export class RedisBilibiliCache implements IBilibiliCache {
 			appLogger.error("Bilibili cache redis set failed", {
 				component: "bilibili-cache",
 				key,
-				error,
 			});
+			throw error;
 		}
 	}
 }

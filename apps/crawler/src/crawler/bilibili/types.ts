@@ -1,3 +1,4 @@
+import type { BilibiliRequestPurpose, BilibiliSessionConfig } from "@cvsa/contracts";
 import type { NetworkDelegate } from "@cvsa/network-scheduler";
 
 export interface BilibiliHttpResponse {
@@ -13,18 +14,27 @@ export type BilibiliRequest = (
 		method?: string;
 		body?: string;
 		timeoutMs?: number;
+		signal?: AbortSignal;
+		purpose?: BilibiliRequestPurpose;
+		adapterId?: string;
 	}
 ) => Promise<BilibiliHttpResponse>;
 
 export interface IBilibiliCache {
 	get(key: string): Promise<string | null>;
 	set(key: string, value: string, ttlSeconds: number): Promise<void>;
+	delete(key: string): Promise<void>;
 }
 
 export interface BilibiliClientOptions {
 	request?: BilibiliRequest;
 	networkDelegate?: NetworkDelegate;
 	cache?: IBilibiliCache;
+	sessionConfig?: BilibiliSessionConfig;
+	clock?: () => number;
+	random?: () => number;
+	requestTimeoutMs?: () => number;
+	operationTimeoutMs?: () => number;
 }
 
 export interface SearchVideosOptions {

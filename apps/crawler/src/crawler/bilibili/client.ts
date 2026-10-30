@@ -1,6 +1,9 @@
+import type { BilibiliSessionConfig, BilibiliSessionStatus } from "@cvsa/contracts";
+import { bilibiliPurpose } from "./requestContext";
+import { getTaskSignal } from "../shared/taskContext";
 import { appLogger } from "@cvsa/logger";
 import { BilibiliSession } from "./session";
-import { createQueryVerificationId, signWbiQuery, toUnixTimestamp } from "./signing";
+import { createQueryVerificationId, toUnixTimestamp } from "./signing";
 import type {
 	BilibiliClientOptions,
 	BilibiliRelatedVideo,
@@ -29,11 +32,13 @@ function createDefaultRequest(options: BilibiliClientOptions): BilibiliRequest {
 		return async (url, reqOptions) => {
 			const res = await delegate.execute({
 				url,
-				requestType: "bilibili-api",
+				requestType: `bilibili:${reqOptions?.purpose ?? bilibiliPurpose("details")}`,
+				adapterId: reqOptions?.adapterId,
+				signal: reqOptions?.signal ?? getTaskSignal(),
 				method: reqOptions?.method ?? "GET",
 				headers: reqOptions?.headers,
 				body: reqOptions?.body,
-				timeoutMs: reqOptions?.timeoutMs,
+				timeoutMs: reqOptions?.timeoutMs ?? options.requestTimeoutMs?.(),
 			});
 			return {
 				status: res.status,
@@ -44,10 +49,12 @@ function createDefaultRequest(options: BilibiliClientOptions): BilibiliRequest {
 	}
 
 	return async (url, reqOptions) => {
+		const signal = reqOptions?.signal ?? getTaskSignal();
 		const res = await fetch(url, {
-			signal: AbortSignal.timeout(
-				reqOptions?.timeoutMs && reqOptions.timeoutMs > 0 ? reqOptions.timeoutMs : 8_000
-			),
+			signal: AbortSignal.any([
+				AbortSignal.timeout(reqOptions?.timeoutMs ?? options.requestTimeoutMs?.() ?? 8000),
+				...(signal ? [signal] : []),
+			]),
 			method: reqOptions?.method ?? "GET",
 			headers: reqOptions?.headers,
 			body: reqOptions?.body,
@@ -70,7 +77,37 @@ export class BilibiliClient {
 
 	constructor(options: BilibiliClientOptions = {}) {
 		const requestImpl = createDefaultRequest(options);
-		this.session = new BilibiliSession(requestImpl, options.cache);
+		this.session = new BilibiliSession(
+			requestImpl,
+			options.cache,
+			options.sessionConfig,
+			options.clock,
+			options.random,
+			options.requestTimeoutMs,
+			options.operationTimeoutMs
+		);
+	}
+
+	configureSession(config: BilibiliSessionConfig): void {
+		this.session.configure(config);
+	}
+	getSessionStatus(): BilibiliSessionStatus {
+		return this.session.getStatus();
+	}
+	start(): Promise<void> {
+		return this.session.start();
+	}
+	stop(): Promise<void> {
+		return this.session.stop();
+	}
+	refreshCredentials(): Promise<unknown> {
+		return this.session.refreshCredentials();
+	}
+	invalidateCredentials(): Promise<void> {
+		return this.session.invalidate();
+	}
+	diagnostic(adapterId: string) {
+		return this.session.diagnostic(adapterId);
 	}
 
 	async searchVideos(
@@ -78,7 +115,6 @@ export class BilibiliClient {
 		options: SearchVideosOptions = {}
 	): Promise<BilibiliResponse<SearchVideosData>> {
 		if (!keyword.trim()) throw new Error("keyword must not be empty");
-		const keys = await this.session.getWbiKeys();
 		const params: Record<string, string | number | boolean> = {
 			category_id: options.categoryId ?? "",
 			context: "",
@@ -96,11 +132,11 @@ export class BilibiliClient {
 			qv_id: createQueryVerificationId(),
 			...options.extraParams,
 		};
-		const query = signWbiQuery(params, keys.imgKey, keys.subKey);
-		return this.session.request(`${API_ORIGIN}/x/web-interface/wbi/search/type?${query}`, {
+		return this.session.signedRequest("/x/web-interface/wbi/search/type", params, {
+			purpose: bilibiliPurpose("search"),
 			headers: {
 				Origin: "https://search.bilibili.com",
-				Referer: "https://search.bilibili.com",
+				Referer: "https://search.bilibili.com/",
 			},
 		});
 	}
@@ -117,6 +153,7 @@ export class BilibiliClient {
 			params.set("offset", options.offset);
 		}
 		return this.session.request(`${API_ORIGIN}/x/polymer/web-dynamic/v1/feed/topic?${params}`, {
+			purpose: bilibiliPurpose("search"),
 			headers: {
 				Origin: "https://www.bilibili.com",
 				Referer: "https://www.bilibili.com/",
@@ -134,18 +171,11 @@ export class BilibiliClient {
 			throw new Error("bvid must be a valid BV identifier");
 		}
 
-		const keys = await this.session.getWbiKeys();
-		const query = signWbiQuery(
+		const response = await this.session.signedRequest<VideoDetailsResponse>(
+			"/x/web-interface/wbi/view/detail",
+			{ ...(byAid ? { aid: Number(identifier) } : { bvid: idStr }), web_location: 1315875 },
 			{
-				...(byAid ? { aid: Number(identifier) } : { bvid: idStr }),
-				web_location: 1315875,
-			},
-			keys.imgKey,
-			keys.subKey
-		);
-		const response = await this.session.request<VideoDetailsResponse>(
-			`${API_ORIGIN}/x/web-interface/wbi/view/detail?${query}`,
-			{
+				purpose: bilibiliPurpose("details"),
 				headers: {
 					Origin: "https://www.bilibili.com",
 					Referer: "https://www.bilibili.com/",
@@ -252,7 +282,8 @@ export class BilibiliClient {
 		const response = await this.session.request<
 			BilibiliResponse<Array<{ id: number; cnt_info: Record<string, number> }>>
 		>(
-			`${API_ORIGIN}/medialist/gateway/base/resource/infos?resources=${uniqueAids.map((aid) => `${aid}:2`).join(",")}`
+			`${API_ORIGIN}/medialist/gateway/base/resource/infos?resources=${uniqueAids.map((aid) => `${aid}:2`).join(",")}`,
+			{ purpose: "tracking" }
 		);
 
 		if (response.code !== 0) {

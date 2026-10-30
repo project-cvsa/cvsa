@@ -1,20 +1,13 @@
 import type { ClassifierHealthDto } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
-import { LocalAkariClassifier, type AkariHealth, type AkariPrediction } from "../../ml/akari";
+import { IsolatedAkariClassifier } from "../../ml/isolatedAkari";
+import type { LocalAkariClassifier, AkariHealth, AkariPrediction } from "../../ml/akari";
 
 /**
- * In-process classifier client for the discovery pipeline.
- *
- * Classification runs inside the crawler through {@link LocalAkariClassifier}
- * (`onnxruntime-node`) — there is no HTTP hop to a separate inference service.
- * `label === 0` means "not a VOCALOID/SVS song"; every other label means the
- * model considers it one. The pipeline only needs the aggregate "is a song"
- * probability, which is `1 - p[not_song]`.
- *
- * Nothing here throws into the discovery pipeline: a missing or broken model
- * makes {@link VideoClassifierClient.classify} return `null`, and the caller
- * falls back to the deterministic rules.
+ * Client for the supervised local ONNX process. Missing artifacts and model errors
+ * return null so discovery can use its deterministic rules. Task cancellation also
+ * terminates inference; the task context prevents a subsequent fallback from writing.
  */
 export interface ClassifierInput {
 	readonly title: string;
@@ -45,8 +38,9 @@ export type LocalClassifier = Pick<LocalAkariClassifier, "classify" | "checkHeal
 export type ClassifierHealth = ClassifierHealthDto;
 
 export interface ClassifierClientOptions {
-	/** Injected for tests; a real in-process classifier is created otherwise. */
+	/** Injected for tests; a supervised inference process is created otherwise. */
 	readonly localClassifier?: LocalClassifier;
+	readonly timeoutMs?: () => number;
 }
 
 /** Used when a prediction arrives without its own model version. */
@@ -68,10 +62,14 @@ export class VideoClassifierClient {
 	private readonly classifier: LocalClassifier;
 
 	constructor(options: ClassifierClientOptions = {}) {
-		this.classifier = options.localClassifier ?? new LocalAkariClassifier();
+		this.classifier = options.localClassifier ?? new IsolatedAkariClassifier(options.timeoutMs);
 	}
 
-	/** The in-process ONNX classifier backing this client. */
+	close(): void {
+		if (this.classifier instanceof IsolatedAkariClassifier) this.classifier.close();
+	}
+
+	/** The local classifier backing this client. */
 	get local(): LocalClassifier {
 		return this.classifier;
 	}
@@ -91,14 +89,14 @@ export class VideoClassifierClient {
 				});
 				if (!prediction) return null;
 
-				appLogger.debug("Classified candidate with the in-process ONNX model", {
+				appLogger.debug("Classified candidate with the local ONNX model", {
 					component: "discovery-classifier",
 					modelVersion: prediction.modelVersion,
 				});
 
 				return toPrediction(prediction);
 			} catch (error) {
-				appLogger.warn("In-process classification failed", {
+				appLogger.warn("Local classification failed", {
 					component: "discovery-classifier",
 					error: error instanceof Error ? error.message : String(error),
 				});

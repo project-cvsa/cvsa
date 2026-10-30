@@ -280,9 +280,10 @@ describe("NetworkScheduler health", () => {
 			openUntil: HEALTH.cooldownMs,
 			effectiveWeight: 0,
 		});
-		await expect(scheduler.execute(request())).rejects.toThrow(
-			"No available network adapter for request type"
-		);
+		expect(await scheduler.execute(request())).toMatchObject({
+			retryReason: "network_recovery",
+			errorCode: "NO_AVAILABLE_ADAPTER",
+		});
 		expect(adapter.startedCount).toBe(3);
 	});
 
@@ -297,9 +298,10 @@ describe("NetworkScheduler health", () => {
 		await scheduler.execute(request());
 
 		clock.advance(HEALTH.cooldownMs - 1);
-		await expect(scheduler.execute(request())).rejects.toThrow(
-			"No available network adapter for request type"
-		);
+		expect(await scheduler.execute(request())).toMatchObject({
+			retryReason: "network_recovery",
+			errorCode: "NO_AVAILABLE_ADAPTER",
+		});
 		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("open");
 	});
 
@@ -373,7 +375,7 @@ describe("NetworkScheduler health", () => {
 		// but the weight is only repaired by genuine successes.
 		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
 			healthState: "degraded",
-			consecutiveFailures: 3,
+			consecutiveFailures: 0,
 			openUntil: null,
 		});
 	});
@@ -393,9 +395,10 @@ describe("NetworkScheduler health", () => {
 		const probe = scheduler.execute(request());
 		await adapter.waitForStart(4);
 
-		await expect(scheduler.execute(request())).rejects.toThrow(
-			"No available network adapter for request type"
-		);
+		expect(await scheduler.execute(request())).toMatchObject({
+			retryReason: "network_recovery",
+			errorCode: "NO_AVAILABLE_ADAPTER",
+		});
 
 		adapter.unblock();
 		expect((await probe).errorCode).toBeUndefined();
@@ -416,9 +419,7 @@ describe("NetworkScheduler health", () => {
 			healthState: "healthy",
 			effectiveWeight: 0,
 		});
-		await expect(scheduler.execute(request())).rejects.toThrow(
-			"No available network adapter for request type"
-		);
+		await expect(scheduler.execute(request())).rejects.toThrow("No available network adapter");
 	});
 
 	test("reload keeps health for the same adapter id", async () => {
@@ -494,7 +495,7 @@ describe("NetworkScheduler health", () => {
 		await adapter.waitForStart(HEALTH.failureThreshold + 1);
 		scheduler.reload(config(), new Map([[adapter.id, adapter]]));
 		try {
-			await expect(scheduler.execute(request())).rejects.toThrow();
+			expect((await scheduler.execute(request())).retryReason).toBe("network_recovery");
 		} finally {
 			adapter.unblock();
 		}
@@ -502,3 +503,159 @@ describe("NetworkScheduler health", () => {
 		expect((await scheduler.execute(request())).errorCode).toBeUndefined();
 	});
 });
+
+test("HTTP 5xx can fail over without penalizing either exit", async () => {
+	const first = new ControllableAdapter("a");
+	const second = new ControllableAdapter("b");
+	first.enqueue(failure("a", "HTTP_5XX"));
+	const settings = config({
+		adapters: ["a", "b"].map((id) => ({
+			id,
+			type: "direct",
+			enabled: true,
+			baseWeight: 1,
+			rateLimits: [],
+		})),
+		bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
+	});
+	const scheduler = new NetworkScheduler(
+		settings,
+		new Map([
+			["a", first],
+			["b", second],
+		]),
+		new FakeRateLimiter(),
+		{ random: () => 0 }
+	);
+	expect((await scheduler.execute(request())).adapterId).toBe("b");
+	for (const item of scheduler.getAdapterStatuses())
+		expect(item).toMatchObject({
+			healthState: "healthy",
+			healthFactor: 1,
+			consecutiveFailures: 0,
+		});
+});
+
+test("failover honors the configured attempt budget and never replays an unsafe POST", async () => {
+	const adapters = ["a", "b", "c"].map((id) => {
+		const adapter = new ControllableAdapter(id);
+		adapter.enqueue(failure(id), failure(id));
+		return adapter;
+	});
+	const settings = config({
+		adapters: adapters.map(({ id }) => ({
+			id,
+			type: "direct",
+			enabled: true,
+			baseWeight: 1,
+			rateLimits: [],
+		})),
+		bindings: [{ requestType: "test", adapterIds: adapters.map(({ id }) => id) }],
+		execution: CrawlerExecutionConfigSchema.parse({ maxAdapterAttempts: 2 }),
+	});
+	const scheduler = new NetworkScheduler(
+		settings,
+		new Map(adapters.map((adapter) => [adapter.id, adapter])),
+		new FakeRateLimiter(),
+		{ random: () => 0 }
+	);
+	expect((await scheduler.execute(request())).retryReason).toBe("network_recovery");
+	expect(adapters.reduce((sum, adapter) => sum + adapter.startedCount, 0)).toBe(2);
+	await scheduler.execute({ ...request(), method: "POST" });
+	expect(adapters.reduce((sum, adapter) => sum + adapter.startedCount, 0)).toBe(3);
+});
+
+test("a waiter resumes after the single half-open probe succeeds", async () => {
+	const adapter = new ControllableAdapter();
+	const clock = new TestClock();
+	const scheduler = createScheduler(adapter, clock);
+	adapter.enqueue(failure(adapter.id), failure(adapter.id), failure(adapter.id));
+	for (let count = 0; count < 3; count++) await scheduler.execute(request());
+	clock.advance(HEALTH.cooldownMs);
+	adapter.block();
+	const probe = scheduler.execute(request());
+	await adapter.waitForStart(4);
+	const waiter = scheduler.execute(request());
+	// Let the waiter reach its bounded admission wait, then finish the probe.
+	for (let index = 0; index < 10; index++) await Promise.resolve();
+	adapter.unblock();
+	expect((await probe).status).toBe(200);
+	expect((await waiter).status).toBe(200);
+	expect(adapter.startedCount).toBe(5);
+});
+
+test("explicit throttle failover recovers the request while retaining the refused exit's cooldown", async () => {
+	const first = new ControllableAdapter("a");
+	const second = new ControllableAdapter("b");
+	first.enqueue(failure("a", "HTTP_429"));
+	const settings = config({
+		adapters: ["a", "b"].map((id) => ({
+			id,
+			type: "direct",
+			enabled: true,
+			baseWeight: 1,
+			rateLimits: [],
+		})),
+		bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
+		execution: CrawlerExecutionConfigSchema.parse({
+			throttleFailover: true,
+			throttleCooldownMs: 5000,
+			throttleJitterMs: 0,
+		}),
+	});
+	const scheduler = new NetworkScheduler(
+		settings,
+		new Map([
+			["a", first],
+			["b", second],
+		]),
+		new FakeRateLimiter(),
+		{ random: () => 0 }
+	);
+	expect((await scheduler.execute(request())).adapterId).toBe("b");
+	expect(first.startedCount).toBe(1);
+	const refused = await scheduler.execute({ ...request(), adapterId: "a" });
+	expect(refused.retryReason).toBe("upstream");
+	expect(first.startedCount).toBe(1);
+	expect(scheduler.getAdapterStatuses()[0].healthState).toBe("healthy");
+});
+
+for (const scenario of ["global", "post"] satisfies Array<"global" | "post">) {
+	test(`throttle failover respects ${scenario === "global" ? "a shared cooldown" : "unsafe POST semantics"}`, async () => {
+		const first = new ControllableAdapter("a");
+		const second = new ControllableAdapter("b");
+		first.enqueue(failure("a", "HTTP_429"));
+		const settings = config({
+			adapters: ["a", "b"].map((id) => ({
+				id,
+				type: "direct",
+				enabled: true,
+				baseWeight: 1,
+				rateLimits: [],
+			})),
+			bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
+			execution: CrawlerExecutionConfigSchema.parse({
+				throttleFailover: true,
+				throttleScope: scenario === "global" ? "request_type" : "adapter",
+			}),
+		});
+		const scheduler = new NetworkScheduler(
+			settings,
+			new Map([
+				["a", first],
+				["b", second],
+			]),
+			new FakeRateLimiter(),
+			{ random: () => 0 }
+		);
+		expect(
+			(
+				await scheduler.execute({
+					...request(),
+					method: scenario === "post" ? "POST" : "GET",
+				})
+			).retryReason
+		).toBe("upstream");
+		expect(second.startedCount).toBe(0);
+	});
+}

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { crawlerEnv } from "@cvsa/env";
-import { createDatabaseClient, type DatabaseClient } from "./client";
+import { createDatabaseClient, type DatabaseClient, type DatabaseClientOptions } from "./client";
 
 export * from "./client";
 export * from "./customTypes";
@@ -14,8 +14,11 @@ export interface SnapshotDb {
 	healthCheck(): Promise<void>;
 }
 
-export function createSnapshotDb(connectionString = crawlerEnv.SNAPSHOT_DATABASE_URL): SnapshotDb {
-	const client = createDatabaseClient({ connectionString });
+export function createSnapshotDb(
+	connectionString = crawlerEnv.SNAPSHOT_DATABASE_URL,
+	options: Omit<DatabaseClientOptions, "connectionString" | "url"> = {}
+): SnapshotDb {
+	const client = createDatabaseClient({ connectionString, ...options });
 
 	return {
 		client,

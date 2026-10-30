@@ -272,6 +272,7 @@ export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
 });
 
 export const NetworkCooldownSchema = z.object({
+	reason: z.literal("upstream_throttle").optional(),
 	scope: z.string(),
 	remainingMs: z.number().nonnegative(),
 	until: z.number(),
@@ -279,6 +280,7 @@ export const NetworkCooldownSchema = z.object({
 
 export const CrawlerStatusDtoSchema = z.object({
 	cooldowns: z.array(NetworkCooldownSchema).optional(),
+	session: z.lazy(() => BilibiliSessionStatusSchema).optional(),
 	ready: z.boolean(),
 	revision: z.number().nullable(),
 	adapters: z.array(
@@ -294,6 +296,11 @@ export const CrawlerStatusDtoSchema = z.object({
 			failures: z.number().nonnegative().optional(),
 			rateLimited: z.number().nonnegative().optional(),
 			averageDurationMs: z.number().nonnegative().nullable().optional(),
+			configuredRate: z.number().optional(),
+			effectiveRate: z.number().optional(),
+			backgroundRate: z.number().optional(),
+			adaptiveFactor: z.number().optional(),
+			lastThrottledAt: z.number().nullable().optional(),
 		})
 	),
 });
@@ -368,8 +375,109 @@ export const HealthConfigSchema = z.object({
 	cooldownMs: z.number().int().positive().max(3_600_000).default(10_000),
 });
 
+export const BilibiliRequestPurposeSchema = z.enum([
+	"tracking",
+	"search",
+	"details",
+	"credentials",
+	"diagnostic",
+]);
+export type BilibiliRequestPurpose = z.infer<typeof BilibiliRequestPurposeSchema>;
+export const BILIBILI_REQUEST_TYPES = [
+	"bilibili:tracking",
+	"bilibili:search",
+	"bilibili:details",
+	"bilibili:credentials",
+	"bilibili:diagnostic",
+];
+export const BrowserIdentityConfigSchema = z.object({
+	family: z.enum(["auto", "chrome", "edge", "safari"]).default("auto"),
+	chromeVersion: z
+		.string()
+		.regex(/^\d+(\.\d+){0,3}$/)
+		.default("156.0.8078.80"),
+	edgeVersion: z
+		.string()
+		.regex(/^\d+(\.\d+){0,3}$/)
+		.default("156.0.4314.56"),
+	safariVersion: z
+		.string()
+		.regex(/^\d+(\.\d+){0,3}$/)
+		.default("27.0"),
+	language: z
+		.string()
+		.min(1)
+		.max(200)
+		.regex(/^[a-zA-Z0-9,;=. -]+$/)
+		.default("zh-CN,zh;q=0.9,en;q=0.8"),
+});
+export type BrowserIdentityConfig = z.infer<typeof BrowserIdentityConfigSchema>;
+export const BilibiliSessionConfigSchema = z.object({
+	refreshIntervalMs: z.number().int().min(60000).max(21600000).default(3600000),
+	refreshRetryMs: z.number().int().min(1000).max(300000).default(30000),
+	recoveryAttempts: z.number().int().min(0).max(2).default(1),
+	recoveryCodes: z.array(z.number().int()).max(10).default([]),
+	browser: BrowserIdentityConfigSchema.prefault({}),
+});
+export type BilibiliSessionConfig = z.infer<typeof BilibiliSessionConfigSchema>;
+export const BilibiliSessionStatusSchema = z.object({
+	generation: z.number().int().nonnegative(),
+	ready: z.boolean(),
+	refreshing: z.boolean(),
+	browser: z.string(),
+	lastRefreshAt: z.number().nullable(),
+	nextRefreshAt: z.number().nullable(),
+	lastRefreshError: z.string().nullable(),
+});
+export type BilibiliSessionStatus = z.infer<typeof BilibiliSessionStatusSchema>;
+export const AdaptiveRateConfigSchema = z.object({
+	enabled: z.boolean().default(true),
+	minFactor: z.number().min(0.01).max(1).default(0.1),
+	decreaseFactor: z.number().gt(0).lt(1).default(0.7),
+	recoveryStep: z.number().gt(0).max(1).default(0.05),
+	recoverySuccesses: z.number().int().min(1).max(1000).default(20),
+	backgroundFactor: z.number().gt(0).max(1).default(0.25),
+	backgroundPenaltyMs: z.number().int().min(0).max(3600000).default(60000),
+});
+export type AdaptiveRateConfig = z.infer<typeof AdaptiveRateConfigSchema>;
+export const BilibiliCredentialBundleSchema = z.object({
+	buvid3: z.string().min(1),
+	buvid4: z.string().min(1),
+	bNut: z.string().min(1),
+	ticket: z.string().min(1),
+	imgKey: z.string().min(1),
+	subKey: z.string().min(1),
+	refreshedAt: z.number(),
+	expiresAt: z.number(),
+	identity: z.object({
+		family: z.enum(["chrome", "edge", "safari"]),
+		version: z.string(),
+		language: z.string(),
+	}),
+});
+export type BilibiliCredentialBundle = z.infer<typeof BilibiliCredentialBundleSchema>;
+export const BilibiliEnvelopeSchema = z
+	.object({
+		code: z.number(),
+		message: z.string().optional().default(""),
+		data: z.unknown().optional(),
+	})
+	.passthrough();
+export const BilibiliDeviceResponseSchema = z.object({
+	code: z.literal(0),
+	data: z.object({ b_3: z.string().min(1), b_4: z.string().min(1) }),
+});
+export const BilibiliTicketResponseSchema = z.object({
+	code: z.literal(0),
+	data: z.object({
+		ticket: z.string().min(1),
+		nav: z.object({ img: z.string().min(1), sub: z.string().min(1) }),
+	}),
+});
+
 export const CrawlerExecutionConfigSchema = z.object({
 	throttleScope: z.enum(["adapter", "request_type"]).default("adapter"),
+	throttleFailover: z.boolean().default(false),
 	taskTimeoutMs: z.number().int().min(1000).max(240000).default(120000),
 	snapshotConcurrency: z.number().int().min(1).max(200).default(25),
 	discoveryConcurrency: z.number().int().min(1).max(100).default(12),
@@ -378,6 +486,13 @@ export const CrawlerExecutionConfigSchema = z.object({
 	throttleCooldownMs: z.number().int().min(100).max(3600000).default(5000),
 	throttleJitterMs: z.number().int().min(0).max(60000).default(5000),
 	queueCap: z.number().int().min(1).max(10000).default(200),
+	maxAdapterAttempts: z.number().int().min(1).max(10).default(3),
+	probeWaitMs: z.number().int().min(10).max(5000).default(100),
+	probeRetryMs: z.number().int().min(100).max(60000).default(1000),
+	probeRetries: z.number().int().min(0).max(5).default(1),
+	maxNetworkCooldownMs: z.number().int().min(1000).max(3600000).default(60000),
+	inferenceTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
+	mqOperationTimeoutMs: z.number().int().min(1000).max(30000).default(3000),
 });
 export type CrawlerExecutionConfig = z.infer<typeof CrawlerExecutionConfigSchema>;
 
@@ -388,6 +503,8 @@ export const NetworkRuntimeConfigSchema = z
 		requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).optional().default({}),
 		health: HealthConfigSchema.optional(),
 		execution: CrawlerExecutionConfigSchema.optional(),
+		session: BilibiliSessionConfigSchema.optional(),
+		adaptive: AdaptiveRateConfigSchema.optional(),
 	})
 	.superRefine((config, context) => {
 		const adapterIds = new Set<string>();
@@ -422,7 +539,7 @@ export const NetworkRuntimeConfigSchema = z
 			(sum, policy) => sum + policy.reservedShare,
 			0
 		);
-		if (totalShare > 1) {
+		if (totalShare > 1 + 1e-9) {
 			context.addIssue({
 				code: "custom",
 				message: `Total reserved share across request types (${totalShare}) must not exceed 1`,

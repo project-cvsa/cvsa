@@ -163,7 +163,7 @@ describe("BilibiliClient", () => {
 		const client = new BilibiliClient({ networkDelegate: mockDelegate });
 		const view = await client.getVideoView(100);
 		expect(view.aid).toBe(100);
-		expect(capturedRequest?.requestType).toBe("bilibili-api");
+		expect(capturedRequest?.requestType).toBe("bilibili:details");
 	});
 
 	test("fetches related recommended videos", async () => {

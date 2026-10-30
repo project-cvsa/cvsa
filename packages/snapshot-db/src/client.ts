@@ -5,6 +5,7 @@ import * as schema from "./schema";
 export interface DatabaseClientOptions {
 	connectionString?: string;
 	url?: string;
+	beforeQuery?: () => void;
 }
 
 /**
@@ -24,7 +25,11 @@ export function createDatabaseClient(options?: DatabaseClientOptions | string) {
 	// every AID would arrive as "900000000000001" instead of a bigint.
 	const client = new SQL({ ...(url ? { url } : {}), bigint: true });
 
-	return Object.assign(drizzle({ client }), { schema });
+	const beforeQuery = typeof options === "object" ? options.beforeQuery : undefined;
+	return Object.assign(
+		drizzle({ client, ...(beforeQuery ? { logger: { logQuery: () => beforeQuery() } } : {}) }),
+		{ schema }
+	);
 }
 
 export type DatabaseClient = ReturnType<typeof createDatabaseClient>;

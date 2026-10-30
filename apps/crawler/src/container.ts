@@ -1,3 +1,5 @@
+import { assertTaskActive } from "./crawler/shared/taskContext";
+import { AdapterProbeService } from "./crawler/network/adapterProbeService";
 import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
 import { DiscoveryAdminService } from "./crawler/discovery/adminService";
 import { ManualSnapshotService } from "./crawler/tracking/manualSnapshot";
@@ -36,7 +38,7 @@ import { and, asc, isNotNull, lte } from "drizzle-orm";
 import { createSnapshotDb, type VideoTracking, videoTracking } from "@cvsa/snapshot-db";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
 
-export const crawlerSnapshotDb = createSnapshotDb();
+export const crawlerSnapshotDb = createSnapshotDb(undefined, { beforeQuery: assertTaskActive });
 export const crawlerMq = createCrawlerMq(
 	crawlerEnv.REDIS_URL,
 	crawlerEnv.NODE_ENV === "test" ? `cvsa-test-${process.pid}` : "bull"
@@ -96,7 +98,16 @@ export const networkRuntime = new NetworkRuntimeConfigManager(
 
 export const bilibiliClient = new BilibiliClient({
 	networkDelegate: networkRuntime,
+	requestTimeoutMs: () => networkRuntime.getExecutionConfig().requestTimeoutMs,
+	operationTimeoutMs: () => networkRuntime.getExecutionConfig().mqOperationTimeoutMs,
 });
+
+networkRuntime.onSessionChange((config) => bilibiliClient.configureSession(config));
+networkRuntime.setSessionStatus(() => bilibiliClient.getSessionStatus());
+export const adapterProbeService = new AdapterProbeService(
+	networkRuntimeConfigService,
+	bilibiliClient
+);
 
 /**
  * Consumes `video_tracking.next_metadata_at`.
@@ -129,10 +140,12 @@ export const discoveryFilterService = new DiscoveryFilterService(
 );
 
 /**
- * In-process ONNX Akari classifier (`src/ml/akari.ts`). Classification runs in
- * this process; there is no separate inference service to call.
+ * ONNX Akari classifier in a supervised local process. The inference process
+ * is terminated on deadline or cancellation and restarted for subsequent work.
  */
-export const videoClassifierClient = new VideoClassifierClient();
+export const videoClassifierClient = new VideoClassifierClient({
+	timeoutMs: () => networkRuntime.getExecutionConfig().inferenceTimeoutMs,
+});
 
 export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 	bilibiliClient,
@@ -186,6 +199,7 @@ export const trackingDispatcher = new TrackingDispatcher(trackingRepository, cra
 });
 
 networkRuntime.onExecutionChange((config) => {
+	crawlerMq.setOperationTimeout?.(config.mqOperationTimeoutMs);
 	snapshotBatchWorker.setTaskTimeout?.(config.taskTimeoutMs);
 	discoveryWorker.setTaskTimeout?.(config.taskTimeoutMs);
 	snapshotBatchWorker.setConcurrency?.(config.snapshotConcurrency);
@@ -229,10 +243,13 @@ const baseCrawlerRuntime = createCrawlerRuntime({
 export const crawlerRuntime = {
 	async start(): Promise<void> {
 		await baseCrawlerRuntime.start();
+		await bilibiliClient.start();
 		metadataRefreshScheduler.start();
 	},
 	async shutdown(): Promise<void> {
 		metadataRefreshScheduler.stop();
 		await baseCrawlerRuntime.shutdown();
+		await bilibiliClient.stop();
+		videoClassifierClient.close();
 	},
 };

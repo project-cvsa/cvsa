@@ -238,3 +238,82 @@ test("a timed-out worker cannot submit a late write through the real repository"
 		await db.disconnect();
 	}
 });
+
+test("Bilibili throttling defers tracking and diagnostics through the same admission path", async () => {
+	const server = createBilibiliProtocolServer({
+		responseFactory: (request) =>
+			request.path.includes("search/type")
+				? { body: { code: -352, message: "Request frequency is limited" } }
+				: undefined,
+	});
+	const { manager } = runtime(server.baseUrl);
+	const client = new BilibiliClient({ networkDelegate: manager });
+	try {
+		await expect(client.searchVideos("test")).rejects.toMatchObject({ reason: "upstream" });
+		await expect(client.bulkGetVideoStats([100])).rejects.toMatchObject({ reason: "upstream" });
+		const adapterId = manager.getStatus().adapters[0].id;
+		await expect(client.diagnostic(adapterId)).rejects.toMatchObject({ reason: "upstream" });
+		expect(
+			server
+				.getCalls()
+				.filter(
+					(call) => call.path.includes("resource/infos") || call.path.endsWith("/nav")
+				)
+		).toHaveLength(0);
+		expect(server.getCalls().filter((call) => call.path.includes("finger/spi"))).toHaveLength(
+			1
+		);
+		expect((await manager.getStatusWithCooldowns()).adapters[0]).toMatchObject({
+			healthState: "healthy",
+			consecutiveFailures: 0,
+			adaptiveFactor: 0.7,
+		});
+	} finally {
+		await client.stop();
+		await manager.close();
+		await server.close();
+	}
+});
+
+test("database handles retained before expiry cannot submit writes after task cancellation", async () => {
+	const { assertTaskActive, runTaskWithDeadline } = await import(
+		"../src/crawler/shared/taskContext"
+	);
+	const { videoTracking } = await import("@cvsa/snapshot-db");
+	const { eq } = await import("drizzle-orm");
+	const db = createSnapshotDb(undefined, { beforeQuery: assertTaskActive });
+	const aid = 9_000_000_000_000_975n;
+	let resume: () => void = () => {};
+	const gate = new Promise<void>((resolve) => {
+		resume = resolve;
+	});
+	let rejected = false;
+	let finished: Promise<void> = Promise.resolve();
+	try {
+		await expect(
+			runTaskWithDeadline(30, () => {
+				const retained = db.client;
+				finished = (async () => {
+					await gate;
+					try {
+						await retained
+							.insert(videoTracking)
+							.values({ aid, nextSnapshotAt: toInstant(new Date()) });
+					} catch {
+						rejected = true;
+					}
+				})();
+				return finished;
+			})
+		).rejects.toThrow("deadline");
+		resume();
+		await finished;
+		expect(rejected).toBe(true);
+		expect(
+			await db.client.select().from(videoTracking).where(eq(videoTracking.aid, aid))
+		).toHaveLength(0);
+	} finally {
+		resume();
+		await db.disconnect();
+	}
+});

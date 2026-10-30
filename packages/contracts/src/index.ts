@@ -6,3 +6,5 @@ export * from "./crawler/operations";
 
 export * from "./embedding";
 export * from "./deploy";
+
+export * from "./akariWorker";
