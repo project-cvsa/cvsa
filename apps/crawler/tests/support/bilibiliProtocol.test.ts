@@ -183,12 +183,14 @@ describe("Bilibili public HTTP protocol", () => {
 	});
 
 	test("aborts a delayed local request when its timeout deadline expires", async () => {
-		const server = createBilibiliProtocolServer({ delayMs: 80 });
+		const server = createBilibiliProtocolServer({ delayMs: 1_500 });
 		try {
 			const request = createBilibiliProtocolRequest(server);
 			await expect(
 				request("https://api.bilibili.com/x/web-interface/view?aid=321", {
-					timeoutMs: 10,
+					// Generous enough for a loaded CI runner to connect before the
+					// deadline, while still expiring long before the delayed reply.
+					timeoutMs: 250,
 				})
 			).rejects.toThrow();
 			expect(server.getCalls()).toHaveLength(1);

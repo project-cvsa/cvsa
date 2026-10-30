@@ -76,7 +76,6 @@ function toMetadataInput(aid: bigint, details: VideoDetailsData): UpsertMetadata
 		honorReply: view.honor_reply ?? null,
 		tags: fromDetailTags(tags),
 		videoStatus: "normal",
-		discoverySource: "manual",
 		capturedAt: now,
 	};
 }

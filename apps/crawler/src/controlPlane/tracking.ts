@@ -3,6 +3,7 @@ import {
 	ActionQueuedResponseSchema,
 	AppError,
 	DeleteTrackingVideoResponseSchema,
+	DiscoveryContextSchema,
 	ErrorResponseSchema,
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
@@ -18,13 +19,47 @@ import {
 	type VideoTrackingDto,
 	VideoTrackingDtoSchema,
 } from "@cvsa/contracts";
-import { toInstant, type BilibiliVideoMetadata, type VideoTracking } from "@cvsa/snapshot-db";
+import {
+	toInstant,
+	type BilibiliVideoMetadata,
+	type Temporal,
+	type VideoTracking,
+} from "@cvsa/snapshot-db";
 import {
 	bilibiliClient,
+	discoveryAdminService,
 	discoveryRepository,
 	manualSnapshotService,
 	trackingRepository,
 } from "../container";
+
+/**
+ * Manual registration and ingest create tracking rows outside the discovery
+ * evaluator. Give them a real sample so a later untrack can record the human
+ * rejection instead of failing with a missing-sample 404.
+ */
+async function ensureManualSample(input: {
+	aid: bigint;
+	bvid: string;
+	title: string;
+	description: string | null;
+	tags: string[];
+	capturedAt: Temporal.Instant;
+}): Promise<void> {
+	if (await discoveryRepository.getSample(input.aid)) return;
+	await discoveryRepository.upsertSample({
+		aid: input.aid,
+		bvid: input.bvid,
+		title: input.title,
+		description: input.description,
+		tags: input.tags,
+		decision: "manual_import",
+		modelVersion: "manual",
+		probabilities: [],
+		songProbability: 1,
+		createdAt: input.capturedAt,
+	});
+}
 
 function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 	return {
@@ -51,6 +86,9 @@ function toTrackingListItemDto(
 	t: VideoTracking,
 	metadata: BilibiliVideoMetadata | undefined
 ): TrackingVideoListItem {
+	const context = metadata
+		? DiscoveryContextSchema.safeParse(metadata.discoveryContext)
+		: undefined;
 	return {
 		...toTrackingDto(t),
 		...(metadata
@@ -61,6 +99,7 @@ function toTrackingListItemDto(
 					videoStatus: metadata.videoStatus,
 					filterDecision: metadata.filterDecision,
 					discoverySource: metadata.discoverySource,
+					discoveryContext: context?.success ? context.data : null,
 				}
 			: {}),
 	};
@@ -106,9 +145,25 @@ export const trackingRoutes = new Elysia()
 					tname: details.View.tname ?? null,
 					tags: details.Tags?.map((t) => t.tag_name) ?? [],
 					discoverySource: "manual",
+					discoveryContext: {
+						origin: {
+							channel: "manual",
+							capturedAt: new Date().toISOString(),
+							manual: { action: "ingest" },
+						},
+					},
 					capturedAt: now,
 				},
 			]);
+
+			await ensureManualSample({
+				aid,
+				bvid: details.View.bvid,
+				title: details.View.title,
+				description: details.View.desc ?? null,
+				tags: details.Tags?.map((t) => t.tag_name) ?? [],
+				capturedAt: now,
+			});
 
 			await trackingRepository.upsertTracking({
 				aid,
@@ -146,14 +201,26 @@ export const trackingRoutes = new Elysia()
 			for (let i = 0; i < aids.length; i += chunkSize) {
 				const chunk = aids.slice(i, i + chunkSize);
 				await Promise.all(
-					chunk.map((aid) =>
-						trackingRepository.upsertTracking({
-							aid: BigInt(aid),
+					chunk.map(async (aid) => {
+						const numericAid = BigInt(aid);
+						await trackingRepository.upsertTracking({
+							aid: numericAid,
 							state: body.state ?? "regular",
 							priority: body.priority ?? 2,
 							nextSnapshotAt: now,
-						})
-					)
+						});
+						const metadata = await discoveryRepository.getMetadata(numericAid);
+						if (metadata) {
+							await ensureManualSample({
+								aid: numericAid,
+								bvid: metadata.bvid,
+								title: metadata.title,
+								description: metadata.description,
+								tags: [],
+								capturedAt: metadata.capturedAt,
+							});
+						}
+					})
 				);
 			}
 			return { registered: aids.length };
@@ -267,10 +334,7 @@ export const trackingRoutes = new Elysia()
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
 			const aid = BigInt(params.aid);
-			const deleted = await trackingRepository.deleteTracking(aid);
-			if (!deleted) {
-				return status(404, { code: "NOT_FOUND", message: "Video tracking not found" });
-			}
+			await discoveryAdminService.untrack(aid);
 			return { ok: true, aid: params.aid };
 		},
 		{

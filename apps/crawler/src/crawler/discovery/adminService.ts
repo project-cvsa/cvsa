@@ -85,6 +85,19 @@ export class DiscoveryAdminService {
 		return toSampleItem(sample);
 	}
 
+	/**
+	 * Human rejection is the permanent exclusion: the sample is labelled `0`
+	 * before the tracking row is removed, so a queued discovery job cannot add
+	 * the video back. A missing sample is a 404 rather than a silent synthetic
+	 * row, mirroring {@link label}.
+	 */
+	async untrack(aid: bigint): Promise<void> {
+		if (!(await this.tracking.getTracking(aid))) {
+			throw new AppError("Video tracking not found", "NOT_FOUND", 404);
+		}
+		await this.label(aid, 0);
+	}
+
 	async listSamples(query: DiscoverySampleListQuery): Promise<DiscoverySampleListResponse> {
 		const [rows, total] = await Promise.all([
 			this.repository.listSamples(query),

@@ -164,6 +164,17 @@ test("search survives worker replacement with persisted progress and no missing 
 				type: "fetch-video-details",
 				aid: String(candidate.aid),
 				source: "search",
+				origin: {
+					channel: "search",
+					capturedAt: expect.any(String),
+					search: {
+						keyword: "test",
+						order: "pubdate",
+						page: expect.any(Number),
+						position: 1,
+						categoryId: null,
+					},
+				},
 			}))
 		);
 		expect(

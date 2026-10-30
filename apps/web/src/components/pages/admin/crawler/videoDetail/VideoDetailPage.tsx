@@ -20,6 +20,149 @@ import Trash2 from "lucide-solid/icons/trash-2";
 
 const HISTORY_PAGE_SIZE = 10;
 
+type DiscoveryContextDto = NonNullable<BilibiliVideoMetadataDto["discoveryContext"]>;
+
+function DiscoveryContextSummary(props: { data: DiscoveryContextDto }) {
+	const t = getComponentT("crawler");
+	const origin = () => props.data.origin;
+	const decision = () => props.data.decision;
+
+	const channelLabel = (channel: string) => {
+		switch (channel) {
+			case "search":
+				return t("videoDetail.channel.search");
+			case "related":
+				return t("videoDetail.channel.related");
+			case "graph":
+				return t("videoDetail.channel.graph");
+			default:
+				return t("videoDetail.channel.manual");
+		}
+	};
+
+	const outcomeLabel = (outcome: string) =>
+		outcome === "accepted"
+			? t("videoDetail.outcome.accepted")
+			: t("videoDetail.outcome.rejected");
+
+	const reasonLabel = (reason: string) => {
+		switch (reason) {
+			case "whitelist_match":
+				return t("videoDetail.reason.whitelistMatch");
+			case "model_accept":
+				return t("videoDetail.reason.modelAccept");
+			case "model_reject":
+				return t("videoDetail.reason.modelReject");
+			case "model_unavailable":
+				return t("videoDetail.reason.modelUnavailable");
+			case "duration_out_of_range":
+				return t("videoDetail.reason.durationOutOfRange");
+			case "blacklist_match":
+				return t("videoDetail.reason.blacklistMatch");
+			default:
+				return reason;
+		}
+	};
+
+	return (
+		<div class="pt-3 border-t border-border flex flex-col gap-2 ts-caption">
+			<span class="text-tertiary font-medium">{t("videoDetail.discoveryOrigin")}</span>
+			<div class="grid grid-cols-2 gap-2">
+				<div>
+					<span class="text-tertiary block">{t("videoDetail.channel")}</span>
+					<span class="text-primary">{channelLabel(origin().channel)}</span>
+				</div>
+				<Show when={origin().search}>
+					{(search) => (
+						<>
+							<div>
+								<span class="text-tertiary block">{t("videoDetail.keyword")}</span>
+								<span class="text-primary">{search().keyword}</span>
+							</div>
+							<div>
+								<span class="text-tertiary block">{t("videoDetail.position")}</span>
+								<span class="text-primary">
+									{t("videoDetail.page")} {search().page} ·{" "}
+									{t("videoDetail.position")} {search().position}
+								</span>
+							</div>
+						</>
+					)}
+				</Show>
+				<Show when={origin().related}>
+					{(related) => (
+						<>
+							<div>
+								<span class="text-tertiary block">
+									{t("videoDetail.sourceAid")}
+								</span>
+								<a
+									href={`https://www.bilibili.com/video/av${related().sourceAid}`}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="text-primary hover:underline"
+								>
+									av{related().sourceAid}
+								</a>
+							</div>
+							<div>
+								<span class="text-tertiary block">{t("videoDetail.position")}</span>
+								<span class="text-primary">{related().position}</span>
+							</div>
+						</>
+					)}
+				</Show>
+			</div>
+
+			<Show when={decision()}>
+				{(value) => (
+					<div class="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+						<div>
+							<span class="text-tertiary block">{t("videoDetail.decision")}</span>
+							<span class="text-primary">
+								{outcomeLabel(value().outcome)} · {reasonLabel(value().reason)}
+							</span>
+						</div>
+						<div>
+							<span class="text-tertiary block">
+								{value().model
+									? t("videoDetail.songProbability")
+									: t("videoDetail.confidence")}
+							</span>
+							<span class="text-primary">
+								{(value().confidence * 100).toFixed(1)}%
+							</span>
+						</div>
+						<Show when={value().model}>
+							{(model) => (
+								<div>
+									<span class="text-tertiary block">
+										{t("videoDetail.model")}
+									</span>
+									<span class="text-primary">
+										{model().modelVersion} ·{" "}
+										{(model().songProbability * 100).toFixed(1)}%
+									</span>
+								</div>
+							)}
+						</Show>
+						<Show when={value().rules?.matchedSinger}>
+							{(singer) => (
+								<div>
+									<span class="text-tertiary block">
+										{t("videoDetail.matchedSinger")}
+									</span>
+									<span class="text-primary">{singer()}</span>
+								</div>
+							)}
+						</Show>
+					</div>
+				)}
+			</Show>
+		</div>
+	);
+}
+
 function VideoMetadataSummary(props: { data: BilibiliVideoMetadataDto }) {
 	const t = getComponentT("crawler");
 	return (
@@ -75,6 +218,10 @@ function VideoMetadataSummary(props: { data: BilibiliVideoMetadataDto }) {
 						<p class="text-secondary line-clamp-3 whitespace-pre-wrap">{desc()}</p>
 					</div>
 				)}
+			</Show>
+
+			<Show when={props.data.discoveryContext}>
+				{(context) => <DiscoveryContextSummary data={context()} />}
 			</Show>
 		</div>
 	);

@@ -1,5 +1,6 @@
 import { appLogger } from "@cvsa/logger";
 import type { ClassifierPrediction, VideoClassifierClient } from "./classifier";
+import type { DiscoveryDecision } from "./types";
 
 export interface FilterDecision {
 	action: "accept" | "reject";
@@ -14,6 +15,78 @@ export interface FilterDecision {
 	confidence: number;
 	/** Present when the classifier ran; absent for rule-only decisions. */
 	model?: ClassifierPrediction;
+	/** Classifier acceptance threshold, when the model produced the decision. */
+	threshold?: number;
+	/** Whitelist entries that fired, when the decision came from the rules. */
+	rules?: {
+		matchedSinger?: string;
+		matchedIndicator?: string;
+	};
+}
+
+/** Maps the internal filter vocabulary onto the persisted, stable contract. */
+export function toDiscoveryDecision(decision: FilterDecision): DiscoveryDecision {
+	const base = {
+		confidence: decision.confidence,
+		sampled: decision.sampled,
+		...(decision.threshold !== undefined ? { threshold: decision.threshold } : {}),
+		...(decision.rules ? { rules: decision.rules } : {}),
+		...(decision.model
+			? {
+					model: {
+						label: decision.model.label,
+						modelVersion: decision.model.modelVersion,
+						songProbability: decision.model.songProbability,
+						probabilities: [...decision.model.probabilities],
+					},
+				}
+			: {}),
+	};
+
+	switch (decision.reason) {
+		case "whitelist_hit":
+			return {
+				...base,
+				outcome: "accepted",
+				basis: "whitelist",
+				reason: "whitelist_match",
+			};
+		case "model_hit":
+			return {
+				...base,
+				outcome: "accepted",
+				basis: decision.model ? "model" : "heuristic",
+				reason: "model_accept",
+			};
+		case "model_rejected":
+			return {
+				...base,
+				outcome: "rejected",
+				basis: decision.model ? "model" : "heuristic",
+				reason: "model_reject",
+			};
+		case "model_unavailable":
+			return {
+				...base,
+				outcome: decision.action === "accept" ? "accepted" : "rejected",
+				basis: "heuristic",
+				reason: "model_unavailable",
+			};
+		case "duration_out_of_range":
+			return {
+				...base,
+				outcome: "rejected",
+				basis: "rules",
+				reason: "duration_out_of_range",
+			};
+		case "blacklist_hit":
+			return {
+				...base,
+				outcome: "rejected",
+				basis: "rules",
+				reason: "blacklist_match",
+			};
+	}
 }
 
 export interface DiscoveryFilterConfig {
@@ -283,6 +356,7 @@ export class DiscoveryFilterService {
 				reason: "model_hit",
 				sampled: false,
 				confidence: 0.85,
+				rules: { matchedSinger: rules.matchedSinger },
 			};
 		}
 
@@ -333,6 +407,7 @@ export class DiscoveryFilterService {
 					sampled: accepted ? false : Math.random() < this.config.rejectionSampleRate,
 					confidence: prediction.songProbability,
 					model: prediction,
+					threshold: this.config.modelThreshold,
 				};
 				appLogger.debug("Discovery candidate classified", {
 					component: "discovery-filter",
@@ -353,6 +428,7 @@ export class DiscoveryFilterService {
 					reason: "model_unavailable",
 					sampled: false,
 					confidence: 0.6,
+					rules: { matchedSinger: rules.matchedSinger },
 				};
 			}
 			return this.rejectByModel(input.title, "model_unavailable", 0.2);
@@ -364,6 +440,7 @@ export class DiscoveryFilterService {
 				reason: "model_hit",
 				sampled: false,
 				confidence: 0.85,
+				rules: { matchedSinger: rules.matchedSinger },
 			};
 		}
 		return this.rejectByModel(input.title, "model_rejected", 0.2);
@@ -381,7 +458,7 @@ export class DiscoveryFilterService {
 		tags: string[];
 		description?: string | null;
 		duration?: number;
-	}): { decision?: FilterDecision; matchedSinger: boolean } {
+	}): { decision?: FilterDecision; matchedSinger?: string; matchedIndicator?: string } {
 		const titleLower = input.title.toLowerCase();
 		const tagSet = new Set(input.tags.map((t) => t.toLowerCase()));
 
@@ -402,17 +479,22 @@ export class DiscoveryFilterService {
 				tagSet.has("vocaloid"))
 		) {
 			return {
-				matchedSinger: true,
+				matchedSinger,
+				matchedIndicator,
 				decision: {
 					action: "accept",
 					reason: "whitelist_hit",
 					sampled: false,
 					confidence: 1.0,
+					rules: {
+						matchedSinger,
+						...(matchedIndicator ? { matchedIndicator } : {}),
+					},
 				},
 			};
 		}
 
-		return { matchedSinger: matchedSinger !== undefined };
+		return { matchedSinger, matchedIndicator };
 	}
 
 	private rejectByModel(

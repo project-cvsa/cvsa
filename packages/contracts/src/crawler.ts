@@ -23,6 +23,79 @@ export const VideoTrackingDtoSchema = z.object({
 	lastError: z.string().nullable().optional(),
 });
 
+export const DiscoveryOriginChannelSchema = z.enum(["search", "related", "manual", "graph"]);
+export const DiscoveryDecisionOutcomeSchema = z.enum(["accepted", "rejected"]);
+export const DiscoveryDecisionBasisSchema = z.enum(["whitelist", "model", "heuristic", "rules"]);
+export const DiscoveryDecisionReasonSchema = z.enum([
+	"whitelist_match",
+	"model_accept",
+	"model_reject",
+	"model_unavailable",
+	"duration_out_of_range",
+	"blacklist_match",
+]);
+
+export const DiscoverySearchOriginSchema = z.object({
+	keyword: z.string(),
+	order: z.string(),
+	page: z.number().int().positive(),
+	position: z.number().int().positive(),
+	categoryId: z.number().int().nullable().optional(),
+});
+
+export const DiscoveryRelatedOriginSchema = z.object({
+	sourceAid: z.string(),
+	position: z.number().int().positive(),
+});
+
+export const DiscoveryManualOriginSchema = z.object({
+	action: z.enum(["ingest", "detail", "seed"]),
+});
+
+export const DiscoveryOriginSchema = z.object({
+	channel: DiscoveryOriginChannelSchema,
+	capturedAt: z.string(),
+	search: DiscoverySearchOriginSchema.optional(),
+	related: DiscoveryRelatedOriginSchema.optional(),
+	manual: DiscoveryManualOriginSchema.optional(),
+});
+
+export const DiscoveryDecisionSchema = z.object({
+	outcome: DiscoveryDecisionOutcomeSchema,
+	basis: DiscoveryDecisionBasisSchema,
+	reason: DiscoveryDecisionReasonSchema,
+	confidence: z.number(),
+	threshold: z.number().nullable().optional(),
+	sampled: z.boolean(),
+	rules: z
+		.object({
+			matchedSinger: z.string().optional(),
+			matchedIndicator: z.string().optional(),
+		})
+		.optional(),
+	model: z
+		.object({
+			label: z.number().int(),
+			modelVersion: z.string(),
+			songProbability: z.number(),
+			probabilities: z.array(z.number()),
+		})
+		.optional(),
+});
+
+export const DiscoveryContextSchema = z.object({
+	origin: DiscoveryOriginSchema,
+	decision: DiscoveryDecisionSchema.optional(),
+	job: z
+		.object({
+			id: z.string(),
+			sweepId: z.string().optional(),
+		})
+		.optional(),
+});
+
+export type DiscoveryContext = z.infer<typeof DiscoveryContextSchema>;
+
 export const IngestVideoRequestSchema = z.object({
 	identifier: z.string().min(1).max(100),
 	state: z.enum(["new", "regular", "milestone", "archive"]).optional().default("regular"),
@@ -153,6 +226,7 @@ export const BilibiliVideoMetadataDtoSchema = z.object({
 	modelScore: z.number().nullable().optional(),
 	modelVersion: z.string().nullable().optional(),
 	discoverySource: z.string().nullable().optional(),
+	discoveryContext: DiscoveryContextSchema.nullable().optional(),
 	capturedAt: z.string(),
 	updatedAt: z.string(),
 });
@@ -495,6 +569,7 @@ export const TrackingVideoListItemSchema = VideoTrackingDtoSchema.extend({
 	videoStatus: z.string().optional(),
 	filterDecision: z.string().optional(),
 	discoverySource: z.string().nullable().optional(),
+	discoveryContext: DiscoveryContextSchema.nullable().optional(),
 });
 
 export const TrackingVideoSortFieldSchema = z.enum([

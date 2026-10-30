@@ -14,7 +14,7 @@ import { DiscoveryFilterService } from "./filter";
 import { RelationExtractor } from "./relationExtractor";
 import type { IDiscoveryRepository } from "./repository.interface";
 import { SearchRover } from "./searchRover";
-import type { CandidateSource, SearchRoverConfig } from "./types";
+import type { CandidateSource, DiscoveryOrigin, SearchRoverConfig } from "./types";
 
 export type DiscoveryJobData =
 	| { type: "search-sweep"; config?: Partial<SearchRoverConfig>; offset?: number }
@@ -24,6 +24,7 @@ export type DiscoveryJobData =
 			source: "search" | "related" | "manual" | "hot_sample";
 			sourceAid?: string;
 			position?: number;
+			origin?: DiscoveryOrigin;
 	  }
 	| { type: "active-discovery"; aid: string }
 	| { type: "hot-sample"; limit?: number };
@@ -106,6 +107,7 @@ export class DiscoveryPipelineProcessor {
 					data.source,
 					data.sourceAid,
 					data.position,
+					data.origin,
 					report
 				);
 				break;
@@ -135,7 +137,7 @@ export class DiscoveryPipelineProcessor {
 				let queued = 0;
 				for (const candidate of candidates)
 					if (!tracked.has(candidate.aid)) {
-						await this.enqueueDetailFetch(candidate.aid, "search");
+						await this.enqueueDetailFetch(candidate.aid, "search", candidate.origin);
 						queued++;
 					}
 				await report?.({
@@ -205,11 +207,17 @@ export class DiscoveryPipelineProcessor {
 		source: "search" | "related" | "manual" | "hot_sample",
 		_sourceAid?: string,
 		_position?: number,
+		origin?: DiscoveryOrigin,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
 		await traceTask("discovery.worker.fetchVideoDetails", async () => {
 			const aid = BigInt(aidStr);
-			const evaluation = await this.evaluator.evaluate({ aid, source });
+			const evaluation = await this.evaluator.evaluate({
+				aid,
+				source,
+				...(origin ? { origin } : {}),
+				job: { id: `detail-${aidStr}` },
+			});
 			if (evaluation.status === "failed" && evaluation.reason === "fetch_failed")
 				throw new AppError(
 					evaluation.errorMessage ?? "Video detail fetch failed",
@@ -287,7 +295,13 @@ export class DiscoveryPipelineProcessor {
 		let queued = 0;
 		for (const cand of extraction.candidates) {
 			if (trackedSet.has(cand.aid)) continue;
-			await this.enqueueDetailFetch(cand.aid, "related", sourceAid, cand.position);
+			await this.enqueueDetailFetch(
+				cand.aid,
+				"related",
+				cand.origin,
+				sourceAid,
+				cand.position
+			);
 			queued++;
 		}
 		return queued;
@@ -296,6 +310,7 @@ export class DiscoveryPipelineProcessor {
 	private async enqueueDetailFetch(
 		aid: bigint,
 		source: CandidateSource,
+		origin?: DiscoveryOrigin,
 		sourceAid?: bigint,
 		position?: number
 	): Promise<void> {
@@ -306,6 +321,7 @@ export class DiscoveryPipelineProcessor {
 				type: "fetch-video-details",
 				aid: aid.toString(),
 				source: source === "topic" ? "search" : source,
+				...(origin ? { origin } : {}),
 				...(sourceAid !== undefined ? { sourceAid: sourceAid.toString() } : {}),
 				...(position !== undefined ? { position } : {}),
 			},

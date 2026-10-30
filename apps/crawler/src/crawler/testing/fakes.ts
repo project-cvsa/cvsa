@@ -6,6 +6,7 @@ import type {
 	Temporal,
 	VideoTracking,
 } from "@cvsa/snapshot-db";
+import { DiscoveryContextSchema } from "@cvsa/contracts";
 import { toInstant, toJson } from "@cvsa/snapshot-db";
 import type { JobType, JobsOptions } from "bullmq";
 import type { IDiscoveryRepository } from "../discovery/repository.interface";
@@ -508,6 +509,24 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 	async upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata> {
 		const now = data.capturedAt ?? toInstant(new Date());
 		const existing = this.metadatas.get(data.aid);
+		const currentContext = DiscoveryContextSchema.safeParse(existing?.discoveryContext);
+		const incomingContext = data.discoveryContext;
+		const discoveryContext = !incomingContext
+			? (existing?.discoveryContext ?? null)
+			: currentContext.success
+				? toJson({
+						origin: currentContext.data.origin,
+						...((incomingContext.decision ?? currentContext.data.decision)
+							? {
+									decision:
+										incomingContext.decision ?? currentContext.data.decision,
+								}
+							: {}),
+						...((incomingContext.job ?? currentContext.data.job)
+							? { job: incomingContext.job ?? currentContext.data.job }
+							: {}),
+					})
+				: toJson(incomingContext);
 		const meta: BilibiliVideoMetadata = {
 			aid: data.aid,
 			bvid: data.bvid,
@@ -550,10 +569,8 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 				data.modelVersion !== undefined
 					? data.modelVersion
 					: (existing?.modelVersion ?? null),
-			discoverySource:
-				data.discoverySource !== undefined
-					? data.discoverySource
-					: (existing?.discoverySource ?? null),
+			discoverySource: existing?.discoverySource ?? data.discoverySource ?? null,
+			discoveryContext,
 			capturedAt: existing?.capturedAt ?? now,
 			updatedAt: now,
 		};
@@ -678,6 +695,10 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		});
 		const offset = options.offset ?? 0;
 		return rows.slice(offset, offset + (options.limit ?? 50));
+	}
+
+	async getSample(aid: bigint): Promise<DiscoverySample | null> {
+		return this.samples.get(aid) ?? null;
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {

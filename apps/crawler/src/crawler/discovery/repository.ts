@@ -6,10 +6,12 @@ import type {
 	DatabaseClient,
 	DiscoverySample,
 } from "@cvsa/snapshot-db";
+import { DiscoveryContextSchema } from "@cvsa/contracts";
 import { and, or, toInstant, toJson } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { IDiscoveryRepository } from "./repository.interface";
 import type {
+	DiscoveryContext,
 	HotSampleOptions,
 	ListDiscoverySamplesOptions,
 	MetadataChangeType,
@@ -38,6 +40,32 @@ const TRACKED_FIELDS: readonly (keyof MetadataComparable)[] = [
 
 function stableJson(value: unknown): string {
 	return JSON.stringify(toJson(value) ?? null);
+}
+
+function parseDiscoveryContext(value: unknown): DiscoveryContext | null {
+	const parsed = DiscoveryContextSchema.safeParse(value);
+	return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Provenance is first-write-wins; the decision snapshot follows the latest
+ * evaluation. A metadata refresh therefore cannot rewrite where a video came
+ * from, while a re-evaluation can still update its classifier outcome.
+ */
+function mergeDiscoveryContext(
+	existing: unknown,
+	incoming: DiscoveryContext | null | undefined
+): DiscoveryContext | null {
+	const current = parseDiscoveryContext(existing);
+	if (!incoming) return current;
+	if (!current) return incoming;
+	return {
+		origin: current.origin,
+		...((incoming.decision ?? current.decision)
+			? { decision: incoming.decision ?? current.decision }
+			: {}),
+		...((incoming.job ?? current.job) ? { job: incoming.job ?? current.job } : {}),
+	};
 }
 
 function comparableFromRow(row: BilibiliVideoMetadata): MetadataComparable {
@@ -121,6 +149,9 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 			if (existing) {
 				const diff = diffMetadata(existing, data);
 				const changeType = changeTypeForDiff(diff);
+				const discoveryContext = data.discoveryContext
+					? mergeDiscoveryContext(existing.discoveryContext, data.discoveryContext)
+					: undefined;
 
 				const updated = await activeTaskResource(this.db)
 					.orm.public.BilibiliVideoMetadata.where({
@@ -171,10 +202,16 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 							data.modelVersion !== undefined
 								? data.modelVersion
 								: existing.modelVersion,
-						discoverySource:
-							data.discoverySource !== undefined
-								? data.discoverySource
-								: existing.discoverySource,
+						// Provenance is first-write-wins: later evaluations and metadata
+						// refreshes must not rewrite where the video was discovered.
+						discoverySource: existing.discoverySource ?? data.discoverySource ?? null,
+						...(discoveryContext !== undefined
+							? {
+									discoveryContext: discoveryContext
+										? toJson(discoveryContext)
+										: null,
+								}
+							: {}),
 					});
 
 				if (updated) {
@@ -221,6 +258,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				modelScore: data.modelScore ?? null,
 				modelVersion: data.modelVersion ?? null,
 				discoverySource: data.discoverySource ?? null,
+				discoveryContext: data.discoveryContext ? toJson(data.discoveryContext) : null,
 				...(data.capturedAt ? { capturedAt: data.capturedAt } : {}),
 			});
 
@@ -286,6 +324,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					modelScore: item.modelScore ?? null,
 					modelVersion: item.modelVersion ?? null,
 					discoverySource: item.discoverySource ?? null,
+					discoveryContext: item.discoveryContext ? toJson(item.discoveryContext) : null,
 					...(item.capturedAt ? { capturedAt: item.capturedAt } : {}),
 				})),
 				{
@@ -496,6 +535,12 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 			total: agg.count(),
 		}));
 		return result.total;
+	}
+
+	async getSample(aid: bigint): Promise<DiscoverySample | null> {
+		return traceTask("discovery.getSample", () =>
+			activeTaskResource(this.db).orm.public.DiscoverySample.where({ aid }).first()
+		);
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {

@@ -3,13 +3,78 @@ import type { BilibiliRelatedVideo, SearchVideo } from "../bilibili";
 
 export type CandidateSource = "related" | "search" | "topic" | "manual" | "hot_sample";
 
+export type DiscoveryOriginChannel = "search" | "related" | "manual" | "graph";
+
+export interface DiscoverySearchOrigin {
+	keyword: string;
+	order: string;
+	page: number;
+	position: number;
+	categoryId?: number | null;
+}
+
+export interface DiscoveryRelatedOrigin {
+	sourceAid: string;
+	position: number;
+}
+
+export interface DiscoveryManualOrigin {
+	action: "ingest" | "detail" | "seed";
+}
+
+export interface DiscoveryOrigin {
+	channel: DiscoveryOriginChannel;
+	capturedAt: string;
+	search?: DiscoverySearchOrigin;
+	related?: DiscoveryRelatedOrigin;
+	manual?: DiscoveryManualOrigin;
+}
+
+export type DiscoveryDecisionOutcome = "accepted" | "rejected";
+export type DiscoveryDecisionBasis = "whitelist" | "model" | "heuristic" | "rules";
+export type DiscoveryDecisionReason =
+	| "whitelist_match"
+	| "model_accept"
+	| "model_reject"
+	| "model_unavailable"
+	| "duration_out_of_range"
+	| "blacklist_match";
+
+export interface DiscoveryDecision {
+	outcome: DiscoveryDecisionOutcome;
+	basis: DiscoveryDecisionBasis;
+	reason: DiscoveryDecisionReason;
+	confidence: number;
+	threshold?: number | null;
+	sampled: boolean;
+	rules?: {
+		matchedSinger?: string;
+		matchedIndicator?: string;
+	};
+	model?: {
+		label: number;
+		modelVersion: string;
+		songProbability: number;
+		probabilities: readonly number[];
+	};
+}
+
+export interface DiscoveryContext {
+	origin: DiscoveryOrigin;
+	decision?: DiscoveryDecision;
+	job?: {
+		id: string;
+		sweepId?: string;
+	};
+}
+
 export interface UpsertDiscoverySampleInput {
 	aid: bigint;
 	bvid: string;
 	title: string;
 	description?: string | null;
 	tags?: string[] | null;
-	decision: "whitelist" | "model_accepted" | "model_rejected";
+	decision: "whitelist" | "model_accepted" | "model_rejected" | "manual_import";
 	modelVersion: string;
 	probabilities: readonly number[];
 	songProbability: number;
@@ -65,6 +130,7 @@ export interface UpsertMetadataInput {
 	modelScore?: number | null;
 	modelVersion?: string | null;
 	discoverySource?: string | null;
+	discoveryContext?: DiscoveryContext | null;
 	capturedAt?: Temporal.Instant;
 }
 
@@ -75,6 +141,7 @@ export interface DiscoveredCandidate {
 	source: CandidateSource;
 	sourceAid?: bigint;
 	position?: number;
+	origin: DiscoveryOrigin;
 	pubdate?: Temporal.Instant | null;
 	rawVideo?: BilibiliRelatedVideo | SearchVideo;
 }

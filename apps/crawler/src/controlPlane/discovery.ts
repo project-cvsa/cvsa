@@ -4,6 +4,7 @@ import {
 	BilibiliVideoMetadataDtoSchema,
 	BilibiliVideoRelationDtoSchema,
 	ClassifierHealthDtoSchema,
+	DiscoveryContextSchema,
 	DiscoveryFilterConfigDtoSchema,
 	DiscoverySampleItemSchema,
 	DiscoverySampleListQuerySchema,
@@ -40,6 +41,7 @@ import {
 } from "../container";
 
 function toMetadataDto(m: BilibiliVideoMetadata): BilibiliVideoMetadataDto {
+	const context = DiscoveryContextSchema.safeParse(m.discoveryContext);
 	return {
 		aid: m.aid.toString(),
 		bvid: m.bvid,
@@ -73,6 +75,7 @@ function toMetadataDto(m: BilibiliVideoMetadata): BilibiliVideoMetadataDto {
 		modelScore: m.modelScore,
 		modelVersion: m.modelVersion,
 		discoverySource: m.discoverySource,
+		discoveryContext: context.success ? context.data : null,
 		capturedAt: m.capturedAt.toString(),
 		updatedAt: m.updatedAt.toString(),
 	};
@@ -392,7 +395,14 @@ export const discoveryRoutes = new Elysia()
 							pic: seedPic,
 							duration: seedDuration ?? 0,
 							ownerName: seedOwnerName,
-							discoverySource: "recommendation-graph-explorer",
+							discoverySource: "graph",
+							discoveryContext: {
+								origin: {
+									channel: "graph",
+									capturedAt: new Date().toISOString(),
+									manual: { action: "seed" },
+								},
+							},
 						},
 					]);
 				} catch {
@@ -413,8 +423,9 @@ export const discoveryRoutes = new Elysia()
 				try {
 					const relatedVideos = await bilibiliClient.getRelatedVideos(seedAid);
 					if (relatedVideos.length > 0) {
+						const capturedAt = new Date().toISOString();
 						await discoveryRepository.bulkUpsertMetadata(
-							relatedVideos.map((item) => ({
+							relatedVideos.map((item, index) => ({
 								aid: BigInt(item.aid),
 								bvid: item.bvid,
 								title: item.title,
@@ -422,6 +433,16 @@ export const discoveryRoutes = new Elysia()
 								duration: item.duration ?? 0,
 								ownerName: item.owner?.name ?? null,
 								discoverySource: "related",
+								discoveryContext: {
+									origin: {
+										channel: "related",
+										capturedAt,
+										related: {
+											sourceAid: (seedAid ?? 0n).toString(),
+											position: index + 1,
+										},
+									},
+								},
 							}))
 						);
 						await discoveryRepository.saveRelations(

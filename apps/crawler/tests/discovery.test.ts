@@ -1,4 +1,4 @@
-import type { DiscoveryJobProgress } from "@cvsa/contracts";
+import { DiscoveryContextSchema, type DiscoveryJobProgress } from "@cvsa/contracts";
 import { describe, expect, test } from "bun:test";
 import { toInstant, type BilibiliVideoMetadata } from "@cvsa/snapshot-db";
 import {
@@ -15,6 +15,7 @@ import {
 	normalizeFilterConfig,
 	RelationExtractor,
 	SearchRover,
+	toDiscoveryDecision,
 	type BilibiliHttpResponse,
 	type DiscoveryJobData,
 } from "../src/crawler";
@@ -263,6 +264,7 @@ describe("metadata change detection", () => {
 		modelScore: null,
 		modelVersion: null,
 		discoverySource: null,
+		discoveryContext: null,
 		capturedAt: toInstant(new Date()),
 		updatedAt: toInstant(new Date()),
 	} satisfies BilibiliVideoMetadata;
@@ -395,8 +397,19 @@ describe("SearchRover", () => {
 
 		expect(candidates).toHaveLength(1);
 		expect(candidates[0]?.title).toBe("【洛天依原创】霜雪千年");
+		expect(candidates[0]?.origin).toMatchObject({
+			channel: "search",
+			search: {
+				keyword: "洛天依原创",
+				order: "totalrank",
+				page: 1,
+				position: 1,
+			},
+		});
 
 		const meta = await repo.getMetadata(300_001n);
+		const context = DiscoveryContextSchema.parse(meta?.discoveryContext);
+		expect(context.origin.search?.keyword).toBe("洛天依原创");
 		expect(meta?.description).toBe("洛天依 原创曲");
 		expect(meta?.pic).toBe("https://i0.hdslb.com/bfs/archive/pic.jpg");
 		expect(meta?.duration).toBe(225);
@@ -496,6 +509,11 @@ describe("DiscoveryService", () => {
 		const meta = await repo.getMetadata(400_002n);
 		expect(meta?.filterDecision).toBe("accepted");
 		expect(meta?.discoverySource).toBe("related");
+		const context = DiscoveryContextSchema.parse(meta?.discoveryContext);
+		expect(context.origin.channel).toBe("related");
+		expect(context.origin.related?.sourceAid).toBe("999999");
+		expect(context.decision?.reason).toBe("whitelist_match");
+		expect(context.decision?.rules?.matchedSinger).toBe("洛天依");
 	});
 
 	test("search sweep promotes only candidates that clear the filter", async () => {
@@ -580,6 +598,18 @@ describe("DiscoveryFilterService", () => {
 		});
 		expect(coverWhitelist.action).toBe("accept");
 		expect(coverWhitelist.reason).toBe("whitelist_hit");
+	});
+
+	test("records a heuristic basis when the singer fallback accepted without a model", () => {
+		const filter = new DiscoveryFilterService({ modelEnabled: false });
+		const decision = filter.evaluateVideo({
+			title: "【洛天依】某首歌",
+			tags: ["洛天依"],
+			duration: 180,
+		});
+
+		expect(decision.reason).toBe("model_hit");
+		expect(toDiscoveryDecision(decision).basis).toBe("heuristic");
 	});
 
 	test("rejects non-whitelist candidates without a model", () => {
@@ -748,6 +778,9 @@ describe("DiscoveryPipelineProcessor", () => {
 			{ tagId: 3878, name: "原创曲", type: "topic", musicId: "" },
 		]);
 		expect(meta?.discoverySource).toBe("search");
+		const context = DiscoveryContextSchema.parse(meta?.discoveryContext);
+		expect(context.origin.channel).toBe("search");
+		expect(context.decision?.reason).toBe("whitelist_match");
 		expect(meta?.filterDecision).toBe("accepted");
 		expect(meta?.modelVersion).toBeNull();
 

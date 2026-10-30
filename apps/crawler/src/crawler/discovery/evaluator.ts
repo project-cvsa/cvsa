@@ -13,18 +13,41 @@ import type { ITrackingRepository } from "../tracking/repository.interface";
 import { resolveTrackingPolicy } from "../tracking/policy";
 import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { VideoClassifierClient } from "./classifier";
-import type { DiscoveryFilterService, FilterDecision } from "./filter";
+import { toDiscoveryDecision, type DiscoveryFilterService, type FilterDecision } from "./filter";
 import type { IDiscoveryRepository } from "./repository.interface";
 import { fromDetailTags } from "./tags";
-import type { CandidateSource, UpsertMetadataInput } from "./types";
+import type {
+	CandidateSource,
+	DiscoveryContext,
+	DiscoveryOrigin,
+	UpsertMetadataInput,
+} from "./types";
 
 const DAY_MS = 24 * 60 * 60 * 1_000;
 
 export interface CandidateEvaluationInput {
 	aid: bigint;
 	source: CandidateSource;
+	/** Discovery path captured when the candidate was enqueued. */
+	origin?: DiscoveryOrigin;
+	/** Queue job that produced this evaluation, when there is one. */
+	job?: { id: string; sweepId?: string };
 	/** Skip the "already tracked" short-circuit (metadata refresh paths). */
 	force?: boolean;
+}
+
+function fallbackOrigin(source: CandidateSource): DiscoveryOrigin {
+	const channel =
+		source === "related" || source === "hot_sample"
+			? "related"
+			: source === "manual"
+				? "manual"
+				: "search";
+	return {
+		channel,
+		capturedAt: new Date().toISOString(),
+		...(channel === "manual" ? { manual: { action: "detail" } } : {}),
+	};
 }
 
 export type CandidateEvaluation =
@@ -69,13 +92,10 @@ export class DiscoveryCandidateEvaluator {
 	async evaluate(input: CandidateEvaluationInput): Promise<CandidateEvaluation> {
 		return traceTask("discovery.evaluateCandidate", async () => {
 			const { aid, source } = input;
+			const origin = input.origin ?? fallbackOrigin(source);
 
-			const labeled = await this.discoveryRepo.listSamples({
-				search: aid.toString(),
-				limit: 1,
-			});
-			if (labeled[0]?.humanLabel === 0)
-				return { status: "skipped", reason: "human_rejected" };
+			const labeled = await this.discoveryRepo.getSample(aid);
+			if (labeled?.humanLabel === 0) return { status: "skipped", reason: "human_rejected" };
 
 			if (!input.force) {
 				const existing = await this.trackingRepo.getTracking(aid);
@@ -116,6 +136,11 @@ export class DiscoveryCandidateEvaluator {
 			const now = toInstant(new Date());
 			const pubdate = view.pubdate ? toInstant(new Date(view.pubdate * 1_000)) : null;
 			const ctime = view.ctime ? toInstant(new Date(view.ctime * 1_000)) : null;
+			const discoveryContext: DiscoveryContext = {
+				origin,
+				decision: toDiscoveryDecision(decision),
+				...(input.job ? { job: input.job } : {}),
+			};
 
 			const metadata: UpsertMetadataInput = {
 				aid,
@@ -156,7 +181,8 @@ export class DiscoveryCandidateEvaluator {
 							: "rejected",
 				modelScore: decision.confidence,
 				modelVersion: decision.model?.modelVersion ?? null,
-				discoverySource: source,
+				discoverySource: origin.channel,
+				discoveryContext,
 				capturedAt: now,
 			};
 
@@ -174,6 +200,12 @@ export class DiscoveryCandidateEvaluator {
 					songProbability: decision.model?.songProbability ?? decision.confidence,
 					createdAt: now,
 				});
+				// A human may have untracked the video while the detail fetch was in
+				// flight; never let that evaluation add it back.
+				const latest = await this.discoveryRepo.getSample(aid);
+				if (latest?.humanLabel === 0) {
+					return { status: "skipped", reason: "human_rejected" };
+				}
 				await this.trackingRepo.upsertTracking({
 					aid,
 					state: "new",

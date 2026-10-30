@@ -23,7 +23,7 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'1cb001ad7cdc68dacbfb4f9776f9b83d927ff7ac65048c883ef69dd906e3c89f'>;
+  StorageHashBase<'98d1bc3ce7b738ac81eaade5fb0b4f00fec111c8af706c2ec569043275a4aaca'>;
 export type ExecutionHash =
   ExecutionHashBase<'6cd53344f1bdb3a1b524736850e3ec015beb6e7b4c865b0e95d53cac85cde803'>;
 export type ProfileHash =
@@ -281,6 +281,7 @@ export namespace Models {
     descV2: FieldOutputTypes['public']['BilibiliVideoMetadata']['descV2'];
     description: FieldOutputTypes['public']['BilibiliVideoMetadata']['description'];
     dimension: FieldOutputTypes['public']['BilibiliVideoMetadata']['dimension'];
+    discoveryContext: FieldOutputTypes['public']['BilibiliVideoMetadata']['discoveryContext'];
     discoverySource: FieldOutputTypes['public']['BilibiliVideoMetadata']['discoverySource'];
     duration: FieldOutputTypes['public']['BilibiliVideoMetadata']['duration'];
     filterDecision: FieldOutputTypes['public']['BilibiliVideoMetadata']['filterDecision'];
@@ -475,6 +476,12 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly dimension: {
+                  readonly dataType: 'pg/json';
+                  readonly codecId: 'pg/json@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly discovery_context: {
                   readonly dataType: 'pg/json';
                   readonly codecId: 'pg/json@1';
                   readonly nullable: true;
@@ -1329,6 +1336,10 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/json@1' };
               };
+              readonly discoveryContext: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/json@1' };
+              };
               readonly discoverySource: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -1447,6 +1458,7 @@ type ContractBase = Omit<
                 readonly descV2: { readonly column: 'desc_v2' };
                 readonly description: { readonly column: 'description' };
                 readonly dimension: { readonly column: 'dimension' };
+                readonly discoveryContext: { readonly column: 'discovery_context' };
                 readonly discoverySource: { readonly column: 'discovery_source' };
                 readonly duration: { readonly column: 'duration' };
                 readonly filterDecision: { readonly column: 'filter_decision' };
