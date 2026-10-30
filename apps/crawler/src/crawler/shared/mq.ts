@@ -57,10 +57,11 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 						"active",
 						"delayed",
 						"failed",
-						"completed"
+						"completed",
+						"prioritized"
 					);
 					return {
-						waiting: counts.waiting ?? 0,
+						waiting: (counts.waiting ?? 0) + (counts.prioritized ?? 0),
 						active: counts.active ?? 0,
 						delayed: counts.delayed ?? 0,
 						failed: counts.failed ?? 0,
