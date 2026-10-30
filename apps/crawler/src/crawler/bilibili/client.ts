@@ -45,6 +45,9 @@ function createDefaultRequest(options: BilibiliClientOptions): BilibiliRequest {
 
 	return async (url, reqOptions) => {
 		const res = await fetch(url, {
+			signal: AbortSignal.timeout(
+				reqOptions?.timeoutMs && reqOptions.timeoutMs > 0 ? reqOptions.timeoutMs : 8_000
+			),
 			method: reqOptions?.method ?? "GET",
 			headers: reqOptions?.headers,
 			body: reqOptions?.body,

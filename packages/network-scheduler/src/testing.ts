@@ -7,17 +7,35 @@ export interface RateLimiterCall {
 }
 
 /**
- * In-memory `NetworkRateLimiter` for tests and single-process use. It records
- * every `consume` call and rejects the scopes it was constructed with, so a test
- * can drive both the happy path and an exhausted budget.
+ * Deterministic test double for routing and circuit-breaker tests.
+ * Admission refuses configured scopes; cooldowns use the injected clock.
+ * Rate enforcement itself is covered against Redis.
  */
 export class FakeRateLimiter implements NetworkRateLimiter {
 	readonly scopes: string[] = [];
 	readonly calls: RateLimiterCall[] = [];
 	private readonly rejectScopes: Set<string>;
+	private readonly cooldowns = new Map<string, number>();
 
-	constructor(rejectScopes: string[] = []) {
+	constructor(
+		rejectScopes: string[] = [],
+		private readonly clock: () => number = Date.now
+	) {
 		this.rejectScopes = new Set(rejectScopes);
+	}
+
+	async reserve(
+		scope: string,
+		budgets: ReadonlyArray<{ scope?: string; durationSeconds: number; maxRequests: number }>
+	): Promise<number> {
+		const refused = budgets.find((budget) => this.rejectScopes.has(budget.scope ?? scope));
+		return refused ? Math.ceil((refused.durationSeconds * 1000) / refused.maxRequests) : 0;
+	}
+	async defer(scope: string, delayMs: number): Promise<void> {
+		this.cooldowns.set(scope, Math.max(this.cooldowns.get(scope) ?? 0, this.clock() + delayMs));
+	}
+	async remainingDelay(scope: string): Promise<number> {
+		return Math.max(0, (this.cooldowns.get(scope) ?? 0) - this.clock());
 	}
 
 	async consume(scope: string, durationSeconds: number, maxRequests: number): Promise<boolean> {

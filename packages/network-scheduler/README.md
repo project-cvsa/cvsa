@@ -288,3 +288,14 @@ Close the shared rate limiter during application shutdown:
 ```ts
 await rateLimiter.close?.();
 ```
+
+Requests default to an 8-second timeout with cancellation. `execution.requestTimeoutMs`
+and `execution.admissionTimeoutMs` configure HTTP and local admission deadlines.
+Each adapter defaults to 20 requests per second, configured with `requestsPerSecond`.
+Redis atomically admits pacing, window and soft-reserve budgets. Local refusals carry
+`retryReason: "local_capacity"` and `retryAfterMs`; they never create upstream cooldowns.
+
+HTTP 429 and application throttling leave adapter health unchanged. They return
+`retryReason: "upstream"` with a retry deadline and create a Redis cooldown scoped to
+that adapter by default. `execution.throttleScope` can select `request_type` instead.
+Cooldown and jitter are configurable; longer `Retry-After` values take precedence.

@@ -68,6 +68,10 @@ function AdapterCard(props: AdapterCardProps) {
 	const metrics = () => [
 		{ label: t("network.adapters.col.weight"), value: props.adapter.baseWeight },
 		{
+			label: t("network.form.requestsPerSecond"),
+			value: `${props.adapter.requestsPerSecond ?? 20}/s`,
+		},
+		{
 			label: t("network.adapters.effectiveWeight"),
 			value: props.runtime?.effectiveWeight.toFixed(2) ?? "—",
 		},

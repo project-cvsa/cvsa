@@ -36,7 +36,10 @@ import { and, createSnapshotDb, type VideoTracking } from "@cvsa/snapshot-db";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
 
 export const crawlerSnapshotDb = createSnapshotDb();
-export const crawlerMq = createCrawlerMq(crawlerEnv.REDIS_URL);
+export const crawlerMq = createCrawlerMq(
+	crawlerEnv.REDIS_URL,
+	crawlerEnv.NODE_ENV === "test" ? `cvsa-test-${process.pid}` : "bull"
+);
 
 export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
 export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
@@ -143,7 +146,7 @@ export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 export const discoveryWorker = createDiscoveryWorker(
 	crawlerMq,
 	discoveryPipelineProcessor,
-	3,
+	12,
 	statsCollector
 );
 export const crawlerAdminStatsService = new CrawlerAdminStatsService(
@@ -178,7 +181,16 @@ export const snapshotBatchWorker = createSnapshotBatchWorker(
 );
 export const trackingDispatcher = new TrackingDispatcher(trackingRepository, crawlerMq, {
 	queueCap: 200,
+	remainingDelay: () => networkRuntime.remainingDelay(),
 	leaseDurationMs: 5 * 60 * 1_000,
+});
+
+networkRuntime.onExecutionChange((config) => {
+	snapshotBatchWorker.setTaskTimeout?.(config.taskTimeoutMs);
+	discoveryWorker.setTaskTimeout?.(config.taskTimeoutMs);
+	snapshotBatchWorker.setConcurrency?.(config.snapshotConcurrency);
+	discoveryWorker.setConcurrency?.(config.discoveryConcurrency);
+	trackingDispatcher.configure(config.queueCap);
 });
 
 let otelSdk: Awaited<ReturnType<typeof initOtelSdk>> | undefined;

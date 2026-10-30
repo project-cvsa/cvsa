@@ -1,3 +1,4 @@
+import { RetryLaterError } from "../shared/retryLater";
 import { AppError, type DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
@@ -16,7 +17,7 @@ import { SearchRover } from "./searchRover";
 import type { CandidateSource, SearchRoverConfig } from "./types";
 
 export type DiscoveryJobData =
-	| { type: "search-sweep"; config?: Partial<SearchRoverConfig> }
+	| { type: "search-sweep"; config?: Partial<SearchRoverConfig>; offset?: number }
 	| {
 			type: "fetch-video-details";
 			aid: string;
@@ -29,19 +30,7 @@ export type DiscoveryJobData =
 
 export const DISCOVERY_QUEUE_NAME = "crawler-discovery";
 
-/**
- * Retry policy for every discovery job.
- *
- * When the network pool is temporarily exhausted (all adapters circuit-open
- * after 429 throttling) the scheduler answers `NO_AVAILABLE_ADAPTER` and the
- * job throws. The shared defaults (3 attempts, 1s exponential) burn out within
- * seconds, so a short outage permanently failed the whole detail backlog. The
- * throttle cooldown keeps an adapter open for at least 60s, therefore the first
- * retry waits 60s and the exponential ladder (60/120/240/480s) keeps deferring
- * long enough for the pool to recover before the job is finally failed.
- *
- * Tracking (`snapshot-batch`) queue defaults are intentionally untouched.
- */
+/** Ordinary failures use bounded retries; throttling is delayed without consuming attempts. */
 export const DISCOVERY_QUEUE_JOB_OPTIONS: JobsOptions = {
 	attempts: 5,
 	backoff: { type: "exponential", delay: 60_000 },
@@ -84,7 +73,8 @@ export class DiscoveryPipelineProcessor {
 
 	async processJob(
 		data: DiscoveryJobData,
-		report?: (progress: DiscoveryJobProgress) => Promise<void>
+		report?: (progress: DiscoveryJobProgress) => Promise<void>,
+		checkpoint?: (offset: number) => Promise<void>
 	): Promise<void> {
 		const target =
 			"aid" in data
@@ -108,7 +98,7 @@ export class DiscoveryPipelineProcessor {
 		});
 		switch (data.type) {
 			case "search-sweep":
-				await this.handleSearchSweep(data.config, report);
+				await this.handleSearchSweep(data.config, report, data.offset ?? 0, checkpoint);
 				break;
 			case "fetch-video-details":
 				await this.handleFetchVideoDetails(
@@ -130,49 +120,33 @@ export class DiscoveryPipelineProcessor {
 
 	private async handleSearchSweep(
 		config?: Partial<SearchRoverConfig>,
-		report?: (progress: DiscoveryJobProgress) => Promise<void>
+		report?: (progress: DiscoveryJobProgress) => Promise<void>,
+		offset = 0,
+		checkpoint?: (offset: number) => Promise<void>
 	): Promise<void> {
-		await traceTask("discovery.worker.searchSweep", async () => {
-			appLogger.info("Executing scheduled search sweep", {
-				component: "discovery-worker",
-			});
-
-			const effectiveKeywords =
-				config?.keywords ?? this.filterService.getConfig().searchKeywords;
-			const candidates = await this.searchRover.runSearchSweep(
-				{
-					...config,
-					keywords: effectiveKeywords,
-				},
-				report
-			);
-			if (candidates.length === 0) return;
-
-			// Filter out already tracked aids before queuing detail fetch
-			const candidateAids = candidates.map((c) => c.aid);
-			const existing = await this.trackingRepo.getTrackings(candidateAids);
-			const trackedSet = new Set(existing.map((t) => t.aid));
-
-			let queued = 0;
-			for (const cand of candidates) {
-				if (!trackedSet.has(cand.aid)) {
-					await this.enqueueDetailFetch(cand.aid, "search");
-					queued++;
-					await report?.({
-						stage: "evaluating",
-						target: cand.aid.toString(),
-						candidates: candidates.length,
-						queued,
-						updatedAt: new Date().toISOString(),
-					});
-				}
-			}
-
-			appLogger.info("Search sweep finished, queued candidate detail fetches", {
-				component: "discovery-worker",
-				totalFound: candidates.length,
-				newCandidatesQueued: queued,
-			});
+		const keywords = config?.keywords ?? this.filterService.getConfig().searchKeywords;
+		await this.searchRover.runSearchSweep({ ...config, keywords }, report, {
+			offset,
+			onPage: async (candidates, nextOffset) => {
+				const existing = await this.trackingRepo.getTrackings(
+					candidates.map((candidate) => candidate.aid)
+				);
+				const tracked = new Set(existing.map((row) => row.aid));
+				let queued = 0;
+				for (const candidate of candidates)
+					if (!tracked.has(candidate.aid)) {
+						await this.enqueueDetailFetch(candidate.aid, "search");
+						queued++;
+					}
+				await report?.({
+					stage: "evaluating",
+					target: null,
+					candidates: candidates.length,
+					queued,
+					updatedAt: new Date().toISOString(),
+				});
+				await checkpoint?.(nextOffset);
+			},
 		});
 	}
 
@@ -343,7 +317,7 @@ export class DiscoveryPipelineProcessor {
 export function createDiscoveryWorker(
 	mq: CrawlerMq,
 	processor: DiscoveryPipelineProcessor,
-	concurrency = 3,
+	concurrency = 12,
 	stats: StatsRecorder = createNoopStatsRecorder()
 ): CrawlerWorker {
 	return mq.createWorker<DiscoveryJobData>(
@@ -362,7 +336,10 @@ export function createDiscoveryWorker(
 				await job.updateProgress?.(progress);
 			};
 			try {
-				await processor.processJob(job.data, report);
+				await processor.processJob(job.data, report, async (offset) => {
+					if (job.data.type === "search-sweep")
+						await job.updateData?.({ ...job.data, offset });
+				});
 				await report({
 					...latest,
 					stage: "completed",
@@ -370,7 +347,11 @@ export function createDiscoveryWorker(
 				});
 				stats.recordJobCompleted();
 			} catch (error) {
-				await report({ ...latest, stage: "failed", updatedAt: new Date().toISOString() });
+				await report({
+					...latest,
+					stage: error instanceof RetryLaterError ? "deferred" : "failed",
+					updatedAt: new Date().toISOString(),
+				});
 				throw error;
 			} finally {
 				stats.recordTask(performance.now() - startedAt);

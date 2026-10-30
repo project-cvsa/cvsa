@@ -1,7 +1,11 @@
+import { assertTaskActive, getTaskSignal } from "../shared/taskContext";
+import { RetryLaterError } from "../shared/retryLater";
 import { AppError } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import {
+	CrawlerExecutionConfigSchema,
+	type CrawlerExecutionConfig,
 	NetworkRuntimeConfigSchema,
 	NetworkScheduler,
 	NetworkSchedulerError,
@@ -90,12 +94,46 @@ export function createDefaultDirectRuntimeConfig(): NetworkRuntimeConfig {
 
 export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	private scheduler: NetworkScheduler | undefined;
+	private adapterIds: string[] = [];
 	private revision: number | undefined;
 	private pollTimer: ReturnType<typeof setInterval> | undefined;
 	private readonly metrics: NetworkMetrics;
 	private readonly logger: NetworkSchedulerLogger;
 	private readonly tracer: NetworkSchedulerTracer;
 	private readonly clock: (() => number) | undefined;
+	private execution = CrawlerExecutionConfigSchema.parse({});
+	private readonly executionListeners = new Set<(config: CrawlerExecutionConfig) => void>();
+
+	getExecutionConfig(): CrawlerExecutionConfig {
+		return { ...this.execution };
+	}
+	onExecutionChange(listener: (config: CrawlerExecutionConfig) => void): void {
+		this.executionListeners.add(listener);
+		listener(this.getExecutionConfig());
+	}
+	async remainingDelay(): Promise<number> {
+		const global = (await this.rateLimiter.remainingDelay?.("bilibili-api")) ?? 0;
+		if (global > 0) return global;
+		const delays = await Promise.all(
+			this.adapterIds.map(
+				(id) => this.rateLimiter.remainingDelay?.(`adapter:${id}:bilibili-api`) ?? 0
+			)
+		);
+		return delays.length > 0 ? Math.min(...delays) : 0;
+	}
+	async getStatusWithCooldowns(): Promise<NetworkRuntimeStatus> {
+		const scopes = [
+			"bilibili-api",
+			...this.adapterIds.map((id) => `adapter:${id}:bilibili-api`),
+		];
+		const cooldowns = await Promise.all(
+			scopes.map(async (scope) => {
+				const remainingMs = (await this.rateLimiter.remainingDelay?.(scope)) ?? 0;
+				return { scope, remainingMs, until: Date.now() + remainingMs };
+			})
+		);
+		return { ...this.getStatus(), cooldowns: cooldowns.filter((item) => item.remainingMs > 0) };
+	}
 
 	constructor(
 		private readonly repository: INetworkRuntimeConfigRepository,
@@ -117,7 +155,22 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 				503
 			);
 		try {
-			return await this.scheduler.execute(request);
+			assertTaskActive();
+			const response = await this.scheduler.execute({
+				...request,
+				signal: request.signal ?? getTaskSignal(),
+			});
+			assertTaskActive();
+			if (
+				response.errorCode === "RATE_LIMITED" ||
+				response.errorCode === "HTTP_429" ||
+				response.errorCode === "APPLICATION_RATE_LIMIT"
+			)
+				throw new RetryLaterError(
+					response.retryAfterMs ?? 1000,
+					response.retryReason ?? "upstream"
+				);
+			return response;
 		} catch (error) {
 			if (error instanceof NetworkSchedulerError) {
 				throw new AppError(error.message, error.code, error.statusCode);
@@ -166,6 +219,11 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 					...(this.clock ? { clock: this.clock } : {}),
 				});
 			}
+			this.adapterIds = config.adapters
+				.filter((adapter) => adapter.enabled)
+				.map((adapter) => adapter.id);
+			this.execution = CrawlerExecutionConfigSchema.parse(config.execution ?? {});
+			for (const listener of this.executionListeners) listener(this.getExecutionConfig());
 			this.revision = validatedDocument.revision;
 			appLogger.info("Network runtime configuration loaded", {
 				component: "network-config",

@@ -1,3 +1,4 @@
+import { CrawlerExecutionConfigSchema } from "./dto";
 import { NetworkSchedulerError } from "./errors";
 import { createNoopNetworkSchedulerLogger, type NetworkSchedulerLogger } from "./logger";
 import { createNoopNetworkSchedulerTracer, type NetworkSchedulerTracer } from "./tracer";
@@ -21,9 +22,6 @@ import {
 	type NetworkTransportResponse,
 } from "./contracts";
 
-const SOFT_RESERVE_WINDOW_SECONDS = 1;
-const RATE_LIMIT_COOLDOWN_MS = 60_000;
-
 interface SoftReserveParams {
 	/**
 	 * Soft reserve partitions an already computable request capacity. When no
@@ -33,6 +31,7 @@ interface SoftReserveParams {
 	 */
 	readonly enabled: boolean;
 	readonly sharedMax: number;
+	readonly windowSeconds: number;
 	readonly reservedQuotas: Map<string, number>;
 }
 
@@ -89,19 +88,6 @@ function healthOutcome(errorCode: NetworkErrorCode | undefined): HealthOutcome {
 	return HEALTH_AFFECTING_NETWORK_ERROR_CODES.has(errorCode) ? "failure" : "neutral";
 }
 
-function retryAfterMs(headers: Record<string, string>, now: number): number {
-	const header = Object.entries(headers).find(
-		([key]) => key.toLowerCase() === "retry-after"
-	)?.[1];
-	if (!header) return 0;
-	if (/^\d+$/.test(header.trim())) {
-		const seconds = Number(header);
-		return Number.isSafeInteger(seconds) ? Math.max(0, seconds * 1000) : 0;
-	}
-	const date = Date.parse(header);
-	return Number.isFinite(date) ? Math.max(0, date - now) : 0;
-}
-
 export class NetworkScheduler implements NetworkDelegate {
 	private readonly random: () => number;
 	private readonly metrics: NetworkMetrics;
@@ -139,7 +125,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		const health = new Map<string, AdapterHealth>();
 		for (const adapterId of adapters.keys()) {
 			const previous = this.state.health.get(adapterId);
-			if (previous) health.set(adapterId, { ...previous });
+			if (previous) health.set(adapterId, previous);
 		}
 		this.state = this.createState(config, adapters, health);
 		this.syncStatistics(config);
@@ -191,9 +177,25 @@ export class NetworkScheduler implements NetworkDelegate {
 
 	public async execute(request: NetworkRequest): Promise<NetworkResponse> {
 		const state = this.state;
-		return this.tracer.traceTask("crawler.network.delegate", () =>
-			this.executeScheduled(state, request)
-		);
+		return this.tracer.traceTask("crawler.network.delegate", async () => {
+			const execution = CrawlerExecutionConfigSchema.parse(state.config.execution ?? {});
+			const deadline = performance.now() + execution.admissionTimeoutMs;
+			while (true) {
+				request.signal?.throwIfAborted();
+				const response = await this.executeScheduled(state, {
+					...request,
+					timeoutMs: request.timeoutMs ?? execution.requestTimeoutMs,
+				});
+				if (
+					response.retryReason !== "local_capacity" ||
+					performance.now() + (response.retryAfterMs ?? 50) > deadline
+				)
+					return response;
+				await new Promise<void>((resolve) =>
+					setTimeout(resolve, Math.max(1, response.retryAfterMs ?? 50))
+				);
+			}
+		});
 	}
 
 	private async executeScheduled(
@@ -234,22 +236,47 @@ export class NetworkScheduler implements NetworkDelegate {
 				);
 			}
 
-			if (requestType && !(await this.admitSoftReserve(state, requestType))) {
-				return this.rateLimitedResponse();
-			}
-
 			const effectiveRequestType = requestType ?? "default";
-
+			const cooldown = (await this.rateLimiter.remainingDelay?.(effectiveRequestType)) ?? 0;
+			if (cooldown > 0) return this.rateLimitedResponse(cooldown, "upstream");
+			if (
+				!this.rateLimiter.reserve &&
+				requestType &&
+				!(await this.admitSoftReserve(state, requestType))
+			)
+				return this.rateLimitedResponse(1000);
+			let minimumDelay = Infinity;
+			let upstreamDelay = Infinity;
 			let lastResponse: NetworkResponse | undefined;
 			let budgetRefused = false;
 			while (candidates.length > 0) {
 				const candidate = this.takeWeightedCandidate(state, candidates);
+				const adapterCooldown =
+					(await this.rateLimiter.remainingDelay?.(
+						`adapter:${candidate.config.id}:${effectiveRequestType}`
+					)) ?? 0;
+				if (adapterCooldown > 0) {
+					upstreamDelay = Math.min(upstreamDelay, adapterCooldown);
+					continue;
+				}
 
 				// getCandidate() is a synchronous pre-filter; the authoritative claim on
 				// a half-open probe happens here, once the candidate is actually picked.
 				if (!this.beginAttempt(state, candidate.config.id)) continue;
 
-				if (!(await this.consumeAdapterLimits(candidate.config))) {
+				let admissionDelay: number;
+				try {
+					admissionDelay = await this.consumeAdapterLimits(
+						candidate.config,
+						state,
+						requestType
+					);
+				} catch (error) {
+					this.releaseHalfOpenProbe(state, candidate.config.id);
+					throw error;
+				}
+				if (admissionDelay > 0) {
+					minimumDelay = Math.min(minimumDelay, admissionDelay);
 					this.releaseHalfOpenProbe(state, candidate.config.id);
 					budgetRefused = true;
 					continue;
@@ -291,7 +318,7 @@ export class NetworkScheduler implements NetworkDelegate {
 					)
 						stats.rateLimited += 1;
 				}
-				this.updateHealth(state, candidate.config.id, response.errorCode, response.headers);
+				this.updateHealth(state, candidate.config.id, response.errorCode);
 				this.logger.info("Network request completed", {
 					component: "network-scheduler",
 					adapterId: candidate.adapter.id,
@@ -301,6 +328,32 @@ export class NetworkScheduler implements NetworkDelegate {
 					errorCode: response.errorCode,
 				});
 
+				if (
+					response.errorCode === "HTTP_429" ||
+					response.errorCode === "APPLICATION_RATE_LIMIT"
+				) {
+					const execution = CrawlerExecutionConfigSchema.parse(
+						state.config.execution ?? {}
+					);
+					const retryAfter = Object.entries(response.headers).find(
+						([key]) => key.toLowerCase() === "retry-after"
+					)?.[1];
+					const seconds = retryAfter ? Number(retryAfter) : 0;
+					const delay = Number.isFinite(seconds)
+						? seconds * 1000
+						: Math.max(0, Date.parse(retryAfter ?? "") - this.clock());
+					const retryDelay = Math.max(
+						execution.throttleCooldownMs + this.random() * execution.throttleJitterMs,
+						Number.isFinite(delay) ? delay : 0
+					);
+					await this.rateLimiter.defer?.(
+						execution.throttleScope === "request_type"
+							? effectiveRequestType
+							: `adapter:${candidate.config.id}:${effectiveRequestType}`,
+						retryDelay
+					);
+					return { ...response, retryAfterMs: retryDelay, retryReason: "upstream" };
+				}
 				if (response.errorCode === undefined) return response;
 				if (!RETRYABLE_NETWORK_ERROR_CODES.has(response.errorCode)) return response;
 				lastResponse = response;
@@ -311,7 +364,10 @@ export class NetworkScheduler implements NetworkDelegate {
 			// "retry later" answer, not a missing adapter, so callers can tell the two
 			// apart: 429 with `RATE_LIMITED` when a budget turned the request away, and
 			// the original 503 when every candidate failed its circuit breaker instead.
-			if (budgetRefused) return this.rateLimitedResponse();
+			if (Number.isFinite(upstreamDelay) && !budgetRefused)
+				return this.rateLimitedResponse(upstreamDelay, "upstream");
+			if (budgetRefused)
+				return this.rateLimitedResponse(Number.isFinite(minimumDelay) ? minimumDelay : 50);
 
 			throw new NetworkSchedulerError(
 				"No available network adapter",
@@ -360,7 +416,10 @@ export class NetworkScheduler implements NetworkDelegate {
 	 * Built in one place so the soft-reserve and adapter-budget paths cannot drift
 	 * apart, and `adapterId` stays empty because no adapter carried the request.
 	 */
-	private rateLimitedResponse(): NetworkResponse {
+	private rateLimitedResponse(
+		retryAfterMs = 50,
+		retryReason: "local_capacity" | "upstream" = "local_capacity"
+	): NetworkResponse {
 		return {
 			adapterId: "",
 			status: 429,
@@ -368,6 +427,8 @@ export class NetworkScheduler implements NetworkDelegate {
 			body: "",
 			durationMs: 0,
 			errorCode: "RATE_LIMITED",
+			retryAfterMs,
+			retryReason,
 		};
 	}
 
@@ -404,7 +465,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		);
 
 		if (reservedPolicies.length === 0) {
-			return { enabled: false, sharedMax: 0, reservedQuotas: new Map() };
+			return { enabled: false, sharedMax: 0, windowSeconds: 1, reservedQuotas: new Map() };
 		}
 
 		let poolRate = 0;
@@ -413,9 +474,9 @@ export class NetworkScheduler implements NetworkDelegate {
 			if (!adapterConfig?.enabled) continue;
 
 			const limits = adapterConfig.rateLimits;
-			if (limits.length === 0) continue;
 
 			poolRate += Math.min(
+				adapterConfig.requestsPerSecond ?? 20,
 				...limits.map((limit) => limit.maxRequests / limit.durationSeconds)
 			);
 		}
@@ -424,27 +485,33 @@ export class NetworkScheduler implements NetworkDelegate {
 		// Soft reserve stays disabled rather than inventing a one-request-per-second
 		// budget that would strangle every request carrying a request type.
 		if (poolRate <= 0) {
-			return { enabled: false, sharedMax: 0, reservedQuotas: new Map() };
+			return { enabled: false, sharedMax: 0, windowSeconds: 1, reservedQuotas: new Map() };
 		}
 
 		const totalShare = reservedPolicies.reduce(
 			(sum, [, policy]) => sum + policy.reservedShare,
 			0
 		);
-		const sharedMax = Math.ceil(poolRate * (1 - totalShare) * SOFT_RESERVE_WINDOW_SECONDS);
+		const windowSeconds = Math.max(
+			1,
+			1 /
+				(poolRate *
+					Math.min(
+						...reservedPolicies.map(([, policy]) => policy.reservedShare),
+						totalShare < 1 ? 1 - totalShare : 1
+					))
+		);
+		const sharedMax = Math.ceil(poolRate * (1 - totalShare) * windowSeconds);
 
 		const reservedQuotas = new Map<string, number>();
 		for (const [requestType, policy] of reservedPolicies) {
 			reservedQuotas.set(
 				requestType,
-				Math.max(
-					1,
-					Math.ceil(poolRate * policy.reservedShare * SOFT_RESERVE_WINDOW_SECONDS)
-				)
+				Math.max(1, Math.ceil(poolRate * policy.reservedShare * windowSeconds))
 			);
 		}
 
-		return { enabled: true, sharedMax: Math.max(0, sharedMax), reservedQuotas };
+		return { enabled: true, windowSeconds, sharedMax: Math.max(0, sharedMax), reservedQuotas };
 	}
 
 	private async admitSoftReserve(state: SchedulerState, requestType: string): Promise<boolean> {
@@ -453,7 +520,13 @@ export class NetworkScheduler implements NetworkDelegate {
 		const reservedQuota = state.softReserve.reservedQuotas.get(requestType);
 		if (reservedQuota !== undefined && reservedQuota > 0) {
 			const scope = `soft-reserve:reserved:${requestType}`;
-			if (await this.rateLimiter.consume(scope, SOFT_RESERVE_WINDOW_SECONDS, reservedQuota)) {
+			if (
+				await this.rateLimiter.consume(
+					scope,
+					state.softReserve.windowSeconds,
+					reservedQuota
+				)
+			) {
 				return true;
 			}
 		}
@@ -461,7 +534,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		if (state.softReserve.sharedMax > 0) {
 			return this.rateLimiter.consume(
 				"soft-reserve:shared",
-				SOFT_RESERVE_WINDOW_SECONDS,
+				state.softReserve.windowSeconds,
 				state.softReserve.sharedMax
 			);
 		}
@@ -471,26 +544,58 @@ export class NetworkScheduler implements NetworkDelegate {
 		return false;
 	}
 
-	private async consumeAdapterLimits(config: NetworkAdapterConfig): Promise<boolean> {
-		if (config.rateLimits.length === 0) return true;
-
-		for (const limit of config.rateLimits) {
+	private async consumeAdapterLimits(
+		config: NetworkAdapterConfig,
+		state: SchedulerState,
+		requestType?: string
+	): Promise<number> {
+		const budgets = [
+			{ durationSeconds: 1 / (config.requestsPerSecond ?? 20), maxRequests: 1 },
+			...config.rateLimits,
+		];
+		if (this.rateLimiter.reserve) {
 			const scope = `adapter:${config.id}`;
-			const allowed = await this.rateLimiter.consume(
-				scope,
-				limit.durationSeconds,
-				limit.maxRequests
-			);
-			if (!allowed) return false;
+			if (!requestType || !state.softReserve.enabled)
+				return this.rateLimiter.reserve(scope, budgets);
+			const quotas = [];
+			const reserved = state.softReserve.reservedQuotas.get(requestType);
+			if (reserved)
+				quotas.push({
+					scope: `soft-reserve:reserved:${requestType}`,
+					durationSeconds: state.softReserve.windowSeconds,
+					maxRequests: reserved,
+				});
+			if (state.softReserve.sharedMax > 0)
+				quotas.push({
+					scope: "soft-reserve:shared",
+					durationSeconds: state.softReserve.windowSeconds,
+					maxRequests: state.softReserve.sharedMax,
+				});
+			let delay = Infinity;
+			for (const quota of quotas) {
+				const wait = await this.rateLimiter.reserve(scope, [...budgets, quota]);
+				if (wait === 0) return 0;
+				delay = Math.min(delay, wait);
+			}
+			return Number.isFinite(delay) ? delay : 1000;
 		}
-		return true;
+		for (const budget of budgets) {
+			if (
+				!(await this.rateLimiter.consume(
+					`adapter:${config.id}`,
+					budget.durationSeconds,
+					budget.maxRequests
+				))
+			)
+				return Math.ceil((budget.durationSeconds * 1000) / budget.maxRequests);
+		}
+		return 0;
 	}
 
 	private updateHealth(
 		state: SchedulerState,
 		adapterId: string,
-		errorCode: NetworkErrorCode | undefined,
-		headers: Record<string, string> = {}
+		errorCode: NetworkErrorCode | undefined
 	): void {
 		const health = this.getHealth(state, adapterId);
 		const outcome = healthOutcome(errorCode);
@@ -519,12 +624,10 @@ export class NetworkScheduler implements NetworkDelegate {
 		}
 
 		health.consecutiveFailures += 1;
-		const throttled = errorCode === "HTTP_429" || errorCode === "APPLICATION_RATE_LIMIT";
-		// Debounce transient failures; throttling and failed probes still isolate immediately.
+		// Debounce transient failures before reducing weight.
 		if (
 			health.consecutiveFailures >= 2 ||
 			wasProbing ||
-			throttled ||
 			state.healthConfig.failureThreshold === 1
 		) {
 			health.factor = Math.max(
@@ -533,19 +636,9 @@ export class NetworkScheduler implements NetworkDelegate {
 			);
 			if (health.factor < 0.8) health.degraded = true;
 		}
-		if (
-			wasProbing ||
-			throttled ||
-			health.consecutiveFailures >= state.healthConfig.failureThreshold
-		) {
+		if (wasProbing || health.consecutiveFailures >= state.healthConfig.failureThreshold) {
 			const now = this.clock();
-			const cooldown = throttled
-				? Math.max(
-						state.healthConfig.cooldownMs,
-						RATE_LIMIT_COOLDOWN_MS,
-						retryAfterMs(headers, now)
-					)
-				: state.healthConfig.cooldownMs;
+			const cooldown = state.healthConfig.cooldownMs;
 			health.openUntil = Math.max(health.openUntil ?? 0, now + cooldown);
 		}
 

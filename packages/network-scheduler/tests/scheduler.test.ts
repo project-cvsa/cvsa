@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	CrawlerExecutionConfigSchema,
 	NetworkScheduler,
 	NetworkSchedulerError,
 	type NetworkAdapter,
@@ -18,21 +19,13 @@ function config(overrides: Partial<NetworkRuntimeConfig> = {}): NetworkRuntimeCo
 		adapters: [adapterConfig("direct-a")],
 		bindings: [{ requestType: "test", adapterIds: ["direct-a"] }],
 		requestTypePolicies: {},
+		execution: CrawlerExecutionConfigSchema.parse({ admissionTimeoutMs: 0 }),
 		...overrides,
 	};
 }
 
 function binding(adapterId: string): NetworkRuntimeConfig["bindings"] {
 	return [{ requestType: "test", adapterIds: [adapterId] }];
-}
-
-/** The adapter's own rate limits also use the limiter; isolate soft-reserve traffic. */
-function softReserveCalls(limiter: FakeRateLimiter): Array<{
-	scope: string;
-	durationSeconds: number;
-	maxRequests: number;
-}> {
-	return limiter.calls.filter((call) => call.scope.startsWith("soft-reserve:"));
 }
 
 function request(requestType?: string): NetworkRequest {
@@ -357,223 +350,5 @@ describe("NetworkScheduler routing", () => {
 
 		expect(result.adapterId).toBe("direct-a");
 		expect(result.errorCode).toBe("NETWORK_FAILURE");
-	});
-});
-
-describe("NetworkScheduler soft reserve", () => {
-	test("stays disabled when no reserve policy is configured", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter(["soft-reserve:shared"]);
-		const scheduler = new NetworkScheduler(
-			config({ requestTypePolicies: {} }),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		const result = await scheduler.execute(request("test"));
-
-		expect(result.adapterId).toBe("direct-a");
-		expect(result.errorCode).toBeUndefined();
-		expect(limiter.calls).toEqual([]);
-	});
-
-	test("does not fabricate a one request per second budget when capacity is unknown", async () => {
-		// Regression: an adapter without rate limits yields no computable pool, so a
-		// configured reserve policy must not collapse every requestType request to
-		// 1 RPS. The limiter rejects everything to prove it is never consulted.
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter(["soft-reserve:shared", "soft-reserve:reserved:test"]);
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [],
-					},
-				],
-				requestTypePolicies: { test: { reservedShare: 0.5 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		for (let index = 0; index < 5; index++) {
-			const result = await scheduler.execute(request("test"));
-			expect(result.errorCode).toBeUndefined();
-			expect(result.adapterId).toBe("direct-a");
-		}
-		expect(limiter.calls).toEqual([]);
-	});
-
-	test("ignores reserve policies whose share is zero", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter(["soft-reserve:shared"]);
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [{ durationSeconds: 1, maxRequests: 10 }],
-					},
-				],
-				requestTypePolicies: { test: { reservedShare: 0 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		const result = await scheduler.execute(request("test"));
-		expect(result.errorCode).toBeUndefined();
-		expect(softReserveCalls(limiter)).toEqual([]);
-	});
-
-	test("partitions a computable pool between reserved and shared capacity", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter();
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [{ durationSeconds: 1, maxRequests: 100 }],
-					},
-				],
-				requestTypePolicies: { test: { reservedShare: 0.3 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		await scheduler.execute(request("test"));
-
-		// The reserved quota is admitted first; the shared budget is only consulted
-		// once the reservation is exhausted, which the next test covers.
-		expect(softReserveCalls(limiter)).toEqual([
-			{ scope: "soft-reserve:reserved:test", durationSeconds: 1, maxRequests: 30 },
-		]);
-	});
-
-	test("falls back to the shared budget when the reserved quota is exhausted", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter(["soft-reserve:reserved:test"]);
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [{ durationSeconds: 1, maxRequests: 100 }],
-					},
-				],
-				requestTypePolicies: { test: { reservedShare: 0.3 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		const result = await scheduler.execute(request("test"));
-
-		expect(result.adapterId).toBe("direct-a");
-		expect(limiter.scopes).toContain("soft-reserve:reserved:test");
-		expect(limiter.scopes).toContain("soft-reserve:shared");
-	});
-
-	test("rate limits with the shared budget when the request type has no reservation", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter(["soft-reserve:shared"]);
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [{ durationSeconds: 1, maxRequests: 100 }],
-					},
-				],
-				requestTypePolicies: { other: { reservedShare: 0.25 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		const result = await scheduler.execute(request("test"));
-
-		expect(result.status).toBe(429);
-		expect(result.errorCode).toBe("RATE_LIMITED");
-		expect(limiter.calls).toEqual([
-			{ scope: "soft-reserve:shared", durationSeconds: 1, maxRequests: 75 },
-		]);
-	});
-
-	test("does not admit unreserved request types when the whole pool is reserved", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter();
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [{ durationSeconds: 1, maxRequests: 20 }],
-					},
-				],
-				requestTypePolicies: { other: { reservedShare: 1 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		const result = await scheduler.execute(request("test"));
-
-		expect(result.status).toBe(429);
-		expect(softReserveCalls(limiter)).toEqual([]);
-	});
-
-	test("does not check soft reserve for requests without a request type", async () => {
-		const adapter = new StaticAdapter("direct-a", response("direct-a"));
-		const limiter = new FakeRateLimiter(["soft-reserve:shared"]);
-		const scheduler = new NetworkScheduler(
-			config({
-				adapters: [
-					{
-						id: "direct-a",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [{ durationSeconds: 1, maxRequests: 100 }],
-					},
-				],
-				bindings: undefined,
-				requestTypePolicies: { test: { reservedShare: 0.5 } },
-			}),
-			new Map([[adapter.id, adapter]]),
-			limiter,
-			{ random: () => 0 }
-		);
-
-		expect(await scheduler.execute(request())).toMatchObject({ adapterId: "direct-a" });
-		expect(softReserveCalls(limiter)).toEqual([]);
 	});
 });

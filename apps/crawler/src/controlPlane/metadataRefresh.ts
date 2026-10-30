@@ -1,3 +1,4 @@
+import { RetryLaterError } from "../crawler/shared/retryLater";
 import { appLogger } from "@cvsa/logger";
 import { toInstant, type Temporal, type VideoTracking } from "@cvsa/snapshot-db";
 import {
@@ -91,6 +92,26 @@ function toMetadataInput(aid: bigint, details: VideoDetailsData): UpsertMetadata
 export class MetadataRefreshScheduler {
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private running = false;
+	private retryTimer: ReturnType<typeof setTimeout> | undefined;
+	private retryAt = Infinity;
+	private scheduleRetry(delayMs: number): void {
+		if (!this.timer || Date.now() + delayMs >= this.retryAt) return;
+		if (this.retryTimer) clearTimeout(this.retryTimer);
+		this.retryAt = Date.now() + delayMs;
+		this.retryTimer = setTimeout(
+			() => {
+				this.retryTimer = undefined;
+				this.retryAt = Infinity;
+				void this.refreshDue().catch((error) =>
+					appLogger.warn("Metadata retry failed", {
+						component: "metadata-refresh",
+						error,
+					})
+				);
+			},
+			Math.max(1, delayMs)
+		);
+	}
 	private readonly intervalMs: number;
 	private readonly batchSize: number;
 
@@ -119,6 +140,9 @@ export class MetadataRefreshScheduler {
 	}
 
 	stop(): void {
+		if (this.retryTimer) clearTimeout(this.retryTimer);
+		this.retryTimer = undefined;
+		this.retryAt = Infinity;
 		if (!this.timer) return;
 		clearInterval(this.timer);
 		this.timer = undefined;
@@ -153,7 +177,6 @@ export class MetadataRefreshScheduler {
 				toMetadataInput(tracking.aid, details)
 			);
 			await this.deps.trackingRepository.updateSchedule(tracking.aid, {
-				nextSnapshotAt: tracking.nextSnapshotAt,
 				nextMetadataAt,
 				lastError: null,
 			});
@@ -163,9 +186,18 @@ export class MetadataRefreshScheduler {
 			});
 			return true;
 		} catch (error) {
+			if (error instanceof RetryLaterError) {
+				this.scheduleRetry(error.delayMs);
+				await this.deps.trackingRepository.updateSchedule(tracking.aid, {
+					nextMetadataAt: toInstant(
+						new Date(Date.now() + error.delayMs + Math.floor(Math.random() * 2_000))
+					),
+					lastError: "network:rate_limited",
+				});
+				return false;
+			}
 			const message = error instanceof Error ? error.message : String(error);
 			await this.deps.trackingRepository.updateSchedule(tracking.aid, {
-				nextSnapshotAt: tracking.nextSnapshotAt,
 				nextMetadataAt,
 				lastError: message,
 			});

@@ -325,7 +325,7 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		const wanted = new Set(aids);
 		const leased: VideoTracking[] = [];
 		for (const [aid, row] of this.trackings) {
-			if (!wanted.has(aid) || !isLeaseFree(row, at)) continue;
+			if (!wanted.has(aid) || !isDue(row, at) || !isLeaseFree(row, at)) continue;
 			const next = { ...row, leaseUntil, updatedAt: at };
 			this.trackings.set(aid, next);
 			leased.push(next);
@@ -394,13 +394,22 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		return row;
 	}
 
-	async updateSchedule(aid: bigint, update: UpdateScheduleInput): Promise<void> {
+	async updateSchedule(
+		aid: bigint,
+		update: UpdateScheduleInput,
+		expectedLeaseUntil?: Temporal.Instant
+	): Promise<void> {
 		const existing = this.trackings.get(aid);
-		if (!existing) return;
+		if (
+			!existing ||
+			(expectedLeaseUntil &&
+				existing.leaseUntil?.epochMilliseconds !== expectedLeaseUntil.epochMilliseconds)
+		)
+			return;
 		this.trackings.set(aid, {
 			...existing,
 			...(update.state ? { state: update.state } : {}),
-			nextSnapshotAt: update.nextSnapshotAt,
+			nextSnapshotAt: update.nextSnapshotAt ?? existing.nextSnapshotAt,
 			...(update.scheduleReason !== undefined
 				? { scheduleReason: update.scheduleReason }
 				: {}),
@@ -426,10 +435,15 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		});
 	}
 
-	async releaseLeases(aids: bigint[]): Promise<void> {
+	async releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void> {
 		for (const aid of aids) {
 			const existing = this.trackings.get(aid);
-			if (existing) this.trackings.set(aid, { ...existing, leaseUntil: null });
+			if (
+				existing &&
+				(!expectedLeaseUntil ||
+					existing.leaseUntil?.epochMilliseconds === expectedLeaseUntil.epochMilliseconds)
+			)
+				this.trackings.set(aid, { ...existing, leaseUntil: null });
 		}
 	}
 

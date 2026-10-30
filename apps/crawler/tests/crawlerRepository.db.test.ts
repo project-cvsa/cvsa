@@ -411,3 +411,22 @@ describe("DiscoveryRepository hot sampling", () => {
 		expect(seeds).not.toContain(recentlySampled);
 	});
 });
+
+test("stale snapshot leases cannot change or release a newer claim", async () => {
+	const target = aid(900);
+	const oldLease = instant(10_000);
+	const newLease = instant(20_000);
+	const next = instant(30_000);
+	await tracking.upsertTracking({ aid: target, nextSnapshotAt: next, leaseUntil: newLease });
+	await tracking.updateSchedule(
+		target,
+		{ nextSnapshotAt: instant(40_000), leaseUntil: null },
+		oldLease
+	);
+	await tracking.releaseLeases([target], oldLease);
+	const row = await tracking.getTracking(target);
+	expect(row?.leaseUntil?.epochMilliseconds).toBe(newLease.epochMilliseconds);
+	expect(row?.nextSnapshotAt.epochMilliseconds).toBe(next.epochMilliseconds);
+	await tracking.updateSchedule(target, { leaseUntil: null }, newLease);
+	expect((await tracking.getTracking(target))?.leaseUntil).toBeNull();
+});

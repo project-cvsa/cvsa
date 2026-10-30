@@ -1,3 +1,4 @@
+import { RetryLaterError } from "../shared/retryLater";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -242,6 +243,7 @@ export class DiscoveryCandidateEvaluator {
 	 * in `archive` so the dispatcher stops chasing them.
 	 */
 	private async handleFetchFailure(aid: bigint, error: unknown): Promise<CandidateEvaluation> {
+		if (error instanceof RetryLaterError) throw error;
 		const classification = classifyBilibiliError(error);
 		const errorMessage = error instanceof Error ? error.message : String(error);
 

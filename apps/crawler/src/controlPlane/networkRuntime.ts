@@ -54,7 +54,7 @@ export const networkRuntimeRoutes = new Elysia()
 			},
 		}
 	)
-	.get("/status", () => networkRuntime.getStatus(), {
+	.get("/status", () => networkRuntime.getStatusWithCooldowns(), {
 		response: {
 			200: NetworkRuntimeStatusSchema,
 			401: ErrorResponseSchema,
@@ -88,11 +88,11 @@ export const networkRuntimeRoutes = new Elysia()
 				const latencyMs = Date.now() - start;
 				return {
 					adapterId: params.id,
-					ok: res.status >= 200 && res.status < 400,
+					ok: res.status >= 200 && res.status < 400 && res.errorCode === undefined,
 					status: res.status,
 					latencyMs,
 					error:
-						res.status >= 400
+						res.status >= 400 || res.errorCode !== undefined
 							? `HTTP ${res.status}${res.errorCode ? `: ${res.errorCode}` : ""}`
 							: undefined,
 				};

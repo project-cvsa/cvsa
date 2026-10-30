@@ -63,12 +63,16 @@ function parseProxyUrl(proxyUrl: string): AxiosProxyConfig {
 }
 
 function createAxiosConfig(request: NetworkRequest, proxyUrl?: string): AxiosRequestConfig {
+	const timeout = AbortSignal.timeout(
+		request.timeoutMs && request.timeoutMs > 0 ? request.timeoutMs : 8_000
+	);
 	const config: AxiosRequestConfig = {
 		url: request.url,
 		method: request.method ?? "GET",
 		headers: request.headers,
 		data: request.body,
-		timeout: request.timeoutMs,
+		timeout: request.timeoutMs && request.timeoutMs > 0 ? request.timeoutMs : 8_000,
+		signal: request.signal ? AbortSignal.any([request.signal, timeout]) : timeout,
 		responseType: "text",
 		validateStatus: () => true,
 	};
@@ -85,7 +89,9 @@ function toTransportErrorCode(error: unknown): NetworkResponse["errorCode"] {
 
 	if (
 		axios.isAxiosError(error) &&
-		(error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")
+		(error.code === "ECONNABORTED" ||
+			error.code === "ETIMEDOUT" ||
+			error.code === "ERR_CANCELED")
 	) {
 		return "REQUEST_TIMEOUT";
 	}

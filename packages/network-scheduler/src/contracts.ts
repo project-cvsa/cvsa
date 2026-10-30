@@ -21,8 +21,7 @@ export type NetworkErrorCode =
 
 /**
  * Errors caused by the exit itself: the adapter could not deliver a usable
- * response because of the network path, the proxy, or upstream throttling aimed
- * at that exit. Only these codes reduce adapter health and trigger failover.
+ * response because of the network path, the proxy, or upstream server failures. Only these codes reduce adapter health and trigger failover.
  *
  * `APPLICATION_ERROR` is deliberately excluded. A business error reported by the
  * upstream application (the resource does not exist, is not visible, the caller
@@ -32,8 +31,6 @@ export type NetworkErrorCode =
 export const HEALTH_AFFECTING_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> = new Set([
 	"NETWORK_FAILURE",
 	"REQUEST_TIMEOUT",
-	"HTTP_429",
-	"APPLICATION_RATE_LIMIT",
 	"HTTP_5XX",
 ]);
 
@@ -59,6 +56,7 @@ export interface NetworkRequest {
 	headers?: Record<string, string>;
 	body?: string;
 	timeoutMs?: number;
+	signal?: AbortSignal;
 }
 
 export interface NetworkResponse {
@@ -68,6 +66,8 @@ export interface NetworkResponse {
 	body: string;
 	durationMs: number;
 	errorCode?: NetworkErrorCode;
+	retryAfterMs?: number;
+	retryReason?: "local_capacity" | "upstream";
 }
 
 export interface NetworkTransportResponse {
@@ -96,7 +96,13 @@ export interface NetworkTransport {
 }
 
 export interface NetworkRateLimiter {
+	reserve?(
+		scope: string,
+		budgets: ReadonlyArray<{ scope?: string; durationSeconds: number; maxRequests: number }>
+	): Promise<number>;
 	consume(scope: string, durationSeconds: number, maxRequests: number): Promise<boolean>;
+	defer?(scope: string, delayMs: number): Promise<void>;
+	remainingDelay?(scope: string): Promise<number>;
 	close?(): Promise<void>;
 }
 
