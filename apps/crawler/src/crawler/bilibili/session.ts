@@ -13,7 +13,7 @@ import type {
 
 const API_ORIGIN = "https://api.bilibili.com";
 const BILI_HOME = "https://www.bilibili.com/";
-const BILI_TICKET_TTL_SECONDS = 3 * 24 * 60 * 60;
+const BILI_TICKET_TTL_SECONDS = 1 * 24 * 60 * 60;
 const DEVICE_COOKIE_CACHE_KEY = "cvsa:bilibili:device-cookies";
 const WBI_KEYS_CACHE_KEY = "cvsa:bilibili:wbi-keys";
 const BILI_TICKET_CACHE_KEY = "cvsa:bilibili:ticket";

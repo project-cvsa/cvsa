@@ -6,7 +6,7 @@ import {
 } from "@cvsa/contracts";
 import { songExternalLinkWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
@@ -29,7 +29,7 @@ export const songExternalLinkUpdateHandler = new Elysia({
 					params.linkId,
 					body
 				);
-				return SongExternalLinkResponseSchema.parse(transformPrismaResult(updated));
+				return SongExternalLinkResponseSchema.parse(serializeResult(updated));
 			});
 			return status(200, link);
 		},

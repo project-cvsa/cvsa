@@ -1,4 +1,4 @@
-import type { JsonValue, Outbox, OutboxStatus, TxClient } from "@cvsa/db";
+import { type JsonValue, type Outbox, type OutboxStatus, type TxClient, outbox } from "@cvsa/db";
 
 export interface RecordOutboxEventParams {
 	aggregateType: string;
@@ -13,11 +13,16 @@ export async function recordOutboxEvent(
 	params: RecordOutboxEventParams
 ): Promise<Outbox> {
 	const status: OutboxStatus = "PENDING";
-	return tx.orm.meta.Outbox.create({
-		aggregateType: params.aggregateType,
-		aggregateId: params.aggregateId,
-		eventType: params.eventType,
-		payload: params.payload ?? undefined,
-		status,
-	});
+	const [row] = await tx
+		.insert(outbox)
+		.values({
+			aggregateType: params.aggregateType,
+			aggregateId: params.aggregateId,
+			eventType: params.eventType,
+			payload: params.payload ?? null,
+			status,
+		})
+		.returning();
+	if (!row) throw new Error("Failed to append outbox event");
+	return row;
 }

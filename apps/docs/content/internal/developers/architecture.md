@@ -16,7 +16,7 @@ description: 了解档案馆的项目组织架构。
 **packages** 目录下是共享包，被 apps 依赖使用：
 
 - `core`: 核心业务逻辑，包含 Service、Repository、DTO 定义
-- `db`: Prisma schema 和生成的数据库客户端
+- `db`: Drizzle schema 和数据库客户端
 - `embedding`: 向量化嵌入服务
 - `logger`: 日志封装
 - `observability`: 链路追踪配置
@@ -25,9 +25,9 @@ description: 了解档案馆的项目组织架构。
 
 ### Schema 位置
 
-数据库 schema 定义位于 `packages/db/prisma/` 目录下。
+数据库 schema 定义位于 `packages/db/src/schema/` 目录下（Drizzle 表定义）。
 其中的目录结构包含：
-- 主入口： `schema.prisma`
+- 主入口： `src/schema/index.ts`
 - 实体定义： `models/`
 - 多对多关系表： `relations/`
 
@@ -64,7 +64,7 @@ Repository 采用接口加实现的方式组织。接口定义在 `repository.in
 
 下面以新增“收藏歌曲”功能为例，说明从数据库到路由的完整开发路径。
 
-首先确认数据层需求。如果只是给 Song 表增加一个收藏数字段，直接在 `packages/db/prisma/models/core/song.prisma` 中添加字段即可。如果需要独立的收藏记录表（如记录哪个用户收藏了哪首歌），则在相应目录下新建 prisma 文件。
+首先确认数据层需求。如果只是给 Song 表增加一个收藏数字段，直接在 `packages/db/src/schema/core/song.ts` 中添加字段即可。如果需要独立的收藏记录表（如记录哪个用户收藏了哪首歌），则在相应 schema 文件中新建表定义。
 
 然后依次实现数据访问、业务逻辑、请求处理。在 `packages/core/src/modules/catalog/song/` 目录下，编写 `dto.ts` 定义请求响应结构，`repository.ts` 实现数据库操作，`service.ts` 编写业务逻辑。
 

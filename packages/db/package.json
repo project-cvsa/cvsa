@@ -4,27 +4,23 @@
 	"main": "src/index.ts",
 	"module": "src/index.ts",
 	"scripts": {
-		"gen": "bunx --bun prisma contract emit",
-		"push": "bunx --bun prisma db update --yes",
-		"migrate:plan": "bunx --bun prisma migration plan",
-		"migrate:status": "bunx --bun prisma migration list",
-		"migrate:deploy": "bunx --bun prisma db migrate",
-		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes",
-		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx --bun prisma db update --yes",
-		"studio": "bunx --bun prisma studio"
+		"lint": "bunx --bun biome lint",
+		"typecheck": "bunx --bun tsc --noEmit",
+		"migrate:generate": "bunx drizzle-kit generate",
+		"migrate:deploy": "bun scripts/migrate.ts",
+		"push": "bunx drizzle-kit push --force",
+		"studio": "bunx drizzle-kit studio",
+		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx drizzle-kit push --force",
+		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx drizzle-kit push --force"
 	},
 	"devDependencies": {
-		"@cvsa/prisma-zod": "^3.6.0",
 		"@cvsa/typescript-config": "workspace:*",
-		"prisma": "8.0.0-rc.27",
-		"prisma-json-types-generator": "^5.1.1"
+		"@types/bun": "latest",
+		"drizzle-kit": "1.0.0-rc.5"
 	},
 	"dependencies": {
 		"@cvsa/env": "workspace:*",
-		"@prisma/adapter-pg": "^7.6.0",
-		"@prisma/client": "^7.6.0",
-		"@prisma/orm-postgres": "8.0.0-rc.20",
-		"@types/pg": "^8.16.0",
+		"drizzle-orm": "1.0.0-rc.5",
 		"temporal-polyfill": "^1.0.6",
 		"zod": "^4.3.6"
 	}

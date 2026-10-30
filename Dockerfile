@@ -41,9 +41,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 FROM deps AS source
 COPY packages ./packages
 COPY locale ./locale
-RUN bun run --filter @cvsa/db gen && \
-	bun run --filter @cvsa/snapshot-db gen && \
-	bun run --filter @cvsa/network-scheduler build
+RUN bun run --filter @cvsa/network-scheduler build
 
 # Stage 4: Target - Backend API & Outbox Service
 FROM source AS backend

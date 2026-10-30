@@ -18,6 +18,7 @@
 		"@cvsa/contracts": "workspace:*",
 		"@cvsa/db": "workspace:*",
 		"@cvsa/env": "workspace:*",
+		"drizzle-orm": "1.0.0-rc.5",
 		"ioredis": "5.10.1"
 	},
 	"exports": {

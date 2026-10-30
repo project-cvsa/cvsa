@@ -2,7 +2,16 @@ import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
 import { waitUntil } from "./support/async";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { NetworkRuntimeConfig } from "../src/crawler";
-import { toInstant } from "@cvsa/snapshot-db";
+import { eq, inArray } from "drizzle-orm";
+import {
+	bilibiliVideoMetadata,
+	bilibiliVideoMetadataHistory,
+	crawlerRuntimeConfig,
+	discoverySample,
+	networkRuntimeConfig,
+	toInstant,
+	videoTracking,
+} from "@cvsa/snapshot-db";
 import { crawlerEnv } from "@cvsa/env";
 import { treaty } from "@elysiajs/eden";
 import { crawlerControlPlane } from "../src/controlPlane";
@@ -34,31 +43,15 @@ const TOUCHED_AIDS = [TRACKING_AID, SAMPLE_AID, METADATA_AID];
 
 async function cleanupSeededRows(): Promise<void> {
 	const client = crawlerSnapshotDb.client;
-	for await (const _ of client.orm.public.BilibiliVideoMetadataHistory.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.BilibiliVideoMetadata.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.DiscoverySample.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.VideoTracking.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.CrawlerRuntimeConfig.where({
-		key: "discovery",
-	}).deleteAll()) {
-		// drained
-	}
+	await client
+		.delete(bilibiliVideoMetadataHistory)
+		.where(inArray(bilibiliVideoMetadataHistory.aid, TOUCHED_AIDS));
+	await client
+		.delete(bilibiliVideoMetadata)
+		.where(inArray(bilibiliVideoMetadata.aid, TOUCHED_AIDS));
+	await client.delete(discoverySample).where(inArray(discoverySample.aid, TOUCHED_AIDS));
+	await client.delete(videoTracking).where(inArray(videoTracking.aid, TOUCHED_AIDS));
+	await client.delete(crawlerRuntimeConfig).where(eq(crawlerRuntimeConfig.key, "discovery"));
 }
 
 function proxyConfig(baseWeight = 1, proxyUrl = PROXY_URL): NetworkRuntimeConfig {
@@ -103,16 +96,19 @@ const runtimeApi = api.v2["network-runtime"];
 const authorized = { headers: { authorization: `Bearer ${TOKEN}` } };
 
 async function storedRow() {
-	return crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
-		id: "default",
-	}).first();
+	const [row] = await crawlerSnapshotDb.client
+		.select()
+		.from(networkRuntimeConfig)
+		.where(eq(networkRuntimeConfig.id, "default"))
+		.limit(1);
+	return row;
 }
 
 describe("crawler control plane", () => {
 	beforeAll(async () => {
-		await crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
-			id: "default",
-		}).deleteAll();
+		await crawlerSnapshotDb.client
+			.delete(networkRuntimeConfig)
+			.where(eq(networkRuntimeConfig.id, "default"));
 		await cleanupSeededRows();
 	});
 
@@ -314,9 +310,11 @@ describe("crawler control plane", () => {
 		expect(status).toBe(200);
 		expect(data?.modelThreshold).toBe(0.42);
 
-		const stored = await crawlerSnapshotDb.client.orm.public.CrawlerRuntimeConfig.where({
-			key: "discovery",
-		}).first();
+		const [stored] = await crawlerSnapshotDb.client
+			.select()
+			.from(crawlerRuntimeConfig)
+			.where(eq(crawlerRuntimeConfig.key, "discovery"))
+			.limit(1);
 		expect(stored?.config).toMatchObject({ modelThreshold: 0.42 });
 	});
 

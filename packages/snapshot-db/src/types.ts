@@ -1,5 +1,4 @@
 import { Temporal } from "temporal-polyfill";
-import type { Contract, FieldOutputTypes, Models } from "../prisma/contract.d";
 
 export { Temporal };
 export type Instant = Temporal.Instant;
@@ -13,8 +12,6 @@ export function toInstant(value: Date | string | Temporal.Instant): Temporal.Ins
 	}
 	return Temporal.Instant.from(value);
 }
-
-export type { Contract, Models };
 
 export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray;
@@ -37,14 +34,3 @@ export function toJson(value: unknown): JsonValue {
 		})
 	);
 }
-
-export type VideoSnapshot = FieldOutputTypes["public"]["VideoSnapshot"];
-export type NetworkRuntimeConfig = FieldOutputTypes["public"]["NetworkRuntimeConfig"];
-export type VideoTracking = FieldOutputTypes["public"]["VideoTracking"];
-export type BilibiliVideoMetadata = FieldOutputTypes["public"]["BilibiliVideoMetadata"];
-export type BilibiliVideoMetadataHistory =
-	FieldOutputTypes["public"]["BilibiliVideoMetadataHistory"];
-export type BilibiliVideoRelation = FieldOutputTypes["public"]["BilibiliVideoRelation"];
-export type CrawlerRuntimeConfig = FieldOutputTypes["public"]["CrawlerRuntimeConfig"];
-export type DiscoverySample = FieldOutputTypes["public"]["DiscoverySample"];
-export type CrawlerStatsRollup = FieldOutputTypes["public"]["CrawlerStatsRollup"];

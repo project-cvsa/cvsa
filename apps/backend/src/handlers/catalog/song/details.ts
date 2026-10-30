@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { AppError, ErrorResponseSchema, SongDetailsResponseSchema } from "@cvsa/contracts";
 import { songReader } from "@cvsa/catalog";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import z from "zod";
 import { traceTask } from "@/common/trace";
 
@@ -13,7 +13,7 @@ export const songDetailsHandler = new Elysia().get(
 			if (!details) {
 				throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 			}
-			return SongDetailsResponseSchema.parse(transformPrismaResult(details));
+			return SongDetailsResponseSchema.parse(serializeResult(details));
 		});
 		return status(200, song);
 	},

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { type DatabaseClient, type Song, type TxClient, toInstant } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type Song,
+	type TxClient,
+	history,
+	outbox,
+	toInstant,
+} from "@cvsa/db";
 import type { ICatalogCache } from "../../src/cache";
 import { SongWriter } from "../../src/song/SongWriter";
 
@@ -33,33 +40,28 @@ describe("SongWriter", () => {
 		let invalidatedKey = "";
 
 		const mockTx = {
-			orm: {
-				core: {
-					Song: {
-						where: (_filter: unknown) => ({
-							first: async () => existingSong,
-							update: async (data: Partial<Song>) => ({
-								...existingSong,
-								...data,
-							}),
-						}),
-					},
+			select: () => ({
+				from: () => ({
+					where: () => ({
+						limit: async () => [existingSong],
+					}),
+				}),
+			}),
+			update: () => ({
+				set: (data: Partial<Song>) => ({
+					where: () => ({
+						returning: async () => [{ ...existingSong, ...data }],
+					}),
+				}),
+			}),
+			insert: (table: unknown) => ({
+				values: (args: unknown) => {
+					if (table === history) historyCreated = args;
+					if (table === outbox) outboxCreated = args;
+					const chain = { returning: async () => [{ id: 1 }] };
+					return Object.assign(Promise.resolve(chain), chain);
 				},
-				meta: {
-					History: {
-						create: async (args: unknown) => {
-							historyCreated = args;
-							return { id: 1 };
-						},
-					},
-					Outbox: {
-						create: async (args: unknown) => {
-							outboxCreated = args;
-							return { id: 1 };
-						},
-					},
-				},
-			},
+			}),
 		};
 
 		const mockDb = {

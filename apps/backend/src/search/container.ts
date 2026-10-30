@@ -2,7 +2,7 @@ import { treaty } from "@elysiajs/eden";
 import type { EmbeddingApp } from "@embedding-contract";
 import { artistReader, artistRoleReader, singerReader, songReader } from "@cvsa/catalog";
 import { SongDetailsResponseSchema } from "@cvsa/contracts";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { env } from "@cvsa/env";
 import {
 	ArtistRoleSearchService,
@@ -26,7 +26,7 @@ export const songSearchService = new SongSearchService(
 		async getDetails(id: number) {
 			const res = await songReader.getDetails(id);
 			if (!res) return null;
-			return SongDetailsResponseSchema.parse(transformPrismaResult(res));
+			return SongDetailsResponseSchema.parse(serializeResult(res));
 		},
 	},
 	searchManager,

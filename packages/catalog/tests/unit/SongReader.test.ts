@@ -41,19 +41,12 @@ describe("SongReader", () => {
 		};
 
 		let dbCalled = false;
-		const queryChain = {
-			include: () => queryChain,
-			first: async () => {
-				dbCalled = true;
-				return null;
-			},
-		};
-
 		const mockDb = {
-			orm: {
-				core: {
-					Song: {
-						where: () => queryChain,
+			query: {
+				song: {
+					findFirst: async () => {
+						dbCalled = true;
+						return null;
 					},
 				},
 			},
@@ -145,17 +138,10 @@ describe("SongReader", () => {
 			externalLinks: [],
 		};
 
-		const queryChain = {
-			include: () => queryChain,
-			first: async () => dbSong,
-		};
-
 		const mockDb = {
-			orm: {
-				core: {
-					Song: {
-						where: () => queryChain,
-					},
+			query: {
+				song: {
+					findFirst: async () => dbSong,
 				},
 			},
 		};

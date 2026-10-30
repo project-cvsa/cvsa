@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma } from "@cvsa/db";
+import { db, svsEngine } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 
 const api = treaty(app);
 
@@ -16,10 +17,13 @@ describe("Engine E2E Tests", () => {
 
 	describe("GET /v2/engine/:id/details - Get Engine Details", () => {
 		test("should retrieve an engine", async () => {
-			const engine = await prisma.orm.core.SvsEngine.create({
-				name: "Test Engine",
-				description: "Test Description",
-			});
+			const [engine] = await db
+				.insert(svsEngine)
+				.values({
+					name: "Test Engine",
+					description: "Test Description",
+				})
+				.returning();
 
 			const { data, status } = await api.v2.engine({ id: engine.id }).details.get();
 
@@ -32,7 +36,7 @@ describe("Engine E2E Tests", () => {
 		});
 
 		test("should return 404 for nonexistent engine", async () => {
-			const { error, status } = await api.v2.engine({ id: 99999 }).details.get();
+			const { error, status } = await api.v2.engine({ id: 2_000_000_000 }).details.get();
 
 			expect(status).toBe(404);
 			expect(error?.value).toMatchObject({
@@ -111,10 +115,13 @@ describe("Engine E2E Tests", () => {
 		test("should update an engine with authentication", async () => {
 			const token = await getAuthToken();
 
-			const engine = await prisma.orm.core.SvsEngine.create({
-				name: "Original Name",
-				description: "Original Description",
-			});
+			const [engine] = await db
+				.insert(svsEngine)
+				.values({
+					name: "Original Name",
+					description: "Original Description",
+				})
+				.returning();
 
 			const { data, status } = await api.v2.engine({ id: engine.id }).patch(
 				{ name: "Updated Name", description: "Updated Description" },
@@ -131,9 +138,12 @@ describe("Engine E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const engine = await prisma.orm.core.SvsEngine.create({
-				name: "Test Engine",
-			});
+			const [engine] = await db
+				.insert(svsEngine)
+				.values({
+					name: "Test Engine",
+				})
+				.returning();
 
 			const { status } = await api.v2.engine({ id: engine.id }).patch({
 				name: "Updated Name",
@@ -145,7 +155,7 @@ describe("Engine E2E Tests", () => {
 		test("should return 404 for non-existent engine", async () => {
 			const token = await getAuthToken();
 
-			const { error, status } = await api.v2.engine({ id: 999999 }).patch(
+			const { error, status } = await api.v2.engine({ id: 2_000_000_000 }).patch(
 				{ name: "Updated Name" },
 				{
 					headers: {
@@ -165,9 +175,12 @@ describe("Engine E2E Tests", () => {
 		test("should soft delete an engine with authentication", async () => {
 			const token = await getAuthToken();
 
-			const engine = await prisma.orm.core.SvsEngine.create({
-				name: "Engine to Delete",
-			});
+			const [engine] = await db
+				.insert(svsEngine)
+				.values({
+					name: "Engine to Delete",
+				})
+				.returning();
 
 			const { status } = await api.v2.engine({ id: engine.id }).delete(
 				{},
@@ -180,16 +193,21 @@ describe("Engine E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedEngine = await prisma.orm.core.SvsEngine.where({
-				id: engine.id,
-			}).first();
+			const [deletedEngine] = await db
+				.select()
+				.from(svsEngine)
+				.where(eq(svsEngine.id, engine.id))
+				.limit(1);
 			expect(deletedEngine?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const engine = await prisma.orm.core.SvsEngine.create({
-				name: "Test Engine",
-			});
+			const [engine] = await db
+				.insert(svsEngine)
+				.values({
+					name: "Test Engine",
+				})
+				.returning();
 
 			const { status } = await api.v2.engine({ id: engine.id }).delete({}, {});
 
@@ -199,7 +217,7 @@ describe("Engine E2E Tests", () => {
 		test("should return 404 for non-existent engine", async () => {
 			const token = await getAuthToken();
 
-			const { status } = await api.v2.engine({ id: 999999 }).delete(
+			const { status } = await api.v2.engine({ id: 2_000_000_000 }).delete(
 				{},
 				{
 					headers: {

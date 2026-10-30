@@ -145,7 +145,7 @@ description: 了解如何参与档案馆的开发工作。
 ### 技术栈
 
 -   前端：Astro SSR + React + TypeScript + Tailwind CSS
--   后端：Elysia.js + TypeScript + Prisma ORM
+-   后端：Elysia.js + TypeScript + Drizzle ORM
 -   数据库：PostgreSQL + TimescaleDB
 -   可视化：自研图表引擎
 -   部署：基于 Docker + PM2 的 VPS 自部署
@@ -166,7 +166,7 @@ description: 了解如何参与档案馆的开发工作。
 #### 后端架构
 
 -   **方案 A：Elysia.js + TypeScript (首选)**
-    -   **理由**：Elysia.js 针对 Bun 运行时进行了深度优化，拥有极高的吞吐量。配合 Prisma ORM，可以实现从数据库到前端的全链路类型安全，大幅降低协作中的接口错误。
+    -   **理由**：Elysia.js 针对 Bun 运行时进行了深度优化，拥有极高的吞吐量。配合 Drizzle ORM，可以实现从数据库到前端的全链路类型安全，大幅降低协作中的接口错误。
 -   **方案 B：NestJS**
     -   **局限**：框架较为厚重，虽规范性强，但在轻量化部署和极致响应速度上略逊于 Elysia.js。
 
@@ -413,6 +413,6 @@ description: 了解如何参与档案馆的开发工作。
 
 ### 维护与可观测性
 
--   **全链路类型安全**：基于 TypeScript 和 Prisma ORM 实现从数据库到前端的类型同步，降低代码维护成本。
+-   **全链路类型安全**：基于 TypeScript 和 Drizzle ORM 实现从数据库到前端的类型同步，降低代码维护成本。
 -   **容器化部署**：系统整体基于 Docker 部署，支持各组件的独立升级与维护。
 -   **监控与告警**：使用 OpenTelemetry + Prometheus + Grafana 来实现系统指标的收集、观测、可视化与预警。

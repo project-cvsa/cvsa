@@ -6,7 +6,7 @@ import {
 } from "@cvsa/contracts";
 import { artistWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -21,7 +21,7 @@ export const artistCreateHandler = new Elysia({ name: "artistCreateHandler" })
 			});
 			const artist = await traceTask("artistWriter.create", async () => {
 				const row = await artistWriter.create(actor, body);
-				return ArtistResponseSchema.parse(transformPrismaResult(row));
+				return ArtistResponseSchema.parse(serializeResult(row));
 			});
 			return status(201, artist);
 		},

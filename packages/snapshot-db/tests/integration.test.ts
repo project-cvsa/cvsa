@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
 import { crawlerEnv } from "@cvsa/env";
 import { SQL } from "bun";
-import { snapshotDb } from "../src";
+import { snapshotDb, videoSnapshot } from "../src";
 
 /**
  * Requires the snapshot database from `docker-compose` and the schema applied by
@@ -22,27 +23,28 @@ describe("SnapshotDB", () => {
 		await snapshotDb.healthCheck();
 		const aid = BigInt(Date.now());
 
-		const created = await snapshotDb.client.orm.public.VideoSnapshot.create({
-			aid,
-			views: 100,
-			coins: 2,
-			likes: 3,
-			favorites: 4,
-			shares: 5,
-			danmakus: 6,
-			replies: 7,
-		});
+		const created = await snapshotDb.client
+			.insert(videoSnapshot)
+			.values({
+				aid,
+				views: 100,
+				coins: 2,
+				likes: 3,
+				favorites: 4,
+				shares: 5,
+				danmakus: 6,
+				replies: 7,
+			})
+			.returning();
+		expect(created[0]?.aid).toBe(aid);
 
-		expect(created.aid).toBe(aid);
-
-		const found = await snapshotDb.client.orm.public.VideoSnapshot.where({
-			aid,
-		}).first();
+		const [found] = await snapshotDb.client
+			.select()
+			.from(videoSnapshot)
+			.where(eq(videoSnapshot.aid, aid));
 		expect(found?.views).toBe(100);
 
-		await snapshotDb.client.orm.public.VideoSnapshot.where({
-			aid,
-		}).deleteAll();
+		await snapshotDb.client.delete(videoSnapshot).where(eq(videoSnapshot.aid, aid));
 	});
 
 	test("runs against the test database, never the development one", () => {

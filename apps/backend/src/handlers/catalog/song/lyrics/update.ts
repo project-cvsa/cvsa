@@ -6,7 +6,7 @@ import {
 } from "@cvsa/contracts";
 import { songLyricsWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
@@ -27,7 +27,7 @@ export const songLyricsUpdateHandler = new Elysia({ name: "songLyricsUpdateHandl
 					params.lyricId,
 					body
 				);
-				return SongLyricsResponseSchema.parse(transformPrismaResult(updated));
+				return SongLyricsResponseSchema.parse(serializeResult(updated));
 			});
 			return status(200, lyric);
 		},

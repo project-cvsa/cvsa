@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma, Temporal } from "@cvsa/db";
+import { artistRole, db, Temporal } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 
 const api = treaty(app);
 
@@ -16,10 +17,13 @@ describe("Artist Role E2E Tests", () => {
 
 	describe("GET /v2/artist-role/:id - Get Artist Role Details", () => {
 		test("should retrieve an artist role", async () => {
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Producer",
-				localizedNames: { zh: "制作人", en: "Producer" },
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Producer",
+					localizedNames: { zh: "制作人", en: "Producer" },
+				})
+				.returning();
 
 			const { data, status } = await api.v2["artist-role"]({ id: role.id }).get();
 
@@ -32,7 +36,7 @@ describe("Artist Role E2E Tests", () => {
 		});
 
 		test("should return 404 for nonexistent role", async () => {
-			const { error, status } = await api.v2["artist-role"]({ id: 99999 }).get();
+			const { error, status } = await api.v2["artist-role"]({ id: 2_000_000_000 }).get();
 
 			expect(status).toBe(404);
 			expect(error?.value).toMatchObject({
@@ -41,10 +45,13 @@ describe("Artist Role E2E Tests", () => {
 		});
 
 		test("should not retrieve soft-deleted role", async () => {
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Deleted Role",
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Deleted Role",
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2["artist-role"]({ id: role.id }).get();
 
@@ -115,9 +122,12 @@ describe("Artist Role E2E Tests", () => {
 		test("should update a role with authentication", async () => {
 			const token = await getAuthToken();
 
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Original Name",
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Original Name",
+				})
+				.returning();
 
 			const { data, status } = await api.v2["artist-role"]({ id: role.id }).patch(
 				{
@@ -137,9 +147,12 @@ describe("Artist Role E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Test Role",
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Test Role",
+				})
+				.returning();
 
 			const { status } = await api.v2["artist-role"]({ id: role.id }).patch({
 				name: "Updated Name",
@@ -151,7 +164,7 @@ describe("Artist Role E2E Tests", () => {
 		test("should return 404 for non-existent role", async () => {
 			const token = await getAuthToken();
 
-			const { error, status } = await api.v2["artist-role"]({ id: 999999 }).patch(
+			const { error, status } = await api.v2["artist-role"]({ id: 2_000_000_000 }).patch(
 				{ name: "Updated Name" },
 				{
 					headers: {
@@ -171,9 +184,12 @@ describe("Artist Role E2E Tests", () => {
 		test("should soft delete a role with authentication", async () => {
 			const token = await getAuthToken();
 
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Role to Delete",
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Role to Delete",
+				})
+				.returning();
 
 			const { status } = await api.v2["artist-role"]({ id: role.id }).delete(
 				{},
@@ -186,16 +202,21 @@ describe("Artist Role E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedRole = await prisma.orm.core.ArtistRole.where({
-				id: role.id,
-			}).first();
+			const [deletedRole] = await db
+				.select()
+				.from(artistRole)
+				.where(eq(artistRole.id, role.id))
+				.limit(1);
 			expect(deletedRole?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Test Role",
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Test Role",
+				})
+				.returning();
 
 			const { status } = await api.v2["artist-role"]({ id: role.id }).delete({}, {});
 
@@ -205,7 +226,7 @@ describe("Artist Role E2E Tests", () => {
 		test("should return 404 for non-existent role", async () => {
 			const token = await getAuthToken();
 
-			const { status } = await api.v2["artist-role"]({ id: 999999 }).delete(
+			const { status } = await api.v2["artist-role"]({ id: 2_000_000_000 }).delete(
 				{},
 				{
 					headers: {
@@ -220,10 +241,13 @@ describe("Artist Role E2E Tests", () => {
 		test("should return 404 when trying to delete already deleted role", async () => {
 			const token = await getAuthToken();
 
-			const role = await prisma.orm.core.ArtistRole.create({
-				name: "Already Deleted",
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [role] = await db
+				.insert(artistRole)
+				.values({
+					name: "Already Deleted",
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2["artist-role"]({ id: role.id }).delete(
 				{},

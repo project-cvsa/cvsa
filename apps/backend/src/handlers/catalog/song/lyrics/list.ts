@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
 import { AppError, ErrorResponseSchema, SongLyricsListResponseSchema } from "@cvsa/contracts";
 import { songReader } from "@cvsa/catalog";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import z from "zod";
 import { traceTask } from "@/common/trace";
 
@@ -14,7 +14,7 @@ export const songLyricsListHandler = new Elysia().get(
 		}
 		const lyrics = await traceTask("songReader.listLyrics", async () => {
 			const list = await songReader.listLyrics(params.id);
-			return SongLyricsListResponseSchema.parse(transformPrismaResult(list));
+			return SongLyricsListResponseSchema.parse(serializeResult(list));
 		});
 		return status(200, lyrics);
 	},

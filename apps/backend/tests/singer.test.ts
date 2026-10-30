@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma, Temporal } from "@cvsa/db";
+import { db, singer as singerTable, Temporal } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 
 const api = treaty(app);
 
@@ -16,11 +17,14 @@ describe("Singer E2E Tests", () => {
 
 	describe("GET /v2/singer/:id - Get Singer", () => {
 		test("should retrieve a singer", async () => {
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Test Singer",
-				description: "Test Description",
-				language: "zh",
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Test Singer",
+					description: "Test Description",
+					language: "zh",
+				})
+				.returning();
 
 			const { data, status } = await api.v2.singer({ id: singer.id }).get();
 
@@ -34,7 +38,7 @@ describe("Singer E2E Tests", () => {
 		});
 
 		test("should return 404 for nonexistent singer", async () => {
-			const { error, status } = await api.v2.singer({ id: 99999 }).get();
+			const { error, status } = await api.v2.singer({ id: 2_000_000_000 }).get();
 
 			expect(status).toBe(404);
 			expect(error?.value).toMatchObject({
@@ -43,10 +47,13 @@ describe("Singer E2E Tests", () => {
 		});
 
 		test("should not retrieve soft-deleted singer", async () => {
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Deleted Singer",
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Deleted Singer",
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2.singer({ id: singer.id }).get();
 
@@ -156,11 +163,14 @@ describe("Singer E2E Tests", () => {
 		test("should update a singer with authentication", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Original Name",
-				description: "Original Description",
-				language: "zh",
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Original Name",
+					description: "Original Description",
+					language: "zh",
+				})
+				.returning();
 
 			const { data, status } = await api.v2.singer({ id: singer.id }).patch(
 				{ name: "Updated Name", description: "Updated Description", language: "en" },
@@ -178,9 +188,12 @@ describe("Singer E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Test Singer",
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Test Singer",
+				})
+				.returning();
 
 			const { status } = await api.v2.singer({ id: singer.id }).patch({
 				name: "Updated Name",
@@ -192,7 +205,7 @@ describe("Singer E2E Tests", () => {
 		test("should return 404 for non-existent singer", async () => {
 			const token = await getAuthToken();
 
-			const { error, status } = await api.v2.singer({ id: 999999 }).patch(
+			const { error, status } = await api.v2.singer({ id: 2_000_000_000 }).patch(
 				{ name: "Updated Name" },
 				{
 					headers: {
@@ -210,10 +223,13 @@ describe("Singer E2E Tests", () => {
 		test("should update localized names", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Singer",
-				localizedNames: { zh: "旧名" },
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Singer",
+					localizedNames: { zh: "旧名" },
+				})
+				.returning();
 
 			const { data, status } = await api.v2.singer({ id: singer.id }).patch(
 				{ localizedNames: { zh: "新名", ja: "新しい名前" } },
@@ -233,9 +249,12 @@ describe("Singer E2E Tests", () => {
 		test("should soft delete a singer with authentication", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Singer to Delete",
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Singer to Delete",
+				})
+				.returning();
 
 			const { status } = await api.v2.singer({ id: singer.id }).delete(
 				{},
@@ -248,16 +267,21 @@ describe("Singer E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedSinger = await prisma.orm.core.Singer.where({
-				id: singer.id,
-			}).first();
+			const [deletedSinger] = await db
+				.select()
+				.from(singerTable)
+				.where(eq(singerTable.id, singer.id))
+				.limit(1);
 			expect(deletedSinger?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Test Singer",
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Test Singer",
+				})
+				.returning();
 
 			const { status } = await api.v2.singer({ id: singer.id }).delete({}, {});
 
@@ -267,7 +291,7 @@ describe("Singer E2E Tests", () => {
 		test("should return 404 for non-existent singer", async () => {
 			const token = await getAuthToken();
 
-			const { status } = await api.v2.singer({ id: 999999 }).delete(
+			const { status } = await api.v2.singer({ id: 2_000_000_000 }).delete(
 				{},
 				{
 					headers: {
@@ -282,10 +306,13 @@ describe("Singer E2E Tests", () => {
 		test("should return 404 when trying to delete already deleted singer", async () => {
 			const token = await getAuthToken();
 
-			const singer = await prisma.orm.core.Singer.create({
-				name: "Already Deleted",
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [singer] = await db
+				.insert(singerTable)
+				.values({
+					name: "Already Deleted",
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2.singer({ id: singer.id }).delete(
 				{},

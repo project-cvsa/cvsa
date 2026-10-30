@@ -1,9 +1,8 @@
 import { SQL } from "bun";
 
 /**
- * Prisma's schema push (`prisma db update`) validates the connection before it
- * applies anything, so it fails outright when the target database has never
- * been created. A freshly started docker-compose cluster only creates the
+ * A schema push validates the connection before it applies anything, so it
+ * fails outright when the target database has never been created. A freshly started docker-compose cluster only creates the
  * database named by `POSTGRES_DB`, which means the `*_test` databases do not
  * exist until someone creates them by hand. `ensureDatabase` closes that gap
  * for the `test:setup` / `test:reset` scripts, so CI and fresh machines never

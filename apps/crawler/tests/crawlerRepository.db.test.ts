@@ -1,6 +1,16 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { DiscoveryContextSchema } from "@cvsa/contracts";
-import { createSnapshotDb, toInstant, type SnapshotDb } from "@cvsa/snapshot-db";
+import { eq, inArray } from "drizzle-orm";
+import {
+	bilibiliVideoMetadata,
+	bilibiliVideoMetadataHistory,
+	bilibiliVideoRelation,
+	createSnapshotDb,
+	discoverySample,
+	toInstant,
+	videoTracking,
+	type SnapshotDb,
+} from "@cvsa/snapshot-db";
 import { DiscoveryRepository } from "../src/crawler/discovery/repository";
 import type { UpsertMetadataInput } from "../src/crawler/discovery/types";
 import { TrackingRepository } from "../src/crawler/tracking/repository";
@@ -35,31 +45,15 @@ async function cleanup(): Promise<void> {
 	const aids = [...new Set(touchedAids)];
 	if (aids.length === 0) return;
 	const client = snapshotDb.client;
-	for await (const _ of client.orm.public.BilibiliVideoMetadataHistory.where((row) =>
-		row.aid.in(aids)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.BilibiliVideoMetadata.where((row) =>
-		row.aid.in(aids)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.BilibiliVideoRelation.where((row) =>
-		row.sourceAid.in(aids)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.DiscoverySample.where((row) =>
-		row.aid.in(aids)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.VideoTracking.where((row) =>
-		row.aid.in(aids)
-	).deleteAll()) {
-		// drained
-	}
+	await client
+		.delete(bilibiliVideoMetadataHistory)
+		.where(inArray(bilibiliVideoMetadataHistory.aid, aids));
+	await client.delete(bilibiliVideoMetadata).where(inArray(bilibiliVideoMetadata.aid, aids));
+	await client
+		.delete(bilibiliVideoRelation)
+		.where(inArray(bilibiliVideoRelation.sourceAid, aids));
+	await client.delete(discoverySample).where(inArray(discoverySample.aid, aids));
+	await client.delete(videoTracking).where(inArray(videoTracking.aid, aids));
 }
 
 beforeAll(async () => {
@@ -192,12 +186,14 @@ describe("TrackingRepository", () => {
 			search: "BV1xx411c7mD",
 		});
 		expect(byBvid.items.map((row) => row.aid)).toEqual([first]);
-		await snapshotDb.client.orm.public.VideoTracking.where({ aid: first }).update({
-			lastViews: 100,
-		});
-		await snapshotDb.client.orm.public.VideoTracking.where({ aid: second }).update({
-			lastViews: 10,
-		});
+		await snapshotDb.client
+			.update(videoTracking)
+			.set({ lastViews: 100 })
+			.where(eq(videoTracking.aid, first));
+		await snapshotDb.client
+			.update(videoTracking)
+			.set({ lastViews: 10 })
+			.where(eq(videoTracking.aid, second));
 		const byViews = await tracking.listTrackingVideos({
 			limit: 200,
 			offset: 0,

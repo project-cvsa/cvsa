@@ -32,7 +32,8 @@ import {
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
 import { initOtelSdk } from "@cvsa/observability";
-import { and, createSnapshotDb, type VideoTracking } from "@cvsa/snapshot-db";
+import { and, asc, isNotNull, lte } from "drizzle-orm";
+import { createSnapshotDb, type VideoTracking, videoTracking } from "@cvsa/snapshot-db";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
 
 export const crawlerSnapshotDb = createSnapshotDb();
@@ -106,15 +107,14 @@ export const bilibiliClient = new BilibiliClient({
  */
 export const metadataRefreshScheduler = new MetadataRefreshScheduler({
 	async listDueMetadata(now, limit) {
-		const rows: VideoTracking[] = [];
-		for await (const row of crawlerSnapshotDb.client.orm.public.VideoTracking.where(
-			(tracking) => and(tracking.nextMetadataAt.isNotNull(), tracking.nextMetadataAt.lte(now))
-		)
-			.orderBy((tracking) => tracking.nextMetadataAt.asc())
-			.limit(limit)
-			.all()) {
-			rows.push(row);
-		}
+		const rows: VideoTracking[] = await crawlerSnapshotDb.client
+			.select()
+			.from(videoTracking)
+			.where(
+				and(isNotNull(videoTracking.nextMetadataAt), lte(videoTracking.nextMetadataAt, now))
+			)
+			.orderBy(asc(videoTracking.nextMetadataAt))
+			.limit(limit);
 		return rows;
 	},
 	trackingRepository,

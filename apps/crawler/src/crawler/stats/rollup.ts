@@ -1,5 +1,6 @@
+import { and, desc, eq, gte } from "drizzle-orm";
 import type { DatabaseClient, Temporal } from "@cvsa/snapshot-db";
-import { and, toJson } from "@cvsa/snapshot-db";
+import { crawlerStatsRollup, toJson } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { OverdueTrackingSummary } from "../tracking/repository.interface";
 import {
@@ -126,25 +127,24 @@ function parseMetrics(value: unknown): StatsRollupMetrics | null {
 	};
 }
 
-/** Prisma-backed persistence for `crawler_stats_rollup`. */
+/** Drizzle-backed persistence for `crawler_stats_rollup`. */
 export class CrawlerStatsRepository implements StatsRollupStore {
 	constructor(private readonly db: DatabaseClient) {}
 
 	async saveRollup(input: SaveStatsRollupInput): Promise<void> {
 		await traceTask("stats.saveRollup", async () => {
 			const metrics = toJson(input.metrics);
-			await this.db.orm.public.CrawlerStatsRollup.upsert({
-				create: {
+			await this.db
+				.insert(crawlerStatsRollup)
+				.values({
 					bucketTime: input.bucketTime,
 					metricGroup: input.metricGroup,
 					metrics,
-				},
-				update: { metrics },
-				conflictOn: {
-					bucketTime: input.bucketTime,
-					metricGroup: input.metricGroup,
-				},
-			});
+				})
+				.onConflictDoUpdate({
+					target: [crawlerStatsRollup.bucketTime, crawlerStatsRollup.metricGroup],
+					set: { metrics },
+				});
 		});
 	}
 
@@ -154,15 +154,19 @@ export class CrawlerStatsRepository implements StatsRollupStore {
 		limit = 240
 	): Promise<StatsRollupRow[]> {
 		return traceTask("stats.listRollup", async () => {
-			const rows = await this.db.orm.public.CrawlerStatsRollup.where((row) =>
-				and(row.metricGroup.eq(metricGroup), row.bucketTime.gte(since))
-			)
-				.orderBy((row) => row.bucketTime.desc())
-				.limit(Math.min(Math.max(limit, 1), 10_080))
-				.all();
+			const rows = await this.db
+				.select()
+				.from(crawlerStatsRollup)
+				.where(
+					and(
+						eq(crawlerStatsRollup.metricGroup, metricGroup),
+						gte(crawlerStatsRollup.bucketTime, since)
+					)
+				)
+				.orderBy(desc(crawlerStatsRollup.bucketTime))
+				.limit(Math.min(Math.max(limit, 1), 10_080));
 
 			return rows
-				.filter((row) => row.bucketTime.epochMilliseconds >= since.epochMilliseconds)
 				.map((row) => ({
 					bucketTime: row.bucketTime,
 					metricGroup: row.metricGroup,

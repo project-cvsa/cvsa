@@ -13,8 +13,8 @@
 - `packages/contracts`: Shared API schemas (Zod), DTOs, and error taxonomy (`AppError`, `ErrorCodeEnum`)
 - `packages/catalog`: Core catalog domain logic (songs, artists, singers, engines), readers, writers, search
 - `packages/authentication`: User authentication, session management, and RBAC (Better Auth)
-- `packages/db`: Primary Prisma schema and generated database client
-- `packages/snapshot-db`: TimescaleDB snapshot and tracking Prisma 8 client
+- `packages/db`: Primary catalog database schema and client (Drizzle ORM)
+- `packages/snapshot-db`: TimescaleDB snapshot, tracking, and discovery persistence (Drizzle ORM)
 - `packages/network-scheduler`: Resilient HTTP client, rate-limiting, and network adapters
 - `apps/embedding`: Standalone vector embedding REST service
 - `packages/logger`: Shared Pino logger configuration

@@ -1,5 +1,5 @@
-import type { DatabaseClient, Singer } from "@cvsa/db";
-import { transformPrismaResult } from "@cvsa/db";
+import { type DatabaseClient, type Singer, serializeResult, singer } from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import { SingerDetailsResponseSchema, type SingerDetailsResponseDto } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
 import type { SingerId } from "./singerTypes";
@@ -11,7 +11,12 @@ export class SingerReader {
 	) {}
 
 	async getById(id: SingerId): Promise<Singer | null> {
-		return this.db.orm.core.Singer.where({ id, deletedAt: null }).first();
+		const [row] = await this.db
+			.select()
+			.from(singer)
+			.where(and(eq(singer.id, id), isNull(singer.deletedAt)))
+			.limit(1);
+		return row ?? null;
 	}
 
 	async getDetails(id: SingerId): Promise<SingerDetailsResponseDto | null> {
@@ -23,12 +28,12 @@ export class SingerReader {
 			}
 		}
 
-		const raw = await this.db.orm.core.Singer.where({ id, deletedAt: null }).first();
+		const raw = await this.getById(id);
 		if (!raw) {
 			return null;
 		}
 
-		const details = SingerDetailsResponseSchema.parse(transformPrismaResult(raw));
+		const details = SingerDetailsResponseSchema.parse(serializeResult(raw));
 		if (this.cache) {
 			await this.cache.set(cacheKey, details, 3600);
 		}

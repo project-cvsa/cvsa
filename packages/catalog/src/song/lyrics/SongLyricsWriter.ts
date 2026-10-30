@@ -1,5 +1,14 @@
-import type { DatabaseClient, Lyrics, TxClient } from "@cvsa/db";
-import { toJson, toInstant } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type Lyrics,
+	type TxClient,
+	history,
+	lyrics,
+	song,
+	toInstant,
+	toJson,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../../cache";
@@ -39,40 +48,52 @@ export class SongLyricsWriter {
 		await this.invalidateCache(songId);
 	}
 
+	private async requireSong(tx: TxClient, songId: SongId) {
+		const [row] = await tx
+			.select()
+			.from(song)
+			.where(and(eq(song.id, songId), isNull(song.deletedAt)))
+			.limit(1);
+		if (!row) {
+			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
+		}
+		return row;
+	}
+
 	private async createInTransaction(
 		tx: TxClient,
 		actor: Principal,
 		songId: SongId,
 		input: SongLyricsCreateInput
 	): Promise<Lyrics> {
-		const song = await tx.orm.core.Song.where({ id: songId, deletedAt: null }).first();
-		if (!song) {
-			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
-		}
+		const songRow = await this.requireSong(tx, songId);
+		assertCanManageLyrics(actor, songRow);
 
-		assertCanManageLyrics(actor, song);
+		const [created] = await tx
+			.insert(lyrics)
+			.values({
+				songId,
+				...input,
+			})
+			.returning();
+		if (!created) throw new Error("Failed to insert lyrics");
 
-		const lyric = await tx.orm.core.Lyrics.create({
-			songId,
-			...input,
-		});
-
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "lyrics",
-			objectId: lyric.id,
+			objectId: created.id,
 			type: "CREATE",
-			new: toJson(lyric),
+			new: toJson(created),
 		});
 
 		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.lyric_created",
-			payload: { songId, lyricId: lyric.id },
+			payload: { songId, lyricId: created.id },
 		});
 
-		return lyric;
+		return created;
 	}
 
 	private async updateInTransaction(
@@ -82,28 +103,28 @@ export class SongLyricsWriter {
 		lyricId: number,
 		input: SongLyricsUpdateInput
 	): Promise<Lyrics> {
-		const song = await tx.orm.core.Song.where({ id: songId, deletedAt: null }).first();
-		if (!song) {
-			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
-		}
+		const songRow = await this.requireSong(tx, songId);
+		assertCanManageLyrics(actor, songRow);
 
-		assertCanManageLyrics(actor, song);
-
-		const existing = await tx.orm.core.Lyrics.where({
-			id: lyricId,
-			songId,
-			deletedAt: null,
-		}).first();
+		const [existing] = await tx
+			.select()
+			.from(lyrics)
+			.where(and(eq(lyrics.id, lyricId), eq(lyrics.songId, songId), isNull(lyrics.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
 		}
 
-		const updated = await tx.orm.core.Lyrics.where({ id: lyricId }).update(input);
+		const [updated] = await tx
+			.update(lyrics)
+			.set(input)
+			.where(eq(lyrics.id, lyricId))
+			.returning();
 		if (!updated) {
 			throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "lyrics",
 			objectId: lyricId,
@@ -128,26 +149,24 @@ export class SongLyricsWriter {
 		songId: SongId,
 		lyricId: number
 	): Promise<void> {
-		const song = await tx.orm.core.Song.where({ id: songId, deletedAt: null }).first();
-		if (!song) {
-			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
-		}
+		const songRow = await this.requireSong(tx, songId);
+		assertCanManageLyrics(actor, songRow);
 
-		assertCanManageLyrics(actor, song);
-
-		const existing = await tx.orm.core.Lyrics.where({
-			id: lyricId,
-			songId,
-			deletedAt: null,
-		}).first();
+		const [existing] = await tx
+			.select()
+			.from(lyrics)
+			.where(and(eq(lyrics.id, lyricId), eq(lyrics.songId, songId), isNull(lyrics.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.lyric.notfound", "NOT_FOUND", 404);
 		}
 
-		const now = toInstant(new Date());
-		await tx.orm.core.Lyrics.where({ id: lyricId }).update({ deletedAt: now });
+		await tx
+			.update(lyrics)
+			.set({ deletedAt: toInstant(new Date()) })
+			.where(eq(lyrics.id, lyricId));
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "lyrics",
 			objectId: lyricId,

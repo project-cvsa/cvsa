@@ -7,7 +7,7 @@ import {
 } from "@cvsa/contracts";
 import { singerWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -22,7 +22,7 @@ export const singerUpdateHandler = new Elysia({ name: "singerUpdateHandler" })
 			});
 			const singer = await traceTask("singerWriter.update", async () => {
 				const row = await singerWriter.update(actor, params.id, body);
-				return SingerResponseSchema.parse(transformPrismaResult(row));
+				return SingerResponseSchema.parse(serializeResult(row));
 			});
 			return status(200, singer);
 		},

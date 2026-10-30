@@ -4,7 +4,7 @@ import Header from "@layouts/Header.astro";
 import { getLocale, i18nServer } from "@lib/i18n/server";
 import { AppError, type SongDetailsResponseDto, SongDetailsResponseSchema } from "@cvsa/contracts";
 import { songReader } from "@cvsa/catalog";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { renderWiki } from "@lib/wiki";
 import { formatDateTime, formatDuration, localizedName, pickLyric } from "@lib/localize";
 import Pencil from "lucide-solid/icons/pencil";
@@ -25,7 +25,7 @@ try {
 			status: 404,
 		});
 	}
-	details = SongDetailsResponseSchema.parse(transformPrismaResult(raw));
+	details = SongDetailsResponseSchema.parse(serializeResult(raw));
 } catch (e) {
 	if (AppError.isAppError(e)) {
 		return new Response(null, {

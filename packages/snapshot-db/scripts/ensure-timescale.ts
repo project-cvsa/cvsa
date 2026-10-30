@@ -2,15 +2,14 @@ import { crawlerEnv } from "@cvsa/env";
 import { SQL } from "bun";
 
 /**
- * TimescaleDB is not expressible in the Prisma contract: both `prisma db
- * migrate` and `prisma db update` create `video_snapshot` as an ordinary
+ * TimescaleDB is not expressible in the Drizzle schema document: both
+ * `drizzle-kit push` and `migrate:deploy` create `video_snapshot` as an ordinary
  * Postgres table. This script upgrades that table in place, so every path that
  * provisions the snapshot database ends up with the same hypertable.
  *
  * It deliberately runs outside the migration graph. A database bootstrapped
- * with `prisma db update` already carries the contract marker, which makes
- * `prisma db migrate` report "already up to date" and skip its migrations; a
- * migration-only hook would never reach that database.
+ * with `drizzle-kit push` never replays the SQL history, so a migration-only
+ * hook would never reach that database.
  *
  * Every statement is idempotent, so `migrate:deploy` is safe to re-run — and
  * safe on top of a database `db:update` already prepared.
@@ -41,7 +40,7 @@ try {
 
 	if (!table || table.name === null) {
 		throw new Error(
-			'Table "video_snapshot" is missing. Run "prisma db migrate" or "prisma db update" first.'
+			'Table "video_snapshot" is missing. Run "bun run migrate:deploy" or "bun run db:update" first.'
 		);
 	}
 
