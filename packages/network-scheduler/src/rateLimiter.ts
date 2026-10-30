@@ -63,11 +63,70 @@ export class RedisRateLimiter implements NetworkRateLimiter {
 		return Array.isArray(result) && result[0] === 1;
 	}
 
+	async reserve(
+		scope: string,
+		budgets: ReadonlyArray<{ scope?: string; durationSeconds: number; maxRequests: number }>
+	): Promise<number> {
+		const result = await this.redis.eval(
+			`
+local time = redis.call('TIME')
+local now = tonumber(time[1]) + tonumber(time[2]) / 1000000
+local wait = 0
+local tokens = {}
+for i = 1, #KEYS do
+ local capacity = tonumber(ARGV[(i-1)*2+1])
+ local duration = tonumber(ARGV[(i-1)*2+2])
+ local bucket = redis.call('HMGET', KEYS[i], 'tokens', 'last_refill')
+ local current = tonumber(bucket[1]) or capacity
+ local last = tonumber(bucket[2]) or now
+ tokens[i] = math.min(capacity, current + math.max(0, now-last) * capacity/duration)
+ if tokens[i] < 1 then wait = math.max(wait, math.ceil((1-tokens[i])*duration/capacity*1000)) end
+end
+if wait > 0 then return wait end
+for i = 1, #KEYS do
+ redis.call('HSET', KEYS[i], 'tokens', tokens[i]-1, 'last_refill', now)
+ redis.call('PEXPIRE', KEYS[i], math.max(1000, math.ceil(tonumber(ARGV[(i-1)*2+2])*2000)))
+end
+return 0`,
+			budgets.length,
+			...budgets.map(
+				(budget) =>
+					`cvsa:crawler:admission:${budget.scope ?? scope}:${budget.durationSeconds}:${budget.maxRequests}`
+			),
+			...budgets.flatMap((budget) => [budget.maxRequests, budget.durationSeconds])
+		);
+		if (typeof result !== "number" || result < 0)
+			throw new Error("Invalid Redis admission response");
+		return result;
+	}
+
+	async defer(scope: string, delayMs: number): Promise<void> {
+		await this.redis.eval(
+			`local ttl = redis.call("PTTL", KEYS[1])
+if ttl < tonumber(ARGV[1]) then redis.call("SET", KEYS[1], "1", "PX", ARGV[1]) end
+return 1`,
+			1,
+			`cvsa:crawler:network-cooldown:${scope}`,
+			Math.ceil(delayMs)
+		);
+	}
+
+	async remainingDelay(scope: string): Promise<number> {
+		const ttl = await this.redis.eval(
+			`return redis.call("PTTL", KEYS[1])`,
+			1,
+			`cvsa:crawler:network-cooldown:${scope}`
+		);
+		return typeof ttl === "number" ? Math.max(0, ttl) : 0;
+	}
+
 	async close(): Promise<void> {
 		await this.redis.quit();
 	}
 }
 
 export function createRedisRateLimiter(redisUrl: string): RedisRateLimiter {
-	return new RedisRateLimiter(new IORedis(redisUrl, { maxRetriesPerRequest: null }));
+	return new RedisRateLimiter(
+		new IORedis(redisUrl, { maxRetriesPerRequest: 1, commandTimeout: 3_000 })
+	);
 }

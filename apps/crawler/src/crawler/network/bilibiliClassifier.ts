@@ -28,7 +28,7 @@ import type {
  * of the exit that carried it.
  */
 
-/** Anti-abuse / throttling answers aimed at the exit, not at the requested resource. */
+/** Anti-abuse and throttling answers; no assumption about their scope. */
 export const BILIBILI_THROTTLING_CODES: ReadonlySet<number> = new Set([
 	-352, // 风控校验失败
 	-412, // 请求被拦截
@@ -74,7 +74,7 @@ function readEnvelopeCode(body: string): number | undefined {
  * response carries no application-level failure.
  *
  * - Risk control and rate limiting become `APPLICATION_RATE_LIMIT`, which the
- *   scheduler retries on another adapter and counts against adapter health.
+ *   scheduler defers without affecting adapter health.
  * - Business failures become `APPLICATION_ERROR`, which is never retried and
  *   never degrades adapter health.
  * - Unknown non-zero codes take the conservative default: no blind retry and no

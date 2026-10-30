@@ -197,7 +197,14 @@ export const UpdateDiscoveryFilterConfigRequestSchema = z.object({
 	modelThreshold: z.number().min(0).max(1).optional(),
 });
 
+export const NetworkCooldownSchema = z.object({
+	scope: z.string(),
+	remainingMs: z.number().nonnegative(),
+	until: z.number(),
+});
+
 export const CrawlerStatusDtoSchema = z.object({
+	cooldowns: z.array(NetworkCooldownSchema).optional(),
 	ready: z.boolean(),
 	revision: z.number().nullable(),
 	adapters: z.array(
@@ -228,21 +235,39 @@ export const NetworkRateLimitSchema = z.object({
 	maxRequests: z.number().int().positive().max(1_000_000),
 });
 
-export const DirectAdapterConfigSchema = z.object({
-	type: z.literal("direct"),
+const AdapterBaseSchema = z.object({
 	id: AdapterIdSchema,
 	enabled: z.boolean().default(true),
 	baseWeight: z.number().positive().default(1),
 	rateLimits: z.array(NetworkRateLimitSchema).default([]),
+	requestsPerSecond: z.number().positive().max(1000).optional(),
 });
 
-export const HttpProxyAdapterConfigSchema = z.object({
+function hasSupportedProxyProtocol(value: string): boolean {
+	try {
+		const protocol = new URL(value).protocol;
+		return protocol === "http:" || protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * `createAxiosNetworkTransport` only implements HTTP/HTTPS proxying. Accepting
+ * another scheme here would let an operator persist a configuration that can
+ * never work, so the protocol is rejected at validation time.
+ */
+export const HttpProxyUrlSchema = z
+	.url()
+	.refine(hasSupportedProxyProtocol, "proxyUrl must use the http: or https: protocol");
+
+export const DirectAdapterConfigSchema = AdapterBaseSchema.extend({
+	type: z.literal("direct"),
+});
+
+export const HttpProxyAdapterConfigSchema = AdapterBaseSchema.extend({
 	type: z.literal("http-proxy"),
-	id: AdapterIdSchema,
-	enabled: z.boolean().default(true),
-	baseWeight: z.number().positive().default(1),
-	rateLimits: z.array(NetworkRateLimitSchema).default([]),
-	proxyUrl: z.string().min(1),
+	proxyUrl: HttpProxyUrlSchema,
 });
 
 export const NetworkAdapterConfigSchema = z.discriminatedUnion("type", [
@@ -260,19 +285,76 @@ export const SoftReservePolicySchema = z.object({
 });
 
 export const HealthConfigSchema = z.object({
-	failurePenalty: z.number().gt(0).lt(1).default(0.5),
-	recoveryBonus: z.number().gt(0).lt(1).default(0.2),
-	minWeightFactor: z.number().gte(0).lt(1).default(0.05),
-	failureThreshold: z.number().int().positive().max(100).default(3),
-	cooldownMs: z.number().int().positive().max(3_600_000).default(30_000),
+	failurePenalty: z.number().gt(0).lt(1).default(0.85),
+	recoveryBonus: z.number().gt(0).lt(1).default(0.5),
+	minWeightFactor: z.number().gte(0).lt(1).default(0.1),
+	/** Consecutive health-affecting failures before the adapter is isolated. */
+	failureThreshold: z.number().int().positive().max(100).default(20),
+	/** How long an isolated adapter stays out of rotation before a probe is allowed. */
+	cooldownMs: z.number().int().positive().max(3_600_000).default(10_000),
 });
 
-export const NetworkRuntimeConfigSchema = z.object({
-	adapters: z.array(NetworkAdapterConfigSchema),
-	bindings: z.array(RequestAdapterBindingSchema).optional(),
-	requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).optional().default({}),
-	health: HealthConfigSchema.optional(),
+export const CrawlerExecutionConfigSchema = z.object({
+	throttleScope: z.enum(["adapter", "request_type"]).default("adapter"),
+	taskTimeoutMs: z.number().int().min(1000).max(240000).default(120000),
+	snapshotConcurrency: z.number().int().min(1).max(200).default(25),
+	discoveryConcurrency: z.number().int().min(1).max(100).default(12),
+	requestTimeoutMs: z.number().int().min(100).max(120000).default(8000),
+	admissionTimeoutMs: z.number().int().min(0).max(10000).default(2000),
+	throttleCooldownMs: z.number().int().min(100).max(3600000).default(5000),
+	throttleJitterMs: z.number().int().min(0).max(60000).default(5000),
+	queueCap: z.number().int().min(1).max(10000).default(200),
 });
+export type CrawlerExecutionConfig = z.infer<typeof CrawlerExecutionConfigSchema>;
+
+export const NetworkRuntimeConfigSchema = z
+	.object({
+		adapters: z.array(NetworkAdapterConfigSchema),
+		bindings: z.array(RequestAdapterBindingSchema).optional(),
+		requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).optional().default({}),
+		health: HealthConfigSchema.optional(),
+		execution: CrawlerExecutionConfigSchema.optional(),
+	})
+	.superRefine((config, context) => {
+		const adapterIds = new Set<string>();
+		for (const adapter of config.adapters) {
+			if (adapterIds.has(adapter.id)) {
+				context.addIssue({
+					code: "custom",
+					message: `Duplicate adapter id: ${adapter.id}`,
+				});
+			}
+			adapterIds.add(adapter.id);
+		}
+		const requestTypes = new Set<string>();
+		for (const binding of config.bindings ?? []) {
+			if (requestTypes.has(binding.requestType)) {
+				context.addIssue({
+					code: "custom",
+					message: `Duplicate request binding: ${binding.requestType}`,
+				});
+			}
+			requestTypes.add(binding.requestType);
+			for (const adapterId of binding.adapterIds) {
+				if (!adapterIds.has(adapterId)) {
+					context.addIssue({
+						code: "custom",
+						message: `Binding ${binding.requestType} refers to unknown adapter ${adapterId}`,
+					});
+				}
+			}
+		}
+		const totalShare = Object.values(config.requestTypePolicies).reduce(
+			(sum, policy) => sum + policy.reservedShare,
+			0
+		);
+		if (totalShare > 1) {
+			context.addIssue({
+				code: "custom",
+				message: `Total reserved share across request types (${totalShare}) must not exceed 1`,
+			});
+		}
+	});
 
 export const NetworkRuntimeConfigDocumentSchema = z.object({
 	revision: z.number().int().nonnegative(),
@@ -480,6 +562,7 @@ export const CrawlerQueueSnapshotSchema = z.object({
 export const DiscoveryJobProgressSchema = z.object({
 	stage: z.enum([
 		"starting",
+		"deferred",
 		"searching",
 		"evaluating",
 		"expanding",

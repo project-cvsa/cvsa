@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	CrawlerExecutionConfigSchema,
 	NetworkScheduler,
 	type NetworkAdapter,
 	type NetworkErrorCode,
@@ -35,6 +36,11 @@ function config(overrides: Partial<NetworkRuntimeConfig> = {}): NetworkRuntimeCo
 		bindings: [{ requestType: "test", adapterIds: ["direct-a"] }],
 		requestTypePolicies: {},
 		health: HEALTH,
+		execution: CrawlerExecutionConfigSchema.parse({
+			admissionTimeoutMs: 0,
+			throttleCooldownMs: 1000,
+			throttleJitterMs: 0,
+		}),
 		...overrides,
 	};
 }
@@ -101,7 +107,7 @@ function createScheduler(
 	return new NetworkScheduler(
 		config(overrides),
 		new Map([[adapter.id, adapter]]),
-		new FakeRateLimiter(),
+		new FakeRateLimiter([], clock.now),
 		{
 			clock: clock.now,
 			random: () => 0,
@@ -111,34 +117,37 @@ function createScheduler(
 
 describe("NetworkScheduler health", () => {
 	for (const code of ["HTTP_429", "APPLICATION_RATE_LIMIT"] satisfies NetworkErrorCode[]) {
-		test(`cools down immediately after ${code} and probes after cooldown`, async () => {
+		test(`keeps adapter available after ${code}`, async () => {
 			const adapter = new ControllableAdapter();
 			adapter.enqueue(failure("direct-a", code), success("direct-a"));
 			const clock = new TestClock();
 			const scheduler = createScheduler(adapter, clock);
 
-			expect((await scheduler.execute(request())).errorCode).toBe(code);
+			const throttled = await scheduler.execute(request());
+			expect(throttled.errorCode).toBe(code);
 			expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-				healthState: "open",
-				openUntil: 60_000,
+				healthState: "healthy",
+				openUntil: null,
 			});
-			await expect(scheduler.execute(request())).rejects.toThrow();
-			expect(adapter.startedCount).toBe(1);
-			clock.advance(60_000);
+
+			expect((await scheduler.execute(request())).retryReason).toBe("upstream");
+			clock.advance(throttled.retryAfterMs ?? 0);
 			expect((await scheduler.execute(request())).errorCode).toBeUndefined();
 			expect(scheduler.getAdapterStatuses()[0].healthState).toBe("healthy");
 		});
 	}
 
-	test("honors a longer Retry-After when throttled", async () => {
+	test("does not turn Retry-After into adapter isolation", async () => {
 		const adapter = new ControllableAdapter();
 		adapter.enqueue({ ...failure("direct-a", "HTTP_429"), headers: { "Retry-After": "120" } });
 		const clock = new TestClock();
 		const scheduler = createScheduler(adapter, clock);
 		await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0].openUntil).toBe(120_000);
+		expect(scheduler.getAdapterStatuses()[0].openUntil).toBeNull();
 		clock.advance(60_000);
-		await expect(scheduler.execute(request())).rejects.toThrow();
+		expect((await scheduler.execute(request())).retryReason).toBe("upstream");
+		clock.advance(60_000);
+		expect((await scheduler.execute(request())).errorCode).toBeUndefined();
 	});
 
 	test("reports per-adapter attempts and throttling across configuration reloads", async () => {
@@ -472,26 +481,24 @@ describe("NetworkScheduler health", () => {
 		]);
 	});
 
-	test("an in-flight request keeps updating the state snapshot it started with", async () => {
+	test("a half-open probe completing across reload releases its slot", async () => {
 		const adapter = new ControllableAdapter();
 		const clock = new TestClock();
 		const scheduler = createScheduler(adapter, clock);
-
+		adapter.enqueue(failure(adapter.id), failure(adapter.id), failure(adapter.id));
+		for (let index = 0; index < HEALTH.failureThreshold; index++)
+			await scheduler.execute(request());
+		clock.advance(HEALTH.cooldownMs);
 		adapter.block();
-		const inFlight = scheduler.execute(request());
-		await adapter.waitForStart(1);
-
+		const probe = scheduler.execute(request());
+		await adapter.waitForStart(HEALTH.failureThreshold + 1);
 		scheduler.reload(config(), new Map([[adapter.id, adapter]]));
-
-		adapter.enqueue(failure("direct-a"));
-		adapter.unblock();
-
-		expect((await inFlight).errorCode).toBe("NETWORK_FAILURE");
-		// The failure landed on the pre-reload snapshot, so the reloaded state is
-		// still healthy until it observes a failure of its own.
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "healthy",
-			consecutiveFailures: 0,
-		});
+		try {
+			await expect(scheduler.execute(request())).rejects.toThrow();
+		} finally {
+			adapter.unblock();
+		}
+		expect((await probe).errorCode).toBeUndefined();
+		expect((await scheduler.execute(request())).errorCode).toBeUndefined();
 	});
 });

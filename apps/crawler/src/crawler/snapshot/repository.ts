@@ -1,3 +1,4 @@
+import { activeTaskResource } from "../shared/taskContext";
 import type { DatabaseClient, VideoSnapshot } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { CreateSnapshotInput, ISnapshotRepository } from "./repository.interface";
@@ -8,7 +9,7 @@ export class SnapshotRepository implements ISnapshotRepository {
 	async createSnapshots(snapshots: CreateSnapshotInput[]): Promise<void> {
 		if (snapshots.length === 0) return;
 		await traceTask("snapshot.createSnapshots", async () => {
-			await this.db.orm.public.VideoSnapshot.createAll(
+			await activeTaskResource(this.db).orm.public.VideoSnapshot.createAll(
 				snapshots.map((s) => ({
 					aid: s.aid,
 					...(s.capturedAt ? { capturedAt: s.capturedAt } : {}),
@@ -30,7 +31,8 @@ export class SnapshotRepository implements ISnapshotRepository {
 
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {
 		return traceTask("snapshot.getRecentSnapshots", () =>
-			this.db.orm.public.VideoSnapshot.where({ aid })
+			activeTaskResource(this.db)
+				.orm.public.VideoSnapshot.where({ aid })
 				.orderBy((s) => s.capturedAt.desc())
 				.limit(limit)
 				.all()

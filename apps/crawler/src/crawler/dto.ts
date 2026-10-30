@@ -1,3 +1,4 @@
+import { NetworkCooldownSchema } from "@cvsa/contracts";
 import { z } from "zod";
 import { NetworkRuntimeConfigSchema } from "@cvsa/network-scheduler";
 
@@ -34,6 +35,7 @@ export const NetworkAdapterRuntimeStatusSchema = z.object({
 });
 
 export const NetworkRuntimeStatusSchema = z.object({
+	cooldowns: z.array(NetworkCooldownSchema).optional(),
 	ready: z.boolean(),
 	revision: z.number().int().nonnegative().nullable(),
 	adapters: z.array(NetworkAdapterRuntimeStatusSchema),

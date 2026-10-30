@@ -4,6 +4,7 @@ import type { DiscoveryJobProgress } from "@cvsa/contracts";
 export interface CrawlerJob<T> {
 	id: string | undefined;
 	data: T;
+	updateData?: (data: T) => Promise<void>;
 	updateProgress?: (progress: DiscoveryJobProgress) => Promise<void>;
 }
 
@@ -50,6 +51,8 @@ export interface CrawlerQueue<T> {
 }
 
 export interface CrawlerWorker {
+	setTaskTimeout?: (timeoutMs: number) => void;
+	setConcurrency?: (concurrency: number) => void;
 	close(): Promise<void>;
 }
 

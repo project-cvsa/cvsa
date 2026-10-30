@@ -25,12 +25,6 @@ export interface BatchProcessApiError {
 
 export type BatchProcessResult = BatchProcessSuccess | BatchProcessApiError;
 
-function trackingState(value: string): TrackingState {
-	return value === "new" || value === "regular" || value === "milestone" || value === "archive"
-		? value
-		: "regular";
-}
-
 export class SnapshotService {
 	private readonly stats: StatsRecorder;
 
@@ -49,47 +43,64 @@ export class SnapshotService {
 	 * A job that threw before writing any schedule must not leave its videos
 	 * invisible until the 5-minute lease expires.
 	 */
-	async releaseLeases(aids: Array<number | bigint | string>): Promise<void> {
+	async releaseLeases(
+		aids: Array<number | bigint | string>,
+		expectedLeaseUntil?: string
+	): Promise<void> {
 		const unique = [...new Set(aids.map((aid) => BigInt(aid)))];
-		await this.trackingRepo.releaseLeases(unique);
+		await this.trackingRepo.releaseLeases(
+			unique,
+			expectedLeaseUntil ? toInstant(new Date(expectedLeaseUntil)) : undefined
+		);
 	}
 
 	async deferLeases(
 		aids: Array<number | bigint | string>,
 		delayMs: number,
-		reason: "rate_limit" | "unavailable"
+		reason: "rate_limit" | "unavailable" | "local_capacity",
+		leaseUntil?: string
 	): Promise<void> {
+		const expectedLeaseUntil = leaseUntil ? toInstant(new Date(leaseUntil)) : undefined;
 		const unique = [...new Set(aids.map((aid) => BigInt(aid)))];
 		const now = Date.now();
 		const trackings = await this.trackingRepo.getTrackings(unique);
 		for (const tracking of trackings) {
-			const consecutiveFails = tracking.consecutiveFails + 1;
-			const next = evaluateNextSchedule({
-				aid: tracking.aid,
-				currentState: trackingState(tracking.state),
-				currentViews: tracking.lastViews ?? 0,
-				currentTime: now,
-				consecutiveFails,
-			});
-			await this.trackingRepo.updateSchedule(tracking.aid, {
-				nextSnapshotAt: toInstant(
-					new Date(Math.max(now + delayMs, next.nextSnapshotAt.getTime()))
-				),
-				consecutiveFails,
-				priority: next.priority,
-				scheduleReason: toScheduleReason(next),
-				lastError:
-					reason === "rate_limit"
-						? "network:rate_limited"
-						: "network:adapter_unavailable",
-				leaseUntil: null,
-			});
+			await this.trackingRepo.updateSchedule(
+				tracking.aid,
+				{
+					nextSnapshotAt: toInstant(new Date(now + delayMs)),
+					...(reason === "local_capacity"
+						? {}
+						: {
+								lastError:
+									reason === "rate_limit"
+										? "network:rate_limited"
+										: "network:adapter_unavailable",
+							}),
+					leaseUntil: null,
+				},
+				expectedLeaseUntil
+			);
 		}
 	}
 
-	async processBatch(aids: Array<number | bigint | string>): Promise<BatchProcessResult> {
+	async processBatch(
+		aids: Array<number | bigint | string>,
+		leaseUntil?: string
+	): Promise<BatchProcessResult> {
 		return traceTask("snapshot.processBatch", async () => {
-			const uniqueBigIntAids = [...new Set(aids.map((aid) => BigInt(aid)))];
+			const expectedLeaseUntil = leaseUntil ? toInstant(new Date(leaseUntil)) : undefined;
+			let uniqueBigIntAids = [...new Set(aids.map((aid) => BigInt(aid)))];
+			if (expectedLeaseUntil) {
+				const owned = await this.trackingRepo.getTrackings(uniqueBigIntAids);
+				uniqueBigIntAids = owned
+					.filter(
+						(row) =>
+							row.leaseUntil?.epochMilliseconds ===
+							expectedLeaseUntil.epochMilliseconds
+					)
+					.map((row) => row.aid);
+			}
 			if (uniqueBigIntAids.length === 0) {
 				return { status: "success", inserted: 0, missingCount: 0 };
 			}
@@ -121,15 +132,19 @@ export class SnapshotService {
 						consecutiveFails: fails,
 					});
 
-					await this.trackingRepo.updateSchedule(aid, {
-						state: next.nextState,
-						nextSnapshotAt: toInstant(next.nextSnapshotAt),
-						consecutiveFails: fails,
-						priority: next.priority,
-						leaseUntil: null,
-						lastError,
-						scheduleReason: toScheduleReason(next),
-					});
+					await this.trackingRepo.updateSchedule(
+						aid,
+						{
+							state: next.nextState,
+							nextSnapshotAt: toInstant(next.nextSnapshotAt),
+							consecutiveFails: fails,
+							priority: next.priority,
+							leaseUntil: null,
+							lastError,
+							scheduleReason: toScheduleReason(next),
+						},
+						expectedLeaseUntil
+					);
 				}
 
 				return { status: "api_error", code: response };
@@ -223,23 +238,29 @@ export class SnapshotService {
 					recentSnapshots,
 				});
 
-				await this.trackingRepo.updateSchedule(aid, {
-					state: next.nextState,
-					nextSnapshotAt: toInstant(next.nextSnapshotAt),
-					lastViews: stat.views,
-					lastCapturedAt: capturedAt,
-					velocity: next.velocity,
-					targetMilestone: next.targetMilestone,
-					etaHours: next.etaHours,
-					priority: next.priority,
-					consecutiveFails: 0,
-					// A committed sample fully settles the job: release the in-flight
-					// lease, clear the failure, and book the next metadata refresh.
-					leaseUntil: null,
-					lastError: null,
-					scheduleReason: toScheduleReason(next),
-					nextMetadataAt: toInstant(computeNextMetadataAt(next.nextState, response.time)),
-				});
+				await this.trackingRepo.updateSchedule(
+					aid,
+					{
+						state: next.nextState,
+						nextSnapshotAt: toInstant(next.nextSnapshotAt),
+						lastViews: stat.views,
+						lastCapturedAt: capturedAt,
+						velocity: next.velocity,
+						targetMilestone: next.targetMilestone,
+						etaHours: next.etaHours,
+						priority: next.priority,
+						consecutiveFails: 0,
+						// A committed sample fully settles the job: release the in-flight
+						// lease, clear the failure, and book the next metadata refresh.
+						leaseUntil: null,
+						lastError: null,
+						scheduleReason: toScheduleReason(next),
+						nextMetadataAt: toInstant(
+							computeNextMetadataAt(next.nextState, response.time)
+						),
+					},
+					expectedLeaseUntil
+				);
 			}
 
 			// Handle videos missing from Bilibili's response (e.g. deleted or private)
@@ -255,15 +276,19 @@ export class SnapshotService {
 					consecutiveFails: fails,
 				});
 
-				await this.trackingRepo.updateSchedule(aid, {
-					state: next.nextState,
-					nextSnapshotAt: toInstant(next.nextSnapshotAt),
-					consecutiveFails: fails,
-					priority: next.priority,
-					leaseUntil: null,
-					lastError: "video_missing_from_stats_response",
-					scheduleReason: toScheduleReason(next),
-				});
+				await this.trackingRepo.updateSchedule(
+					aid,
+					{
+						state: next.nextState,
+						nextSnapshotAt: toInstant(next.nextSnapshotAt),
+						consecutiveFails: fails,
+						priority: next.priority,
+						leaseUntil: null,
+						lastError: "video_missing_from_stats_response",
+						scheduleReason: toScheduleReason(next),
+					},
+					expectedLeaseUntil
+				);
 			}
 
 			return {

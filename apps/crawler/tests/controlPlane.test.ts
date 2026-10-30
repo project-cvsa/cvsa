@@ -1,3 +1,5 @@
+import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
+import { waitUntil } from "./support/async";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { NetworkRuntimeConfig } from "../src/crawler";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -6,6 +8,8 @@ import { treaty } from "@elysiajs/eden";
 import { crawlerControlPlane } from "../src/controlPlane";
 import {
 	crawlerMq,
+	discoveryQueue,
+	discoveryPipelineProcessor,
 	crawlerSnapshotDb,
 	discoveryRepository,
 	networkRuntime,
@@ -388,4 +392,121 @@ describe("crawler control plane", () => {
 		expect(labeled.data?.humanLabel).toBe(1);
 		expect(labeled.data?.labeledAt).not.toBeNull();
 	});
+	test.serial(
+		"saving concurrency through the API changes scheduling on the running worker",
+		async () => {
+			const seed = await runtimeApi.config.get(authorized);
+			if (!seed.data) {
+				const created = await runtimeApi.config.put(
+					{ revision: 0, config: mixedConfig() },
+					authorized
+				);
+				expect(created.status).toBe(200);
+			}
+			const before = await runtimeApi.config.get(authorized);
+			if (!before.data) throw new Error("Expected persisted runtime configuration");
+			const originalConfig = before.data.config;
+			const prefix = `concurrency-${crypto.randomUUID()}`;
+			const gate = Promise.withResolvers<void>();
+			const parallelGate = Promise.withResolvers<void>();
+			const entered: string[] = [];
+			const originalProcess = discoveryPipelineProcessor.processJob;
+			discoveryPipelineProcessor.processJob = async (data, report, checkpoint) => {
+				if (data.type === "active-discovery" && data.aid.startsWith(prefix)) {
+					entered.push(data.aid);
+					if (data.aid === `${prefix}-first`) await gate.promise;
+					else await parallelGate.promise;
+					return;
+				}
+				return originalProcess.call(discoveryPipelineProcessor, data, report, checkpoint);
+			};
+			const save = async (concurrency: number) => {
+				const current = await runtimeApi.config.get(authorized);
+				if (!current.data) throw new Error("Missing runtime configuration");
+				const result = await runtimeApi.config.put(
+					{
+						revision: current.data.revision,
+						config: {
+							...originalConfig,
+							execution: CrawlerExecutionConfigSchema.parse({
+								...originalConfig.execution,
+								discoveryConcurrency: concurrency,
+							}),
+						},
+					},
+					authorized
+				);
+				expect(result.status).toBe(200);
+			};
+			try {
+				await save(1);
+				await discoveryQueue.add(
+					`${prefix}-first`,
+					{ type: "active-discovery", aid: `${prefix}-first` },
+					{ removeOnComplete: false }
+				);
+				await waitUntil(
+					() => entered.includes(`${prefix}-first`),
+					"first worker task start"
+				);
+				await discoveryQueue.add(
+					`${prefix}-second`,
+					{ type: "active-discovery", aid: `${prefix}-second` },
+					{ removeOnComplete: false }
+				);
+				await waitUntil(
+					async () =>
+						(await discoveryQueue.getJobs(["waiting"])).some(
+							(job) => job.name === `${prefix}-second`
+						),
+					"second task waiting behind the blocked first task"
+				);
+				expect(entered).toEqual([`${prefix}-first`]);
+				await save(2);
+				await discoveryQueue.add(
+					`${prefix}-third`,
+					{ type: "active-discovery", aid: `${prefix}-third` },
+					{ removeOnComplete: false }
+				);
+				gate.resolve();
+				await waitUntil(
+					() =>
+						entered.includes(`${prefix}-second`) && entered.includes(`${prefix}-third`),
+					"two concurrent tasks after applying the new limit"
+				);
+				parallelGate.resolve();
+				await waitUntil(
+					async () =>
+						(await discoveryQueue.getJobs(["completed"])).filter((job) =>
+							job.name.startsWith(prefix)
+						).length === 3,
+					"all worker tasks completed"
+				);
+			} finally {
+				gate.resolve();
+				parallelGate.resolve();
+				discoveryPipelineProcessor.processJob = originalProcess;
+				const current = await runtimeApi.config.get(authorized);
+				if (current.data)
+					await runtimeApi.config.put(
+						{ revision: current.data.revision, config: originalConfig },
+						authorized
+					);
+				await waitUntil(
+					async () =>
+						(await discoveryQueue.getJobs(["active"])).every(
+							(job) => !job.name.startsWith(prefix)
+						),
+					"test tasks released"
+				);
+				for (const job of await discoveryQueue.getJobs([
+					"waiting",
+					"delayed",
+					"completed",
+					"failed",
+				]))
+					if (job.name.startsWith(prefix)) await discoveryQueue.removeJob(job.id);
+			}
+		}
+	);
 });

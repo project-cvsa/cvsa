@@ -24,7 +24,7 @@ export interface UpsertTrackingInput {
 
 export interface UpdateScheduleInput {
 	state?: TrackingState;
-	nextSnapshotAt: Temporal.Instant;
+	nextSnapshotAt?: Temporal.Instant;
 	scheduleReason?: TrackingScheduleReason;
 	nextMetadataAt?: Temporal.Instant | null;
 	/** `null` releases the in-flight lease, which is what a finished job does. */
@@ -94,9 +94,13 @@ export interface ITrackingRepository {
 	getTracking(aid: bigint): Promise<VideoTracking | null>;
 	getTrackings(aids: bigint[]): Promise<VideoTracking[]>;
 	upsertTracking(input: UpsertTrackingInput): Promise<VideoTracking>;
-	updateSchedule(aid: bigint, update: UpdateScheduleInput): Promise<void>;
+	updateSchedule(
+		aid: bigint,
+		update: UpdateScheduleInput,
+		expectedLeaseUntil?: Temporal.Instant
+	): Promise<void>;
 	/** Release the lease on videos without rescheduling them. */
-	releaseLeases(aids: bigint[]): Promise<void>;
+	releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void>;
 	postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void>;
 	countOverdueVideos(now: Temporal.Instant | Date): Promise<OverdueTrackingSummary>;
 	listTrackingVideos(params: ListTrackingVideosParams): Promise<ListTrackingVideosResult>;

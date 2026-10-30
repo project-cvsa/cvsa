@@ -70,9 +70,9 @@ describe("SnapshotService", () => {
 		await service.deferLeases([12n], 60_000, "rate_limit");
 		const tracking = repo.trackings.get(12n);
 		expect(tracking?.leaseUntil).toBeNull();
-		expect(tracking?.consecutiveFails).toBe(1);
+		expect(tracking?.consecutiveFails).toBe(0);
 		expect(tracking?.lastError).toBe("network:rate_limited");
-		expect(tracking?.scheduleReason).toBe("retry");
+		expect(tracking?.scheduleReason).toBe("regular");
 		expect(tracking?.nextSnapshotAt.epochMilliseconds).toBeGreaterThanOrEqual(before + 60_000);
 	});
 	test("successfully processes a batch, writes snapshots, and settles the lease", async () => {

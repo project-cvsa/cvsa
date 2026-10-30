@@ -1,3 +1,4 @@
+import NetworkExecutionPolicy from "../network/NetworkExecutionPolicy";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
 import { createMemo, createSignal, Show } from "solid-js";
@@ -319,6 +320,17 @@ export default function NetworkSection(props: NetworkSectionProps) {
 							<NetworkRoutingPolicy
 								config={doc().config}
 								onChange={(config) => setNetworkDoc({ ...doc(), config })}
+							/>
+
+							<NetworkExecutionPolicy
+								config={doc().config.execution}
+								status={props.statusData()}
+								onChange={(execution) =>
+									setNetworkDoc({
+										...doc(),
+										config: { ...doc().config, execution },
+									})
+								}
 							/>
 
 							<NetworkHealthPolicy

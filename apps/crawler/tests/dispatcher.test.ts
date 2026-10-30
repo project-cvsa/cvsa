@@ -97,18 +97,28 @@ describe("TrackingDispatcher", () => {
 		for (const row of repo.trackings.values()) expect(row.leaseUntil).toBeNull();
 	});
 
-	test("dispatches only the capacity the queue can absorb", async () => {
+	test("never exceeds available job slots and leaves excess videos unleased", async () => {
 		const repo = new InMemoryTrackingRepository();
-		for (let i = 1; i <= 10; i++) repo.trackings.set(BigInt(i), dueRow(i));
-
+		const videoCount = 400;
+		for (let i = 1; i <= videoCount; i++) repo.trackings.set(BigInt(i), dueRow(i));
 		const fakeMq = createFakeMq();
-		fakeMq.state.jobCounts = { waiting: 190, active: 5, delayed: 0, failed: 0, completed: 0 };
-
-		const dispatcher = new TrackingDispatcher(repo, fakeMq, { queueCap: 200 });
-		expect(await dispatcher.tick(new Date())).toBe(5);
-		expect(fakeMq.state.queuedJobs).toHaveLength(1);
-		const batch = fakeMq.state.queuedJobs[0]?.data as { aids: string[] };
-		expect(batch.aids).toHaveLength(5);
+		const queueCap = 8;
+		const occupied = { waiting: 2, active: 1, delayed: 2, failed: 0, completed: 0 };
+		fakeMq.state.jobCounts = occupied;
+		const freeSlots = queueCap - occupied.waiting - occupied.active - occupied.delayed;
+		const dispatcher = new TrackingDispatcher(repo, fakeMq, {
+			queueCap,
+			maxPerTick: videoCount,
+		});
+		const dispatched = await dispatcher.tick(new Date());
+		expect(fakeMq.state.queuedJobs).toHaveLength(freeSlots);
+		const leased = [...repo.trackings.values()].filter((row) => row.leaseUntil !== null);
+		expect(dispatched).toBe(leased.length);
+		expect(dispatched).toBeGreaterThan(0);
+		expect(dispatched).toBeLessThan(videoCount);
+		expect([...repo.trackings.values()].filter((row) => row.leaseUntil === null)).toHaveLength(
+			videoCount - dispatched
+		);
 	});
 
 	test("does nothing when no videos are due", async () => {

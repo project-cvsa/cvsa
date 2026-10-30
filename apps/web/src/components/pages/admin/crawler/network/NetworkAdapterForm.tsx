@@ -80,6 +80,9 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 		props.adapter?.type === "http-proxy" ? props.adapter.proxyUrl : ""
 	);
 	const [weight, setWeight] = createSignal(props.adapter?.baseWeight ?? 1);
+	const [requestsPerSecond, setRequestsPerSecond] = createSignal(
+		props.adapter?.requestsPerSecond ?? 20
+	);
 	const [limits, setLimits] = createSignal<NetworkRateLimit[]>(
 		props.adapter?.rateLimits.map((limit) => ({ ...limit })) ?? [
 			{ durationSeconds: 60, maxRequests: 120 },
@@ -123,6 +126,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				enabled: props.adapter?.enabled ?? true,
 				baseWeight: weight() > 0 ? weight() : 1,
 				rateLimits: limits(),
+				requestsPerSecond: requestsPerSecond(),
 				proxyUrl: endpoint,
 			};
 		} else {
@@ -132,6 +136,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 				enabled: props.adapter?.enabled ?? true,
 				baseWeight: weight() > 0 ? weight() : 1,
 				rateLimits: limits(),
+				requestsPerSecond: requestsPerSecond(),
 			};
 		}
 
@@ -171,6 +176,16 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 					}}
 				/>
 
+				<NumberField
+					size="md"
+					label={t("network.form.requestsPerSecond")}
+					helperText={t("network.form.requestsPerSecondHelp")}
+					min={0.1}
+					max={1000}
+					step={0.1}
+					value={requestsPerSecond()}
+					onChange={setRequestsPerSecond}
+				/>
 				<NumberField
 					size="md"
 					label={t("network.form.weight")}

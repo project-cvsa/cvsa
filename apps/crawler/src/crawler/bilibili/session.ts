@@ -18,6 +18,12 @@ const DEVICE_COOKIE_CACHE_KEY = "cvsa:bilibili:device-cookies";
 const WBI_KEYS_CACHE_KEY = "cvsa:bilibili:wbi-keys";
 const BILI_TICKET_CACHE_KEY = "cvsa:bilibili:ticket";
 
+const USER_AGENTS = [
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+];
+
 const browserHeaders = {
 	Accept: "application/json, text/plain, */*",
 	"User-Agent": "Mozilla/5.0 Chrome/131 Safari/537.36",
@@ -30,11 +36,13 @@ function getSetCookieValue(headers: Record<string, string>, name: string): strin
 }
 
 export class BilibiliSession {
+	private readonly userAgent = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 	private buvid3: string | undefined;
 	private buvid4: string | undefined;
 	private bNut: string | undefined;
 	private biliTicket: string | undefined;
 	private readonly cache: IBilibiliCache;
+	private credentialsInFlight: Promise<Pick<WbiCredentials, "imgKey" | "subKey">> | undefined;
 
 	constructor(
 		private readonly requestImpl: BilibiliRequest,
@@ -66,6 +74,8 @@ export class BilibiliSession {
 			response = await this.requestImpl(url, {
 				...options,
 				headers: {
+					...browserHeaders,
+					"User-Agent": this.userAgent ?? browserHeaders["User-Agent"],
 					...(cookie ? { Cookie: cookie } : {}),
 					...options.headers,
 				},
@@ -113,6 +123,14 @@ export class BilibiliSession {
 	}
 
 	async getWbiKeys(): Promise<Pick<WbiCredentials, "imgKey" | "subKey">> {
+		if (!this.credentialsInFlight)
+			this.credentialsInFlight = this.loadWbiKeys().finally(() => {
+				this.credentialsInFlight = undefined;
+			});
+		return this.credentialsInFlight;
+	}
+
+	private async loadWbiKeys(): Promise<Pick<WbiCredentials, "imgKey" | "subKey">> {
 		await this.ensureDeviceCookies();
 		const [cachedKeys, cachedTicket] = await Promise.all([
 			this.cache.get(WBI_KEYS_CACHE_KEY),
@@ -151,7 +169,10 @@ export class BilibiliSession {
 		}
 
 		const home = await this.requestImpl(BILI_HOME, {
-			headers: browserHeaders,
+			headers: {
+				...browserHeaders,
+				"User-Agent": this.userAgent ?? browserHeaders["User-Agent"],
+			},
 			method: "HEAD",
 		});
 		const bNut =

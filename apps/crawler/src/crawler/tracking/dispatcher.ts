@@ -11,6 +11,7 @@ const CHUNK_SIZE = 30; // Max aids per Bilibili medialist API request
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in-flight lease
 
 export interface TrackingDispatcherOptions extends TrackingPolicyConfig {
+	remainingDelay?: () => Promise<number>;
 	intervalMs?: number;
 	maxPerTick?: number;
 	leaseDurationMs?: number;
@@ -26,6 +27,7 @@ export class TrackingDispatcher {
 	private readonly intervalMs: number;
 	private readonly maxPerTick: number;
 	private readonly leaseDurationMs: number;
+	private readonly remainingDelay: (() => Promise<number>) | undefined;
 	private readonly policy: Required<TrackingPolicyConfig>;
 
 	constructor(
@@ -33,6 +35,7 @@ export class TrackingDispatcher {
 		mq: CrawlerMq,
 		options: TrackingDispatcherOptions = {}
 	) {
+		this.remainingDelay = options.remainingDelay;
 		this.queue = mq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
 		this.intervalMs = options.intervalMs ?? 1_000;
 		this.maxPerTick = options.maxPerTick ?? 300;
@@ -45,6 +48,9 @@ export class TrackingDispatcher {
 		return this.policy.queueCap;
 	}
 
+	configure(queueCap: number): void {
+		this.policy.queueCap = queueCap;
+	}
 	start(): void {
 		if (this.isRunning) return;
 		this.isRunning = true;
@@ -79,8 +85,9 @@ export class TrackingDispatcher {
 			return await traceTask("tracking.dispatcher.tick", async () => {
 				// Backpressure first: pulling from the DB only to sit in Redis would
 				// turn a Bilibili hiccup into unbounded queue growth.
+				if (((await this.remainingDelay?.()) ?? 0) > 0) return 0;
 				const counts = await this.queue.getJobCounts();
-				const inFlight = counts.active + counts.waiting;
+				const inFlight = counts.active + counts.waiting + counts.delayed;
 				const capacity = this.queueCap - inFlight;
 				if (capacity <= 0) {
 					appLogger.warn("TrackingDispatcher is backpressured by the queue cap", {
@@ -92,7 +99,7 @@ export class TrackingDispatcher {
 					return 0;
 				}
 
-				const claimLimit = Math.min(this.maxPerTick, capacity);
+				const claimLimit = Math.min(this.maxPerTick, capacity * CHUNK_SIZE);
 				const claimed = await this.trackingRepo.claimDueVideos(
 					toInstant(now),
 					claimLimit,
@@ -115,8 +122,13 @@ export class TrackingDispatcher {
 					for (const chunk of chunks) {
 						await this.queue.add(
 							"process-batch",
-							{ aids: chunk.aids.map((aid) => aid.toString()) },
-							{ priority: chunk.priority }
+							{
+								aids: chunk.aids.map((aid) => aid.toString()),
+								leaseUntil: new Date(
+									now.getTime() + this.leaseDurationMs
+								).toISOString(),
+							},
+							{ priority: chunk.priority, attempts: 1 }
 						);
 						dispatched += chunk.aids.length;
 					}

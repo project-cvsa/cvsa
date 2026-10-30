@@ -1,3 +1,4 @@
+import { RetryLaterError } from "../shared/retryLater";
 import type { DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
@@ -136,7 +137,11 @@ export class SearchRover {
 
 	async runSearchSweep(
 		config: Partial<SearchRoverConfig> = {},
-		onProgress?: (progress: DiscoveryJobProgress) => Promise<void>
+		onProgress?: (progress: DiscoveryJobProgress) => Promise<void>,
+		continuation?: {
+			offset: number;
+			onPage: (candidates: DiscoveredCandidate[], offset: number) => Promise<void>;
+		}
 	): Promise<DiscoveredCandidate[]> {
 		return traceTask("discovery.searchRover.sweep", async () => {
 			const keywords = config.keywords ?? DEFAULT_KEYWORDS;
@@ -145,10 +150,12 @@ export class SearchRover {
 
 			const allCandidates: DiscoveredCandidate[] = [];
 			const seenAids = new Set<bigint>();
+			let offset = 0;
 
 			for (const keyword of keywords) {
 				for (const order of orders) {
 					for (let page = 1; page <= pagesPerQuery; page++) {
+						if (offset++ < (continuation?.offset ?? 0)) continue;
 						try {
 							await onProgress?.({
 								stage: "searching",
@@ -165,6 +172,7 @@ export class SearchRover {
 								categoryId: config.categoryId,
 							});
 
+							await continuation?.onPage(results, offset);
 							for (const cand of results) {
 								if (!seenAids.has(cand.aid)) {
 									seenAids.add(cand.aid);
@@ -172,6 +180,7 @@ export class SearchRover {
 								}
 							}
 						} catch (error) {
+							if (error instanceof RetryLaterError || continuation) throw error;
 							appLogger.error("Search rover query encountered error", {
 								component: "search-rover",
 								keyword,
@@ -190,13 +199,14 @@ export class SearchRover {
 				uniqueDiscovered: allCandidates.length,
 			});
 
-			await onProgress?.({
-				stage: "searching",
-				target: null,
-				candidates: allCandidates.length,
-				queued: 0,
-				updatedAt: new Date().toISOString(),
-			});
+			if (!continuation)
+				await onProgress?.({
+					stage: "searching",
+					target: null,
+					candidates: allCandidates.length,
+					queued: 0,
+					updatedAt: new Date().toISOString(),
+				});
 			return allCandidates;
 		});
 	}

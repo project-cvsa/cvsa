@@ -1,4 +1,13 @@
-import { Queue, Worker, type JobType, type JobsOptions, type WorkerOptions } from "bullmq";
+import { assertTaskActive, runTaskWithDeadline } from "./taskContext";
+import {
+	Queue,
+	Worker,
+	DelayedError,
+	type JobType,
+	type JobsOptions,
+	type WorkerOptions,
+} from "bullmq";
+import { RetryLaterError } from "./retryLater";
 import IORedis from "ioredis";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
@@ -19,7 +28,7 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 	removeOnFail: { age: 24 * 60 * 60, count: 1_000 },
 };
 
-export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
+export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"): CrawlerMq {
 	const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
 	const queues: Array<Queue<unknown>> = [];
 	const workers: Array<Worker<unknown>> = [];
@@ -33,11 +42,13 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 		createQueue<T>(name: string, options: JobsOptions = {}): CrawlerQueue<T> {
 			const queue = new Queue<T, unknown, string, T, unknown, string>(name, {
 				connection,
+				prefix,
 				defaultJobOptions: { ...DEFAULT_JOB_OPTIONS, ...options },
 			});
 			queues.push(queue as Queue<unknown>);
 			return {
 				add: async (jobName: string, data: T, jobOptions?: JobsOptions): Promise<void> => {
+					assertTaskActive();
 					await queue.add(jobName, data, jobOptions);
 				},
 				getJobCounts: async (): Promise<CrawlerJobCounts> => {
@@ -126,17 +137,31 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 			processor: CrawlerProcessor<T>,
 			options: Omit<WorkerOptions, "connection"> = {}
 		): CrawlerWorker {
+			let taskTimeoutMs = 120_000;
 			const worker = new Worker<T>(
 				name,
-				async (job) => {
+				async (job, token) => {
 					const crawlerJob: CrawlerJob<T> = {
 						id: job.id ?? undefined,
 						data: job.data,
-						updateProgress: (progress) => job.updateProgress(progress),
+						updateData: (data) => {
+							assertTaskActive();
+							return job.updateData(data);
+						},
+						updateProgress: (progress) => {
+							assertTaskActive();
+							return job.updateProgress(progress);
+						},
 					};
-					await processor(crawlerJob);
+					try {
+						await runTaskWithDeadline(taskTimeoutMs, () => processor(crawlerJob));
+					} catch (error) {
+						if (!(error instanceof RetryLaterError)) throw error;
+						await job.moveToDelayed(Date.now() + Math.max(1, error.delayMs), token);
+						throw new DelayedError();
+					}
 				},
-				{ ...options, connection }
+				{ ...options, connection, prefix }
 			);
 			workers.push(worker as Worker<unknown>);
 			worker.on("failed", (job, error) => {
@@ -146,7 +171,15 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL): CrawlerMq {
 					error,
 				});
 			});
-			return { close: (force = true) => worker.close(force) };
+			return {
+				setTaskTimeout: (timeoutMs) => {
+					taskTimeoutMs = timeoutMs;
+				},
+				setConcurrency: (concurrency) => {
+					worker.concurrency = concurrency;
+				},
+				close: (force = true) => worker.close(force),
+			};
 		},
 
 		async close(): Promise<void> {
