@@ -181,7 +181,12 @@ export class DiscoveryService {
 		const evaluations = await mapWithConcurrency(
 			pending,
 			MANUAL_EVALUATION_CONCURRENCY,
-			(candidate) => this.evaluator.evaluate({ aid: candidate.aid, source })
+			(candidate) =>
+				this.evaluator.evaluate({
+					aid: candidate.aid,
+					source,
+					origin: candidate.origin,
+				})
 		);
 
 		return evaluations.filter((evaluation) => evaluation.status === "accepted").length;

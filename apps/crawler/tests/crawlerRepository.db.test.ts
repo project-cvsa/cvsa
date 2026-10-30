@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { DiscoveryContextSchema } from "@cvsa/contracts";
 import { createSnapshotDb, toInstant, type SnapshotDb } from "@cvsa/snapshot-db";
 import { DiscoveryRepository } from "../src/crawler/discovery/repository";
 import type { UpsertMetadataInput } from "../src/crawler/discovery/types";
@@ -294,6 +295,54 @@ describe("DiscoveryRepository metadata history", () => {
 
 		const created = await discovery.getMetadata(BASE_AID + 13n);
 		expect(created?.title).toBe("全新视频");
+	});
+
+	test("keeps the first origin while the decision follows the latest evaluation", async () => {
+		const target = aid(14);
+		await discovery.upsertMetadata(
+			input(target, {
+				discoverySource: "search",
+				discoveryContext: {
+					origin: {
+						channel: "search",
+						capturedAt: "2026-10-30T00:00:00.000Z",
+						search: {
+							keyword: "洛天依原创",
+							order: "pubdate",
+							page: 1,
+							position: 3,
+						},
+					},
+				},
+			})
+		);
+
+		await discovery.upsertMetadata(
+			input(target, {
+				discoverySource: "manual",
+				discoveryContext: {
+					origin: {
+						channel: "manual",
+						capturedAt: "2026-10-31T00:00:00.000Z",
+						manual: { action: "ingest" },
+					},
+					decision: {
+						outcome: "accepted",
+						basis: "model",
+						reason: "model_accept",
+						confidence: 0.93,
+						sampled: false,
+					},
+				},
+			})
+		);
+
+		const stored = await discovery.getMetadata(target);
+		expect(stored?.discoverySource).toBe("search");
+		const context = DiscoveryContextSchema.parse(stored?.discoveryContext);
+		expect(context.origin.channel).toBe("search");
+		expect(context.origin.search?.keyword).toBe("洛天依原创");
+		expect(context.decision?.reason).toBe("model_accept");
 	});
 });
 

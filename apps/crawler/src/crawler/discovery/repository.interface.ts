@@ -30,6 +30,7 @@ export interface IDiscoveryRepository {
 	upsertSample(sample: UpsertDiscoverySampleInput): Promise<DiscoverySample>;
 	listSamples(options?: ListDiscoverySamplesOptions): Promise<DiscoverySample[]>;
 	countSamples(options?: ListDiscoverySamplesOptions): Promise<number>;
+	getSample(aid: bigint): Promise<DiscoverySample | null>;
 	labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null>;
 	getRuntimeConfig(key: string): Promise<{ revision: number; config: unknown } | null>;
 	saveRuntimeConfig(

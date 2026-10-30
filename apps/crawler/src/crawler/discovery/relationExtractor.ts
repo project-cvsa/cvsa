@@ -33,6 +33,14 @@ export class RelationExtractor {
 
 				const targetAid = BigInt(item.aid);
 				const pubdate = item.pubdate ? toInstant(new Date(item.pubdate * 1000)) : null;
+				const origin = {
+					channel: "related" as const,
+					capturedAt: capturedAt.toString(),
+					related: {
+						sourceAid: sourceAid.toString(),
+						position: position + 1,
+					},
+				};
 
 				relations.push({
 					sourceAid,
@@ -57,7 +65,8 @@ export class RelationExtractor {
 					copyright: item.copyright ?? null,
 					cid: item.cid ? BigInt(item.cid) : null,
 					Dynamic: item.dynamic ?? null,
-					discoverySource: "recommendation",
+					discoverySource: "related",
+					discoveryContext: { origin },
 					capturedAt,
 				});
 
@@ -66,6 +75,7 @@ export class RelationExtractor {
 					bvid: item.bvid,
 					title: item.title,
 					source: "related",
+					origin,
 					sourceAid,
 					position,
 					pubdate,

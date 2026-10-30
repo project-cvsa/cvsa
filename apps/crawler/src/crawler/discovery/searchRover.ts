@@ -72,14 +72,26 @@ export class SearchRover {
 			if (videos.length === 0) return [];
 
 			const now = toInstant(new Date());
+			const capturedAt = new Date().toISOString();
 			const candidates: DiscoveredCandidate[] = [];
 			const metadatas: UpsertMetadataInput[] = [];
 
-			for (const video of videos) {
+			for (const [index, video] of videos.entries()) {
 				if (!video?.aid) continue;
 				const aid = BigInt(video.aid);
 				const cleanTitle = stripHighlightTags(video.title ?? "");
 				const pubdate = video.pubdate ? toInstant(new Date(video.pubdate * 1000)) : null;
+				const origin = {
+					channel: "search" as const,
+					capturedAt,
+					search: {
+						keyword,
+						order: options.order ?? "totalrank",
+						page: options.page ?? 1,
+						position: index + 1,
+						categoryId: options.categoryId ?? null,
+					},
+				};
 
 				const metadata: UpsertMetadataInput = {
 					aid,
@@ -107,6 +119,7 @@ export class SearchRover {
 					tname: video.typename ?? null,
 					tags: fromSearchTagString(video.tag),
 					discoverySource: "search",
+					discoveryContext: { origin },
 					capturedAt: now,
 				};
 
@@ -116,6 +129,7 @@ export class SearchRover {
 					bvid: video.bvid,
 					title: cleanTitle,
 					source: "search",
+					origin,
 					pubdate,
 					rawVideo: video,
 				});

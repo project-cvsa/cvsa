@@ -83,6 +83,7 @@ model BilibiliVideoMetadata {
   modelScore      Float?    @map("model_score")
   modelVersion    String?   @map("model_version")
   discoverySource String?   @map("discovery_source")
+  discoveryContext Json?    @map("discovery_context")
   capturedAt      DateTime  @default(now()) @map("captured_at")
   updatedAt       DateTime  @onCreate(now()) @onUpdate(now()) @map("updated_at")
 

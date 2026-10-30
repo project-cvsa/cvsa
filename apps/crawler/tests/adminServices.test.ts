@@ -250,6 +250,54 @@ describe("crawler admin services", () => {
 		expect(await tracking.getTracking(1n)).toBeNull();
 		await expect(service.label(999n, 1)).rejects.toMatchObject({ statusCode: 404 });
 	});
+	test("untrack labels the sample as human rejected before deleting tracking", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await repository.upsertSample({
+			aid: 2n,
+			bvid: "BV2",
+			title: "candidate",
+			decision: "model_accepted",
+			modelVersion: "test",
+			probabilities: [],
+			songProbability: 0.9,
+		});
+		await tracking.upsertTracking({
+			aid: 2n,
+			state: "regular",
+			nextSnapshotAt: toInstant(new Date()),
+		});
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		await service.untrack(2n);
+
+		expect((await repository.getSample(2n))?.humanLabel).toBe(0);
+		expect(await tracking.getTracking(2n)).toBeNull();
+	});
+	test("untrack keeps tracking when the discovery sample is missing", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await tracking.upsertTracking({
+			aid: 3n,
+			state: "regular",
+			nextSnapshotAt: toInstant(new Date()),
+		});
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		await expect(service.untrack(3n)).rejects.toMatchObject({ statusCode: 404 });
+
+		expect(await tracking.getTracking(3n)).not.toBeNull();
+	});
 	test("scales custom-range series rates by the requested minutes, not the preset window", async () => {
 		const now = Date.now();
 		const store = new InMemoryRollupStore();
