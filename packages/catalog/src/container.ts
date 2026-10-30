@@ -10,7 +10,7 @@ import { SongLyricsWriter } from "./song/lyrics/SongLyricsWriter";
 import { SongReader } from "./song/SongReader";
 import { SongWriter } from "./song/SongWriter";
 
-export const catalogCache = new RedisCatalogCache(env.REDIS_URL);
+export const catalogCache = new RedisCatalogCache(env.REDIS_CACHE_URL ?? env.REDIS_URL);
 export const songReader = new SongReader(prisma, catalogCache);
 export const songWriter = new SongWriter(prisma, catalogCache);
 export const songLyricsWriter = new SongLyricsWriter(prisma, catalogCache);

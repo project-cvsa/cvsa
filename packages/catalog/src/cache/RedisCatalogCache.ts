@@ -31,11 +31,8 @@ export class RedisCatalogCache implements ICatalogCache {
 	async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
 		try {
 			const serialized = JSON.stringify(value);
-			if (ttlSeconds && ttlSeconds > 0) {
-				await this.redis.set(key, serialized, "EX", ttlSeconds);
-			} else {
-				await this.redis.set(key, serialized);
-			}
+			const ttl = ttlSeconds && ttlSeconds > 0 ? ttlSeconds : 86_400;
+			await this.redis.set(key, serialized, "EX", ttl);
 		} catch {
 			// Cache write failure must never break business flow
 		}

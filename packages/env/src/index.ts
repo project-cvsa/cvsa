@@ -23,6 +23,7 @@ export const env = createEnv({
 		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error"]).optional().default("info"),
 
 		REDIS_URL: z.string().optional().default("redis://127.0.0.1:6379"),
+		REDIS_CACHE_URL: z.string().optional().default("redis://127.0.0.1:6379"),
 
 		/** Embedding service used by search indexing. */
 		EMBEDDING_API_URL: z.url().optional().default("http://127.0.0.1:14900"),
@@ -55,6 +56,7 @@ export const crawlerEnv = createEnv({
 	server: {
 		NODE_ENV: z.enum(["development", "test", "production"]).optional(),
 		REDIS_URL: z.url().default("redis://127.0.0.1:6379"),
+		REDIS_CACHE_URL: z.url().default("redis://127.0.0.1:6379"),
 		SNAPSHOT_DATABASE_URL: z.url().default(SNAPSHOT_DATABASE_URL_DEFAULT),
 		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
 		OTEL_SERVICE_NAME: z.string().default("cvsa-crawler"),

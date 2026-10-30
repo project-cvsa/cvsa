@@ -35,7 +35,7 @@ jobs:
         # `--wait` blocks until every container reports healthy, so Postgres,
         # TimescaleDB, Redis and Meilisearch are accepting connections before
         # `setup:ci` runs instead of racing their first-boot initialization.
-        run: docker compose up -d --wait --wait-timeout 240 db snapshot-db redis meili
+        run: docker compose up -d --wait --wait-timeout 240 db snapshot-db redis redis-cache meili
 
       - uses: actions/cache@v4
         with:
