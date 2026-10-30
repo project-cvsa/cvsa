@@ -35,7 +35,7 @@ COPY packages/snapshot-db/package.json ./packages/snapshot-db/package.json
 COPY packages/typescript-config/package.json ./packages/typescript-config/package.json
 
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun install --frozen-lockfile
+	bun install --frozen-lockfile --ignore-scripts
 
 # Stage 3: Source & Contract Generation Layer
 FROM deps AS source
