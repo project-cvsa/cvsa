@@ -29,6 +29,9 @@ describe("Crawler Admin API Access Control", () => {
 			.samples({ aid: "1" })
 			.label.post({ humanLabel: 1 });
 		const snapshot = await api.v2.admin.crawler.tracking.videos({ aid: "1" }).snapshots.post();
+		const snapshotList = await api.v2.admin.crawler.tracking
+			.videos({ aid: "1" })
+			.snapshots.get({ query: { limit: 20, offset: 0 } });
 
 		expect(stats.status).toBe(401);
 		expect(tracking.status).toBe(401);
@@ -36,6 +39,7 @@ describe("Crawler Admin API Access Control", () => {
 		expect(samples.status).toBe(401);
 		expect(label.status).toBe(401);
 		expect(snapshot.status).toBe(401);
+		expect(snapshotList.status).toBe(401);
 	});
 
 	test("should return 403 when authenticated as regular user (non-admin)", async () => {

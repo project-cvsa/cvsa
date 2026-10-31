@@ -47,4 +47,40 @@ describe("manual snapshot", () => {
 		}
 		expect(TrackingAidParamsSchema.safeParse({ aid: "12" }).success).toBe(true);
 	});
+
+	test("allows forced enqueue overriding existing lease", async () => {
+		const repo = new InMemoryTrackingRepository();
+		repo.trackings.set(
+			12n,
+			createTrackingRow(12n, { leaseUntil: toInstant(new Date(Date.now() + 60_000)) })
+		);
+		const mq = createFakeMq();
+		const service = new ManualSnapshotService(
+			repo,
+			mq.createQueue<SnapshotBatchJobData>("snapshot-batch")
+		);
+		expect(await service.enqueue("12", { force: true })).toEqual({ queued: true, aid: "12" });
+		expect(mq.state.queuedJobs[0]).toMatchObject({
+			name: "process-batch",
+			data: { aids: ["12"] },
+		});
+	});
+
+	test("auto-creates tracking when metadata exists for untracked video", async () => {
+		const repo = new InMemoryTrackingRepository();
+		const mq = createFakeMq();
+		const metadataRepo = {
+			async getMetadata(aid: bigint) {
+				return aid === 99n ? { aid: 99n, title: "test" } : null;
+			},
+		};
+		const service = new ManualSnapshotService(
+			repo,
+			mq.createQueue<SnapshotBatchJobData>("snapshot-batch"),
+			metadataRepo
+		);
+		expect(await service.enqueue("99")).toEqual({ queued: true, aid: "99" });
+		expect(repo.trackings.get(99n)).toBeDefined();
+		expect(repo.trackings.get(99n)?.priority).toBe(1);
+	});
 });

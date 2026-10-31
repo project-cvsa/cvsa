@@ -92,13 +92,29 @@ export default function Select(props: SelectProps) {
 	const helperId = () => `${selectId()}-helper`;
 	const hasError = () => Boolean(local.errorText);
 	const isFloating = () => Boolean(local.label && !local.size);
-	const collection = createMemo(() =>
-		createListCollection<SelectOption>({
-			items: [...local.options],
-			itemToString: (item) => item.label,
-			itemToValue: (item) => item.value,
-			isItemDisabled: (item) => Boolean(item.disabled),
-		})
+	const collection = createMemo(
+		() =>
+			createListCollection<SelectOption>({
+				items: [...local.options],
+				itemToString: (item) => item.label,
+				itemToValue: (item) => item.value,
+				isItemDisabled: (item) => Boolean(item.disabled),
+			}),
+		undefined,
+		{
+			equals: (prev, next) => {
+				if (!prev || !next) return false;
+				const prevItems = prev.items;
+				const nextItems = next.items;
+				if (prevItems.length !== nextItems.length) return false;
+				return prevItems.every(
+					(item, idx) =>
+						item.value === nextItems[idx]?.value &&
+						item.label === nextItems[idx]?.label &&
+						Boolean(item.disabled) === Boolean(nextItems[idx]?.disabled)
+				);
+			},
+		}
 	);
 	const describedBy = () => {
 		const ids: string[] = [];
@@ -121,6 +137,11 @@ export default function Select(props: SelectProps) {
 			disabled={local.disabled}
 			required={local.required}
 			invalid={hasError()}
+			closeOnSelect={true}
+			unmountOnExit={true}
+			onInteractOutside={(event) => {
+				event.detail.focusable = true;
+			}}
 			positioning={{ placement: "bottom-start", gutter: 6 }}
 			onValueChange={(details) => local.onValueChange?.(details.value[0])}
 			class={cn("flex flex-col gap-1.5 w-full", local.class)}
@@ -231,8 +252,8 @@ export default function Select(props: SelectProps) {
 			</Show>
 
 			<Portal>
-				<ArkSelect.Positioner class="z-50">
-					<ArkSelect.Content class="z-60 max-h-[min(22rem,var(--available-height))] min-w-[var(--reference-width)] w-max max-w-[min(24rem,calc(100vw-2rem))] overflow-y-auto bg-surface p-1.5 shadow-xl outline-none border border-border transition-all duration-150 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95">
+				<ArkSelect.Positioner class="z-50 pointer-events-none data-[state=open]:pointer-events-auto">
+					<ArkSelect.Content class="z-60 pointer-events-auto max-h-[min(22rem,var(--available-height))] min-w-[var(--reference-width)] w-max max-w-[min(24rem,calc(100vw-2rem))] overflow-y-auto bg-surface p-1.5 shadow-xl outline-none border border-border transition-all duration-150 data-[state=open]:animate-in data-[state=open]:fade-in data-[state=open]:zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=closed]:zoom-out-95">
 						<For each={local.options}>
 							{(option) => <SelectOptionRow option={option} size={local.size} />}
 						</For>

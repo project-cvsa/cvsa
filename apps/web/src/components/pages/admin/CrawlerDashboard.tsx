@@ -26,9 +26,11 @@ export default function CrawlerDashboard() {
 	const [activeSection, setActiveSection] = createSignal<SectionId>("overview");
 	const [visited, setVisited] = createSignal<ReadonlySet<SectionId>>(new Set(["overview"]));
 	const [refreshRevision, setRefreshRevision] = createSignal(0);
+	const [refreshingManual, setRefreshingManual] = createSignal(false);
 	const refreshAll = () => {
+		setRefreshingManual(true);
 		setRefreshRevision((value) => value + 1);
-		void refreshStatus();
+		void refreshStatus().finally(() => setRefreshingManual(false));
 	};
 	const statusRequests = createRequestSequence();
 	const [statusData, setStatusData] = createSignal<CrawlerStatusDto | null>(null);
@@ -69,10 +71,10 @@ export default function CrawlerDashboard() {
 		}
 		void refreshStatus();
 		const timer = setInterval(() => {
-			if (!document.hidden) refreshAll();
-		}, 5000);
+			if (!document.hidden) void refreshStatus();
+		}, 10000);
 		const onVisible = () => {
-			if (!document.hidden) refreshAll();
+			if (!document.hidden) void refreshStatus();
 		};
 		document.addEventListener("visibilitychange", onVisible);
 		onCleanup(() => {
@@ -126,7 +128,7 @@ export default function CrawlerDashboard() {
 					<Button
 						variant="outlined"
 						size="sm"
-						loading={loadingStatus()}
+						loading={refreshingManual()}
 						onClick={refreshAll}
 						class="gap-1.5"
 					>
@@ -138,9 +140,9 @@ export default function CrawlerDashboard() {
 
 			<Show when={statusError()}>
 				{(error) => (
-					<p role="alert" class="ts-caption text-error">
+					<div role="alert" class="p-3 bg-error text-on-error ts-caption font-medium">
 						{error()}
-					</p>
+					</div>
 				)}
 			</Show>
 

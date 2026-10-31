@@ -15,4 +15,8 @@ export interface CreateSnapshotInput {
 export interface ISnapshotRepository {
 	createSnapshots(snapshots: CreateSnapshotInput[]): Promise<void>;
 	getRecentSnapshots(aid: bigint, limit?: number): Promise<VideoSnapshot[]>;
+	listSnapshots(
+		aid: bigint,
+		options: { limit: number; offset: number }
+	): Promise<{ items: VideoSnapshot[]; total: number }>;
 }

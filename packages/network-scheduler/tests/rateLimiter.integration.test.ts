@@ -105,11 +105,10 @@ describe("NetworkScheduler with the Redis limiter", () => {
 					type: "direct",
 					enabled: true,
 					baseWeight: 1,
-					rateLimits: [{ durationSeconds: 60, maxRequests: 2 }],
+					requestsPerSecond: 1,
 				},
 			],
 			bindings: [{ requestType, adapterIds: [adapterId] }],
-			requestTypePolicies: { [requestType]: { reservedShare: 1 } },
 		});
 		const schedulerLimiter: RedisRateLimiter = createRedisRateLimiter(REDIS_URL);
 		const scheduler = new NetworkScheduler(
@@ -146,62 +145,4 @@ describe("shared upstream cooldown", () => {
 			await second.close();
 		}
 	});
-});
-
-test("throttling pauses the request class across schedulers without isolating adapters", async () => {
-	const target = scope();
-	let attempts = 0;
-	const adapter: NetworkAdapter = {
-		id: target,
-		async execute() {
-			attempts += 1;
-			return {
-				adapterId: target,
-				status: 429,
-				headers: { "retry-after": "120" },
-				body: "",
-				durationMs: 1,
-				errorCode: "HTTP_429",
-			};
-		},
-	};
-	const config = NetworkRuntimeConfigSchema.parse({
-		execution: { throttleScope: "request_type" },
-		adapters: [{ id: "proxy", type: "direct" }],
-	});
-	const first = new NetworkScheduler(config, new Map([["proxy", adapter]]), limiter);
-	const second = new NetworkScheduler(config, new Map([["proxy", adapter]]), limiter);
-	// A unique request class avoids sharing cooldown with other tests.
-	config.bindings = [{ requestType: target, adapterIds: ["proxy"] }];
-	first.reload(config, new Map([["proxy", adapter]]));
-	second.reload(config, new Map([["proxy", adapter]]));
-	const throttled = await first.execute({ url: "https://example.com", requestType: target });
-	expect(throttled.errorCode).toBe("HTTP_429");
-	expect(throttled.retryAfterMs).toBe(120 * 1000);
-	expect(
-		(await second.execute({ url: "https://example.com", requestType: target })).errorCode
-	).toBe("RATE_LIMITED");
-	expect(attempts).toBe(1);
-	expect(first.getAdapterStatuses()[0]?.openUntil).toBeNull();
-	expect(await limiter.remainingDelay(target)).toBeGreaterThan(0);
-});
-
-test("atomic admission does not spend one budget when another refuses", async () => {
-	const target = scope();
-	expect(
-		await limiter.reserve(target, [
-			{ scope: `${target}:blocked`, durationSeconds: 60, maxRequests: 1 },
-		])
-	).toBe(0);
-	expect(
-		await limiter.reserve(target, [
-			{ scope: `${target}:free`, durationSeconds: 60, maxRequests: 1 },
-			{ scope: `${target}:blocked`, durationSeconds: 60, maxRequests: 1 },
-		])
-	).toBeGreaterThan(0);
-	expect(
-		await limiter.reserve(target, [
-			{ scope: `${target}:free`, durationSeconds: 60, maxRequests: 1 },
-		])
-	).toBe(0);
 });

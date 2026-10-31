@@ -45,7 +45,7 @@ export default function Tabs<T extends string = string>(props: TabsProps<T>) {
 	return (
 		<div
 			class={cn(
-				"flex items-center gap-1 border-b border-border overflow-x-auto no-scrollbar",
+				"flex items-center justify-start w-full gap-1 border-b border-border overflow-x-auto no-scrollbar",
 				local.class
 			)}
 			role="tablist"

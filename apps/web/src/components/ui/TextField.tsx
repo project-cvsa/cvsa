@@ -124,7 +124,7 @@ export default function TextField(props: TextFieldProps) {
 	};
 
 	return (
-		<div class={cn("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5 w-full", local.class)}>
 			<Show when={hasLabel() && local.size}>
 				<label for={inputId()} class="ts-caption text-secondary font-medium select-none">
 					{local.label}
@@ -136,7 +136,7 @@ export default function TextField(props: TextFieldProps) {
 
 			<div
 				class={cn(
-					"relative flex items-center bg-surface border transition-colors",
+					"relative flex items-center bg-surface border transition-colors w-full",
 					hasLabel() && !local.size ? "h-[58px]" : controlSizeClass(local.size ?? "md"),
 					boxClass(),
 					local.disabled && "opacity-60"

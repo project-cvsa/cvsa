@@ -10,8 +10,13 @@ import {
 	TrackingVideoListResponseSchema,
 	VideoMetadataHistoryItemSchema,
 	VideoMetadataHistoryListResponseSchema,
+	VideoSnapshotItemSchema,
+	VideoSnapshotListQuerySchema,
+	VideoSnapshotListResponseSchema,
+	QueueSnapshotQuerySchema,
 	VideoTrackingDtoSchema,
 	type VideoMetadataHistoryItem,
+	type VideoSnapshotItem,
 } from "../../src/crawler";
 
 const tracking = {
@@ -67,6 +72,34 @@ describe("crawler admin contracts", () => {
 		expect(VideoMetadataHistoryListResponseSchema.parse({ items: [item], total: 1 })).toEqual({
 			items: [item],
 			total: 1,
+		});
+	});
+
+	it("parses video snapshot items and lists", () => {
+		const item: VideoSnapshotItem = {
+			aid: "170001",
+			capturedAt: "2026-10-26T12:00:00.000Z",
+			views: 1000,
+			coins: 50,
+			likes: 200,
+			favorites: 80,
+			shares: 10,
+			danmakus: 30,
+			replies: 15,
+		};
+
+		expect(VideoSnapshotItemSchema.safeParse(item).success).toBe(true);
+		expect(VideoSnapshotItemSchema.safeParse({ ...item, views: -1 }).success).toBe(false);
+		expect(VideoSnapshotListResponseSchema.parse({ items: [item], total: 1 })).toEqual({
+			items: [item],
+			total: 1,
+		});
+		expect(VideoSnapshotListQuerySchema.parse({ limit: "15", offset: "30" })).toEqual({
+			limit: 15,
+			offset: 30,
+		});
+		expect(QueueSnapshotQuerySchema.parse({ force: "true" })).toEqual({
+			force: true,
 		});
 	});
 

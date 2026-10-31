@@ -116,6 +116,7 @@ export class SnapshotService {
 					component: "snapshot-service",
 					code: response,
 					batchSize: uniqueBigIntAids.length,
+					sampleAids: uniqueBigIntAids.slice(0, 10).map((a) => a.toString()),
 				});
 				const trackings = await this.trackingRepo.getTrackings(uniqueBigIntAids);
 				const trackingMap = new Map(trackings.map((t) => [t.aid, t]));
@@ -265,6 +266,13 @@ export class SnapshotService {
 
 			// Handle videos missing from Bilibili's response (e.g. deleted or private)
 			const missingAids = uniqueBigIntAids.filter((aid) => !receivedAidSet.has(aid));
+			if (missingAids.length > 0) {
+				appLogger.warn("Videos missing from bulk stats response", {
+					component: "snapshot-service",
+					count: missingAids.length,
+					missingAids: missingAids.map((a) => a.toString()),
+				});
+			}
 			for (const aid of missingAids) {
 				const tracking = trackingMap.get(aid);
 				const fails = (tracking?.consecutiveFails ?? 0) + 1;

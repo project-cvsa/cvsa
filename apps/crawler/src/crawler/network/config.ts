@@ -194,12 +194,6 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			assertTaskActive();
 			const response = await this.scheduler.execute({
 				...request,
-				cooldownScope:
-					request.cooldownScope ??
-					(request.requestType?.startsWith("bilibili:") ? "bilibili" : undefined),
-				background:
-					request.background ??
-					["bilibili:search", "bilibili:details"].includes(request.requestType ?? ""),
 				signal: request.signal ?? getTaskSignal(),
 			});
 			assertTaskActive();
@@ -216,11 +210,23 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 					value = undefined;
 				}
 				const envelope = BilibiliEnvelopeSchema.safeParse(value);
+				const code = envelope.success ? envelope.data.code : undefined;
+				const message = envelope.success ? envelope.data.message : undefined;
+				appLogger.warn("Network request deferred due to rate limit or throttle", {
+					component: "network-config",
+					url: request.url,
+					requestType: request.requestType,
+					errorCode: response.errorCode,
+					biliCode: code,
+					biliMessage: message,
+					retryAfterMs: response.retryAfterMs ?? 1000,
+					...request.context,
+				});
 				throw new RetryLaterError(
 					response.retryAfterMs ?? 1000,
 					response.retryReason ?? "upstream",
-					envelope.success ? envelope.data.code : undefined,
-					envelope.success ? envelope.data.message : undefined
+					code,
+					message
 				);
 			}
 			return response;

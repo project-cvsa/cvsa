@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { activeTaskResource } from "../shared/taskContext";
 import type { DatabaseClient, VideoSnapshot } from "@cvsa/snapshot-db";
 import { videoSnapshot } from "@cvsa/snapshot-db";
@@ -42,5 +42,25 @@ export class SnapshotRepository implements ISnapshotRepository {
 				.orderBy(desc(videoSnapshot.capturedAt))
 				.limit(limit)
 		);
+	}
+
+	async listSnapshots(
+		aid: bigint,
+		options: { limit: number; offset: number }
+	): Promise<{ items: VideoSnapshot[]; total: number }> {
+		return traceTask("snapshot.listSnapshots", async () => {
+			const db = activeTaskResource(this.db);
+			const [[{ total }], items] = await Promise.all([
+				db.select({ total: count() }).from(videoSnapshot).where(eq(videoSnapshot.aid, aid)),
+				db
+					.select()
+					.from(videoSnapshot)
+					.where(eq(videoSnapshot.aid, aid))
+					.orderBy(desc(videoSnapshot.capturedAt))
+					.limit(options.limit)
+					.offset(options.offset),
+			]);
+			return { items, total };
+		});
 	}
 }

@@ -38,6 +38,9 @@ import {
 	UpdateDiscoveryFilterConfigRequestSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
+	VideoSnapshotListQuerySchema,
+	VideoSnapshotListResponseSchema,
+	QueueSnapshotQuerySchema,
 	VideoTrackingDtoSchema,
 	type ActionQueuedResponse,
 	type BilibiliVideoMetadataDto,
@@ -60,6 +63,7 @@ import {
 	type TestNetworkAdapterResponse,
 	type TrackingVideoListResponse,
 	type VideoMetadataHistoryListResponse,
+	type VideoSnapshotListResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
 import { adminAuthMiddleware } from "@/middlewares";
@@ -348,12 +352,36 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/tracking/videos/:aid/snapshots",
-		({ params }): Promise<ActionQueuedResponse> =>
+		({ params, query }): Promise<ActionQueuedResponse> =>
 			callCrawlerApi<ActionQueuedResponse>(
 				`/tracking/videos/${params.aid}/snapshots`,
-				"POST"
+				"POST",
+				undefined,
+				query
 			),
-		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
+		{
+			params: TrackingAidParamsSchema,
+			query: QueueSnapshotQuerySchema,
+			response: { 200: ActionQueuedResponseSchema },
+		}
+	)
+	.get(
+		"/tracking/videos/:aid/snapshots",
+		async ({ params, query }): Promise<VideoSnapshotListResponse> => {
+			return callCrawlerApi<VideoSnapshotListResponse>(
+				`/tracking/videos/${params.aid}/snapshots`,
+				"GET",
+				undefined,
+				query
+			);
+		},
+		{
+			params: TrackingAidParamsSchema,
+			query: VideoSnapshotListQuerySchema,
+			response: {
+				200: VideoSnapshotListResponseSchema,
+			},
+		}
 	)
 	.post(
 		"/tracking/videos/:aid/promote",

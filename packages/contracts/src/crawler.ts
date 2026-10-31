@@ -287,11 +287,11 @@ export const CrawlerStatusDtoSchema = z.object({
 		z.object({
 			id: z.string(),
 			enabled: z.boolean(),
-			healthState: z.string(),
-			healthFactor: z.number(),
-			effectiveWeight: z.number(),
-			consecutiveFailures: z.number(),
-			openUntil: z.number().nullable(),
+			healthState: z.string().optional(),
+			healthFactor: z.number().optional(),
+			effectiveWeight: z.number().optional(),
+			consecutiveFailures: z.number().optional(),
+			openUntil: z.number().nullable().optional(),
 			requests: z.number().nonnegative().optional(),
 			failures: z.number().nonnegative().optional(),
 			rateLimited: z.number().nonnegative().optional(),
@@ -320,8 +320,8 @@ const AdapterBaseSchema = z.object({
 	id: AdapterIdSchema,
 	enabled: z.boolean().default(true),
 	baseWeight: z.number().positive().default(1),
-	rateLimits: z.array(NetworkRateLimitSchema).default([]),
 	requestsPerSecond: z.number().positive().max(1000).optional(),
+	rateLimits: z.array(NetworkRateLimitSchema).default([]).optional(),
 });
 
 function hasSupportedProxyProtocol(value: string): boolean {
@@ -500,7 +500,7 @@ export const NetworkRuntimeConfigSchema = z
 	.object({
 		adapters: z.array(NetworkAdapterConfigSchema),
 		bindings: z.array(RequestAdapterBindingSchema).optional(),
-		requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).optional().default({}),
+		requestTypePolicies: z.record(z.string(), SoftReservePolicySchema).default({}).optional(),
 		health: HealthConfigSchema.optional(),
 		execution: CrawlerExecutionConfigSchema.optional(),
 		session: BilibiliSessionConfigSchema.optional(),
@@ -535,7 +535,7 @@ export const NetworkRuntimeConfigSchema = z
 				}
 			}
 		}
-		const totalShare = Object.values(config.requestTypePolicies).reduce(
+		const totalShare = Object.values(config.requestTypePolicies ?? {}).reduce(
 			(sum, policy) => sum + policy.reservedShare,
 			0
 		);
@@ -628,6 +628,36 @@ export const VideoMetadataHistoryListResponseSchema = z.object({
 	total: z.number().int().nonnegative(),
 });
 
+/** Engagement snapshot recorded at a specific point in time. */
+export const VideoSnapshotItemSchema = z.object({
+	aid: z.string(),
+	capturedAt: z.string(),
+	views: z.number().int().nonnegative(),
+	coins: z.number().int().nonnegative(),
+	likes: z.number().int().nonnegative(),
+	favorites: z.number().int().nonnegative(),
+	shares: z.number().int().nonnegative(),
+	danmakus: z.number().int().nonnegative(),
+	replies: z.number().int().nonnegative(),
+});
+
+export const VideoSnapshotListQuerySchema = z.object({
+	limit: z.coerce.number().int().min(1).max(100).default(20),
+	offset: z.coerce.number().int().min(0).default(0),
+});
+
+export const VideoSnapshotListResponseSchema = z.object({
+	items: z.array(VideoSnapshotItemSchema),
+	total: z.number().int().nonnegative(),
+});
+
+export const QueueSnapshotQuerySchema = z.object({
+	force: z
+		.union([z.boolean(), z.enum(["true", "false"])])
+		.transform((val) => val === true || val === "true")
+		.optional(),
+});
+
 // Discovery samples (classifier training data)
 
 /** A stored discovery decision together with its optional human label. */
@@ -682,6 +712,7 @@ export const LabelDiscoverySampleRequestSchema = z.object({
 export const TrackingVideoListItemSchema = VideoTrackingDtoSchema.extend({
 	title: z.string().optional(),
 	bvid: z.string().optional(),
+	pic: z.string().nullable().optional(),
 	ownerName: z.string().nullable().optional(),
 	videoStatus: z.string().optional(),
 	filterDecision: z.string().optional(),
@@ -836,6 +867,10 @@ export type VideoMetadataHistoryListQuery = z.infer<typeof VideoMetadataHistoryL
 export type VideoMetadataHistoryListResponse = z.infer<
 	typeof VideoMetadataHistoryListResponseSchema
 >;
+export type VideoSnapshotItem = z.infer<typeof VideoSnapshotItemSchema>;
+export type VideoSnapshotListQuery = z.infer<typeof VideoSnapshotListQuerySchema>;
+export type VideoSnapshotListResponse = z.infer<typeof VideoSnapshotListResponseSchema>;
+export type QueueSnapshotQuery = z.infer<typeof QueueSnapshotQuerySchema>;
 export type DiscoverySampleItem = z.infer<typeof DiscoverySampleItemSchema>;
 export type DiscoverySampleListQuery = z.infer<typeof DiscoverySampleListQuerySchema>;
 export type DiscoverySampleListResponse = z.infer<typeof DiscoverySampleListResponseSchema>;
