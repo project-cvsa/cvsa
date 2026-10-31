@@ -3,6 +3,7 @@
 	"type": "module",
 	"version": "0.1.0",
 	"scripts": {
+		"build": "bun build src/index.ts --target bun --outfile dist/index.js --external onnxruntime-node && bun build src/ml/akariWorker.ts --target bun --outfile dist/akariWorker.js --external onnxruntime-node && bun build ../../packages/snapshot-db/scripts/migrate.ts --target bun --outfile dist/migrate.js && bun build ../../packages/snapshot-db/scripts/ensure-timescale.ts --target bun --outfile dist/ensure-timescale.js && rm -rf dist/drizzle && cp -r ../../packages/snapshot-db/drizzle dist/drizzle",
 		"dev": "NODE_ENV=development bun --watch src/index.ts",
 		"start": "bun src/index.ts",
 		"seed:tracking": "bun src/scripts/seed-tracking.ts",
