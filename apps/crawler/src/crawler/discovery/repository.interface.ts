@@ -39,4 +39,10 @@ export interface IDiscoveryRepository {
 		config: unknown,
 		expectedRevision?: number
 	): Promise<{ revision: number; config: unknown }>;
+	markSearchWindowsExplored(windows: { keyword: string; windowStart: number }[]): Promise<void>;
+	getExploredSearchWindows(
+		keyword: string,
+		fromWindow: number,
+		toWindow: number
+	): Promise<Set<number>>;
 }

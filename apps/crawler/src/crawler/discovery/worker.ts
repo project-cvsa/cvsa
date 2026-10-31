@@ -18,7 +18,13 @@ import { SearchRover } from "./searchRover";
 import type { CandidateSource, DiscoveryOrigin, SearchRoverConfig } from "./types";
 
 export type DiscoveryJobData =
-	| { type: "search-sweep"; config?: Partial<SearchRoverConfig>; offset?: number }
+	| {
+			type: "search-sweep";
+			mode?: "incremental" | "deep";
+			config?: Partial<SearchRoverConfig>;
+			offset?: number;
+			_timeoutMs?: number;
+	  }
 	| {
 			type: "fetch-video-details";
 			aid: string;
@@ -101,7 +107,13 @@ export class DiscoveryPipelineProcessor {
 		});
 		switch (data.type) {
 			case "search-sweep":
-				await this.handleSearchSweep(data.config, report, data.offset ?? 0, checkpoint);
+				await this.handleSearchSweep(
+					data.config,
+					data.mode,
+					report,
+					data.offset ?? 0,
+					checkpoint
+				);
 				break;
 			case "fetch-video-details":
 				await this.handleFetchVideoDetails(
@@ -124,34 +136,43 @@ export class DiscoveryPipelineProcessor {
 
 	private async handleSearchSweep(
 		config?: Partial<SearchRoverConfig>,
+		mode?: "incremental" | "deep",
 		report?: (progress: DiscoveryJobProgress) => Promise<void>,
 		offset = 0,
 		checkpoint?: (offset: number) => Promise<void>
 	): Promise<void> {
 		const keywords = config?.keywords ?? this.filterService.getConfig().searchKeywords;
-		await this.searchRover.runSearchSweep({ ...config, keywords }, report, {
-			offset,
-			onPage: async (candidates, nextOffset) => {
-				const existing = await this.trackingRepo.getTrackings(
-					candidates.map((candidate) => candidate.aid)
-				);
-				const tracked = new Set(existing.map((row) => row.aid));
-				let queued = 0;
-				for (const candidate of candidates)
-					if (!tracked.has(candidate.aid)) {
-						await this.enqueueDetailFetch(candidate.aid, "search", candidate.origin);
-						queued++;
-					}
-				await report?.({
-					stage: "evaluating",
-					target: null,
-					candidates: candidates.length,
-					queued,
-					updatedAt: new Date().toISOString(),
-				});
-				await checkpoint?.(nextOffset);
-			},
-		});
+		await this.searchRover.runSearchSweep(
+			{ ...config, mode: mode ?? config?.mode, keywords },
+			report,
+			{
+				offset,
+				onPage: async (candidates, nextOffset) => {
+					const existing = await this.trackingRepo.getTrackings(
+						candidates.map((candidate) => candidate.aid)
+					);
+					const tracked = new Set(existing.map((row) => row.aid));
+					let queued = 0;
+					for (const candidate of candidates)
+						if (!tracked.has(candidate.aid)) {
+							await this.enqueueDetailFetch(
+								candidate.aid,
+								"search",
+								candidate.origin
+							);
+							queued++;
+						}
+					await report?.({
+						stage: "evaluating",
+						target: null,
+						candidates: candidates.length,
+						queued,
+						updatedAt: new Date().toISOString(),
+					});
+					await checkpoint?.(nextOffset);
+				},
+			}
+		);
 	}
 
 	/**

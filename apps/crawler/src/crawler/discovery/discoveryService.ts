@@ -143,23 +143,32 @@ export class DiscoveryService {
 		return traceTask("discovery.runSearchSweep", async () => {
 			const effectiveKeywords =
 				config?.keywords ?? this.filterService.getConfig().searchKeywords;
-			const candidates = await this.searchRover.runSearchSweep({
-				...config,
-				keywords: effectiveKeywords,
-			});
-			if (candidates.length === 0) {
-				return { totalDiscovered: 0, newTracked: 0 };
-			}
+			let totalDiscovered = 0;
+			let newTracked = 0;
 
-			const newTracked = await this.evaluateAll(candidates, "search");
+			await this.searchRover.runSearchSweep(
+				{
+					...config,
+					keywords: effectiveKeywords,
+				},
+				undefined,
+				{
+					offset: 0,
+					onPage: async (pageCandidates) => {
+						totalDiscovered += pageCandidates.length;
+						const tracked = await this.evaluateAll(pageCandidates, "search");
+						newTracked += tracked;
+					},
+				}
+			);
 
 			appLogger.info("Search sweep discovery finished", {
 				component: "discovery-service",
-				totalDiscovered: candidates.length,
+				totalDiscovered,
 				newTracked,
 			});
 
-			return { totalDiscovered: candidates.length, newTracked };
+			return { totalDiscovered, newTracked };
 		});
 	}
 

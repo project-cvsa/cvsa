@@ -202,7 +202,7 @@ function createDetailClient(
 	});
 }
 
-function searchVideo(aid: number, title: string) {
+function searchVideo(aid: number, title: string, pubdate = 1_444_824_000) {
 	return {
 		type: "video",
 		id: aid,
@@ -221,8 +221,8 @@ function searchVideo(aid: number, title: string) {
 		favorites: 200_000,
 		tag: "洛天依,原创曲,VOCALOID",
 		review: 5_000,
-		pubdate: 1_444_824_000,
-		senddate: 1_444_824_000,
+		pubdate,
+		senddate: pubdate,
 		duration: "03:45",
 		like: 300_000,
 		upic: "//i0.hdslb.com/bfs/face/upic.jpg",
@@ -401,6 +401,86 @@ describe("SearchRover", () => {
 				position: 1,
 			},
 		});
+	});
+
+	test("incremental sweep explores windows, records to ledger, and skips explored keywords", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const nowSec = Math.floor(Date.now() / 1000);
+		const targetTo = Math.floor(nowSec / 600) * 600;
+		const targetFrom = targetTo - 86400;
+		const videoPubdate = targetTo - 3600; // 1 hour ago
+		const client = createDetailClient(new Map(), {
+			searchResult: [searchVideo(300_002, "【洛天依原创】新曲", videoPubdate)],
+		});
+
+		const rover = new SearchRover(client, repo);
+		const candidates = await rover.runSearchSweep({
+			mode: "incremental",
+			keywords: ["洛天依原创"],
+			from: targetFrom,
+			to: targetTo,
+		});
+
+		expect(candidates).toHaveLength(1);
+		expect(candidates[0]?.aid).toBe(300_002n);
+		expect(repo.exploredWindows.size).toBeGreaterThan(0);
+
+		// Second run on the same range should skip searching because all windows are explored
+		let searchInvoked = false;
+		const spyClient = new BilibiliClient({
+			request: async () => {
+				searchInvoked = true;
+				return { status: 200, headers: {}, body: "{}" };
+			},
+		});
+		const roverSecond = new SearchRover(spyClient, repo);
+		const secondCandidates = await roverSecond.runSearchSweep({
+			mode: "incremental",
+			keywords: ["洛天依原创"],
+			from: targetFrom,
+			to: targetTo,
+		});
+		expect(secondCandidates).toHaveLength(0);
+		expect(searchInvoked).toBe(false);
+	});
+
+	test("failed search query does not mark windows as explored", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const client = new BilibiliClient({
+			request: async () => ({
+				status: 200,
+				headers: {},
+				body: JSON.stringify({ code: -352, message: "Rate limit" }),
+			}),
+		});
+
+		const rover = new SearchRover(client, repo);
+		const candidates = await rover.runSearchSweep({
+			mode: "incremental",
+			keywords: ["洛天依原创"],
+			timeWindowDays: 1,
+		});
+
+		expect(candidates).toHaveLength(0);
+		expect(repo.exploredWindows.size).toBe(0);
+	});
+
+	test("deep sweep executes multi-window slices with engagement orders", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const client = createDetailClient(new Map(), {
+			searchResult: [searchVideo(300_003, "【洛天依原创】热门视频")],
+		});
+
+		const rover = new SearchRover(client, repo);
+		const candidates = await rover.runSearchSweep({
+			mode: "deep",
+			keywords: ["洛天依原创"],
+			orders: ["click"],
+			pagesPerQuery: 1,
+		});
+
+		expect(candidates).toHaveLength(1);
+		expect(candidates[0]?.aid).toBe(300_003n);
 	});
 });
 
@@ -976,14 +1056,15 @@ describe("DiscoveryScheduler", () => {
 		await scheduler.startScheduledSweeps(300_000);
 		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual([
 			"repeatable-search-sweep",
+			"repeatable-deep-sweep",
 			"repeatable-hot-sample",
 		]);
 
 		await scheduler.triggerDetailFetch(777_777n, "manual");
-		expect(mq.state.queuedJobs[2]?.name).toBe("detail-777777");
+		expect(mq.state.queuedJobs[3]?.name).toBe("detail-777777");
 
 		await scheduler.triggerHotSample(3);
-		expect(mq.state.queuedJobs[3]?.name.startsWith("hot-sample-")).toBe(true);
+		expect(mq.state.queuedJobs[4]?.name.startsWith("hot-sample-")).toBe(true);
 	});
 
 	test("ignores related triggers and hot sampling while paused", async () => {
@@ -996,7 +1077,10 @@ describe("DiscoveryScheduler", () => {
 		await scheduler.triggerHotSample(3);
 		await scheduler.triggerActiveDiscovery(777_777n);
 
-		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual(["repeatable-search-sweep"]);
+		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual([
+			"repeatable-search-sweep",
+			"repeatable-deep-sweep",
+		]);
 	});
 });
 

@@ -173,8 +173,13 @@ export const DiscoverySweepRequestSchema = z.object({
 		.min(1)
 		.max(5)
 		.optional(),
-	pagesPerQuery: z.number().int().min(1).max(10).optional(),
+	pagesPerQuery: z.number().int().min(1).max(50).optional(),
 	categoryId: z.number().int().positive().optional(),
+	mode: z.enum(["incremental", "deep"]).optional(),
+	timeWindowDays: z.number().positive().max(365).optional(),
+	concurrency: z.number().int().min(1).max(10).optional(),
+	from: z.number().int().positive().optional(),
+	to: z.number().int().positive().optional(),
 });
 
 export const DiscoverySweepResponseSchema = z.object({

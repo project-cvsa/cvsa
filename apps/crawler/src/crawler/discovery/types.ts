@@ -190,6 +190,11 @@ export interface SearchRoverConfig {
 	orders?: Array<"totalrank" | "click" | "pubdate" | "dm" | "stow">;
 	pagesPerQuery?: number;
 	timeWindowHours?: number;
+	timeWindowDays?: number;
+	mode?: "incremental" | "deep";
+	concurrency?: number;
+	from?: number | Date;
+	to?: number | Date;
 	categoryId?: number;
 }
 

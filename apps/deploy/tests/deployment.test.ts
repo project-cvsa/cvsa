@@ -16,15 +16,22 @@ async function fixture(fail: boolean) {
 		"services:\n  crawler:\n    image: old-crawler\n    networks:\n      - custom-net\nnetworks:\n  custom-net:\n    external: true\n"
 	);
 	const calls: string[][] = [];
-	const service = new DeploymentService(root, async (_files, args) => {
-		calls.push(args);
-		if (fail && args[0] === "up") throw new Error("unhealthy");
-	});
+	const cleaned: string[][] = [];
+	const service = new DeploymentService(
+		root,
+		async (_files, args) => {
+			calls.push(args);
+			if (fail && args[0] === "up") throw new Error("unhealthy");
+		},
+		async (services) => {
+			cleaned.push([...services]);
+		}
+	);
 	await service.initialize();
 	const state = service.start({ tag: "sha-123456789abc", services: ["web"] });
 	expect(service.start({ tag: "sha-123456789abc", services: ["backend"] })).toBeUndefined();
 	for (let i = 0; i < 100 && state?.status === "deploying"; i++) await Bun.sleep(5);
-	return { root, calls, state };
+	return { root, calls, cleaned, state };
 }
 test("selective deployment preserves other versions and custom configurations", async () => {
 	const { root, calls, state } = await fixture(false);
@@ -45,9 +52,15 @@ test("selective deployment preserves other versions and custom configurations", 
 	expect(calls[2]).toContain("--no-deps");
 	expect(await Bun.file(join(root, ".env")).text()).toBe("IMAGE_TAG=old\n");
 });
+test("successful rollout removes stale images for the deployed services", async () => {
+	const { cleaned, state } = await fixture(false);
+	expect(state?.status).toBe("success");
+	expect(cleaned).toEqual([["web"]]);
+});
 test("unhealthy rollout does not save desired versions as successful", async () => {
-	const { root, state } = await fixture(true);
+	const { root, cleaned, state } = await fixture(true);
 	expect(state?.status).toBe("failed");
+	expect(cleaned).toEqual([]);
 	expect(await Bun.file(join(root, "docker-compose.override.yml")).text()).toContain(
 		"old-crawler"
 	);

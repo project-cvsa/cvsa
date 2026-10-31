@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { bigint, doublePrecision, index, integer, json, pgTable, text } from "drizzle-orm/pg-core";
+import {
+	bigint,
+	doublePrecision,
+	index,
+	integer,
+	json,
+	pgTable,
+	primaryKey,
+	text,
+} from "drizzle-orm/pg-core";
 import { temporalInstant } from "../customTypes";
 
 /** Classifier output kept for threshold tuning and manual labelling. */
@@ -28,3 +37,20 @@ export const discoverySample = pgTable(
 
 export type DiscoverySample = typeof discoverySample.$inferSelect;
 export type DiscoverySampleInsert = typeof discoverySample.$inferInsert;
+
+/** Explored time windows for incremental search rover. Presence means explored. */
+export const discoverySearchWindow = pgTable(
+	"discovery_search_window",
+	{
+		keyword: text("keyword").notNull(),
+		windowStart: integer("window_start").notNull(),
+		createdAt: temporalInstant("created_at").notNull().default(sql`now()`),
+	},
+	(table) => [
+		primaryKey({ columns: [table.keyword, table.windowStart] }),
+		index("discovery_search_window_keyword_idx").on(table.keyword),
+	]
+);
+
+export type DiscoverySearchWindow = typeof discoverySearchWindow.$inferSelect;
+export type DiscoverySearchWindowInsert = typeof discoverySearchWindow.$inferInsert;
