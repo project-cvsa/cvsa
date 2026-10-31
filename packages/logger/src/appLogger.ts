@@ -4,6 +4,7 @@ import { type Logger, SeverityNumber } from "@opentelemetry/api-logs";
 import { pinoLogger } from "./pinoSetup";
 import { sanitizeLogAttributes, sanitizeLogMessage } from "./sanitize";
 import { otelLogger } from "@cvsa/observability";
+import { getLogContext } from "./context";
 
 type PinoLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 type LogAttrs = Record<string, unknown> | undefined;
@@ -80,9 +81,14 @@ function createLogMethod(level: PinoLevel) {
 		const spanContextAttrs =
 			traceId && spanId ? { trace_id: traceId, span_id: spanId } : undefined;
 
+		const ambientAttrs = getLogContext();
+
 		// Scrub credentials before they reach any sink: the pino line, the
 		// OpenTelemetry log record, and the active span event.
-		const sanitizedAttrs = sanitizeLogAttributes(attrs);
+		const sanitizedAttrs = sanitizeLogAttributes({
+			...ambientAttrs,
+			...attrs,
+		});
 		const message = sanitizeLogMessage(msg);
 
 		const mergedAttrs = {

@@ -12,7 +12,7 @@ import { RetryLaterError } from "./retryLater";
 import IORedis from "ioredis";
 import { context, propagation } from "@opentelemetry/api";
 import { crawlerEnv } from "@cvsa/env";
-import { appLogger } from "@cvsa/logger";
+import { appLogger, withLogContext } from "@cvsa/logger";
 import type {
 	CrawlerJob,
 	CrawlerJobCounts,
@@ -225,23 +225,31 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 							rawData._timeoutMs > 0
 								? rawData._timeoutMs
 								: taskTimeoutMs;
-						await runTaskWithDeadline(
-							effectiveTimeout,
-							async () => {
-								try {
-									await processor(crawlerJob);
-								} catch (error) {
-									if (!(error instanceof RetryLaterError)) throw error;
-									await bounded(() =>
-										job.moveToDelayed(
-											Date.now() + Math.max(1, error.delayMs),
-											token
-										)
-									);
-									throw new DelayedError();
-								}
+						await withLogContext(
+							{
+								queue: name,
+								jobId: job.id,
+								jobName: job.name,
 							},
-							controller.signal
+							() =>
+								runTaskWithDeadline(
+									effectiveTimeout,
+									async () => {
+										try {
+											await processor(crawlerJob);
+										} catch (error) {
+											if (!(error instanceof RetryLaterError)) throw error;
+											await bounded(() =>
+												job.moveToDelayed(
+													Date.now() + Math.max(1, error.delayMs),
+													token
+												)
+											);
+											throw new DelayedError();
+										}
+									},
+									controller.signal
+								)
 						);
 					});
 				},
