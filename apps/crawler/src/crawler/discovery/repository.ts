@@ -369,6 +369,12 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		});
 	}
 
+	async deleteMetadata(aid: bigint): Promise<void> {
+		await traceTask("discovery.deleteMetadata", async () => {
+			await activeTaskResource(this.db).delete(bilibiliVideoMetadata).where(eq(AID, aid));
+		});
+	}
+
 	async getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null> {
 		return traceTask("discovery.getMetadata", async () => {
 			const [row] = await activeTaskResource(this.db)

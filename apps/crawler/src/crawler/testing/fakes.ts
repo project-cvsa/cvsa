@@ -586,6 +586,10 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		}
 	}
 
+	async deleteMetadata(aid: bigint): Promise<void> {
+		this.metadatas.delete(aid);
+	}
+
 	async getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null> {
 		return this.metadatas.get(aid) ?? null;
 	}

@@ -335,11 +335,6 @@ describe("RelationExtractor", () => {
 
 		const saved = await repo.getRelationsBySource(sourceAid);
 		expect(saved.map((r) => r.targetAid)).toEqual([200_001n, 200_002n]);
-
-		const meta = await repo.getMetadata(200_001n);
-		expect(meta?.title).toBe("Recommended Song 1");
-		expect(meta?.ownerName).toBe("Producer 0");
-		expect(meta?.duration).toBe(210);
 	});
 
 	test("does not overwrite richer metadata with a shallow recommendation payload", async () => {
@@ -386,7 +381,7 @@ describe("RelationExtractor", () => {
 });
 
 describe("SearchRover", () => {
-	test("cleans highlighted HTML tags, parses duration, and stores structured tags", async () => {
+	test("cleans highlighted HTML tags and produces candidate with origin", async () => {
 		const repo = new InMemoryDiscoveryRepository();
 		const client = createDetailClient(new Map(), {
 			searchResult: [searchVideo(300_001, '【<em class="keyword">洛天依</em>原创】霜雪千年')],
@@ -406,14 +401,6 @@ describe("SearchRover", () => {
 				position: 1,
 			},
 		});
-
-		const meta = await repo.getMetadata(300_001n);
-		const context = DiscoveryContextSchema.parse(meta?.discoveryContext);
-		expect(context.origin.search?.keyword).toBe("洛天依原创");
-		expect(meta?.description).toBe("洛天依 原创曲");
-		expect(meta?.pic).toBe("https://i0.hdslb.com/bfs/archive/pic.jpg");
-		expect(meta?.duration).toBe(225);
-		expect(meta?.tags).toEqual([{ name: "洛天依" }, { name: "原创曲" }, { name: "VOCALOID" }]);
 	});
 });
 

@@ -228,11 +228,8 @@ export class DiscoveryCandidateEvaluator {
 				return { status: "accepted", decision, details, metadata };
 			}
 
-			if (decision.reason === "model_unavailable") {
-				// Keep the metadata as pending when the ONNX model is unavailable
-				// so no candidate is silently lost during model initialization.
-				await this.discoveryRepo.upsertMetadata(metadata);
-			}
+			// Clean up any residual metadata row for rejected candidate to prevent table bloat
+			await this.discoveryRepo.deleteMetadata(aid);
 
 			if (decision.sampled) {
 				await this.discoveryRepo.upsertSample({

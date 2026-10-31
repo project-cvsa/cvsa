@@ -3,12 +3,7 @@ import { traceTask } from "@cvsa/observability";
 import { type Temporal, toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliRelatedVideo } from "../bilibili";
 import type { IDiscoveryRepository } from "./repository.interface";
-import type {
-	DiscoveredCandidate,
-	ExtractionResult,
-	RelationEdge,
-	UpsertMetadataInput,
-} from "./types";
+import type { DiscoveredCandidate, ExtractionResult, RelationEdge } from "./types";
 
 export class RelationExtractor {
 	constructor(private readonly discoveryRepo: IDiscoveryRepository) {}
@@ -24,7 +19,6 @@ export class RelationExtractor {
 			}
 
 			const relations: RelationEdge[] = [];
-			const metadatas: UpsertMetadataInput[] = [];
 			const candidates: DiscoveredCandidate[] = [];
 
 			for (let position = 0; position < items.length; position++) {
@@ -49,27 +43,6 @@ export class RelationExtractor {
 					capturedAt,
 				});
 
-				metadatas.push({
-					aid: targetAid,
-					bvid: item.bvid,
-					title: item.title,
-					description: item.desc ?? null,
-					pic: item.pic ?? null,
-					pubdate,
-					duration: item.duration ?? 0,
-					mid: item.owner?.mid ? BigInt(item.owner.mid) : null,
-					ownerName: item.owner?.name ?? null,
-					ownerFace: item.owner?.face ?? null,
-					tid: item.tid ?? null,
-					tname: item.tname ?? null,
-					copyright: item.copyright ?? null,
-					cid: item.cid ? BigInt(item.cid) : null,
-					Dynamic: item.dynamic ?? null,
-					discoverySource: "related",
-					discoveryContext: { origin },
-					capturedAt,
-				});
-
 				candidates.push({
 					aid: targetAid,
 					bvid: item.bvid,
@@ -83,10 +56,7 @@ export class RelationExtractor {
 				});
 			}
 
-			await Promise.all([
-				this.discoveryRepo.saveRelations(relations),
-				this.discoveryRepo.bulkUpsertMetadata(metadatas),
-			]);
+			await this.discoveryRepo.saveRelations(relations);
 
 			appLogger.debug("Extracted related recommendations and saved graph edges", {
 				component: "relation-extractor",
