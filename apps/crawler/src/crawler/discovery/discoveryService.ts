@@ -6,6 +6,7 @@ import type { ITrackingRepository } from "../tracking/repository.interface";
 import type { VideoClassifierClient } from "./classifier";
 import { DiscoveryCandidateEvaluator } from "./evaluator";
 import { DiscoveryFilterService } from "./filter";
+import { RELATED_DISCOVERY_ENABLED } from "./flags";
 import { RelationExtractor } from "./relationExtractor";
 import type { IDiscoveryRepository } from "./repository.interface";
 import { SearchRover } from "./searchRover";
@@ -70,7 +71,8 @@ export class DiscoveryService {
 		private readonly trackingRepo: ITrackingRepository,
 		filterService?: DiscoveryFilterService,
 		classifier?: VideoClassifierClient,
-		stats: StatsRecorder = createNoopStatsRecorder()
+		stats: StatsRecorder = createNoopStatsRecorder(),
+		private readonly relatedDiscoveryEnabled = RELATED_DISCOVERY_ENABLED
 	) {
 		const effectiveFilter = filterService ?? new DiscoveryFilterService();
 		this.filterService = effectiveFilter;
@@ -92,6 +94,14 @@ export class DiscoveryService {
 		sourceAid: bigint,
 		relatedVideos?: BilibiliRelatedVideo[]
 	): Promise<ProcessRecommendationsResult> {
+		if (!this.relatedDiscoveryEnabled) {
+			appLogger.debug("Related discovery is paused; skipping recommendation processing", {
+				component: "discovery-service",
+				sourceAid: sourceAid.toString(),
+			});
+			return { sourceAid, relationsCount: 0, newTracked: 0 };
+		}
+
 		return traceTask("discovery.processVideoRecommendations", async () => {
 			let items = relatedVideos;
 			if (!items) {

@@ -1,4 +1,5 @@
 export * from "./types";
+export * from "./flags";
 export * from "./repository.interface";
 export * from "./repository";
 export * from "./relationExtractor";

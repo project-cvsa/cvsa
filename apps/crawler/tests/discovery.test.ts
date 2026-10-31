@@ -423,7 +423,15 @@ describe("DiscoveryService", () => {
 			])
 		);
 		// The related list is supplied directly; the service only fetches details.
-		const service = new DiscoveryService(client, repo, tracking, new DiscoveryFilterService());
+		const service = new DiscoveryService(
+			client,
+			repo,
+			tracking,
+			new DiscoveryFilterService(),
+			undefined,
+			undefined,
+			true
+		);
 
 		const result = await service.processVideoRecommendations(999_999n, [
 			{
@@ -501,6 +509,43 @@ describe("DiscoveryService", () => {
 		expect(context.origin.related?.sourceAid).toBe("999999");
 		expect(context.decision?.reason).toBe("whitelist_match");
 		expect(context.decision?.rules?.matchedSinger).toBe("洛天依");
+	});
+
+	test("does not fetch or ingest recommendations while related discovery is paused", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		const service = new DiscoveryService(
+			createDetailClient(new Map()),
+			repo,
+			tracking,
+			new DiscoveryFilterService()
+		);
+
+		const result = await service.processVideoRecommendations(999_999n, [
+			{
+				aid: 400_002,
+				bvid: "BV1400002",
+				title: "【洛天依原创】新曲",
+				pic: "",
+				owner: { mid: 2, name: "B", face: "" },
+				stat: {
+					aid: 400_002,
+					view: 200,
+					danmaku: 0,
+					reply: 0,
+					favorite: 0,
+					coin: 0,
+					share: 0,
+					now_rank: 0,
+					his_rank: 0,
+					like: 0,
+				},
+			},
+		]);
+
+		expect(result).toEqual({ sourceAid: 999_999n, relationsCount: 0, newTracked: 0 });
+		expect(await repo.getRelationsBySource(999_999n)).toHaveLength(0);
+		expect(await tracking.getTracking(400_002n)).toBeNull();
 	});
 
 	test("search sweep promotes only candidates that clear the filter", async () => {
@@ -739,7 +784,16 @@ describe("DiscoveryPipelineProcessor", () => {
 			])
 		);
 
-		const processor = new DiscoveryPipelineProcessor(client, repo, tracking, queue);
+		const processor = new DiscoveryPipelineProcessor(
+			client,
+			repo,
+			tracking,
+			queue,
+			undefined,
+			undefined,
+			undefined,
+			true
+		);
 		const progress: DiscoveryJobProgress[] = [];
 		await processor.processJob(
 			{
@@ -877,7 +931,11 @@ describe("DiscoveryPipelineProcessor", () => {
 			createDetailClient(new Map()),
 			repo,
 			tracking,
-			queue
+			queue,
+			undefined,
+			undefined,
+			undefined,
+			true
 		);
 		const progress: DiscoveryJobProgress[] = [];
 		await processor.processJob({ type: "hot-sample", limit: 5 }, async (value) => {
@@ -891,13 +949,29 @@ describe("DiscoveryPipelineProcessor", () => {
 			aid: "800001",
 		});
 	});
+
+	test("skips hot sample expansion while related discovery is paused", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		repo.hotSampleAids = [800_001n, 800_002n];
+		const mq = createFakeMq();
+		const processor = new DiscoveryPipelineProcessor(
+			createDetailClient(new Map()),
+			repo,
+			new InMemoryTrackingRepository(),
+			mq.createQueue<DiscoveryJobData>("crawler-discovery")
+		);
+
+		await processor.processJob({ type: "hot-sample", limit: 5 });
+
+		expect(mq.state.queuedJobs).toHaveLength(0);
+	});
 });
 
 describe("DiscoveryScheduler", () => {
 	test("registers both repeatable jobs and manual triggers", async () => {
 		const mq = createFakeMq();
 		const queue = mq.createQueue<DiscoveryJobData>("crawler-discovery");
-		const scheduler = new DiscoveryScheduler(queue);
+		const scheduler = new DiscoveryScheduler(queue, true);
 
 		await scheduler.startScheduledSweeps(300_000);
 		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual([
@@ -910,6 +984,19 @@ describe("DiscoveryScheduler", () => {
 
 		await scheduler.triggerHotSample(3);
 		expect(mq.state.queuedJobs[3]?.name.startsWith("hot-sample-")).toBe(true);
+	});
+
+	test("ignores related triggers and hot sampling while paused", async () => {
+		const mq = createFakeMq();
+		const scheduler = new DiscoveryScheduler(
+			mq.createQueue<DiscoveryJobData>("crawler-discovery")
+		);
+
+		await scheduler.startScheduledSweeps(300_000);
+		await scheduler.triggerHotSample(3);
+		await scheduler.triggerActiveDiscovery(777_777n);
+
+		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual(["repeatable-search-sweep"]);
 	});
 });
 
