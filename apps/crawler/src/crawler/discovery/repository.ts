@@ -1,3 +1,20 @@
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	gt,
+	gte,
+	inArray,
+	isNotNull,
+	isNull,
+	like,
+	lte,
+	notInArray,
+	or,
+	type SQL,
+} from "drizzle-orm";
 import { activeTaskResource } from "../shared/taskContext";
 import type {
 	BilibiliVideoMetadata,
@@ -6,8 +23,17 @@ import type {
 	DatabaseClient,
 	DiscoverySample,
 } from "@cvsa/snapshot-db";
+import {
+	bilibiliVideoMetadata,
+	bilibiliVideoMetadataHistory,
+	bilibiliVideoRelation,
+	crawlerRuntimeConfig,
+	discoverySample,
+	toInstant,
+	toJson,
+	videoTracking,
+} from "@cvsa/snapshot-db";
 import { DiscoveryContextSchema } from "@cvsa/contracts";
-import { and, or, toInstant, toJson } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type { IDiscoveryRepository } from "./repository.interface";
 import type {
@@ -135,16 +161,19 @@ export function changeTypeForDiff(diff: MetadataFieldDiff): MetadataChangeType |
 	return "updated";
 }
 
+const AID = bilibiliVideoMetadata.aid;
+
 export class DiscoveryRepository implements IDiscoveryRepository {
 	constructor(private readonly db: DatabaseClient) {}
 
 	async upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata> {
 		return traceTask("discovery.upsertMetadata", async () => {
-			const existing = await activeTaskResource(this.db)
-				.orm.public.BilibiliVideoMetadata.where({
-					aid: data.aid,
-				})
-				.first();
+			const db = activeTaskResource(this.db);
+			const [existing] = await db
+				.select()
+				.from(bilibiliVideoMetadata)
+				.where(eq(AID, data.aid))
+				.limit(1);
 
 			if (existing) {
 				const diff = diffMetadata(existing, data);
@@ -153,11 +182,9 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					? mergeDiscoveryContext(existing.discoveryContext, data.discoveryContext)
 					: undefined;
 
-				const updated = await activeTaskResource(this.db)
-					.orm.public.BilibiliVideoMetadata.where({
-						aid: data.aid,
-					})
-					.update({
+				const [updated] = await db
+					.update(bilibiliVideoMetadata)
+					.set({
 						bvid: data.bvid,
 						cid: data.cid !== undefined ? data.cid : existing.cid,
 						videos: data.videos ?? existing.videos,
@@ -212,7 +239,9 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 										: null,
 								}
 							: {}),
-					});
+					})
+					.where(eq(AID, data.aid))
+					.returning();
 
 				if (updated) {
 					if (changeType) {
@@ -223,45 +252,47 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				return existing;
 			}
 
-			const created = await activeTaskResource(
-				this.db
-			).orm.public.BilibiliVideoMetadata.create({
-				aid: data.aid,
-				bvid: data.bvid,
-				cid: data.cid ?? null,
-				videos: data.videos ?? 1,
-				tid: data.tid ?? null,
-				tidV2: data.tidV2 ?? null,
-				tname: data.tname ?? null,
-				tnameV2: data.tnameV2 ?? null,
-				copyright: data.copyright ?? null,
-				pic: data.pic ?? null,
-				title: data.title,
-				pubdate: data.pubdate ?? null,
-				ctime: data.ctime ?? null,
-				description: data.description ?? null,
-				descV2: data.descV2 !== undefined ? toJson(data.descV2) : null,
-				state: data.state ?? 0,
-				duration: data.duration ?? 0,
-				Dynamic: data.Dynamic ?? null,
-				dimension: data.dimension !== undefined ? toJson(data.dimension) : null,
-				mid: data.mid ?? null,
-				ownerName: data.ownerName ?? null,
-				ownerFace: data.ownerFace ?? null,
-				pages: data.pages !== undefined ? toJson(data.pages) : null,
-				staff: data.staff !== undefined ? toJson(data.staff) : null,
-				rights: data.rights !== undefined ? toJson(data.rights) : null,
-				honorReply: data.honorReply !== undefined ? toJson(data.honorReply) : null,
-				tags: data.tags !== undefined ? toJson(data.tags) : null,
-				videoStatus: data.videoStatus ?? "normal",
-				filterDecision: data.filterDecision ?? "accepted",
-				modelScore: data.modelScore ?? null,
-				modelVersion: data.modelVersion ?? null,
-				discoverySource: data.discoverySource ?? null,
-				discoveryContext: data.discoveryContext ? toJson(data.discoveryContext) : null,
-				...(data.capturedAt ? { capturedAt: data.capturedAt } : {}),
-			});
+			const [created] = await db
+				.insert(bilibiliVideoMetadata)
+				.values({
+					aid: data.aid,
+					bvid: data.bvid,
+					cid: data.cid ?? null,
+					videos: data.videos ?? 1,
+					tid: data.tid ?? null,
+					tidV2: data.tidV2 ?? null,
+					tname: data.tname ?? null,
+					tnameV2: data.tnameV2 ?? null,
+					copyright: data.copyright ?? null,
+					pic: data.pic ?? null,
+					title: data.title,
+					pubdate: data.pubdate ?? null,
+					ctime: data.ctime ?? null,
+					description: data.description ?? null,
+					descV2: data.descV2 !== undefined ? toJson(data.descV2) : null,
+					state: data.state ?? 0,
+					duration: data.duration ?? 0,
+					Dynamic: data.Dynamic ?? null,
+					dimension: data.dimension !== undefined ? toJson(data.dimension) : null,
+					mid: data.mid ?? null,
+					ownerName: data.ownerName ?? null,
+					ownerFace: data.ownerFace ?? null,
+					pages: data.pages !== undefined ? toJson(data.pages) : null,
+					staff: data.staff !== undefined ? toJson(data.staff) : null,
+					rights: data.rights !== undefined ? toJson(data.rights) : null,
+					honorReply: data.honorReply !== undefined ? toJson(data.honorReply) : null,
+					tags: data.tags !== undefined ? toJson(data.tags) : null,
+					videoStatus: data.videoStatus ?? "normal",
+					filterDecision: data.filterDecision ?? "accepted",
+					modelScore: data.modelScore ?? null,
+					modelVersion: data.modelVersion ?? null,
+					discoverySource: data.discoverySource ?? null,
+					discoveryContext: data.discoveryContext ? toJson(data.discoveryContext) : null,
+					...(data.capturedAt ? { capturedAt: data.capturedAt } : {}),
+				})
+				.returning();
 
+			if (!created) throw new Error(`Failed to insert metadata for aid=${data.aid}`);
 			await this.appendMetadataHistory(created, "created", {});
 			return created;
 		});
@@ -283,117 +314,134 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				if (!unique.has(item.aid)) unique.set(item.aid, item);
 			}
 
-			const existingRows = await activeTaskResource(this.db)
-				.orm.public.BilibiliVideoMetadata.where((m) => m.aid.in([...unique.keys()]))
-				.all();
+			const db = activeTaskResource(this.db);
+			const existingRows = await db
+				.select({ aid: AID })
+				.from(bilibiliVideoMetadata)
+				.where(inArray(AID, [...unique.keys()]));
 			const existingAids = new Set(existingRows.map((row) => row.aid));
 			const missing = [...unique.values()].filter((item) => !existingAids.has(item.aid));
 			if (missing.length === 0) return;
 
-			await activeTaskResource(this.db).orm.public.BilibiliVideoMetadata.createAll(
-				missing.map((item) => ({
-					aid: item.aid,
-					bvid: item.bvid,
-					cid: item.cid ?? null,
-					videos: item.videos ?? 1,
-					tid: item.tid ?? null,
-					tidV2: item.tidV2 ?? null,
-					tname: item.tname ?? null,
-					tnameV2: item.tnameV2 ?? null,
-					copyright: item.copyright ?? null,
-					pic: item.pic ?? null,
-					title: item.title,
-					pubdate: item.pubdate ?? null,
-					ctime: item.ctime ?? null,
-					description: item.description ?? null,
-					descV2: item.descV2 !== undefined ? toJson(item.descV2) : null,
-					state: item.state ?? 0,
-					duration: item.duration ?? 0,
-					Dynamic: item.Dynamic ?? null,
-					dimension: item.dimension !== undefined ? toJson(item.dimension) : null,
-					mid: item.mid ?? null,
-					ownerName: item.ownerName ?? null,
-					ownerFace: item.ownerFace ?? null,
-					pages: item.pages !== undefined ? toJson(item.pages) : null,
-					staff: item.staff !== undefined ? toJson(item.staff) : null,
-					rights: item.rights !== undefined ? toJson(item.rights) : null,
-					honorReply: item.honorReply !== undefined ? toJson(item.honorReply) : null,
-					tags: item.tags !== undefined ? toJson(item.tags) : null,
-					videoStatus: item.videoStatus ?? "normal",
-					filterDecision: item.filterDecision ?? "accepted",
-					modelScore: item.modelScore ?? null,
-					modelVersion: item.modelVersion ?? null,
-					discoverySource: item.discoverySource ?? null,
-					discoveryContext: item.discoveryContext ? toJson(item.discoveryContext) : null,
-					...(item.capturedAt ? { capturedAt: item.capturedAt } : {}),
-				})),
-				{
-					onConflict: "skip",
-					conflictOn: ["aid"],
-				}
-			);
+			await db
+				.insert(bilibiliVideoMetadata)
+				.values(
+					missing.map((item) => ({
+						aid: item.aid,
+						bvid: item.bvid,
+						cid: item.cid ?? null,
+						videos: item.videos ?? 1,
+						tid: item.tid ?? null,
+						tidV2: item.tidV2 ?? null,
+						tname: item.tname ?? null,
+						tnameV2: item.tnameV2 ?? null,
+						copyright: item.copyright ?? null,
+						pic: item.pic ?? null,
+						title: item.title,
+						pubdate: item.pubdate ?? null,
+						ctime: item.ctime ?? null,
+						description: item.description ?? null,
+						descV2: item.descV2 !== undefined ? toJson(item.descV2) : null,
+						state: item.state ?? 0,
+						duration: item.duration ?? 0,
+						Dynamic: item.Dynamic ?? null,
+						dimension: item.dimension !== undefined ? toJson(item.dimension) : null,
+						mid: item.mid ?? null,
+						ownerName: item.ownerName ?? null,
+						ownerFace: item.ownerFace ?? null,
+						pages: item.pages !== undefined ? toJson(item.pages) : null,
+						staff: item.staff !== undefined ? toJson(item.staff) : null,
+						rights: item.rights !== undefined ? toJson(item.rights) : null,
+						honorReply: item.honorReply !== undefined ? toJson(item.honorReply) : null,
+						tags: item.tags !== undefined ? toJson(item.tags) : null,
+						videoStatus: item.videoStatus ?? "normal",
+						filterDecision: item.filterDecision ?? "accepted",
+						modelScore: item.modelScore ?? null,
+						modelVersion: item.modelVersion ?? null,
+						discoverySource: item.discoverySource ?? null,
+						discoveryContext: item.discoveryContext
+							? toJson(item.discoveryContext)
+							: null,
+						...(item.capturedAt ? { capturedAt: item.capturedAt } : {}),
+					}))
+				)
+				.onConflictDoNothing({ target: [AID] });
 		});
 	}
 
 	async getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null> {
-		return traceTask("discovery.getMetadata", () =>
-			activeTaskResource(this.db).orm.public.BilibiliVideoMetadata.where({ aid }).first()
-		);
+		return traceTask("discovery.getMetadata", async () => {
+			const [row] = await activeTaskResource(this.db)
+				.select()
+				.from(bilibiliVideoMetadata)
+				.where(eq(AID, aid))
+				.limit(1);
+			return row ?? null;
+		});
 	}
 
 	async getMetadatas(aids: bigint[]): Promise<BilibiliVideoMetadata[]> {
 		if (aids.length === 0) return [];
 		return traceTask("discovery.getMetadatas", () =>
 			activeTaskResource(this.db)
-				.orm.public.BilibiliVideoMetadata.where((m) => m.aid.in(aids))
-				.all()
+				.select()
+				.from(bilibiliVideoMetadata)
+				.where(inArray(AID, aids))
 		);
 	}
 
 	async getMetadataHistory(aid: bigint, limit = 100): Promise<BilibiliVideoMetadataHistory[]> {
 		return traceTask("discovery.getMetadataHistory", () =>
 			activeTaskResource(this.db)
-				.orm.public.BilibiliVideoMetadataHistory.where({ aid })
-				.orderBy((h) => h.capturedAt.desc())
+				.select()
+				.from(bilibiliVideoMetadataHistory)
+				.where(eq(bilibiliVideoMetadataHistory.aid, aid))
+				.orderBy(desc(bilibiliVideoMetadataHistory.capturedAt))
 				.limit(Math.min(Math.max(limit, 1), 500))
-				.all()
 		);
 	}
 
 	async saveRelations(relations: RelationEdge[]): Promise<void> {
 		if (relations.length === 0) return;
 		await traceTask("discovery.saveRelations", async () => {
-			await activeTaskResource(this.db).orm.public.BilibiliVideoRelation.createAll(
-				relations.map((rel) => ({
-					sourceAid: rel.sourceAid,
-					targetAid: rel.targetAid,
-					position: rel.position,
-					...(rel.capturedAt ? { capturedAt: rel.capturedAt } : {}),
-				})),
-				{
-					onConflict: "skip",
-					conflictOn: ["sourceAid", "targetAid", "capturedAt"],
-				}
-			);
+			await activeTaskResource(this.db)
+				.insert(bilibiliVideoRelation)
+				.values(
+					relations.map((rel) => ({
+						sourceAid: rel.sourceAid,
+						targetAid: rel.targetAid,
+						position: rel.position,
+						...(rel.capturedAt ? { capturedAt: rel.capturedAt } : {}),
+					}))
+				)
+				.onConflictDoNothing({
+					target: [
+						bilibiliVideoRelation.sourceAid,
+						bilibiliVideoRelation.targetAid,
+						bilibiliVideoRelation.capturedAt,
+					],
+				});
 		});
 	}
 
 	async getRelationsBySource(sourceAid: bigint): Promise<BilibiliVideoRelation[]> {
 		return traceTask("discovery.getRelationsBySource", () =>
 			activeTaskResource(this.db)
-				.orm.public.BilibiliVideoRelation.where({ sourceAid })
-				.orderBy((r) => r.position.asc())
-				.all()
+				.select()
+				.from(bilibiliVideoRelation)
+				.where(eq(bilibiliVideoRelation.sourceAid, sourceAid))
+				.orderBy(asc(bilibiliVideoRelation.position))
 		);
 	}
 
 	async getIncomingRelations(targetAid: bigint, limit = 50): Promise<BilibiliVideoRelation[]> {
 		return traceTask("discovery.getIncomingRelations", () =>
 			activeTaskResource(this.db)
-				.orm.public.BilibiliVideoRelation.where({ targetAid })
-				.orderBy((r) => r.capturedAt.desc())
+				.select()
+				.from(bilibiliVideoRelation)
+				.where(eq(bilibiliVideoRelation.targetAid, targetAid))
+				.orderBy(desc(bilibiliVideoRelation.capturedAt))
 				.limit(limit)
-				.all()
 		);
 	}
 
@@ -407,41 +455,45 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				new Date(options.now.epochMilliseconds - options.cooldownMinutes * 60_000)
 			);
 			const limit = Math.min(Math.max(options.limit, 1), 100);
+			const db = activeTaskResource(this.db);
 
-			const recentSources = await activeTaskResource(this.db)
-				.orm.public.BilibiliVideoRelation.where((r) => r.capturedAt.gte(cooldownCutoff))
-				.limit(2_000)
-				.all();
+			const recentSources = await db
+				.select({ sourceAid: bilibiliVideoRelation.sourceAid })
+				.from(bilibiliVideoRelation)
+				.where(gte(bilibiliVideoRelation.capturedAt, cooldownCutoff))
+				.limit(2_000);
 			const recentlySampled = [...new Set(recentSources.map((r) => r.sourceAid))];
 
-			const collection = activeTaskResource(this.db).orm.public.VideoTracking.where((t) =>
-				recentlySampled.length > 0
-					? and(t.velocity.gt(0), t.aid.notIn(recentlySampled))
-					: t.velocity.gt(0)
-			);
-
-			const rows = await collection
-				.orderBy((t) => t.velocity.desc())
-				.limit(limit)
-				.all();
+			const rows = await db
+				.select({ aid: videoTracking.aid })
+				.from(videoTracking)
+				.where(
+					recentlySampled.length > 0
+						? and(
+								gt(videoTracking.velocity, 0),
+								notInArray(videoTracking.aid, recentlySampled)
+							)
+						: gt(videoTracking.velocity, 0)
+				)
+				.orderBy(desc(videoTracking.velocity))
+				.limit(limit);
 			return rows.map((row) => row.aid);
 		});
 	}
 
 	async upsertSample(sample: UpsertDiscoverySampleInput): Promise<DiscoverySample> {
 		return traceTask("discovery.upsertSample", async () => {
-			const existing = await activeTaskResource(this.db)
-				.orm.public.DiscoverySample.where({
-					aid: sample.aid,
-				})
-				.first();
+			const db = activeTaskResource(this.db);
+			const [existing] = await db
+				.select()
+				.from(discoverySample)
+				.where(eq(discoverySample.aid, sample.aid))
+				.limit(1);
 
 			if (existing) {
-				const updated = await activeTaskResource(this.db)
-					.orm.public.DiscoverySample.where({
-						aid: sample.aid,
-					})
-					.update({
+				const [updated] = await db
+					.update(discoverySample)
+					.set({
 						bvid: sample.bvid,
 						title: sample.title,
 						description: sample.description ?? existing.description,
@@ -454,110 +506,134 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 							? { humanLabel: sample.humanLabel }
 							: {}),
 						...(sample.labeledAt !== undefined ? { labeledAt: sample.labeledAt } : {}),
-					});
-				if (updated) return updated;
-				return existing;
+					})
+					.where(eq(discoverySample.aid, sample.aid))
+					.returning();
+				return updated ?? existing;
 			}
 
-			return activeTaskResource(this.db).orm.public.DiscoverySample.create({
-				aid: sample.aid,
-				bvid: sample.bvid,
-				title: sample.title,
-				description: sample.description ?? null,
-				tags: sample.tags !== undefined ? toJson(sample.tags) : null,
-				decision: sample.decision,
-				modelVersion: sample.modelVersion,
-				probabilities: toJson(sample.probabilities),
-				songProbability: sample.songProbability,
-				humanLabel: sample.humanLabel ?? null,
-				labeledAt: sample.labeledAt ?? null,
-				...(sample.createdAt ? { createdAt: sample.createdAt } : {}),
-			});
+			const [created] = await db
+				.insert(discoverySample)
+				.values({
+					aid: sample.aid,
+					bvid: sample.bvid,
+					title: sample.title,
+					description: sample.description ?? null,
+					tags: sample.tags !== undefined ? toJson(sample.tags) : null,
+					decision: sample.decision,
+					modelVersion: sample.modelVersion,
+					probabilities: toJson(sample.probabilities),
+					songProbability: sample.songProbability,
+					humanLabel: sample.humanLabel ?? null,
+					labeledAt: sample.labeledAt ?? null,
+					...(sample.createdAt ? { createdAt: sample.createdAt } : {}),
+				})
+				.returning();
+			if (!created)
+				throw new Error(`Failed to insert discovery sample for aid=${sample.aid}`);
+			return created;
 		});
 	}
 
-	private async sampleCollection(options: ListDiscoverySamplesOptions = {}) {
+	/** WHERE clause shared by {@link listSamples} and {@link countSamples}. */
+	private async sampleWhere(options: ListDiscoverySamplesOptions = {}): Promise<SQL | undefined> {
 		const search = options.search?.trim();
 		const exactAid =
 			search && /^(?:av)?\d+$/i.test(search) ? BigInt(search.replace(/^av/i, "")) : undefined;
 		const sourceRows = options.source
 			? await activeTaskResource(this.db)
-					.orm.public.BilibiliVideoMetadata.where((m) =>
-						m.discoverySource.eq(options.source ?? "")
-					)
-					.select("aid")
-					.all()
+					.select({ aid: AID })
+					.from(bilibiliVideoMetadata)
+					.where(eq(bilibiliVideoMetadata.discoverySource, options.source))
 			: undefined;
-		return activeTaskResource(this.db).orm.public.DiscoverySample.where((s) => {
-			const conditions = [s.aid.gte(0n)];
-			if (options.decision) conditions.push(s.decision.eq(options.decision));
-			if (options.labeled === true) conditions.push(s.humanLabel.isNotNull());
-			if (options.labeled === false) conditions.push(s.humanLabel.isNull());
-			if (options.minConfidence !== undefined)
-				conditions.push(s.songProbability.gte(options.minConfidence));
-			if (options.maxConfidence !== undefined)
-				conditions.push(s.songProbability.lte(options.maxConfidence));
-			if (exactAid !== undefined) conditions.push(s.aid.eq(exactAid));
-			else if (search)
-				conditions.push(
-					or(s.bvid.eq(search), s.title.like(`%${search.replace(/[\\%_]/g, "\\$&")}%`))
-				);
-			if (sourceRows) conditions.push(s.aid.in(sourceRows.map((m) => m.aid)));
-			return and(conditions[0], ...conditions.slice(1));
-		});
+
+		const conditions: SQL[] = [gte(discoverySample.aid, 0n)];
+		if (options.decision) conditions.push(eq(discoverySample.decision, options.decision));
+		if (options.labeled === true) conditions.push(isNotNull(discoverySample.humanLabel));
+		if (options.labeled === false) conditions.push(isNull(discoverySample.humanLabel));
+		if (options.minConfidence !== undefined)
+			conditions.push(gte(discoverySample.songProbability, options.minConfidence));
+		if (options.maxConfidence !== undefined)
+			conditions.push(lte(discoverySample.songProbability, options.maxConfidence));
+		if (exactAid !== undefined) conditions.push(eq(discoverySample.aid, exactAid));
+		else if (search) {
+			const searchCondition = or(
+				eq(discoverySample.bvid, search),
+				like(discoverySample.title, `%${search.replace(/[\\%_]/g, "\\$&")}%`)
+			);
+			if (searchCondition) conditions.push(searchCondition);
+		}
+		if (sourceRows)
+			conditions.push(
+				inArray(
+					discoverySample.aid,
+					sourceRows.map((m) => m.aid)
+				)
+			);
+
+		return and(...conditions);
 	}
 
 	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
 		return traceTask("discovery.listSamples", async () => {
-			const collection = await this.sampleCollection(options);
-			const asc = options.sortOrder === "asc";
-			const sorted =
+			const where = await this.sampleWhere(options);
+			const ascending = options.sortOrder === "asc";
+			const direction = ascending ? asc : desc;
+			const order =
 				options.sortBy === "confidence"
-					? collection.orderBy([
-							(s) => (asc ? s.songProbability.asc() : s.songProbability.desc()),
-							(s) => s.aid.desc(),
-						])
+					? [direction(discoverySample.songProbability), desc(discoverySample.aid)]
 					: options.sortBy === "aid"
-						? collection.orderBy((s) => (asc ? s.aid.asc() : s.aid.desc()))
-						: collection.orderBy([
-								(s) => (asc ? s.createdAt.asc() : s.createdAt.desc()),
-								(s) => s.aid.desc(),
-							]);
-			return sorted
+						? [direction(discoverySample.aid)]
+						: [direction(discoverySample.createdAt), desc(discoverySample.aid)];
+
+			return activeTaskResource(this.db)
+				.select()
+				.from(discoverySample)
+				.where(where)
+				.orderBy(...order)
 				.limit(Math.min(Math.max(options.limit ?? 50, 1), 200))
-				.offset(options.offset ?? 0)
-				.all();
+				.offset(options.offset ?? 0);
 		});
 	}
 
 	async countSamples(options: ListDiscoverySamplesOptions = {}): Promise<number> {
-		const result = await (await this.sampleCollection(options)).aggregate((agg) => ({
-			total: agg.count(),
-		}));
-		return result.total;
+		const where = await this.sampleWhere(options);
+		const [totals] = await activeTaskResource(this.db)
+			.select({ total: count() })
+			.from(discoverySample)
+			.where(where);
+		return totals?.total ?? 0;
 	}
 
 	async getSample(aid: bigint): Promise<DiscoverySample | null> {
-		return traceTask("discovery.getSample", () =>
-			activeTaskResource(this.db).orm.public.DiscoverySample.where({ aid }).first()
-		);
+		return traceTask("discovery.getSample", async () => {
+			const [row] = await activeTaskResource(this.db)
+				.select()
+				.from(discoverySample)
+				.where(eq(discoverySample.aid, aid))
+				.limit(1);
+			return row ?? null;
+		});
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {
 		return traceTask("discovery.labelSample", async () => {
-			const now = toInstant(new Date());
-			return activeTaskResource(this.db).orm.public.DiscoverySample.where({ aid }).update({
-				humanLabel,
-				labeledAt: now,
-			});
+			const [row] = await activeTaskResource(this.db)
+				.update(discoverySample)
+				.set({ humanLabel, labeledAt: toInstant(new Date()) })
+				.where(eq(discoverySample.aid, aid))
+				.returning();
+			return row ?? null;
 		});
 	}
 
 	async getRuntimeConfig(key: string): Promise<{ revision: number; config: unknown } | null> {
 		return traceTask("discovery.getRuntimeConfig", async () => {
-			const row = await activeTaskResource(this.db)
-				.orm.public.CrawlerRuntimeConfig.where({ key })
-				.first();
+			const [row] = await activeTaskResource(this.db)
+				.select()
+				.from(crawlerRuntimeConfig)
+				.where(eq(crawlerRuntimeConfig.key, key))
+				.limit(1);
 			if (!row) return null;
 			return { revision: row.revision, config: row.config };
 		});
@@ -569,9 +645,12 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		expectedRevision?: number
 	): Promise<{ revision: number; config: unknown }> {
 		return traceTask("discovery.saveRuntimeConfig", async () => {
-			const existing = await activeTaskResource(this.db)
-				.orm.public.CrawlerRuntimeConfig.where({ key })
-				.first();
+			const db = activeTaskResource(this.db);
+			const [existing] = await db
+				.select()
+				.from(crawlerRuntimeConfig)
+				.where(eq(crawlerRuntimeConfig.key, key))
+				.limit(1);
 			if (existing) {
 				if (expectedRevision !== undefined && existing.revision !== expectedRevision) {
 					throw new Error(
@@ -579,27 +658,29 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					);
 				}
 				const nextRevision = existing.revision + 1;
-				const updated = await activeTaskResource(this.db)
-					.orm.public.CrawlerRuntimeConfig.where({
-						key,
-					})
-					.update({
+				const [updated] = await db
+					.update(crawlerRuntimeConfig)
+					.set({
 						revision: nextRevision,
 						config: toJson(config),
-					});
+					})
+					.where(eq(crawlerRuntimeConfig.key, key))
+					.returning();
 				return {
 					revision: updated?.revision ?? nextRevision,
 					config: updated?.config ?? config,
 				};
 			}
 
-			const created = await activeTaskResource(
-				this.db
-			).orm.public.CrawlerRuntimeConfig.create({
-				key,
-				revision: 1,
-				config: toJson(config),
-			});
+			const [created] = await db
+				.insert(crawlerRuntimeConfig)
+				.values({
+					key,
+					revision: 1,
+					config: toJson(config),
+				})
+				.returning();
+			if (!created) throw new Error(`Failed to create runtime config for key=${key}`);
 			return { revision: created.revision, config: created.config };
 		});
 	}
@@ -610,13 +691,15 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		changedFields: MetadataFieldDiff
 	): Promise<void> {
 		await traceTask("discovery.appendMetadataHistory", async () => {
-			await activeTaskResource(this.db).orm.public.BilibiliVideoMetadataHistory.create({
-				aid: row.aid,
-				capturedAt: toInstant(new Date()),
-				changeType,
-				changedFields: toJson(changedFields),
-				snapshot: toJson(row),
-			});
+			await activeTaskResource(this.db)
+				.insert(bilibiliVideoMetadataHistory)
+				.values({
+					aid: row.aid,
+					capturedAt: toInstant(new Date()),
+					changeType,
+					changedFields: toJson(changedFields),
+					snapshot: toJson(row),
+				});
 		});
 	}
 }

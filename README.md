@@ -18,8 +18,8 @@ cvsa/
 │   ├── contracts/        # Shared API schemas (Zod), DTOs, error taxonomy
 │   ├── catalog/          # Core catalog domain logic (songs, artists, singers)
 │   ├── authentication/   # User authentication and RBAC (Better Auth)
-│   ├── db/               # Primary PostgreSQL Prisma client & migrations
-│   ├── snapshot-db/      # TimescaleDB snapshot & tracking Prisma client
+│   ├── db/               # Primary PostgreSQL Drizzle schema & migrations
+│   ├── snapshot-db/      # TimescaleDB snapshot & tracking persistence (Drizzle)
 │   ├── network-scheduler/# HTTP client, rate limiter & proxy scheduler
 │   ├── logger/           # Shared Pino logger
 │   ├── observability/    # OpenTelemetry tracing instrumentation

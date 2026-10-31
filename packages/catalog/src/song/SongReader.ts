@@ -1,4 +1,13 @@
-import type { DatabaseClient, Lyrics, Song, SongExternalLink } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type Lyrics,
+	type Song,
+	type SongExternalLink,
+	lyrics,
+	song,
+	songExternalLink,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { ICatalogCache } from "../cache";
 import type { SongDetails, SongId } from "./songTypes";
 
@@ -17,24 +26,44 @@ export class SongReader {
 			}
 		}
 
-		const data = await this.db.orm.core.Song.where({ id, deletedAt: null })
-			.include("performances", (perf) =>
-				perf.include("singer").include("svsEngine").include("svsEngineVersion")
-			)
-			.include("creations", (cr) => cr.include("role").include("artist"))
-			.include("lyrics", (lyr) => lyr.where({ deletedAt: null }))
-			.include("externalLinks", (lnk) => lnk.where({ deletedAt: null }))
-			.first();
+		const data = await this.db.query.song.findFirst({
+			where: {
+				id,
+				deletedAt: { isNull: true },
+			},
+			with: {
+				performances: {
+					with: {
+						singer: true,
+						svsEngine: true,
+						svsEngineVersion: true,
+					},
+				},
+				creations: {
+					with: {
+						artist: true,
+						role: true,
+					},
+				},
+				lyrics: {
+					where: { deletedAt: { isNull: true } },
+				},
+				externalLinks: {
+					where: { deletedAt: { isNull: true } },
+				},
+			},
+		});
 
 		if (!data) {
 			return null;
 		}
 
-		const { performances, creations, lyrics, externalLinks, ...song } = data;
+		const { performances, creations, lyrics: lyricRows, externalLinks, ...songFields } = data;
 
 		const details: SongDetails = {
-			...song,
-			singers: performances.map((item) => {
+			...songFields,
+			singers: performances.flatMap((item) => {
+				if (!item.singer) return [];
 				const engineName = item.svsEngine?.name ?? "";
 				const engineVersion = item.svsEngineVersion?.versionString ?? "";
 				const engine = !engineName
@@ -42,16 +71,17 @@ export class SongReader {
 					: !engineVersion
 						? engineName
 						: `${engineName} ${engineVersion}`;
-				return {
-					...item.singer,
-					engine,
-				};
+				return [
+					{
+						...item.singer,
+						engine,
+					},
+				];
 			}),
-			artists: creations.map((item) => ({
-				...item.artist,
-				role: item.role,
-			})),
-			lyrics,
+			artists: creations.flatMap((item) =>
+				item.artist && item.role ? [{ ...item.artist, role: item.role }] : []
+			),
+			lyrics: lyricRows,
 			externalLinks,
 		};
 
@@ -63,22 +93,42 @@ export class SongReader {
 	}
 
 	async getById(id: SongId): Promise<Song | null> {
-		return this.db.orm.core.Song.where({ id, deletedAt: null }).first();
+		const [row] = await this.db
+			.select()
+			.from(song)
+			.where(and(eq(song.id, id), isNull(song.deletedAt)))
+			.limit(1);
+		return row ?? null;
 	}
 
 	async listLyrics(songId: SongId): Promise<Lyrics[]> {
-		return this.db.orm.core.Lyrics.where({ songId, deletedAt: null }).all();
+		return this.db
+			.select()
+			.from(lyrics)
+			.where(and(eq(lyrics.songId, songId), isNull(lyrics.deletedAt)));
 	}
 
 	async getLyricById(songId: SongId, lyricId: number): Promise<Lyrics | null> {
-		return this.db.orm.core.Lyrics.where({ id: lyricId, songId, deletedAt: null }).first();
+		const [row] = await this.db
+			.select()
+			.from(lyrics)
+			.where(and(eq(lyrics.id, lyricId), eq(lyrics.songId, songId), isNull(lyrics.deletedAt)))
+			.limit(1);
+		return row ?? null;
 	}
 
 	async getExternalLinkById(songId: SongId, linkId: number): Promise<SongExternalLink | null> {
-		return this.db.orm.core.SongExternalLink.where({
-			id: linkId,
-			songId,
-			deletedAt: null,
-		}).first();
+		const [row] = await this.db
+			.select()
+			.from(songExternalLink)
+			.where(
+				and(
+					eq(songExternalLink.id, linkId),
+					eq(songExternalLink.songId, songId),
+					isNull(songExternalLink.deletedAt)
+				)
+			)
+			.limit(1);
+		return row ?? null;
 	}
 }

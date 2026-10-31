@@ -201,10 +201,10 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 		});
 	});
 
-	test("the default client wires the in-process ONNX classifier", () => {
+	test("a closed default classifier reports unavailable instead of hanging", async () => {
 		const client = new VideoClassifierClient();
-
-		expect(client.local).toBeInstanceOf(LocalAkariClassifier);
+		client.close();
+		expect(await client.health()).toMatchObject({ reachable: false, modelsLoaded: null });
 	});
 });
 

@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import { CreateSongRequestSchema, ErrorResponseSchema, SongResponseSchema } from "@cvsa/contracts";
 import { songWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -15,7 +15,7 @@ export const songCreateHandler = new Elysia({ name: "songCreateHandler" }).use(a
 		});
 		const song = await traceTask("songWriter.create", async () => {
 			const created = await songWriter.create(principal, body);
-			return SongResponseSchema.parse(transformPrismaResult(created));
+			return SongResponseSchema.parse(serializeResult(created));
 		});
 		return status(201, song);
 	},

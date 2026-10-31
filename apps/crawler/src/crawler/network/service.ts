@@ -1,3 +1,5 @@
+import { normalizeBilibiliRuntimeConfig } from "./policy";
+import type { NetworkRuntimeConfigManager } from "./config";
 import { AppError } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import {
@@ -80,14 +82,33 @@ export class NetworkRuntimeConfigService {
 	async get(): Promise<NetworkRuntimeConfigDocument | null> {
 		const persisted = await this.repository.get();
 		if (!persisted) return null;
-		return NetworkRuntimeConfigDocumentSchema.parse(persisted);
+		const document = NetworkRuntimeConfigDocumentSchema.parse(persisted);
+		return { ...document, config: normalizeBilibiliRuntimeConfig(document.config) };
+	}
+
+	async replaceAndApply(
+		expectedRevision: number,
+		config: unknown,
+		runtime: NetworkRuntimeConfigManager
+	): Promise<NetworkRuntimeConfigDocument> {
+		const saved = await this.replace(expectedRevision, config);
+		const applied = runtime.apply(saved);
+		if (!applied && runtime.getStatus().revision !== saved.revision)
+			throw new AppError(
+				"Runtime configuration was saved but could not be applied",
+				"INTERNAL_SERVER_ERROR",
+				503
+			);
+		return saved;
 	}
 
 	async replace(
 		expectedRevision: number,
 		config: unknown
 	): Promise<NetworkRuntimeConfigDocument> {
-		const validatedConfig = NetworkRuntimeConfigSchema.parse(config);
+		const validatedConfig = normalizeBilibiliRuntimeConfig(
+			NetworkRuntimeConfigSchema.parse(config)
+		);
 		const existing = await this.repository.get();
 		const nextConfig = restoreRedactedCredentials(validatedConfig, readStoredConfig(existing));
 

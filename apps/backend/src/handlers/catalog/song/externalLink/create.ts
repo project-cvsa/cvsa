@@ -6,7 +6,7 @@ import {
 } from "@cvsa/contracts";
 import { songExternalLinkWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
@@ -24,7 +24,7 @@ export const songExternalLinkCreateHandler = new Elysia({
 			});
 			const link = await traceTask("songExternalLinkWriter.create", async () => {
 				const created = await songExternalLinkWriter.create(principal, params.id, body);
-				return SongExternalLinkResponseSchema.parse(transformPrismaResult(created));
+				return SongExternalLinkResponseSchema.parse(serializeResult(created));
 			});
 			return status(201, link);
 		},

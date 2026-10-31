@@ -1,60 +1,78 @@
 import {
-	type PrismaClient,
+	type DatabaseClient,
 	type TxClient,
 	Temporal,
+	outbox,
+	serializeResult,
 	toInstant,
-	transformPrismaResult,
-	or,
 } from "@cvsa/db";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import type { CreateOutboxEntryDto, OutboxEntryDto, PendingOutboxQueryDto } from "./dto";
 import type { IOutboxRepository } from "./repository.interface";
 import { OutboxNotFoundError } from "./service";
 
 export class OutboxRepository implements IOutboxRepository {
-	constructor(private readonly prisma: PrismaClient) {}
+	constructor(private readonly db: DatabaseClient) {}
 
 	async create(input: CreateOutboxEntryDto, tx?: TxClient): Promise<OutboxEntryDto> {
-		const client = tx ?? this.prisma;
-		const row = await client.orm.meta.Outbox.create({
-			aggregateType: input.aggregateType,
-			aggregateId: input.aggregateId,
-			eventType: input.eventType,
-			payload: (input.payload ?? null) as unknown as undefined,
-			status: "PENDING",
-		});
-		return transformPrismaResult(row);
+		const client = tx ?? this.db;
+		const [row] = await client
+			.insert(outbox)
+			.values({
+				aggregateType: input.aggregateType,
+				aggregateId: input.aggregateId,
+				eventType: input.eventType,
+				payload: input.payload ?? null,
+				status: "PENDING",
+			})
+			.returning();
+		if (!row) throw new Error("Failed to append outbox entry");
+		return serializeResult(row);
 	}
 
 	async findPending(query: PendingOutboxQueryDto): Promise<OutboxEntryDto[]> {
-		const client = this.prisma;
 		const now = Temporal.Now.instant();
-		const rows = await client.orm.meta.Outbox.where({ status: "PENDING" })
-			.where((o) => or(o.nextRetryAt.isNull(), o.nextRetryAt.lte(now)))
-			.orderBy((o) => o.createdAt.asc())
-			.limit(query.limit)
-			.all();
-		return transformPrismaResult(rows);
+		const rows = await this.db
+			.select()
+			.from(outbox)
+			.where(
+				and(
+					eq(outbox.status, "PENDING"),
+					or(isNull(outbox.nextRetryAt), lte(outbox.nextRetryAt, now))
+				)
+			)
+			.orderBy(asc(outbox.createdAt))
+			.limit(query.limit);
+		return serializeResult(rows);
 	}
 
 	async markProcessing(id: number, tx?: TxClient): Promise<OutboxEntryDto> {
-		const client = tx ?? this.prisma;
-		const row = await client.orm.meta.Outbox.where({ id }).update({ status: "PROCESSING" });
+		const client = tx ?? this.db;
+		const [row] = await client
+			.update(outbox)
+			.set({ status: "PROCESSING" })
+			.where(eq(outbox.id, id))
+			.returning();
 		if (!row) {
 			throw new OutboxNotFoundError(id);
 		}
-		return transformPrismaResult(row);
+		return serializeResult(row);
 	}
 
 	async markProcessed(id: number, tx?: TxClient): Promise<OutboxEntryDto> {
-		const client = tx ?? this.prisma;
-		const row = await client.orm.meta.Outbox.where({ id }).update({
-			status: "PROCESSED",
-			processedAt: Temporal.Now.instant(),
-		});
+		const client = tx ?? this.db;
+		const [row] = await client
+			.update(outbox)
+			.set({
+				status: "PROCESSED",
+				processedAt: Temporal.Now.instant(),
+			})
+			.where(eq(outbox.id, id))
+			.returning();
 		if (!row) {
 			throw new OutboxNotFoundError(id);
 		}
-		return transformPrismaResult(row);
+		return serializeResult(row);
 	}
 
 	async markFailed(
@@ -63,20 +81,24 @@ export class OutboxRepository implements IOutboxRepository {
 		nextRetryAt: Date,
 		tx?: TxClient
 	): Promise<OutboxEntryDto> {
-		const client = tx ?? this.prisma;
-		const existing = await client.orm.meta.Outbox.first({ id });
+		const client = tx ?? this.db;
+		const [existing] = await client.select().from(outbox).where(eq(outbox.id, id)).limit(1);
 		if (!existing) {
 			throw new OutboxNotFoundError(id);
 		}
-		const row = await client.orm.meta.Outbox.where({ id }).update({
-			status: "FAILED",
-			lastError,
-			nextRetryAt: toInstant(nextRetryAt),
-			retryCount: (existing.retryCount ?? 0) + 1,
-		});
+		const [row] = await client
+			.update(outbox)
+			.set({
+				status: "FAILED",
+				lastError,
+				nextRetryAt: toInstant(nextRetryAt),
+				retryCount: (existing.retryCount ?? 0) + 1,
+			})
+			.where(eq(outbox.id, id))
+			.returning();
 		if (!row) {
 			throw new OutboxNotFoundError(id);
 		}
-		return transformPrismaResult(row);
+		return serializeResult(row);
 	}
 }

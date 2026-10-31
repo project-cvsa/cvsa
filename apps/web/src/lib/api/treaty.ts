@@ -2,7 +2,7 @@
  * Eden Treaty transport for the web app.
  *
  * `@api-contract` is the backend's type-only entry point. It must stay a type
- * import: the backend module graph pulls in server-only code (Prisma,
+ * import: the backend module graph pulls in server-only code (the database client,
  * pino) that must never reach the browser bundle. `verbatimModuleSyntax` is on in
  * this app, so a value import fails the build instead of silently shipping.
  */

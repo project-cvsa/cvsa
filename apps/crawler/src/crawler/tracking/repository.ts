@@ -1,6 +1,7 @@
+import { and, asc, count, desc, eq, gt, inArray, isNull, like, lte, or } from "drizzle-orm";
 import { activeTaskResource } from "../shared/taskContext";
 import type { DatabaseClient, Temporal, VideoTracking } from "@cvsa/snapshot-db";
-import { and, or, toInstant } from "@cvsa/snapshot-db";
+import { bilibiliVideoMetadata, toInstant, videoTracking } from "@cvsa/snapshot-db";
 import { traceTask } from "@cvsa/observability";
 import type {
 	ITrackingRepository,
@@ -11,6 +12,8 @@ import type {
 	UpsertTrackingInput,
 } from "./repository.interface";
 
+const AID = videoTracking.aid;
+
 export class TrackingRepository implements ITrackingRepository {
 	constructor(private readonly db: DatabaseClient) {}
 
@@ -18,12 +21,16 @@ export class TrackingRepository implements ITrackingRepository {
 		return traceTask("tracking.findDueVideos", async () => {
 			const at = beforeTime ?? toInstant(new Date());
 			return activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) =>
-					and(t.nextSnapshotAt.lte(at), or(t.leaseUntil.isNull(), t.leaseUntil.lte(at)))
+				.select()
+				.from(videoTracking)
+				.where(
+					and(
+						lte(videoTracking.nextSnapshotAt, at),
+						or(isNull(videoTracking.leaseUntil), lte(videoTracking.leaseUntil, at))
+					)
 				)
-				.orderBy([(t) => t.priority.asc(), (t) => t.nextSnapshotAt.asc()])
-				.limit(limit)
-				.all();
+				.orderBy(asc(videoTracking.priority), asc(videoTracking.nextSnapshotAt))
+				.limit(limit);
 		});
 	}
 
@@ -35,22 +42,19 @@ export class TrackingRepository implements ITrackingRepository {
 		if (aids.length === 0) return [];
 		return traceTask("tracking.leaseVideos", async () => {
 			const at = now ?? toInstant(new Date());
-			const leased: VideoTracking[] = [];
-			// `updateAll` emits the updated rows, so this doubles as the
-			// compare-and-set acknowledgement: only rows whose lease was free (or
-			// expired) come back and get dispatched.
-			for await (const row of activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) =>
+			// `returning()` doubles as the compare-and-set acknowledgement: only rows
+			// whose lease was free (or expired) come back and get dispatched.
+			return activeTaskResource(this.db)
+				.update(videoTracking)
+				.set({ leaseUntil })
+				.where(
 					and(
-						t.aid.in(aids),
-						t.nextSnapshotAt.lte(at),
-						or(t.leaseUntil.isNull(), t.leaseUntil.lte(at))
+						inArray(AID, aids),
+						lte(videoTracking.nextSnapshotAt, at),
+						or(isNull(videoTracking.leaseUntil), lte(videoTracking.leaseUntil, at))
 					)
 				)
-				.updateAll({ leaseUntil })) {
-				leased.push(row);
-			}
-			return leased;
+				.returning();
 		});
 	}
 
@@ -72,79 +76,83 @@ export class TrackingRepository implements ITrackingRepository {
 	}
 
 	async getTracking(aid: bigint): Promise<VideoTracking | null> {
-		return traceTask("tracking.getTracking", () =>
-			activeTaskResource(this.db).orm.public.VideoTracking.where({ aid }).first()
-		);
+		return traceTask("tracking.getTracking", async () => {
+			const [row] = await activeTaskResource(this.db)
+				.select()
+				.from(videoTracking)
+				.where(eq(AID, aid))
+				.limit(1);
+			return row ?? null;
+		});
 	}
 
 	async getTrackings(aids: bigint[]): Promise<VideoTracking[]> {
 		if (aids.length === 0) return [];
 		return traceTask("tracking.getTrackings", () =>
-			activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) => t.aid.in(aids))
-				.all()
+			activeTaskResource(this.db).select().from(videoTracking).where(inArray(AID, aids))
 		);
 	}
 
 	async upsertTracking(input: UpsertTrackingInput): Promise<VideoTracking> {
 		return traceTask("tracking.upsertTracking", async () => {
-			const existing = await activeTaskResource(this.db)
-				.orm.public.VideoTracking.where({
-					aid: input.aid,
-				})
-				.first();
+			const existing = await this.getTracking(input.aid);
 			if (existing) {
-				const updated = await activeTaskResource(this.db)
-					.orm.public.VideoTracking.where({
-						aid: input.aid,
-					})
-					.update({
+				const [updated] = await activeTaskResource(this.db)
+					.update(videoTracking)
+					.set({
 						state: input.state ?? existing.state,
 						nextSnapshotAt: input.nextSnapshotAt,
 						scheduleReason:
 							input.scheduleReason !== undefined
 								? input.scheduleReason
 								: existing.scheduleReason,
-						nextMetadataAt:
-							input.nextMetadataAt !== undefined
-								? input.nextMetadataAt
-								: existing.nextMetadataAt,
-						leaseUntil:
-							input.leaseUntil !== undefined ? input.leaseUntil : existing.leaseUntil,
-						lastError:
-							input.lastError !== undefined ? input.lastError : existing.lastError,
+						...(input.nextMetadataAt !== undefined
+							? { nextMetadataAt: input.nextMetadataAt }
+							: {}),
+						...(input.leaseUntil !== undefined ? { leaseUntil: input.leaseUntil } : {}),
+						...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
 						lastViews: input.lastViews ?? existing.lastViews,
-						lastCapturedAt: input.lastCapturedAt ?? existing.lastCapturedAt,
+						...(input.lastCapturedAt !== undefined
+							? { lastCapturedAt: input.lastCapturedAt }
+							: {}),
 						velocity: input.velocity ?? existing.velocity,
-						targetMilestone:
-							input.targetMilestone !== undefined
-								? input.targetMilestone
-								: existing.targetMilestone,
-						etaHours: input.etaHours !== undefined ? input.etaHours : existing.etaHours,
-						publishedAt: input.publishedAt ?? existing.publishedAt,
+						...(input.targetMilestone !== undefined
+							? { targetMilestone: input.targetMilestone }
+							: {}),
+						...(input.etaHours !== undefined ? { etaHours: input.etaHours } : {}),
+						...(input.publishedAt !== undefined
+							? { publishedAt: input.publishedAt }
+							: {}),
 						priority: input.priority ?? existing.priority,
 						consecutiveFails: input.consecutiveFails ?? existing.consecutiveFails,
-					});
+					})
+					.where(eq(AID, input.aid))
+					.returning();
 				if (updated) return updated;
 			}
 
-			return activeTaskResource(this.db).orm.public.VideoTracking.create({
-				aid: input.aid,
-				state: input.state ?? "regular",
-				nextSnapshotAt: input.nextSnapshotAt,
-				scheduleReason: input.scheduleReason ?? "initial",
-				nextMetadataAt: input.nextMetadataAt ?? null,
-				leaseUntil: input.leaseUntil ?? null,
-				lastError: input.lastError ?? null,
-				lastViews: input.lastViews ?? 0,
-				lastCapturedAt: input.lastCapturedAt ?? null,
-				velocity: input.velocity ?? 0,
-				targetMilestone: input.targetMilestone ?? null,
-				etaHours: input.etaHours ?? null,
-				publishedAt: input.publishedAt ?? null,
-				priority: input.priority ?? 2,
-				consecutiveFails: input.consecutiveFails ?? 0,
-			});
+			const [created] = await activeTaskResource(this.db)
+				.insert(videoTracking)
+				.values({
+					aid: input.aid,
+					state: input.state ?? "regular",
+					nextSnapshotAt: input.nextSnapshotAt,
+					scheduleReason: input.scheduleReason ?? "initial",
+					nextMetadataAt: input.nextMetadataAt ?? null,
+					leaseUntil: input.leaseUntil ?? null,
+					lastError: input.lastError ?? null,
+					lastViews: input.lastViews ?? 0,
+					lastCapturedAt: input.lastCapturedAt ?? null,
+					velocity: input.velocity ?? 0,
+					targetMilestone: input.targetMilestone ?? null,
+					etaHours: input.etaHours ?? null,
+					publishedAt: input.publishedAt ?? null,
+					priority: input.priority ?? 2,
+					consecutiveFails: input.consecutiveFails ?? 0,
+				})
+				.returning();
+			if (!created) throw new Error(`Failed to insert tracking row for aid=${input.aid}`);
+			return created;
 		});
 	}
 
@@ -154,13 +162,9 @@ export class TrackingRepository implements ITrackingRepository {
 		expectedLeaseUntil?: Temporal.Instant
 	): Promise<void> {
 		await traceTask("tracking.updateSchedule", async () => {
-			for await (const _ of activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) =>
-					expectedLeaseUntil
-						? and(t.aid.eq(aid), t.leaseUntil.eq(expectedLeaseUntil))
-						: t.aid.eq(aid)
-				)
-				.updateAll({
+			await activeTaskResource(this.db)
+				.update(videoTracking)
+				.set({
 					...(update.state ? { state: update.state } : {}),
 					...(update.nextSnapshotAt !== undefined
 						? { nextSnapshotAt: update.nextSnapshotAt }
@@ -186,56 +190,60 @@ export class TrackingRepository implements ITrackingRepository {
 					...(update.consecutiveFails !== undefined
 						? { consecutiveFails: update.consecutiveFails }
 						: {}),
-				})) {
-				/* Drain conditional updates. */
-			}
+				})
+				.where(
+					expectedLeaseUntil
+						? and(eq(AID, aid), eq(videoTracking.leaseUntil, expectedLeaseUntil))
+						: eq(AID, aid)
+				);
 		});
 	}
 
 	async releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void> {
 		if (aids.length === 0) return;
 		await traceTask("tracking.releaseLeases", async () => {
-			for await (const _ of activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) =>
+			await activeTaskResource(this.db)
+				.update(videoTracking)
+				.set({ leaseUntil: null })
+				.where(
 					expectedLeaseUntil
-						? and(t.aid.in(aids), t.leaseUntil.eq(expectedLeaseUntil))
-						: t.aid.in(aids)
-				)
-				.updateAll({ leaseUntil: null })) {
-				// updateAll streams updated rows
-			}
+						? and(inArray(AID, aids), eq(videoTracking.leaseUntil, expectedLeaseUntil))
+						: inArray(AID, aids)
+				);
 		});
 	}
 
 	async postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void> {
 		if (aids.length === 0) return;
 		await traceTask("tracking.postponeSchedule", async () => {
-			for await (const _ of activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) => t.aid.in(aids))
-				.updateAll({
-					nextSnapshotAt,
-				})) {
-				// updateAll streams updated rows
-			}
+			await activeTaskResource(this.db)
+				.update(videoTracking)
+				.set({ nextSnapshotAt })
+				.where(inArray(AID, aids));
 		});
 	}
 
 	async countOverdueVideos(now: Temporal.Instant | Date): Promise<OverdueTrackingSummary> {
 		return traceTask("tracking.countOverdueVideos", async () => {
 			const at = now instanceof Date ? toInstant(now) : now;
-			const base = activeTaskResource(this.db).orm.public.VideoTracking.where((t) =>
-				and(t.nextSnapshotAt.lte(at), or(t.leaseUntil.isNull(), t.leaseUntil.lte(at)))
+			const due = and(
+				lte(videoTracking.nextSnapshotAt, at),
+				or(isNull(videoTracking.leaseUntil), lte(videoTracking.leaseUntil, at))
 			);
-			const aggregate = await base.aggregate((agg) => ({ overdueCount: agg.count() }));
-			const overdueCount = aggregate.overdueCount;
+			const db = activeTaskResource(this.db);
+			const [totals] = await db
+				.select({ overdueCount: count() })
+				.from(videoTracking)
+				.where(due);
+			const overdueCount = totals?.overdueCount ?? 0;
 			if (overdueCount === 0) return { overdueCount: 0, maxOverdueLagSec: 0 };
 
-			const oldest = await activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) =>
-					and(t.nextSnapshotAt.lte(at), or(t.leaseUntil.isNull(), t.leaseUntil.lte(at)))
-				)
-				.orderBy((t) => t.nextSnapshotAt.asc())
-				.first();
+			const [oldest] = await db
+				.select()
+				.from(videoTracking)
+				.where(due)
+				.orderBy(asc(videoTracking.nextSnapshotAt))
+				.limit(1);
 			if (!oldest) return { overdueCount, maxOverdueLagSec: 0 };
 
 			const lagMs = at.epochMilliseconds - oldest.nextSnapshotAt.epochMilliseconds;
@@ -260,82 +268,73 @@ export class TrackingRepository implements ITrackingRepository {
 					exactAid = BigInt(search.replace(/^av/i, ""));
 				} else {
 					const matches = await activeTaskResource(this.db)
-						.orm.public.BilibiliVideoMetadata.where((m) =>
+						.select({ aid: bilibiliVideoMetadata.aid })
+						.from(bilibiliVideoMetadata)
+						.where(
 							/^BV[0-9a-z]{10}$/i.test(search)
-								? m.bvid.eq(search)
-								: m.title.like(`%${search.replace(/[\\%_]/g, "\\$&")}%`)
-						)
-						.all();
+								? eq(bilibiliVideoMetadata.bvid, search)
+								: like(
+										bilibiliVideoMetadata.title,
+										`%${search.replace(/[\\%_]/g, "\\$&")}%`
+									)
+						);
 					matchingAids = matches.map((metadata) => metadata.aid);
 					if (matchingAids.length === 0) return { items: [], total: 0 };
 				}
 			}
 
-			const collection = activeTaskResource(this.db).orm.public.VideoTracking.where((t) => {
-				const conditions = [];
-				if (state !== undefined) conditions.push(t.state.eq(state));
-				if (exactAid !== undefined) conditions.push(t.aid.eq(exactAid));
-				else if (matchingAids !== undefined) conditions.push(t.aid.in(matchingAids));
+			const conditions = [];
+			if (state !== undefined) conditions.push(eq(videoTracking.state, state));
+			if (exactAid !== undefined) conditions.push(eq(AID, exactAid));
+			else if (matchingAids !== undefined) conditions.push(inArray(AID, matchingAids));
 
-				if (params.statusFilter === "failing") {
-					conditions.push(t.consecutiveFails.gt(0));
-				} else if (params.statusFilter === "highPriority") {
-					conditions.push(t.priority.eq(1));
-				} else if (params.statusFilter === "normal") {
-					conditions.push(t.consecutiveFails.eq(0));
-				}
+			if (params.statusFilter === "failing") {
+				conditions.push(gt(videoTracking.consecutiveFails, 0));
+			} else if (params.statusFilter === "highPriority") {
+				conditions.push(eq(videoTracking.priority, 1));
+			} else if (params.statusFilter === "normal") {
+				conditions.push(eq(videoTracking.consecutiveFails, 0));
+			}
 
-				const first = conditions[0];
-				if (!first) return t.aid.gte(0n);
-				const second = conditions[1];
-				if (!second) return first;
-				return and(first, second, ...conditions.slice(2));
-			});
+			const where = conditions.length > 0 ? and(...conditions) : undefined;
+			const db = activeTaskResource(this.db);
 
-			const aggregate = await collection.aggregate((agg) => ({ total: agg.count() }));
+			const [totals] = await db.select({ total: count() }).from(videoTracking).where(where);
 
 			const isAsc = params.sortOrder === "asc";
-			const items = await (params.sortBy === "views"
-				? collection.orderBy([(t) => (isAsc ? t.lastViews.asc() : t.lastViews.desc())])
-				: params.sortBy === "velocity"
-					? collection.orderBy([(t) => (isAsc ? t.velocity.asc() : t.velocity.desc())])
-					: params.sortBy === "nextSnapshotAt"
-						? collection.orderBy([
-								(t) => (isAsc ? t.nextSnapshotAt.asc() : t.nextSnapshotAt.desc()),
-							])
-						: params.sortBy === "consecutiveFails"
-							? collection.orderBy([
-									(t) =>
-										isAsc
-											? t.consecutiveFails.asc()
-											: t.consecutiveFails.desc(),
-								])
-							: params.sortBy === "publishedAt"
-								? collection.orderBy([
-										(t) => (isAsc ? t.publishedAt.asc() : t.publishedAt.desc()),
-									])
-								: collection.orderBy([
-										(t) => (isAsc ? t.updatedAt.asc() : t.updatedAt.desc()),
-									])
-			)
-				.orderBy((t) => t.aid.desc())
-				.limit(limit)
-				.offset(offset)
-				.all();
+			const direction = isAsc ? asc : desc;
+			const sortColumn =
+				params.sortBy === "views"
+					? videoTracking.lastViews
+					: params.sortBy === "velocity"
+						? videoTracking.velocity
+						: params.sortBy === "nextSnapshotAt"
+							? videoTracking.nextSnapshotAt
+							: params.sortBy === "consecutiveFails"
+								? videoTracking.consecutiveFails
+								: params.sortBy === "publishedAt"
+									? videoTracking.publishedAt
+									: videoTracking.updatedAt;
 
-			return { items, total: aggregate.total };
+			const items = await db
+				.select()
+				.from(videoTracking)
+				.where(where)
+				.orderBy(direction(sortColumn), desc(AID))
+				.limit(limit)
+				.offset(offset);
+
+			return { items, total: totals?.total ?? 0 };
 		});
 	}
 
 	async deleteTracking(aid: bigint): Promise<boolean> {
 		return traceTask("tracking.deleteTracking", async () => {
-			let deleted = false;
-			for await (const _ of activeTaskResource(this.db)
-				.orm.public.VideoTracking.where((t) => t.aid.eq(aid))
-				.deleteAll()) {
-				deleted = true;
-			}
-			return deleted;
+			const deleted = await activeTaskResource(this.db)
+				.delete(videoTracking)
+				.where(eq(AID, aid))
+				.returning({ aid: AID });
+			return deleted.length > 0;
 		});
 	}
 }

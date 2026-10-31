@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma } from "@cvsa/db";
+import { db, lyrics as lyricsTable, song as songTable } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 
 const api = treaty(app);
 
@@ -16,11 +17,14 @@ describe("Song E2E Tests", () => {
 
 	describe("GET /v2/song/:id/details - Get Song Details", async () => {
 		test("should retrieve a song", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-				duration: 180,
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+					duration: 180,
+				})
+				.returning();
 
 			const { data, status } = await api.v2.song({ id: song.id }).details.get();
 
@@ -34,7 +38,7 @@ describe("Song E2E Tests", () => {
 		});
 
 		test("should return 404 for nonexistent song", async () => {
-			const { error, status } = await api.v2.song({ id: 1099 }).details.get();
+			const { error, status } = await api.v2.song({ id: 2_000_000_000 }).details.get();
 
 			expect(status).toBe(404);
 			expect(error?.value).toMatchObject({
@@ -110,9 +114,10 @@ describe("Song E2E Tests", () => {
 			});
 
 			// Verify lyrics were persisted to DB
-			const lyrics = await prisma.orm.core.Lyrics.where({
-				songId: data?.id ?? 0,
-			}).all();
+			const lyrics = await db
+				.select()
+				.from(lyricsTable)
+				.where(eq(lyricsTable.songId, data?.id ?? 0));
 			expect(lyrics).toHaveLength(1);
 			expect(lyrics[0]).toMatchObject({
 				language: "zh",
@@ -128,9 +133,12 @@ describe("Song E2E Tests", () => {
 		test("should update a song with authentication", async () => {
 			const token = await getAuthToken();
 
-			const song = await prisma.orm.core.Song.create({
-				name: "Original Name",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Original Name",
+				})
+				.returning();
 
 			const { data, status } = await api.v2.song({ id: song.id }).patch(
 				{ name: "Updated Name" },
@@ -146,9 +154,12 @@ describe("Song E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+				})
+				.returning();
 
 			const { status } = await api.v2.song({ id: song.id }).patch({
 				name: "Updated Name",
@@ -160,7 +171,7 @@ describe("Song E2E Tests", () => {
 		test("should return 404 for non-existent song", async () => {
 			const token = await getAuthToken();
 
-			const { error, status } = await api.v2.song({ id: 999999 }).patch(
+			const { error, status } = await api.v2.song({ id: 2_000_000_000 }).patch(
 				{ name: "Updated Name" },
 				{
 					headers: {
@@ -180,9 +191,12 @@ describe("Song E2E Tests", () => {
 		test("should soft delete a song with authentication", async () => {
 			const token = await getAuthToken();
 
-			const song = await prisma.orm.core.Song.create({
-				name: "Song to Delete",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Song to Delete",
+				})
+				.returning();
 
 			const { status } = await api.v2.song({ id: song.id }).delete(
 				{},
@@ -195,16 +209,21 @@ describe("Song E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedSong = await prisma.orm.core.Song.where({
-				id: song.id,
-			}).first();
+			const [deletedSong] = await db
+				.select()
+				.from(songTable)
+				.where(eq(songTable.id, song.id))
+				.limit(1);
 			expect(deletedSong?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+				})
+				.returning();
 
 			const { status } = await api.v2.song({ id: song.id }).delete({}, {});
 
@@ -214,7 +233,7 @@ describe("Song E2E Tests", () => {
 		test("should return 404 for non-existent song", async () => {
 			const token = await getAuthToken();
 
-			const { status } = await api.v2.song({ id: 999999 }).delete(
+			const { status } = await api.v2.song({ id: 2_000_000_000 }).delete(
 				{},
 				{
 					headers: {

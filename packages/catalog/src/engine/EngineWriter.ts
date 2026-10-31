@@ -1,5 +1,13 @@
-import type { DatabaseClient, SvsEngine, TxClient } from "@cvsa/db";
-import { Temporal, toJson } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type SvsEngine,
+	type TxClient,
+	history,
+	svsEngine,
+	Temporal,
+	toJson,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
@@ -41,30 +49,34 @@ export class EngineWriter {
 	): Promise<SvsEngine> {
 		assertCanCreateEngine(actor);
 
-		const engine = await tx.orm.core.SvsEngine.create({
-			name: input.name,
-			description: input.description,
-			localizedDescriptions: input.localizedDescriptions
-				? toJson(input.localizedDescriptions)
-				: undefined,
-		});
+		const [created] = await tx
+			.insert(svsEngine)
+			.values({
+				name: input.name,
+				description: input.description,
+				localizedDescriptions: input.localizedDescriptions
+					? toJson(input.localizedDescriptions)
+					: undefined,
+			})
+			.returning();
+		if (!created) throw new Error("Failed to insert engine");
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "svs_engine",
-			objectId: engine.id,
+			objectId: created.id,
 			type: "CREATE",
-			new: toJson(engine),
+			new: toJson(created),
 		});
 
 		await recordOutboxEvent(tx, {
 			aggregateType: "SvsEngine",
-			aggregateId: engine.id,
+			aggregateId: created.id,
 			eventType: "EngineCreated",
-			payload: toJson(engine),
+			payload: toJson(created),
 		});
 
-		return engine;
+		return created;
 	}
 
 	private async updateInTransaction(
@@ -75,24 +87,32 @@ export class EngineWriter {
 	): Promise<SvsEngine> {
 		assertCanUpdateEngine(actor);
 
-		const existing = await tx.orm.core.SvsEngine.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(svsEngine)
+			.where(and(eq(svsEngine.id, id), isNull(svsEngine.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.engine.notfound", "NOT_FOUND", 404);
 		}
 
-		const updated = await tx.orm.core.SvsEngine.where({ id }).update({
-			name: input.name,
-			description: input.description,
-			localizedDescriptions: input.localizedDescriptions
-				? toJson(input.localizedDescriptions)
-				: undefined,
-		});
+		const [updated] = await tx
+			.update(svsEngine)
+			.set({
+				name: input.name,
+				description: input.description,
+				localizedDescriptions: input.localizedDescriptions
+					? toJson(input.localizedDescriptions)
+					: undefined,
+			})
+			.where(eq(svsEngine.id, id))
+			.returning();
 
 		if (!updated) {
 			throw new AppError("error.engine.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "svs_engine",
 			objectId: id,
@@ -114,16 +134,21 @@ export class EngineWriter {
 	private async deleteInTransaction(tx: TxClient, actor: Principal, id: EngineId): Promise<void> {
 		assertCanDeleteEngine(actor);
 
-		const existing = await tx.orm.core.SvsEngine.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(svsEngine)
+			.where(and(eq(svsEngine.id, id), isNull(svsEngine.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.engine.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.core.SvsEngine.where({ id }).update({
-			deletedAt: Temporal.Now.instant(),
-		});
+		await tx
+			.update(svsEngine)
+			.set({ deletedAt: Temporal.Now.instant() })
+			.where(eq(svsEngine.id, id));
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "svs_engine",
 			objectId: id,

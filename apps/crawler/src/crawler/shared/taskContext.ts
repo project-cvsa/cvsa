@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-const tasks = new AsyncLocalStorage<AbortSignal>();
+const tasks = new AsyncLocalStorage<AbortSignal | undefined>();
 
 export class TaskDeadlineError extends Error {
 	constructor() {
@@ -21,20 +21,29 @@ export function activeTaskResource<T>(resource: T): T {
 
 export async function runTaskWithDeadline<T>(
 	timeoutMs: number,
-	work: () => Promise<T>
+	work: () => Promise<T>,
+	parentSignal?: AbortSignal
 ): Promise<T> {
 	const controller = new AbortController();
-	let timer: ReturnType<typeof setTimeout> | undefined;
+	const signal = parentSignal
+		? AbortSignal.any([controller.signal, parentSignal])
+		: controller.signal;
+	signal.throwIfAborted();
+	let abort: () => void = () => {};
 	const deadline = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => {
-			const error = new TaskDeadlineError();
-			controller.abort(error);
-			reject(error);
-		}, timeoutMs);
+		abort = () => reject(signal.reason);
+		signal.addEventListener("abort", abort, { once: true });
 	});
+	const timer = setTimeout(() => controller.abort(new TaskDeadlineError()), timeoutMs);
 	try {
-		return await Promise.race([tasks.run(controller.signal, work), deadline]);
+		return await Promise.race([tasks.run(signal, work), deadline]);
 	} finally {
-		if (timer) clearTimeout(timer);
+		clearTimeout(timer);
+		signal.removeEventListener("abort", abort);
+		controller.abort(new Error("Crawler task finished"));
 	}
+}
+
+export function outsideCrawlerTask<T>(work: () => Promise<T>): Promise<T> {
+	return tasks.run(undefined, work);
 }

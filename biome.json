@@ -59,12 +59,8 @@
 			"!.zed/*",
 			"!packages/typescript-config/base.json",
 			"!**/*.grit",
-			"!packages/db/prisma/contract.d.ts",
-			"!packages/db/prisma/contract.json",
-			"!packages/db/prisma/migrations/**",
-			"!packages/snapshot-db/prisma/contract.d.ts",
-			"!packages/snapshot-db/prisma/contract.json",
-			"!packages/snapshot-db/prisma/migrations/**"
+			"!packages/db/drizzle/**",
+			"!packages/snapshot-db/drizzle/**"
 		]
 	}
 }

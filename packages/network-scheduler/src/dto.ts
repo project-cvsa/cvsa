@@ -1,4 +1,6 @@
 export {
+	AdaptiveRateConfigSchema,
+	type AdaptiveRateConfig,
 	NetworkRateLimitSchema as RateLimitSchema,
 	NetworkAdapterConfigSchema,
 	DirectAdapterConfigSchema,

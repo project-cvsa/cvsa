@@ -21,7 +21,7 @@ export type NetworkErrorCode =
 
 /**
  * Errors caused by the exit itself: the adapter could not deliver a usable
- * response because of the network path, the proxy, or upstream server failures. Only these codes reduce adapter health and trigger failover.
+ * response because of the network path or the proxy. Only these codes reduce adapter health. HTTP 5xx may trigger bounded failover without a health penalty.
  *
  * `APPLICATION_ERROR` is deliberately excluded. A business error reported by the
  * upstream application (the resource does not exist, is not visible, the caller
@@ -31,12 +31,12 @@ export type NetworkErrorCode =
 export const HEALTH_AFFECTING_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> = new Set([
 	"NETWORK_FAILURE",
 	"REQUEST_TIMEOUT",
-	"HTTP_5XX",
 ]);
 
 /** Codes worth retrying on another adapter within the same call. */
 export const RETRYABLE_NETWORK_ERROR_CODES: ReadonlySet<NetworkErrorCode> = new Set([
 	...HEALTH_AFFECTING_NETWORK_ERROR_CODES,
+	"HTTP_5XX",
 ]);
 
 export interface NetworkApplicationErrorContext {
@@ -52,11 +52,15 @@ export type NetworkApplicationErrorClassifier = (
 export interface NetworkRequest {
 	url: string;
 	requestType?: string;
+	cooldownScope?: string;
 	method?: string;
 	headers?: Record<string, string>;
 	body?: string;
 	timeoutMs?: number;
 	signal?: AbortSignal;
+	adapterId?: string;
+	background?: boolean;
+	replaySafe?: boolean;
 }
 
 export interface NetworkResponse {
@@ -67,7 +71,7 @@ export interface NetworkResponse {
 	durationMs: number;
 	errorCode?: NetworkErrorCode;
 	retryAfterMs?: number;
-	retryReason?: "local_capacity" | "upstream";
+	retryReason?: "local_capacity" | "upstream" | "network_recovery";
 }
 
 export interface NetworkTransportResponse {
@@ -95,7 +99,19 @@ export interface NetworkTransport {
 	): Promise<NetworkTransportResponse>;
 }
 
+export interface AdaptiveRateState {
+	factor: number;
+	successes: number;
+	lastThrottledAt: number | null;
+}
+
 export interface NetworkRateLimiter {
+	getAdaptiveState?(scope: string): Promise<AdaptiveRateState>;
+	recordAdaptiveOutcome?(
+		scope: string,
+		throttled: boolean,
+		policy: import("./dto").AdaptiveRateConfig
+	): Promise<AdaptiveRateState>;
 	reserve?(
 		scope: string,
 		budgets: ReadonlyArray<{ scope?: string; durationSeconds: number; maxRequests: number }>
@@ -123,4 +139,9 @@ export interface NetworkAdapterRuntimeStatus {
 	failures: number;
 	rateLimited: number;
 	averageDurationMs: number | null;
+	configuredRate?: number;
+	effectiveRate?: number;
+	backgroundRate?: number;
+	adaptiveFactor?: number;
+	lastThrottledAt?: number | null;
 }

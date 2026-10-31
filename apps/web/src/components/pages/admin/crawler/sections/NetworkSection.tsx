@@ -1,3 +1,5 @@
+import NetworkSessionPolicy from "../network/NetworkSessionPolicy";
+import NetworkAdaptivePolicy from "../network/NetworkAdaptivePolicy";
 import NetworkExecutionPolicy from "../network/NetworkExecutionPolicy";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
@@ -91,7 +93,8 @@ export default function NetworkSection(props: NetworkSectionProps) {
 					id: "direct-default",
 					enabled: true,
 					baseWeight: 1,
-					rateLimits: [],
+					requestsPerSecond: 5,
+					rateLimits: [{ durationSeconds: 1, maxRequests: 5 }],
 				},
 			],
 			bindings: [
@@ -333,6 +336,25 @@ export default function NetworkSection(props: NetworkSectionProps) {
 								}
 							/>
 
+							<NetworkSessionPolicy
+								config={doc().config.session}
+								status={props.statusData()?.session}
+								onChange={(session) =>
+									setNetworkDoc({
+										...doc(),
+										config: { ...doc().config, session },
+									})
+								}
+							/>
+							<NetworkAdaptivePolicy
+								config={doc().config.adaptive}
+								onChange={(adaptive) =>
+									setNetworkDoc({
+										...doc(),
+										config: { ...doc().config, adaptive },
+									})
+								}
+							/>
 							<NetworkHealthPolicy
 								config={doc().config.health}
 								onChange={updateHealth}

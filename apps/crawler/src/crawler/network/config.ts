@@ -1,3 +1,11 @@
+import {
+	BILIBILI_REQUEST_TYPES,
+	BilibiliEnvelopeSchema,
+	BilibiliSessionConfigSchema,
+	type BilibiliSessionConfig,
+	type BilibiliSessionStatus,
+} from "@cvsa/contracts";
+import { normalizeBilibiliRuntimeConfig } from "./policy";
 import { assertTaskActive, getTaskSignal } from "../shared/taskContext";
 import { RetryLaterError } from "../shared/retryLater";
 import { AppError } from "@cvsa/contracts";
@@ -6,7 +14,6 @@ import { traceTask } from "@cvsa/observability";
 import {
 	CrawlerExecutionConfigSchema,
 	type CrawlerExecutionConfig,
-	NetworkRuntimeConfigSchema,
 	NetworkScheduler,
 	NetworkSchedulerError,
 	type AdapterRegistry,
@@ -95,6 +102,17 @@ export function createDefaultDirectRuntimeConfig(): NetworkRuntimeConfig {
 export class NetworkRuntimeConfigManager implements NetworkDelegate {
 	private scheduler: NetworkScheduler | undefined;
 	private adapterIds: string[] = [];
+	private bindings: NonNullable<NetworkRuntimeConfig["bindings"]> = [];
+	private sessionConfig = BilibiliSessionConfigSchema.parse({});
+	private readonly sessionListeners = new Set<(config: BilibiliSessionConfig) => void>();
+	private sessionStatus: (() => BilibiliSessionStatus) | undefined;
+	onSessionChange(listener: (config: BilibiliSessionConfig) => void): void {
+		this.sessionListeners.add(listener);
+		listener(this.sessionConfig);
+	}
+	setSessionStatus(provider: () => BilibiliSessionStatus): void {
+		this.sessionStatus = provider;
+	}
 	private revision: number | undefined;
 	private pollTimer: ReturnType<typeof setInterval> | undefined;
 	private readonly metrics: NetworkMetrics;
@@ -112,27 +130,45 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 		listener(this.getExecutionConfig());
 	}
 	async remainingDelay(): Promise<number> {
-		const global = (await this.rateLimiter.remainingDelay?.("bilibili-api")) ?? 0;
+		const requestType = "bilibili:tracking";
+		const scope = "bilibili";
+		const global = (await this.rateLimiter.remainingDelay?.(scope)) ?? 0;
 		if (global > 0) return global;
+		const ids =
+			this.bindings.find((binding) => binding.requestType === requestType)?.adapterIds ??
+			this.adapterIds;
 		const delays = await Promise.all(
-			this.adapterIds.map(
-				(id) => this.rateLimiter.remainingDelay?.(`adapter:${id}:bilibili-api`) ?? 0
-			)
+			ids
+				.filter((id) => this.adapterIds.includes(id))
+				.map((id) => this.rateLimiter.remainingDelay?.(`adapter:${id}:${scope}`) ?? 0)
 		);
 		return delays.length > 0 ? Math.min(...delays) : 0;
 	}
 	async getStatusWithCooldowns(): Promise<NetworkRuntimeStatus> {
-		const scopes = [
-			"bilibili-api",
-			...this.adapterIds.map((id) => `adapter:${id}:bilibili-api`),
-		];
+		const types = ["bilibili", "bilibili-api", ...BILIBILI_REQUEST_TYPES];
+		const scopes = types.flatMap((type) => [
+			type,
+			...this.adapterIds.map((id) => `adapter:${id}:${type}`),
+		]);
 		const cooldowns = await Promise.all(
-			scopes.map(async (scope) => {
-				const remainingMs = (await this.rateLimiter.remainingDelay?.(scope)) ?? 0;
-				return { scope, remainingMs, until: Date.now() + remainingMs };
-			})
+			scopes.map(
+				async (scope): Promise<NonNullable<NetworkRuntimeStatus["cooldowns"]>[number]> => {
+					const remainingMs = (await this.rateLimiter.remainingDelay?.(scope)) ?? 0;
+					return {
+						scope,
+						remainingMs,
+						until: Date.now() + remainingMs,
+						reason: "upstream_throttle",
+					};
+				}
+			)
 		);
-		return { ...this.getStatus(), cooldowns: cooldowns.filter((item) => item.remainingMs > 0) };
+		return {
+			...this.getStatus(),
+			adapters: (await this.scheduler?.getAdapterStatusesWithRates()) ?? [],
+			cooldowns: cooldowns.filter((item) => item.remainingMs > 0),
+			...(this.sessionStatus ? { session: this.sessionStatus() } : {}),
+		};
 	}
 
 	constructor(
@@ -158,18 +194,35 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			assertTaskActive();
 			const response = await this.scheduler.execute({
 				...request,
+				cooldownScope:
+					request.cooldownScope ??
+					(request.requestType?.startsWith("bilibili:") ? "bilibili" : undefined),
+				background:
+					request.background ??
+					["bilibili:search", "bilibili:details"].includes(request.requestType ?? ""),
 				signal: request.signal ?? getTaskSignal(),
 			});
 			assertTaskActive();
 			if (
 				response.errorCode === "RATE_LIMITED" ||
 				response.errorCode === "HTTP_429" ||
-				response.errorCode === "APPLICATION_RATE_LIMIT"
-			)
+				response.errorCode === "APPLICATION_RATE_LIMIT" ||
+				response.retryReason === "network_recovery"
+			) {
+				let value: unknown;
+				try {
+					value = JSON.parse(response.body);
+				} catch {
+					value = undefined;
+				}
+				const envelope = BilibiliEnvelopeSchema.safeParse(value);
 				throw new RetryLaterError(
 					response.retryAfterMs ?? 1000,
-					response.retryReason ?? "upstream"
+					response.retryReason ?? "upstream",
+					envelope.success ? envelope.data.code : undefined,
+					envelope.success ? envelope.data.message : undefined
 				);
+			}
 			return response;
 		} catch (error) {
 			if (error instanceof NetworkSchedulerError) {
@@ -205,7 +258,7 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			const validatedDocument = NetworkRuntimeConfigDocumentSchema.parse(document);
 			if (this.revision !== undefined && validatedDocument.revision <= this.revision)
 				return false;
-			const config = NetworkRuntimeConfigSchema.parse(validatedDocument.config);
+			const config = normalizeBilibiliRuntimeConfig(validatedDocument.config);
 			const adapters = new Map(
 				config.adapters.map((adapter) => [adapter.id, this.registry.create(adapter)])
 			);
@@ -222,6 +275,9 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 			this.adapterIds = config.adapters
 				.filter((adapter) => adapter.enabled)
 				.map((adapter) => adapter.id);
+			this.bindings = config.bindings ?? [];
+			this.sessionConfig = BilibiliSessionConfigSchema.parse(config.session ?? {});
+			for (const listener of this.sessionListeners) listener(this.sessionConfig);
 			this.execution = CrawlerExecutionConfigSchema.parse(config.execution ?? {});
 			for (const listener of this.executionListeners) listener(this.getExecutionConfig());
 			this.revision = validatedDocument.revision;

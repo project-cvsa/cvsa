@@ -7,7 +7,7 @@ import { getLocale, i18nServer } from "@lib/i18n/server";
 import { localizedName, pickLyric } from "@lib/localize";
 import { AppError, type SongDetailsResponseDto, SongDetailsResponseSchema } from "@cvsa/contracts";
 import { songReader } from "@cvsa/catalog";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 
 const { id } = Astro.params;
 const { language } = getLocale(Astro.request);
@@ -17,7 +17,7 @@ let data: SongDetailsResponseDto | undefined;
 try {
 	const raw = await songReader.getDetails(Number.parseInt(id || "", 10) || 0);
 	if (raw) {
-		data = SongDetailsResponseSchema.parse(transformPrismaResult(raw));
+		data = SongDetailsResponseSchema.parse(serializeResult(raw));
 	} else {
 		throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 	}

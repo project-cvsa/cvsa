@@ -1,3 +1,4 @@
+import { withBilibiliPurpose } from "../crawler/bilibili/requestContext";
 import { RetryLaterError } from "../crawler/shared/retryLater";
 import { appLogger } from "@cvsa/logger";
 import { toInstant, type Temporal, type VideoTracking } from "@cvsa/snapshot-db";
@@ -171,7 +172,9 @@ export class MetadataRefreshScheduler {
 		);
 
 		try {
-			const details = await this.deps.bilibiliClient.getVideoDetails(tracking.aid);
+			const details = await withBilibiliPurpose("tracking", () =>
+				this.deps.bilibiliClient.getVideoDetails(tracking.aid)
+			);
 			await this.deps.discoveryRepository.upsertMetadata(
 				toMetadataInput(tracking.aid, details)
 			);

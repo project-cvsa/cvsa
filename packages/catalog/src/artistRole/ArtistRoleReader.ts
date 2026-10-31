@@ -1,5 +1,5 @@
-import type { ArtistRole, DatabaseClient } from "@cvsa/db";
-import { transformPrismaResult } from "@cvsa/db";
+import { type ArtistRole, type DatabaseClient, artistRole, serializeResult } from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import {
 	ArtistRoleDetailsResponseSchema,
 	type ArtistRoleDetailsResponseDto,
@@ -14,7 +14,12 @@ export class ArtistRoleReader {
 	) {}
 
 	async getById(id: ArtistRoleId): Promise<ArtistRole | null> {
-		return this.db.orm.core.ArtistRole.where({ id, deletedAt: null }).first();
+		const [row] = await this.db
+			.select()
+			.from(artistRole)
+			.where(and(eq(artistRole.id, id), isNull(artistRole.deletedAt)))
+			.limit(1);
+		return row ?? null;
 	}
 
 	async getDetails(id: ArtistRoleId): Promise<ArtistRoleDetailsResponseDto | null> {
@@ -26,12 +31,12 @@ export class ArtistRoleReader {
 			}
 		}
 
-		const raw = await this.db.orm.core.ArtistRole.where({ id, deletedAt: null }).first();
+		const raw = await this.getById(id);
 		if (!raw) {
 			return null;
 		}
 
-		const details = ArtistRoleDetailsResponseSchema.parse(transformPrismaResult(raw));
+		const details = ArtistRoleDetailsResponseSchema.parse(serializeResult(raw));
 		if (this.cache) {
 			await this.cache.set(cacheKey, details, 3600);
 		}

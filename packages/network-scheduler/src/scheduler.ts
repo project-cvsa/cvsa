@@ -1,4 +1,4 @@
-import { CrawlerExecutionConfigSchema } from "./dto";
+import { AdaptiveRateConfigSchema, CrawlerExecutionConfigSchema } from "./dto";
 import { NetworkSchedulerError } from "./errors";
 import { createNoopNetworkSchedulerLogger, type NetworkSchedulerLogger } from "./logger";
 import { createNoopNetworkSchedulerTracer, type NetworkSchedulerTracer } from "./tracer";
@@ -11,6 +11,7 @@ import type { NetworkAdapterConfig, NetworkRuntimeConfig } from "./dto";
 import {
 	HEALTH_AFFECTING_NETWORK_ERROR_CODES,
 	RETRYABLE_NETWORK_ERROR_CODES,
+	type AdaptiveRateState,
 	type NetworkAdapter,
 	type NetworkAdapterHealthState,
 	type NetworkAdapterRuntimeStatus,
@@ -95,6 +96,7 @@ export class NetworkScheduler implements NetworkDelegate {
 	private readonly tracer: NetworkSchedulerTracer;
 	private readonly clock: () => number;
 	private state: Readonly<SchedulerState>;
+	private readonly adaptive = new Map<string, AdaptiveRateState>();
 	private readonly statistics = new Map<string, AdapterStatistics>();
 
 	constructor(
@@ -154,8 +156,10 @@ export class NetworkScheduler implements NetworkDelegate {
 			const health = this.getHealth(state, config.id);
 			const healthState = this.getHealthState(health);
 			const stats = this.statistics.get(config.id);
+			const rates = this.rateStatus(state, config);
 			return {
 				id: config.id,
+				...rates,
 				enabled: config.enabled,
 				healthState,
 				healthFactor: health.factor,
@@ -175,11 +179,80 @@ export class NetworkScheduler implements NetworkDelegate {
 		});
 	}
 
+	public async getAdapterStatusesWithRates(): Promise<NetworkAdapterRuntimeStatus[]> {
+		await Promise.all(
+			this.state.config.adapters.map(async (config) => {
+				const value = await this.rateLimiter.getAdaptiveState?.(`adapter:${config.id}`);
+				if (value) this.adaptive.set(config.id, value);
+			})
+		);
+		return this.getAdapterStatuses();
+	}
+
+	private rateStatus(state: SchedulerState, config: NetworkAdapterConfig) {
+		const policy = AdaptiveRateConfigSchema.parse(state.config.adaptive ?? {});
+		const adaptive = this.adaptive.get(config.id);
+		const factor = policy.enabled
+			? Math.min(1, Math.max(policy.minFactor, adaptive?.factor ?? 1))
+			: 1;
+		const configuredRate = Math.min(
+			config.requestsPerSecond ?? 20,
+			...config.rateLimits.map((limit) => limit.maxRequests / limit.durationSeconds)
+		);
+		const penalized =
+			policy.enabled &&
+			adaptive?.lastThrottledAt != null &&
+			this.clock() < adaptive.lastThrottledAt + policy.backgroundPenaltyMs;
+		return {
+			configuredRate,
+			effectiveRate: configuredRate * factor,
+			backgroundRate: configuredRate * factor * (penalized ? policy.backgroundFactor : 1),
+			adaptiveFactor: factor,
+			lastThrottledAt: adaptive?.lastThrottledAt ?? null,
+		};
+	}
+
+	private recoveryResponse(state: SchedulerState, ids: string[]): NetworkResponse {
+		const execution = CrawlerExecutionConfigSchema.parse(state.config.execution ?? {});
+		const waits = ids.map((id) => {
+			const health = this.getHealth(state, id);
+			return health.halfOpenProbeInFlight
+				? execution.probeWaitMs
+				: Math.max(execution.probeRetryMs, (health.openUntil ?? 0) - this.clock());
+		});
+		return {
+			adapterId: "",
+			status: 503,
+			headers: {},
+			body: "",
+			durationMs: 0,
+			errorCode: "NO_AVAILABLE_ADAPTER",
+			retryReason: "network_recovery",
+			retryAfterMs: Math.min(execution.maxNetworkCooldownMs, Math.max(1, Math.min(...waits))),
+		};
+	}
+
+	private wait(delay: number, signal?: AbortSignal): Promise<void> {
+		signal?.throwIfAborted();
+		return new Promise((resolve, reject) => {
+			const abort = () => {
+				clearTimeout(timer);
+				reject(signal?.reason);
+			};
+			const timer = setTimeout(() => {
+				signal?.removeEventListener("abort", abort);
+				resolve();
+			}, delay);
+			signal?.addEventListener("abort", abort, { once: true });
+		});
+	}
+
 	public async execute(request: NetworkRequest): Promise<NetworkResponse> {
 		const state = this.state;
 		return this.tracer.traceTask("crawler.network.delegate", async () => {
 			const execution = CrawlerExecutionConfigSchema.parse(state.config.execution ?? {});
 			const deadline = performance.now() + execution.admissionTimeoutMs;
+			let probeWaits = 0;
 			while (true) {
 				request.signal?.throwIfAborted();
 				const response = await this.executeScheduled(state, {
@@ -187,13 +260,19 @@ export class NetworkScheduler implements NetworkDelegate {
 					timeoutMs: request.timeoutMs ?? execution.requestTimeoutMs,
 				});
 				if (
+					response.retryReason === "network_recovery" &&
+					response.retryAfterMs === execution.probeWaitMs &&
+					probeWaits++ < execution.probeRetries
+				) {
+					await this.wait(execution.probeWaitMs, request.signal);
+					continue;
+				}
+				if (
 					response.retryReason !== "local_capacity" ||
 					performance.now() + (response.retryAfterMs ?? 50) > deadline
 				)
 					return response;
-				await new Promise<void>((resolve) =>
-					setTimeout(resolve, Math.max(1, response.retryAfterMs ?? 50))
-				);
+				await this.wait(Math.max(1, response.retryAfterMs ?? 50), request.signal);
 			}
 		});
 	}
@@ -220,15 +299,23 @@ export class NetworkScheduler implements NetworkDelegate {
 				);
 			}
 
-			const adapterIds = binding
+			const execution = CrawlerExecutionConfigSchema.parse(state.config.execution ?? {});
+			const boundIds = binding
 				? binding.adapterIds
 				: state.config.adapters.map((adapter) => adapter.id);
+			const adapterIds = request.adapterId
+				? boundIds.filter((id) => id === request.adapterId)
+				: boundIds;
+			const enabledIds = adapterIds.filter((id) =>
+				state.config.adapters.some((adapter) => adapter.id === id && adapter.enabled)
+			);
 
 			const candidates = adapterIds
 				.map((id) => this.getCandidate(state, id))
 				.filter((candidate): candidate is Candidate => candidate !== undefined);
 
 			if (candidates.length === 0) {
+				if (enabledIds.length > 0) return this.recoveryResponse(state, enabledIds);
 				throw new NetworkSchedulerError(
 					"No available network adapter for request type",
 					"NO_AVAILABLE_ADAPTER",
@@ -237,7 +324,8 @@ export class NetworkScheduler implements NetworkDelegate {
 			}
 
 			const effectiveRequestType = requestType ?? "default";
-			const cooldown = (await this.rateLimiter.remainingDelay?.(effectiveRequestType)) ?? 0;
+			const cooldownScope = request.cooldownScope ?? effectiveRequestType;
+			const cooldown = (await this.rateLimiter.remainingDelay?.(cooldownScope)) ?? 0;
 			if (cooldown > 0) return this.rateLimitedResponse(cooldown, "upstream");
 			if (
 				!this.rateLimiter.reserve &&
@@ -249,11 +337,12 @@ export class NetworkScheduler implements NetworkDelegate {
 			let upstreamDelay = Infinity;
 			let lastResponse: NetworkResponse | undefined;
 			let budgetRefused = false;
-			while (candidates.length > 0) {
+			while (candidates.length > 0 && attempts < execution.maxAdapterAttempts) {
+				request.signal?.throwIfAborted();
 				const candidate = this.takeWeightedCandidate(state, candidates);
 				const adapterCooldown =
 					(await this.rateLimiter.remainingDelay?.(
-						`adapter:${candidate.config.id}:${effectiveRequestType}`
+						`adapter:${candidate.config.id}:${cooldownScope}`
 					)) ?? 0;
 				if (adapterCooldown > 0) {
 					upstreamDelay = Math.min(upstreamDelay, adapterCooldown);
@@ -269,7 +358,8 @@ export class NetworkScheduler implements NetworkDelegate {
 					admissionDelay = await this.consumeAdapterLimits(
 						candidate.config,
 						state,
-						requestType
+						requestType,
+						request.background
 					);
 				} catch (error) {
 					this.releaseHalfOpenProbe(state, candidate.config.id);
@@ -294,18 +384,24 @@ export class NetworkScheduler implements NetworkDelegate {
 				try {
 					response = await candidate.adapter.execute(request, observer);
 				} catch (error) {
-					// Adapters are expected to translate transport failures into error
-					// codes. If one throws anyway, record the failure so a claimed
-					// half-open probe is never left dangling, then surface the error.
-					this.updateHealth(state, candidate.config.id, "NETWORK_FAILURE");
-					const stats = this.statistics.get(candidate.config.id);
-					if (stats) {
-						stats.requests += 1;
-						stats.failures += 1;
+					if (request.signal?.aborted) {
+						this.releaseHalfOpenProbe(state, candidate.config.id);
+						throw error;
 					}
-					throw error;
+					response = {
+						adapterId: candidate.config.id,
+						status: 0,
+						headers: {},
+						body: "",
+						durationMs: 0,
+						errorCode: "NETWORK_FAILURE",
+					};
 				}
 
+				if (request.signal?.aborted) {
+					this.releaseHalfOpenProbe(state, candidate.config.id);
+					request.signal.throwIfAborted();
+				}
 				const stats = this.statistics.get(candidate.config.id);
 				if (stats) {
 					stats.requests += 1;
@@ -319,6 +415,18 @@ export class NetworkScheduler implements NetworkDelegate {
 						stats.rateLimited += 1;
 				}
 				this.updateHealth(state, candidate.config.id, response.errorCode);
+				const throttled =
+					response.errorCode === "HTTP_429" ||
+					response.errorCode === "APPLICATION_RATE_LIMIT";
+				const adaptivePolicy = AdaptiveRateConfigSchema.parse(state.config.adaptive ?? {});
+				if (adaptivePolicy.enabled && (throttled || response.errorCode === undefined)) {
+					const value = await this.rateLimiter.recordAdaptiveOutcome?.(
+						`adapter:${candidate.config.id}`,
+						throttled,
+						adaptivePolicy
+					);
+					if (value) this.adaptive.set(candidate.config.id, value);
+				}
 				this.logger.info("Network request completed", {
 					component: "network-scheduler",
 					adapterId: candidate.adapter.id,
@@ -348,17 +456,49 @@ export class NetworkScheduler implements NetworkDelegate {
 					);
 					await this.rateLimiter.defer?.(
 						execution.throttleScope === "request_type"
-							? effectiveRequestType
-							: `adapter:${candidate.config.id}:${effectiveRequestType}`,
+							? cooldownScope
+							: `adapter:${candidate.config.id}:${cooldownScope}`,
 						retryDelay
 					);
-					return { ...response, retryAfterMs: retryDelay, retryReason: "upstream" };
+					const deferred: NetworkResponse = {
+						...response,
+						retryAfterMs: retryDelay,
+						retryReason: "upstream",
+					};
+					if (
+						execution.throttleFailover &&
+						execution.throttleScope === "adapter" &&
+						(request.replaySafe ||
+							["GET", "HEAD"].includes((request.method ?? "GET").toUpperCase())) &&
+						candidates.length > 0 &&
+						attempts < execution.maxAdapterAttempts
+					) {
+						lastResponse = deferred;
+						continue;
+					}
+					return deferred;
 				}
 				if (response.errorCode === undefined) return response;
 				if (!RETRYABLE_NETWORK_ERROR_CODES.has(response.errorCode)) return response;
+				if (
+					!request.replaySafe &&
+					!["GET", "HEAD"].includes((request.method ?? "GET").toUpperCase())
+				)
+					return response;
 				lastResponse = response;
 			}
-			if (lastResponse) return lastResponse;
+			if (lastResponse) {
+				if (
+					lastResponse.errorCode === "HTTP_5XX" ||
+					lastResponse.retryReason === "upstream"
+				)
+					return lastResponse;
+				return {
+					...lastResponse,
+					retryReason: "network_recovery",
+					retryAfterMs: Math.min(execution.maxNetworkCooldownMs, execution.probeRetryMs),
+				};
+			}
 
 			// No candidate could be attempted. A refusal by an adapter's own budget is a
 			// "retry later" answer, not a missing adapter, so callers can tell the two
@@ -369,11 +509,7 @@ export class NetworkScheduler implements NetworkDelegate {
 			if (budgetRefused)
 				return this.rateLimitedResponse(Number.isFinite(minimumDelay) ? minimumDelay : 50);
 
-			throw new NetworkSchedulerError(
-				"No available network adapter",
-				"NO_AVAILABLE_ADAPTER",
-				503
-			);
+			return this.recoveryResponse(state, enabledIds);
 		} finally {
 			this.metrics.scheduleAttempts.record(attempts, {});
 		}
@@ -547,12 +683,26 @@ export class NetworkScheduler implements NetworkDelegate {
 	private async consumeAdapterLimits(
 		config: NetworkAdapterConfig,
 		state: SchedulerState,
-		requestType?: string
+		requestType?: string,
+		background = false
 	): Promise<number> {
-		const budgets = [
-			{ durationSeconds: 1 / (config.requestsPerSecond ?? 20), maxRequests: 1 },
-			...config.rateLimits,
+		const shared = await this.rateLimiter.getAdaptiveState?.(`adapter:${config.id}`);
+		if (shared) this.adaptive.set(config.id, shared);
+		const rates = this.rateStatus(state, config);
+		const factor = rates.adaptiveFactor;
+		const budgets: Array<{ scope?: string; durationSeconds: number; maxRequests: number }> = [
+			{ durationSeconds: 1 / ((config.requestsPerSecond ?? 20) * factor), maxRequests: 1 },
+			...config.rateLimits.map((limit) => ({
+				...limit,
+				durationSeconds: limit.durationSeconds / factor,
+			})),
 		];
+		if (background && rates.backgroundRate < rates.effectiveRate)
+			budgets.push({
+				scope: `background:${config.id}`,
+				durationSeconds: 1 / rates.backgroundRate,
+				maxRequests: 1,
+			});
 		if (this.rateLimiter.reserve) {
 			const scope = `adapter:${config.id}`;
 			if (!requestType || !state.softReserve.enabled)
@@ -617,6 +767,7 @@ export class NetworkScheduler implements NetworkDelegate {
 		}
 
 		if (outcome === "neutral") {
+			health.consecutiveFailures = 0;
 			// A business error still proves the exit delivered a response. Close the
 			// circuit if this was the probe, but leave the weight untouched.
 			if (wasProbing) health.openUntil = undefined;

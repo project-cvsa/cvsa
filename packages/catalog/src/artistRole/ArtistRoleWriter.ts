@@ -1,5 +1,13 @@
-import type { ArtistRole, DatabaseClient, TxClient } from "@cvsa/db";
-import { Temporal, toJson } from "@cvsa/db";
+import {
+	type ArtistRole,
+	type DatabaseClient,
+	type TxClient,
+	artistRole,
+	history,
+	Temporal,
+	toJson,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
@@ -45,28 +53,32 @@ export class ArtistRoleWriter {
 	): Promise<ArtistRole> {
 		assertCanCreateArtistRole(actor);
 
-		const role = await tx.orm.core.ArtistRole.create({
-			name: input.name,
-			language: input.language ?? "zh",
-			localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
-		});
+		const [created] = await tx
+			.insert(artistRole)
+			.values({
+				name: input.name,
+				language: input.language ?? "zh",
+				localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
+			})
+			.returning();
+		if (!created) throw new Error("Failed to insert artist role");
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "artist_role",
-			objectId: role.id,
+			objectId: created.id,
 			type: "CREATE",
-			new: toJson(role),
+			new: toJson(created),
 		});
 
 		await recordOutboxEvent(tx, {
 			aggregateType: "ArtistRole",
-			aggregateId: role.id,
+			aggregateId: created.id,
 			eventType: "ArtistRoleCreated",
-			payload: toJson(role),
+			payload: toJson(created),
 		});
 
-		return role;
+		return created;
 	}
 
 	private async updateInTransaction(
@@ -77,22 +89,30 @@ export class ArtistRoleWriter {
 	): Promise<ArtistRole> {
 		assertCanUpdateArtistRole(actor);
 
-		const existing = await tx.orm.core.ArtistRole.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(artistRole)
+			.where(and(eq(artistRole.id, id), isNull(artistRole.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.artistRole.notfound", "NOT_FOUND", 404);
 		}
 
-		const updated = await tx.orm.core.ArtistRole.where({ id }).update({
-			name: input.name,
-			language: input.language,
-			localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
-		});
+		const [updated] = await tx
+			.update(artistRole)
+			.set({
+				name: input.name,
+				language: input.language,
+				localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
+			})
+			.where(eq(artistRole.id, id))
+			.returning();
 
 		if (!updated) {
 			throw new AppError("error.artistRole.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "artist_role",
 			objectId: id,
@@ -118,16 +138,21 @@ export class ArtistRoleWriter {
 	): Promise<void> {
 		assertCanDeleteArtistRole(actor);
 
-		const existing = await tx.orm.core.ArtistRole.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(artistRole)
+			.where(and(eq(artistRole.id, id), isNull(artistRole.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.artistRole.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.core.ArtistRole.where({ id }).update({
-			deletedAt: Temporal.Now.instant(),
-		});
+		await tx
+			.update(artistRole)
+			.set({ deletedAt: Temporal.Now.instant() })
+			.where(eq(artistRole.id, id));
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "artist_role",
 			objectId: id,

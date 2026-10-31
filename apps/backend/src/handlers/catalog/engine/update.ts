@@ -7,7 +7,7 @@ import {
 } from "@cvsa/contracts";
 import { engineWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -22,7 +22,7 @@ export const engineUpdateHandler = new Elysia({ name: "engineUpdateHandler" })
 			});
 			const engine = await traceTask("engineWriter.update", async () => {
 				const row = await engineWriter.update(actor, params.id, body);
-				return EngineResponseSchema.parse(transformPrismaResult(row));
+				return EngineResponseSchema.parse(serializeResult(row));
 			});
 			return status(200, engine);
 		},

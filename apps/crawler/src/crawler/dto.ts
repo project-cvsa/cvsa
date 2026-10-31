@@ -1,4 +1,4 @@
-import { NetworkCooldownSchema } from "@cvsa/contracts";
+import { CrawlerStatusDtoSchema } from "@cvsa/contracts";
 import { z } from "zod";
 import { NetworkRuntimeConfigSchema } from "@cvsa/network-scheduler";
 
@@ -24,22 +24,8 @@ export const ReplaceNetworkRuntimeConfigRequestSchema = z.object({
 });
 
 /** Mirrors `NetworkAdapterRuntimeStatus` from the scheduler's contracts. */
-export const NetworkAdapterRuntimeStatusSchema = z.object({
-	id: z.string(),
-	enabled: z.boolean(),
-	healthState: z.enum(["healthy", "degraded", "open", "half-open"]),
-	healthFactor: z.number(),
-	effectiveWeight: z.number(),
-	consecutiveFailures: z.number().int().nonnegative(),
-	openUntil: z.number().int().nullable(),
-});
-
-export const NetworkRuntimeStatusSchema = z.object({
-	cooldowns: z.array(NetworkCooldownSchema).optional(),
-	ready: z.boolean(),
-	revision: z.number().int().nonnegative().nullable(),
-	adapters: z.array(NetworkAdapterRuntimeStatusSchema),
-});
+export const NetworkAdapterRuntimeStatusSchema = CrawlerStatusDtoSchema.shape.adapters.element;
+export const NetworkRuntimeStatusSchema = CrawlerStatusDtoSchema;
 
 export {
 	BilibiliVideoMetadataDtoSchema,

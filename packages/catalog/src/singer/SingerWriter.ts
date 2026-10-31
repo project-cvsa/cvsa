@@ -1,5 +1,13 @@
-import type { DatabaseClient, Singer, TxClient } from "@cvsa/db";
-import { Temporal, toJson } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type Singer,
+	type TxClient,
+	history,
+	singer,
+	Temporal,
+	toJson,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
@@ -41,33 +49,37 @@ export class SingerWriter {
 	): Promise<Singer> {
 		assertCanCreateSinger(actor);
 
-		const singer = await tx.orm.core.Singer.create({
-			name: input.name,
-			avatarUrl: input.avatarUrl,
-			language: input.language ?? "zh",
-			localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
-			description: input.description,
-			localizedDescriptions: input.localizedDescriptions
-				? toJson(input.localizedDescriptions)
-				: undefined,
-		});
+		const [created] = await tx
+			.insert(singer)
+			.values({
+				name: input.name,
+				avatarUrl: input.avatarUrl,
+				language: input.language ?? "zh",
+				localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
+				description: input.description,
+				localizedDescriptions: input.localizedDescriptions
+					? toJson(input.localizedDescriptions)
+					: undefined,
+			})
+			.returning();
+		if (!created) throw new Error("Failed to insert singer");
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "singer",
-			objectId: singer.id,
+			objectId: created.id,
 			type: "CREATE",
-			new: toJson(singer),
+			new: toJson(created),
 		});
 
 		await recordOutboxEvent(tx, {
 			aggregateType: "Singer",
-			aggregateId: singer.id,
+			aggregateId: created.id,
 			eventType: "SingerCreated",
-			payload: toJson(singer),
+			payload: toJson(created),
 		});
 
-		return singer;
+		return created;
 	}
 
 	private async updateInTransaction(
@@ -78,27 +90,35 @@ export class SingerWriter {
 	): Promise<Singer> {
 		assertCanUpdateSinger(actor);
 
-		const existing = await tx.orm.core.Singer.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(singer)
+			.where(and(eq(singer.id, id), isNull(singer.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.singer.notfound", "NOT_FOUND", 404);
 		}
 
-		const updated = await tx.orm.core.Singer.where({ id }).update({
-			name: input.name,
-			avatarUrl: input.avatarUrl,
-			language: input.language,
-			localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
-			description: input.description,
-			localizedDescriptions: input.localizedDescriptions
-				? toJson(input.localizedDescriptions)
-				: undefined,
-		});
+		const [updated] = await tx
+			.update(singer)
+			.set({
+				name: input.name,
+				avatarUrl: input.avatarUrl,
+				language: input.language,
+				localizedNames: input.localizedNames ? toJson(input.localizedNames) : undefined,
+				description: input.description,
+				localizedDescriptions: input.localizedDescriptions
+					? toJson(input.localizedDescriptions)
+					: undefined,
+			})
+			.where(eq(singer.id, id))
+			.returning();
 
 		if (!updated) {
 			throw new AppError("error.singer.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "singer",
 			objectId: id,
@@ -120,16 +140,18 @@ export class SingerWriter {
 	private async deleteInTransaction(tx: TxClient, actor: Principal, id: SingerId): Promise<void> {
 		assertCanDeleteSinger(actor);
 
-		const existing = await tx.orm.core.Singer.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(singer)
+			.where(and(eq(singer.id, id), isNull(singer.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.singer.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.core.Singer.where({ id }).update({
-			deletedAt: Temporal.Now.instant(),
-		});
+		await tx.update(singer).set({ deletedAt: Temporal.Now.instant() }).where(eq(singer.id, id));
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "singer",
 			objectId: id,

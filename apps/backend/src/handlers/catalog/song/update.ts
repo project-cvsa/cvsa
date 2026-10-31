@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ErrorResponseSchema, SongResponseSchema, UpdateSongRequestSchema } from "@cvsa/contracts";
 import { songWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -18,7 +18,7 @@ export const songUpdateHandler = new Elysia({ name: "songUpdateHandler" })
 			});
 			const song = await traceTask("songWriter.update", async () => {
 				const updated = await songWriter.update(principal, params.id, body);
-				return SongResponseSchema.parse(transformPrismaResult(updated));
+				return SongResponseSchema.parse(serializeResult(updated));
 			});
 			return status(200, song);
 		},

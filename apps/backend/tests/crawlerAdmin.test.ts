@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma } from "@cvsa/db";
+import { db, role, user as userTable } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 import { createSession } from "@cvsa/authentication";
 
 const api = treaty(app);
@@ -38,19 +39,25 @@ describe("Crawler Admin API Access Control", () => {
 	});
 
 	test("should return 403 when authenticated as regular user (non-admin)", async () => {
-		const regularRole = await prisma.orm.meta.Role.create({
-			name: `USER_${rand()}`,
-		});
+		const [regularRole] = await db
+			.insert(role)
+			.values({
+				name: `USER_${rand()}`,
+			})
+			.returning();
 
-		const user = await prisma.orm.auth.User.create({
-			id: `u_${rand()}`,
-			username: `user_${rand()}`,
-			displayUsername: `user_${rand()}`,
-			name: "Regular User",
-			roleId: regularRole.id,
-			reputation: 0,
-			emailVerified: false,
-		});
+		const [user] = await db
+			.insert(userTable)
+			.values({
+				id: `u_${rand()}`,
+				username: `user_${rand()}`,
+				displayUsername: `user_${rand()}`,
+				name: "Regular User",
+				roleId: regularRole.id,
+				reputation: 0,
+				emailVerified: false,
+			})
+			.returning();
 
 		const session = await createSession(user.id);
 
@@ -69,22 +76,28 @@ describe("Crawler Admin API Access Control", () => {
 	});
 
 	test("should pass admin check when user has OWNER role", async () => {
-		let ownerRole = await prisma.orm.meta.Role.where({ name: "OWNER" }).first();
+		let [ownerRole] = await db.select().from(role).where(eq(role.name, "OWNER")).limit(1);
 		if (!ownerRole) {
-			ownerRole = await prisma.orm.meta.Role.create({
-				name: "OWNER",
-			});
+			[ownerRole] = await db
+				.insert(role)
+				.values({
+					name: "OWNER",
+				})
+				.returning();
 		}
 
-		const owner = await prisma.orm.auth.User.create({
-			id: `u_${rand()}`,
-			username: `owner_${rand()}`,
-			displayUsername: `owner_${rand()}`,
-			name: "Owner User",
-			roleId: ownerRole.id,
-			reputation: 0,
-			emailVerified: false,
-		});
+		const [owner] = await db
+			.insert(userTable)
+			.values({
+				id: `u_${rand()}`,
+				username: `owner_${rand()}`,
+				displayUsername: `owner_${rand()}`,
+				name: "Owner User",
+				roleId: ownerRole.id,
+				reputation: 0,
+				emailVerified: false,
+			})
+			.returning();
 
 		const session = await createSession(owner.id);
 

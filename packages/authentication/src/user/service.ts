@@ -1,4 +1,5 @@
-import { prisma, type User } from "@cvsa/db";
+import { type User, account, db, user } from "@cvsa/db";
+import { and, eq } from "drizzle-orm";
 import { AppError } from "@cvsa/contracts";
 import { getRandomId } from "../randomId";
 import { hashPassword, verifyPassword } from "../password";
@@ -19,27 +20,29 @@ export class UserService {
 		data: SignupRequestDto,
 		options?: { ipAddress?: string | null; userAgent?: string | null }
 	): Promise<{ user: User; token: string }> {
-		const existingUser = await prisma.orm.auth.User.first();
+		const [existingUser] = await db.select().from(user).limit(1);
 
-		if (existingUser !== null && process.env.NODE_ENV !== "test") {
+		if (existingUser !== undefined && process.env.NODE_ENV !== "test") {
 			throw new AppError("error.signup.invite_required", "FORBIDDEN", 403, {
 				message: "Registration is invite-only and currently closed.",
 			});
 		}
 
-		// Check username uniqueness
-		const sameUsername = await prisma.orm.auth.User.where({
-			username: data.username,
-		}).first();
+		const [sameUsername] = await db
+			.select()
+			.from(user)
+			.where(eq(user.username, data.username))
+			.limit(1);
 		if (sameUsername) {
 			throw new AppError("error.username-taken", "USERNAME_IS_ALREADY_TAKEN", 409);
 		}
 
-		// Check email uniqueness
 		if (data.email) {
-			const sameEmail = await prisma.orm.auth.User.where({
-				email: data.email,
-			}).first();
+			const [sameEmail] = await db
+				.select()
+				.from(user)
+				.where(eq(user.email, data.email))
+				.limit(1);
 			if (sameEmail) {
 				throw new AppError(
 					"error.email-taken",
@@ -50,25 +53,29 @@ export class UserService {
 		}
 
 		let roleId: number | null = null;
-		if (existingUser === null || process.env.NODE_ENV === "test") {
+		if (existingUser === undefined || process.env.NODE_ENV === "test") {
 			const ownerRole = await ensureOwnerRole();
 			roleId = ownerRole.id;
 		}
 
 		const userId = getRandomId(7);
-		const user = await prisma.orm.auth.User.create({
-			id: userId,
-			username: data.username,
-			displayUsername: data.username,
-			name: data.displayName || data.username,
-			email: data.email ?? null,
-			emailVerified: false,
-			reputation: 0,
-			roleId,
-		});
+		const [created] = await db
+			.insert(user)
+			.values({
+				id: userId,
+				username: data.username,
+				displayUsername: data.username,
+				name: data.displayName || data.username,
+				email: data.email ?? null,
+				emailVerified: false,
+				reputation: 0,
+				roleId,
+			})
+			.returning();
+		if (!created) throw new Error("Failed to create user");
 
 		const hashedPassword = await hashPassword(data.password);
-		await prisma.orm.auth.Account.create({
+		await db.insert(account).values({
 			id: getRandomId(12),
 			accountId: userId,
 			providerId: "credential",
@@ -79,7 +86,7 @@ export class UserService {
 		const session = await createSession(userId, options);
 
 		return {
-			user,
+			user: created,
 			token: session.token,
 		};
 	}
@@ -91,34 +98,34 @@ export class UserService {
 		data: LoginRequestDto,
 		options?: { ipAddress?: string | null; userAgent?: string | null }
 	): Promise<{ user: User; token: string }> {
-		// Try email first, then username
-		let user = await prisma.orm.auth.User.where({ email: data.email }).first();
-		if (!user) {
-			user = await prisma.orm.auth.User.where({ username: data.email }).first();
-		}
+		const [byEmail] = await db.select().from(user).where(eq(user.email, data.email)).limit(1);
+		const foundUser =
+			byEmail ??
+			(await db.select().from(user).where(eq(user.username, data.email)).limit(1))[0];
 
-		if (!user) {
+		if (!foundUser) {
 			throw new AppError("error.invalid-cred", "INVALID_CREDENTIALS", 401);
 		}
 
-		const account = await prisma.orm.auth.Account.where({
-			userId: user.id,
-			providerId: "credential",
-		}).first();
+		const [credential] = await db
+			.select()
+			.from(account)
+			.where(and(eq(account.userId, foundUser.id), eq(account.providerId, "credential")))
+			.limit(1);
 
-		if (!account?.password) {
+		if (!credential?.password) {
 			throw new AppError("error.invalid-cred", "INVALID_CREDENTIALS", 401);
 		}
 
-		const valid = await verifyPassword(data.password, account.password);
+		const valid = await verifyPassword(data.password, credential.password);
 		if (!valid) {
 			throw new AppError("error.invalid-cred", "INVALID_CREDENTIALS", 401);
 		}
 
-		const session = await createSession(user.id, options);
+		const session = await createSession(foundUser.id, options);
 
 		return {
-			user,
+			user: foundUser,
 			token: session.token,
 		};
 	}
@@ -128,8 +135,8 @@ export class UserService {
 	}
 
 	async assertCanRegister(_inviteCode?: string | null): Promise<void> {
-		const existingUser = await prisma.orm.auth.User.first();
-		if (existingUser !== null && process.env.NODE_ENV !== "test") {
+		const [existingUser] = await db.select().from(user).limit(1);
+		if (existingUser !== undefined && process.env.NODE_ENV !== "test") {
 			throw new AppError("error.signup.invite_required", "FORBIDDEN", 403, {
 				message: "Registration is invite-only and currently closed.",
 			});

@@ -6,7 +6,7 @@ import {
 } from "@cvsa/contracts";
 import { engineWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 
@@ -21,7 +21,7 @@ export const engineCreateHandler = new Elysia({ name: "engineCreateHandler" })
 			});
 			const engine = await traceTask("engineWriter.create", async () => {
 				const row = await engineWriter.create(actor, body);
-				return EngineResponseSchema.parse(transformPrismaResult(row));
+				return EngineResponseSchema.parse(serializeResult(row));
 			});
 			return status(201, engine);
 		},

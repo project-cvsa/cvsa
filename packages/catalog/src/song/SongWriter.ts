@@ -1,5 +1,16 @@
-import type { DatabaseClient, Song, TxClient } from "@cvsa/db";
-import { toJson, toInstant } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type Song,
+	type TxClient,
+	history,
+	lyrics,
+	performance,
+	creation,
+	song,
+	toInstant,
+	toJson,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
@@ -37,17 +48,27 @@ export class SongWriter {
 	): Promise<Song> {
 		assertCanCreateSong(actor);
 
-		const { performances, creations, lyrics, publishedAt, ...restSongData } = input;
+		const {
+			performances,
+			creations,
+			lyrics: lyricInputs,
+			publishedAt,
+			...restSongData
+		} = input;
 
-		const song = await tx.orm.core.Song.create({
-			...restSongData,
-			...(publishedAt !== undefined ? { publishedAt: toInstant(publishedAt) } : {}),
-		});
+		const [created] = await tx
+			.insert(song)
+			.values({
+				...restSongData,
+				...(publishedAt !== undefined ? { publishedAt: toInstant(publishedAt) } : {}),
+			})
+			.returning();
+		if (!created) throw new Error("Failed to insert song");
 
 		if (performances && performances.length > 0) {
-			await tx.orm.core.Performance.createAll(
+			await tx.insert(performance).values(
 				performances.map((p) => ({
-					songId: song.id,
+					songId: created.id,
 					singerId: p.singerId,
 					voicebankId: p.voicebankId,
 					svsEngineId: p.svsEngineId,
@@ -57,19 +78,19 @@ export class SongWriter {
 		}
 
 		if (creations && creations.length > 0) {
-			await tx.orm.core.Creation.createAll(
+			await tx.insert(creation).values(
 				creations.map((c) => ({
-					songId: song.id,
+					songId: created.id,
 					artistId: c.artistId,
 					artistRoleId: c.roleId,
 				}))
 			);
 		}
 
-		if (lyrics && lyrics.length > 0) {
-			await tx.orm.core.Lyrics.createAll(
-				lyrics.map((l) => ({
-					songId: song.id,
+		if (lyricInputs && lyricInputs.length > 0) {
+			await tx.insert(lyrics).values(
+				lyricInputs.map((l) => ({
+					songId: created.id,
 					language: l.language,
 					isTranslated: l.isTranslated,
 					plainText: l.plainText,
@@ -79,22 +100,22 @@ export class SongWriter {
 			);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "song",
-			objectId: song.id,
+			objectId: created.id,
 			type: "CREATE",
-			new: toJson(song),
+			new: toJson(created),
 		});
 
 		await recordOutboxEvent(tx, {
 			aggregateType: "song",
-			aggregateId: song.id,
+			aggregateId: created.id,
 			eventType: "song.created",
-			payload: { id: song.id },
+			payload: { id: created.id },
 		});
 
-		return song;
+		return created;
 	}
 
 	private async updateInTransaction(
@@ -103,7 +124,11 @@ export class SongWriter {
 		id: SongId,
 		input: UpdateSongInput
 	): Promise<Song> {
-		const existing = await tx.orm.core.Song.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(song)
+			.where(and(eq(song.id, id), isNull(song.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
@@ -116,13 +141,13 @@ export class SongWriter {
 			...(publishedAt !== undefined ? { publishedAt: toInstant(publishedAt) } : {}),
 		};
 
-		const updated = await tx.orm.core.Song.where({ id }).update(updateData);
+		const [updated] = await tx.update(song).set(updateData).where(eq(song.id, id)).returning();
 
 		if (!updated) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "song",
 			objectId: id,
@@ -142,7 +167,11 @@ export class SongWriter {
 	}
 
 	private async deleteInTransaction(tx: TxClient, actor: Principal, id: SongId): Promise<void> {
-		const existing = await tx.orm.core.Song.where({ id, deletedAt: null }).first();
+		const [existing] = await tx
+			.select()
+			.from(song)
+			.where(and(eq(song.id, id), isNull(song.deletedAt)))
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
 		}
@@ -150,9 +179,9 @@ export class SongWriter {
 		assertCanDeleteSong(actor, existing);
 
 		const now = toInstant(new Date());
-		await tx.orm.core.Song.where({ id }).update({ deletedAt: now });
+		await tx.update(song).set({ deletedAt: now }).where(eq(song.id, id));
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "song",
 			objectId: id,

@@ -1,0 +1,2233 @@
+{
+	"type": "base",
+	"version": "9",
+	"dialect": "postgres",
+	"id": "4af01aec-af02-42eb-ace1-89ce83b30189",
+	"prevIds": ["00000000-0000-0000-0000-000000000000"],
+	"footprints": [
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "crawler_runtime_config"],
+			"writes": [
+				"s|tbl|public.crawler_runtime_config",
+				"n|tbl|public.crawler_runtime_config",
+				"e|tbl|public.crawler_runtime_config",
+				"n|rel|public.crawler_runtime_config",
+				"n|type|public.crawler_runtime_config",
+				"n|rel|public.crawler_runtime_config_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "network_runtime_config"],
+			"writes": [
+				"s|tbl|public.network_runtime_config",
+				"n|tbl|public.network_runtime_config",
+				"e|tbl|public.network_runtime_config",
+				"n|rel|public.network_runtime_config",
+				"n|type|public.network_runtime_config",
+				"n|rel|public.network_runtime_config_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "discovery_sample"],
+			"writes": [
+				"s|tbl|public.discovery_sample",
+				"n|tbl|public.discovery_sample",
+				"e|tbl|public.discovery_sample",
+				"n|rel|public.discovery_sample",
+				"n|type|public.discovery_sample",
+				"n|rel|public.discovery_sample_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "bilibili_video_metadata"],
+			"writes": [
+				"s|tbl|public.bilibili_video_metadata",
+				"n|tbl|public.bilibili_video_metadata",
+				"e|tbl|public.bilibili_video_metadata",
+				"n|rel|public.bilibili_video_metadata",
+				"n|type|public.bilibili_video_metadata",
+				"n|rel|public.bilibili_video_metadata_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "bilibili_video_metadata_history"],
+			"writes": [
+				"s|tbl|public.bilibili_video_metadata_history",
+				"n|tbl|public.bilibili_video_metadata_history",
+				"e|tbl|public.bilibili_video_metadata_history",
+				"n|rel|public.bilibili_video_metadata_history",
+				"n|type|public.bilibili_video_metadata_history",
+				"n|rel|public.bilibili_video_metadata_history_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "bilibili_video_relation"],
+			"writes": [
+				"s|tbl|public.bilibili_video_relation",
+				"n|tbl|public.bilibili_video_relation",
+				"e|tbl|public.bilibili_video_relation",
+				"n|rel|public.bilibili_video_relation",
+				"n|type|public.bilibili_video_relation",
+				"n|rel|public.bilibili_video_relation_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "video_snapshot"],
+			"writes": [
+				"s|tbl|public.video_snapshot",
+				"n|tbl|public.video_snapshot",
+				"e|tbl|public.video_snapshot",
+				"n|rel|public.video_snapshot",
+				"n|type|public.video_snapshot",
+				"n|rel|public.video_snapshot_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "crawler_stats_rollup"],
+			"writes": [
+				"s|tbl|public.crawler_stats_rollup",
+				"n|tbl|public.crawler_stats_rollup",
+				"e|tbl|public.crawler_stats_rollup",
+				"n|rel|public.crawler_stats_rollup",
+				"n|type|public.crawler_stats_rollup",
+				"n|rel|public.crawler_stats_rollup_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_table",
+			"statementTarget": ["table", "public", "video_tracking"],
+			"writes": [
+				"s|tbl|public.video_tracking",
+				"n|tbl|public.video_tracking",
+				"e|tbl|public.video_tracking",
+				"n|rel|public.video_tracking",
+				"n|type|public.video_tracking",
+				"n|rel|public.video_tracking_pkey"
+			],
+			"reads": ["n|sch|public"]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"discovery_sample",
+				"discovery_sample_created_at_idx_225d8c0f"
+			],
+			"writes": [
+				"s|idx|public.discovery_sample_created_at_idx_225d8c0f",
+				"n|idx|public.discovery_sample_created_at_idx_225d8c0f",
+				"e|idx|public.discovery_sample_created_at_idx_225d8c0f",
+				"n|rel|public.discovery_sample_created_at_idx_225d8c0f"
+			],
+			"reads": [
+				"n|tbl|public.discovery_sample",
+				"n|sch|public",
+				"n|col|public.discovery_sample.created_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"discovery_sample",
+				"discovery_sample_decision_idx_cb87c9d6"
+			],
+			"writes": [
+				"s|idx|public.discovery_sample_decision_idx_cb87c9d6",
+				"n|idx|public.discovery_sample_decision_idx_cb87c9d6",
+				"e|idx|public.discovery_sample_decision_idx_cb87c9d6",
+				"n|rel|public.discovery_sample_decision_idx_cb87c9d6"
+			],
+			"reads": [
+				"n|tbl|public.discovery_sample",
+				"n|sch|public",
+				"n|col|public.discovery_sample.decision"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"discovery_sample",
+				"discovery_sample_human_label_idx_a828fb63"
+			],
+			"writes": [
+				"s|idx|public.discovery_sample_human_label_idx_a828fb63",
+				"n|idx|public.discovery_sample_human_label_idx_a828fb63",
+				"e|idx|public.discovery_sample_human_label_idx_a828fb63",
+				"n|rel|public.discovery_sample_human_label_idx_a828fb63"
+			],
+			"reads": [
+				"n|tbl|public.discovery_sample",
+				"n|sch|public",
+				"n|col|public.discovery_sample.human_label"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata",
+				"bilibili_video_metadata_bvid_idx_c12e1092"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_bvid_idx_c12e1092",
+				"n|idx|public.bilibili_video_metadata_bvid_idx_c12e1092",
+				"e|idx|public.bilibili_video_metadata_bvid_idx_c12e1092",
+				"n|rel|public.bilibili_video_metadata_bvid_idx_c12e1092"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata.bvid"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata",
+				"bilibili_video_metadata_filter_decision_idx_27d2a765"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_filter_decision_idx_27d2a765",
+				"n|idx|public.bilibili_video_metadata_filter_decision_idx_27d2a765",
+				"e|idx|public.bilibili_video_metadata_filter_decision_idx_27d2a765",
+				"n|rel|public.bilibili_video_metadata_filter_decision_idx_27d2a765"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata.filter_decision"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata",
+				"bilibili_video_metadata_mid_idx_f4dbf00d"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_mid_idx_f4dbf00d",
+				"n|idx|public.bilibili_video_metadata_mid_idx_f4dbf00d",
+				"e|idx|public.bilibili_video_metadata_mid_idx_f4dbf00d",
+				"n|rel|public.bilibili_video_metadata_mid_idx_f4dbf00d"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata.mid"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata",
+				"bilibili_video_metadata_pubdate_idx_0fd30c15"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_pubdate_idx_0fd30c15",
+				"n|idx|public.bilibili_video_metadata_pubdate_idx_0fd30c15",
+				"e|idx|public.bilibili_video_metadata_pubdate_idx_0fd30c15",
+				"n|rel|public.bilibili_video_metadata_pubdate_idx_0fd30c15"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata.pubdate"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata",
+				"bilibili_video_metadata_video_status_idx_d4de8f7b"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_video_status_idx_d4de8f7b",
+				"n|idx|public.bilibili_video_metadata_video_status_idx_d4de8f7b",
+				"e|idx|public.bilibili_video_metadata_video_status_idx_d4de8f7b",
+				"n|rel|public.bilibili_video_metadata_video_status_idx_d4de8f7b"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata.video_status"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata_history",
+				"bilibili_video_metadata_history_aid_captured_at_idx_dcdef075"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_history_aid_captured_at_idx_dcdef075",
+				"n|idx|public.bilibili_video_metadata_history_aid_captured_at_idx_dcdef075",
+				"e|idx|public.bilibili_video_metadata_history_aid_captured_at_idx_dcdef075",
+				"n|rel|public.bilibili_video_metadata_history_aid_captured_at_idx_dcdef075"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata_history",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata_history.aid",
+				"n|col|public.bilibili_video_metadata_history.captured_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_metadata_history",
+				"bilibili_video_metadata_history_captured_at_idx_d9a9e270"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_metadata_history_captured_at_idx_d9a9e270",
+				"n|idx|public.bilibili_video_metadata_history_captured_at_idx_d9a9e270",
+				"e|idx|public.bilibili_video_metadata_history_captured_at_idx_d9a9e270",
+				"n|rel|public.bilibili_video_metadata_history_captured_at_idx_d9a9e270"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_metadata_history",
+				"n|sch|public",
+				"n|col|public.bilibili_video_metadata_history.captured_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_relation",
+				"bilibili_video_relation_captured_at_idx_d9a9e270"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_relation_captured_at_idx_d9a9e270",
+				"n|idx|public.bilibili_video_relation_captured_at_idx_d9a9e270",
+				"e|idx|public.bilibili_video_relation_captured_at_idx_d9a9e270",
+				"n|rel|public.bilibili_video_relation_captured_at_idx_d9a9e270"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_relation",
+				"n|sch|public",
+				"n|col|public.bilibili_video_relation.captured_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_relation",
+				"bilibili_video_relation_source_aid_captured_at_idx_ae145c84"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_relation_source_aid_captured_at_idx_ae145c84",
+				"n|idx|public.bilibili_video_relation_source_aid_captured_at_idx_ae145c84",
+				"e|idx|public.bilibili_video_relation_source_aid_captured_at_idx_ae145c84",
+				"n|rel|public.bilibili_video_relation_source_aid_captured_at_idx_ae145c84"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_relation",
+				"n|sch|public",
+				"n|col|public.bilibili_video_relation.source_aid",
+				"n|col|public.bilibili_video_relation.captured_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"bilibili_video_relation",
+				"bilibili_video_relation_target_aid_idx_89f38e54"
+			],
+			"writes": [
+				"s|idx|public.bilibili_video_relation_target_aid_idx_89f38e54",
+				"n|idx|public.bilibili_video_relation_target_aid_idx_89f38e54",
+				"e|idx|public.bilibili_video_relation_target_aid_idx_89f38e54",
+				"n|rel|public.bilibili_video_relation_target_aid_idx_89f38e54"
+			],
+			"reads": [
+				"n|tbl|public.bilibili_video_relation",
+				"n|sch|public",
+				"n|col|public.bilibili_video_relation.target_aid"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"video_snapshot",
+				"video_snapshot_captured_at_idx_d9a9e270"
+			],
+			"writes": [
+				"s|idx|public.video_snapshot_captured_at_idx_d9a9e270",
+				"n|idx|public.video_snapshot_captured_at_idx_d9a9e270",
+				"e|idx|public.video_snapshot_captured_at_idx_d9a9e270",
+				"n|rel|public.video_snapshot_captured_at_idx_d9a9e270"
+			],
+			"reads": [
+				"n|tbl|public.video_snapshot",
+				"n|sch|public",
+				"n|col|public.video_snapshot.captured_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"crawler_stats_rollup",
+				"crawler_stats_rollup_metric_group_bucket_time_idx_e6e915ef"
+			],
+			"writes": [
+				"s|idx|public.crawler_stats_rollup_metric_group_bucket_time_idx_e6e915ef",
+				"n|idx|public.crawler_stats_rollup_metric_group_bucket_time_idx_e6e915ef",
+				"e|idx|public.crawler_stats_rollup_metric_group_bucket_time_idx_e6e915ef",
+				"n|rel|public.crawler_stats_rollup_metric_group_bucket_time_idx_e6e915ef"
+			],
+			"reads": [
+				"n|tbl|public.crawler_stats_rollup",
+				"n|sch|public",
+				"n|col|public.crawler_stats_rollup.metric_group",
+				"n|col|public.crawler_stats_rollup.bucket_time"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"video_tracking",
+				"video_tracking_lease_until_idx_f9b7ab83"
+			],
+			"writes": [
+				"s|idx|public.video_tracking_lease_until_idx_f9b7ab83",
+				"n|idx|public.video_tracking_lease_until_idx_f9b7ab83",
+				"e|idx|public.video_tracking_lease_until_idx_f9b7ab83",
+				"n|rel|public.video_tracking_lease_until_idx_f9b7ab83"
+			],
+			"reads": [
+				"n|tbl|public.video_tracking",
+				"n|sch|public",
+				"n|col|public.video_tracking.lease_until"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"video_tracking",
+				"video_tracking_next_metadata_at_idx_675f7bb3"
+			],
+			"writes": [
+				"s|idx|public.video_tracking_next_metadata_at_idx_675f7bb3",
+				"n|idx|public.video_tracking_next_metadata_at_idx_675f7bb3",
+				"e|idx|public.video_tracking_next_metadata_at_idx_675f7bb3",
+				"n|rel|public.video_tracking_next_metadata_at_idx_675f7bb3"
+			],
+			"reads": [
+				"n|tbl|public.video_tracking",
+				"n|sch|public",
+				"n|col|public.video_tracking.next_metadata_at"
+			]
+		},
+		{
+			"statementType": "create_index",
+			"statementTarget": [
+				"index",
+				"public",
+				"video_tracking",
+				"video_tracking_next_snapshot_at_priority_idx_9b21cea1"
+			],
+			"writes": [
+				"s|idx|public.video_tracking_next_snapshot_at_priority_idx_9b21cea1",
+				"n|idx|public.video_tracking_next_snapshot_at_priority_idx_9b21cea1",
+				"e|idx|public.video_tracking_next_snapshot_at_priority_idx_9b21cea1",
+				"n|rel|public.video_tracking_next_snapshot_at_priority_idx_9b21cea1"
+			],
+			"reads": [
+				"n|tbl|public.video_tracking",
+				"n|sch|public",
+				"n|col|public.video_tracking.next_snapshot_at",
+				"n|col|public.video_tracking.priority"
+			]
+		}
+	],
+	"ddl": [
+		{
+			"schema": "public",
+			"name": "crawler_runtime_config",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "network_runtime_config",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "discovery_sample",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "bilibili_video_metadata",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "bilibili_video_metadata_history",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "bilibili_video_relation",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "video_snapshot",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "crawler_stats_rollup",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"name": "video_tracking",
+			"isRlsEnabled": false,
+			"entityType": "tables"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_runtime_config",
+			"name": "key",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_runtime_config",
+			"name": "revision",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "1",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_runtime_config",
+			"name": "config",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_runtime_config",
+			"name": "updated_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "network_runtime_config",
+			"name": "id",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "'default'",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "network_runtime_config",
+			"name": "revision",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "1",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "network_runtime_config",
+			"name": "config",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "network_runtime_config",
+			"name": "updated_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "bvid",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "title",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "description",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "tags",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "decision",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "model_version",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "probabilities",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "song_probability",
+			"type": "double precision",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "human_label",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "labeled_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "created_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "now()",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bvid",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "cid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "videos",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "1",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "tid",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "tid_v2",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "tname",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "tname_v2",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "copyright",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "pic",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "title",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "pubdate",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "ctime",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "description",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "desc_v2",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "state",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "duration",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "dynamic",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "dimension",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "mid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "owner_name",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "owner_face",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "pages",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "staff",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "rights",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "honor_reply",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "tags",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "video_status",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "'normal'",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "filter_decision",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "'accepted'",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "model_score",
+			"type": "double precision",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "model_version",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "discovery_source",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "discovery_context",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "captured_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "now()",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "updated_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "id",
+			"type": "bigserial",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "captured_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "now()",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "change_type",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "changed_fields",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "snapshot",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "source_aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "target_aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "position",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "captured_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "now()",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "captured_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "now()",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "views",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "coins",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "likes",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "favorites",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "shares",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "danmakus",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "replies",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_stats_rollup",
+			"name": "bucket_time",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_stats_rollup",
+			"name": "metric_group",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_stats_rollup",
+			"name": "metrics",
+			"type": "json",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "aid",
+			"type": "bigint",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "state",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "'regular'",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "next_snapshot_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "lease_until",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "schedule_reason",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "'regular'",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "next_metadata_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "last_views",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "last_captured_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "velocity",
+			"type": "double precision",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "target_milestone",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "eta_hours",
+			"type": "double precision",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "published_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "priority",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "2",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "consecutive_fails",
+			"type": "integer",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": "0",
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "last_error",
+			"type": "text",
+			"typeSchema": null,
+			"notNull": false,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "updated_at",
+			"type": "timestamp with time zone",
+			"typeSchema": null,
+			"notNull": true,
+			"dimensions": 0,
+			"default": null,
+			"generated": null,
+			"identity": null,
+			"entityType": "columns"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "discovery_sample_created_at_idx_225d8c0f",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "created_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "discovery_sample_decision_idx_cb87c9d6",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "decision",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "discovery_sample_human_label_idx_a828fb63",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "human_label",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bilibili_video_metadata_bvid_idx_c12e1092",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "bvid",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bilibili_video_metadata_filter_decision_idx_27d2a765",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "filter_decision",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bilibili_video_metadata_mid_idx_f4dbf00d",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "mid",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bilibili_video_metadata_pubdate_idx_0fd30c15",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "pubdate",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bilibili_video_metadata_video_status_idx_d4de8f7b",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "video_status",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "bilibili_video_metadata_history_aid_captured_at_idx_dcdef075",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "aid",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "captured_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "bilibili_video_metadata_history_captured_at_idx_d9a9e270",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "captured_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "bilibili_video_relation_captured_at_idx_d9a9e270",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "captured_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "bilibili_video_relation_source_aid_captured_at_idx_ae145c84",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "source_aid",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "captured_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "bilibili_video_relation_target_aid_idx_89f38e54",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "target_aid",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "video_snapshot_captured_at_idx_d9a9e270",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "captured_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_stats_rollup",
+			"name": "crawler_stats_rollup_metric_group_bucket_time_idx_e6e915ef",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "metric_group",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "bucket_time",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "video_tracking_lease_until_idx_f9b7ab83",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "lease_until",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "video_tracking_next_metadata_at_idx_675f7bb3",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "next_metadata_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "video_tracking_next_snapshot_at_priority_idx_9b21cea1",
+			"nameExplicit": true,
+			"columns": [
+				{
+					"value": "next_snapshot_at",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				},
+				{
+					"value": "priority",
+					"isExpression": false,
+					"asc": true,
+					"nullsFirst": false,
+					"opclass": null
+				}
+			],
+			"isUnique": false,
+			"where": null,
+			"with": "",
+			"method": "btree",
+			"concurrently": false,
+			"entityType": "indexes"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_relation",
+			"name": "bilibili_video_relation_pkey",
+			"columns": ["source_aid", "target_aid", "captured_at"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "video_snapshot",
+			"name": "video_snapshot_pkey",
+			"columns": ["aid", "captured_at"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_stats_rollup",
+			"name": "crawler_stats_rollup_pkey",
+			"columns": ["bucket_time", "metric_group"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "crawler_runtime_config",
+			"name": "crawler_runtime_config_pkey",
+			"columns": ["key"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "network_runtime_config",
+			"name": "network_runtime_config_pkey",
+			"columns": ["id"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "discovery_sample",
+			"name": "discovery_sample_pkey",
+			"columns": ["aid"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata",
+			"name": "bilibili_video_metadata_pkey",
+			"columns": ["aid"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "bilibili_video_metadata_history",
+			"name": "bilibili_video_metadata_history_pkey",
+			"columns": ["id"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		},
+		{
+			"schema": "public",
+			"table": "video_tracking",
+			"name": "video_tracking_pkey",
+			"columns": ["aid"],
+			"nameExplicit": false,
+			"entityType": "pks"
+		}
+	]
+}

@@ -1,2 +1,1 @@
-# Prisma generated client; regenerate with `bun run gen`.
-prisma/generated
+node_modules

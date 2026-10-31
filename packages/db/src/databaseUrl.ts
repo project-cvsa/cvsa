@@ -1,22 +1,24 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { parseEnv } from "node:util";
 
-/** Matches the Prisma CLI default when `DATABASE_URL` is not configured. */
+/** Matches the Drizzle config default when `DATABASE_URL` is not configured. */
 const DEFAULT_DATABASE_URL = "postgresql://cvsa:password@localhost:5432/cvsa";
 
 /**
- * Loads the same `.env` / `.env.test` file the Prisma CLI uses and returns the
- * primary database connection string.
+ * Returns the primary database connection string.
  *
- * Prisma reads the file from `prisma.config.ts` itself, while the test setup
- * script runs as a separate process. Sharing this helper keeps both from
- * drifting apart and silently targeting different databases.
+ * `drizzle-kit` preloads `.env` before reading the config, so
+ * `process.loadEnvFile(".env.test")` cannot replace the development
+ * `DATABASE_URL`. Test mode therefore reads `.env.test` directly; outside tests
+ * an explicitly configured `DATABASE_URL` still wins over `.env`.
  */
 export function loadDatabaseUrl(): string {
-	const envFile = process.env.NODE_ENV === "test" ? ".env.test" : ".env";
+	const test = process.env.NODE_ENV === "test";
+	const envFile = test ? ".env.test" : ".env";
+	const fromFile = existsSync(envFile)
+		? parseEnv(readFileSync(envFile, "utf8")).DATABASE_URL
+		: undefined;
 
-	if (existsSync(envFile)) {
-		process.loadEnvFile(envFile);
-	}
-
-	return process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+	if (test) return fromFile ?? process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
+	return process.env.DATABASE_URL ?? fromFile ?? DEFAULT_DATABASE_URL;
 }

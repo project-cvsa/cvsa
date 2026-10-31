@@ -76,7 +76,9 @@ describe("Bilibili public HTTP protocol", () => {
 			expect(params.get("wts")).not.toBeNull();
 			expect(params.get("w_rid")).toMatch(/^[0-9a-f]{32}$/);
 			expect(searchRequest.headers.cookie).toContain("bili_ticket=test-bili-ticket");
-			expect(searchRequest.headers.referer).toBe("https://search.bilibili.com");
+			expect(new URL(searchRequest.headers.referer).origin).toBe(
+				"https://search.bilibili.com"
+			);
 		} finally {
 			await server.close();
 		}

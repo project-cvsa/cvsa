@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { prisma, Temporal } from "@cvsa/db";
+import { db, lyrics as lyricsTable, song as songTable, Temporal } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 
 const api = treaty(app);
 
@@ -16,10 +17,13 @@ describe("Song Lyrics E2E Tests", () => {
 
 	describe("GET /v2/song/:id/lyrics - List Song Lyrics", () => {
 		test("should return empty array when song has no lyrics", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
 
 			const { data, status } = await api.v2.song({ id: song.id }).lyrics.get();
 
@@ -28,17 +32,20 @@ describe("Song Lyrics E2E Tests", () => {
 		});
 
 		test("should return all lyrics for a song", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			await prisma.orm.core.Lyrics.create({
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			await db.insert(lyricsTable).values({
 				songId: song.id,
 				language: "zh",
 				isTranslated: false,
 				plainText: "第一行歌词",
 			});
-			await prisma.orm.core.Lyrics.create({
+			await db.insert(lyricsTable).values({
 				songId: song.id,
 				language: "en",
 				isTranslated: true,
@@ -65,18 +72,21 @@ describe("Song Lyrics E2E Tests", () => {
 		});
 
 		test("should not return deleted lyrics", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			await prisma.orm.core.Lyrics.create({
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			await db.insert(lyricsTable).values({
 				songId: song.id,
 				language: "zh",
 				isTranslated: false,
 				plainText: "第一行歌词",
 				deletedAt: Temporal.Now.instant(),
 			});
-			await prisma.orm.core.Lyrics.create({
+			await db.insert(lyricsTable).values({
 				songId: song.id,
 				language: "en",
 				isTranslated: true,
@@ -93,16 +103,22 @@ describe("Song Lyrics E2E Tests", () => {
 
 	describe("GET /v2/song/:id/lyric/:lyricId - Get Specific Lyric", () => {
 		test("should return a specific lyric", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			const lyrics = await prisma.orm.core.Lyrics.create({
-				songId: song.id,
-				language: "zh",
-				isTranslated: false,
-				plainText: "第一行歌词",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			const [lyrics] = await db
+				.insert(lyricsTable)
+				.values({
+					songId: song.id,
+					language: "zh",
+					isTranslated: false,
+					plainText: "第一行歌词",
+				})
+				.returning();
 
 			const { data, status } = await api.v2
 				.song({ id: song.id })
@@ -128,10 +144,13 @@ describe("Song Lyrics E2E Tests", () => {
 		});
 
 		test("should return 404 for nonexistent lyric", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
 
 			const { error, status } = await api.v2
 				.song({ id: song.id })
@@ -145,17 +164,23 @@ describe("Song Lyrics E2E Tests", () => {
 		});
 
 		test("should return 404 for deleted lyric", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			const lyrics = await prisma.orm.core.Lyrics.create({
-				songId: song.id,
-				language: "zh",
-				isTranslated: false,
-				plainText: "第一行歌词",
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			const [lyrics] = await db
+				.insert(lyricsTable)
+				.values({
+					songId: song.id,
+					language: "zh",
+					isTranslated: false,
+					plainText: "第一行歌词",
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2
 				.song({ id: song.id })
@@ -172,10 +197,13 @@ describe("Song Lyrics E2E Tests", () => {
 	describe("POST /v2/song/:id/lyric - Create Lyric", () => {
 		test("should create a lyric with authentication", async () => {
 			const token = await getAuthToken();
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
 
 			const payload = {
 				language: "ja",
@@ -203,10 +231,13 @@ describe("Song Lyrics E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
 
 			const { error, status } = await api.v2.song({ id: song.id }).lyric.post({
 				language: "zh",
@@ -244,16 +275,22 @@ describe("Song Lyrics E2E Tests", () => {
 	describe("PATCH /v2/song/:id/lyric/:lyricId - Update Lyric", () => {
 		test("should update a lyric with authentication", async () => {
 			const token = await getAuthToken();
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			const lyrics = await prisma.orm.core.Lyrics.create({
-				songId: song.id,
-				language: "zh",
-				isTranslated: false,
-				plainText: "原歌词",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			const [lyrics] = await db
+				.insert(lyricsTable)
+				.values({
+					songId: song.id,
+					language: "zh",
+					isTranslated: false,
+					plainText: "原歌词",
+				})
+				.returning();
 
 			const { data, status } = await api.v2
 				.song({ id: song.id })
@@ -281,16 +318,22 @@ describe("Song Lyrics E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			const lyrics = await prisma.orm.core.Lyrics.create({
-				songId: song.id,
-				language: "zh",
-				isTranslated: false,
-				plainText: "歌词",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			const [lyrics] = await db
+				.insert(lyricsTable)
+				.values({
+					songId: song.id,
+					language: "zh",
+					isTranslated: false,
+					plainText: "歌词",
+				})
+				.returning();
 
 			const { error, status } = await api.v2
 				.song({ id: song.id })
@@ -330,10 +373,13 @@ describe("Song Lyrics E2E Tests", () => {
 
 		test("should return 404 for nonexistent lyric", async () => {
 			const token = await getAuthToken();
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
 
 			const { error, status } = await api.v2
 				.song({ id: song.id })
@@ -359,16 +405,22 @@ describe("Song Lyrics E2E Tests", () => {
 	describe("DELETE /v2/song/:id/lyric/:lyricId - Delete Lyric", () => {
 		test("should soft delete a lyric with authentication", async () => {
 			const token = await getAuthToken();
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			const lyrics = await prisma.orm.core.Lyrics.create({
-				songId: song.id,
-				language: "zh",
-				isTranslated: false,
-				plainText: "歌词",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			const [lyrics] = await db
+				.insert(lyricsTable)
+				.values({
+					songId: song.id,
+					language: "zh",
+					isTranslated: false,
+					plainText: "歌词",
+				})
+				.returning();
 
 			const { status } = await api.v2
 				.song({ id: song.id })
@@ -384,23 +436,31 @@ describe("Song Lyrics E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedLyric = await prisma.orm.core.Lyrics.where({
-				id: lyrics.id,
-			}).first();
+			const [deletedLyric] = await db
+				.select()
+				.from(lyricsTable)
+				.where(eq(lyricsTable.id, lyrics.id))
+				.limit(1);
 			expect(deletedLyric?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
-			const lyrics = await prisma.orm.core.Lyrics.create({
-				songId: song.id,
-				language: "zh",
-				isTranslated: false,
-				plainText: "歌词",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
+			const [lyrics] = await db
+				.insert(lyricsTable)
+				.values({
+					songId: song.id,
+					language: "zh",
+					isTranslated: false,
+					plainText: "歌词",
+				})
+				.returning();
 
 			const { error, status } = await api.v2
 				.song({ id: song.id })
@@ -436,10 +496,13 @@ describe("Song Lyrics E2E Tests", () => {
 
 		test("should return 404 for nonexistent lyric", async () => {
 			const token = await getAuthToken();
-			const song = await prisma.orm.core.Song.create({
-				name: "Test Song",
-				type: "ORIGINAL",
-			});
+			const [song] = await db
+				.insert(songTable)
+				.values({
+					name: "Test Song",
+					type: "ORIGINAL",
+				})
+				.returning();
 
 			const { error, status } = await api.v2
 				.song({ id: song.id })

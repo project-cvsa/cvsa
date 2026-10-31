@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "../src/index";
-import { prisma, Temporal } from "@cvsa/db";
+import { artist as artistTable, db, Temporal } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 
 const api = treaty(app);
 
@@ -16,12 +17,15 @@ describe("Artist E2E Tests", () => {
 
 	describe("GET /v2/artist/:id - Get Artist Details", () => {
 		test("should retrieve an artist", async () => {
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Test Artist",
-				description: "Test Description",
-				language: "zh",
-				aliases: ["Alias1", "Alias2"],
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Test Artist",
+					description: "Test Description",
+					language: "zh",
+					aliases: ["Alias1", "Alias2"],
+				})
+				.returning();
 
 			const { data, status } = await api.v2.artist({ id: artist.id }).get();
 
@@ -36,7 +40,7 @@ describe("Artist E2E Tests", () => {
 		});
 
 		test("should return 404 for nonexistent artist", async () => {
-			const { error, status } = await api.v2.artist({ id: 99999 }).get();
+			const { error, status } = await api.v2.artist({ id: 2_000_000_000 }).get();
 
 			expect(status).toBe(404);
 			expect(error?.value).toMatchObject({
@@ -45,11 +49,14 @@ describe("Artist E2E Tests", () => {
 		});
 
 		test("should not retrieve soft-deleted artist", async () => {
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Deleted Artist",
-				aliases: [],
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Deleted Artist",
+					aliases: [],
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2.artist({ id: artist.id }).get();
 
@@ -161,12 +168,15 @@ describe("Artist E2E Tests", () => {
 		test("should update an artist with authentication", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Original Name",
-				description: "Original Description",
-				language: "zh",
-				aliases: [],
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Original Name",
+					description: "Original Description",
+					language: "zh",
+					aliases: [],
+				})
+				.returning();
 
 			const { data, status } = await api.v2.artist({ id: artist.id }).patch(
 				{ name: "Updated Name", description: "Updated Description", language: "en" },
@@ -184,10 +194,13 @@ describe("Artist E2E Tests", () => {
 		});
 
 		test("should return 401 without authentication", async () => {
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Test Artist",
-				aliases: [],
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Test Artist",
+					aliases: [],
+				})
+				.returning();
 
 			const { status } = await api.v2.artist({ id: artist.id }).patch({
 				name: "Updated Name",
@@ -199,7 +212,7 @@ describe("Artist E2E Tests", () => {
 		test("should return 404 for non-existent artist", async () => {
 			const token = await getAuthToken();
 
-			const { error, status } = await api.v2.artist({ id: 999999 }).patch(
+			const { error, status } = await api.v2.artist({ id: 2_000_000_000 }).patch(
 				{ name: "Updated Name" },
 				{
 					headers: {
@@ -217,10 +230,13 @@ describe("Artist E2E Tests", () => {
 		test("should update aliases array", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Artist",
-				aliases: ["Old Alias"],
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Artist",
+					aliases: ["Old Alias"],
+				})
+				.returning();
 
 			const { data, status } = await api.v2.artist({ id: artist.id }).patch(
 				{ aliases: ["New Alias 1", "New Alias 2"] },
@@ -240,10 +256,13 @@ describe("Artist E2E Tests", () => {
 		test("should soft delete an artist with authentication", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Artist to Delete",
-				aliases: [],
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Artist to Delete",
+					aliases: [],
+				})
+				.returning();
 
 			const { status } = await api.v2.artist({ id: artist.id }).delete(
 				{},
@@ -256,17 +275,22 @@ describe("Artist E2E Tests", () => {
 
 			expect(status).toBe(204);
 
-			const deletedArtist = await prisma.orm.core.Artist.where({
-				id: artist.id,
-			}).first();
+			const [deletedArtist] = await db
+				.select()
+				.from(artistTable)
+				.where(eq(artistTable.id, artist.id))
+				.limit(1);
 			expect(deletedArtist?.deletedAt).not.toBeNull();
 		});
 
 		test("should return 401 without authentication", async () => {
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Test Artist",
-				aliases: [],
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Test Artist",
+					aliases: [],
+				})
+				.returning();
 
 			const { status } = await api.v2.artist({ id: artist.id }).delete({}, {});
 
@@ -276,7 +300,7 @@ describe("Artist E2E Tests", () => {
 		test("should return 404 for non-existent artist", async () => {
 			const token = await getAuthToken();
 
-			const { status } = await api.v2.artist({ id: 999999 }).delete(
+			const { status } = await api.v2.artist({ id: 2_000_000_000 }).delete(
 				{},
 				{
 					headers: {
@@ -291,11 +315,14 @@ describe("Artist E2E Tests", () => {
 		test("should return 404 when trying to delete already deleted artist", async () => {
 			const token = await getAuthToken();
 
-			const artist = await prisma.orm.core.Artist.create({
-				name: "Already Deleted",
-				aliases: [],
-				deletedAt: Temporal.Now.instant(),
-			});
+			const [artist] = await db
+				.insert(artistTable)
+				.values({
+					name: "Already Deleted",
+					aliases: [],
+					deletedAt: Temporal.Now.instant(),
+				})
+				.returning();
 
 			const { error, status } = await api.v2.artist({ id: artist.id }).delete(
 				{},

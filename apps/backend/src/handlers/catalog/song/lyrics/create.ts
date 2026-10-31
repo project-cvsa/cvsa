@@ -6,7 +6,7 @@ import {
 } from "@cvsa/contracts";
 import { songLyricsWriter } from "@cvsa/catalog";
 import { createUserPrincipal } from "@cvsa/authentication";
-import { transformPrismaResult } from "@cvsa/db";
+import { serializeResult } from "@cvsa/db";
 import { authMiddleware } from "@/middlewares";
 import { traceTask } from "@/common/trace";
 import z from "zod";
@@ -22,7 +22,7 @@ export const songLyricsCreateHandler = new Elysia({ name: "songLyricsCreateHandl
 			});
 			const lyric = await traceTask("songLyricsWriter.create", async () => {
 				const created = await songLyricsWriter.create(principal, params.id, body);
-				return SongLyricsResponseSchema.parse(transformPrismaResult(created));
+				return SongLyricsResponseSchema.parse(serializeResult(created));
 			});
 			return status(201, lyric);
 		},

@@ -1,5 +1,6 @@
 import { For, Show } from "solid-js";
 import NumberField from "@components/ui/NumberField";
+import Switch from "@components/ui/Switch";
 import Select from "@components/ui/Select";
 import {
 	CrawlerExecutionConfigSchema,
@@ -14,7 +15,7 @@ type Props = {
 	onChange: (config: CrawlerExecutionConfig) => void;
 };
 const FIELDS: Array<{
-	key: Exclude<keyof CrawlerExecutionConfig, "throttleScope">;
+	key: Exclude<keyof CrawlerExecutionConfig, "throttleScope" | "throttleFailover">;
 	min: number;
 	max: number;
 }> = [
@@ -26,6 +27,13 @@ const FIELDS: Array<{
 	{ key: "throttleCooldownMs", min: 100, max: 3600000 },
 	{ key: "throttleJitterMs", min: 0, max: 60000 },
 	{ key: "queueCap", min: 1, max: 10000 },
+	{ key: "maxAdapterAttempts", min: 1, max: 10 },
+	{ key: "probeWaitMs", min: 10, max: 5000 },
+	{ key: "probeRetryMs", min: 100, max: 60000 },
+	{ key: "probeRetries", min: 0, max: 5 },
+	{ key: "maxNetworkCooldownMs", min: 1000, max: 3600000 },
+	{ key: "mqOperationTimeoutMs", min: 1000, max: 30000 },
+	{ key: "inferenceTimeoutMs", min: 1000, max: 120000 },
 ];
 
 export default function NetworkExecutionPolicy(props: Props) {
@@ -72,13 +80,21 @@ export default function NetworkExecutionPolicy(props: Props) {
 					}}
 				/>
 			</div>
+			<Switch
+				checked={config().throttleFailover}
+				disabled={config().throttleScope !== "adapter"}
+				label={t("network.execution.throttleFailover")}
+				onChange={(throttleFailover) => props.onChange({ ...config(), throttleFailover })}
+			/>
+			<p class="ts-caption text-secondary">{t("network.execution.throttleFailoverHelp")}</p>
 			<Show when={props.status?.cooldowns?.length}>
 				<div class="flex flex-col gap-2 border border-border p-3">
 					<p class="ts-label text-primary">{t("network.execution.cooldowns")}</p>
 					<For each={props.status?.cooldowns}>
 						{(item) => (
 							<p class="ts-caption text-secondary">
-								{item.scope} · {Math.ceil(item.remainingMs / 1000)}s ·{" "}
+								{t("network.execution.reasonUpstream")} · {item.scope} ·{" "}
+								{Math.ceil(item.remainingMs / 1000)}s ·{" "}
 								{new Date(item.until).toLocaleTimeString()}
 							</p>
 						)}

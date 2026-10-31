@@ -6,7 +6,7 @@ import NumberField from "@components/ui/NumberField";
 import Switch from "@components/ui/Switch";
 import { toast } from "@components/ui/Toast";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import type { NetworkRuntimeConfig } from "@cvsa/contracts";
+import { BILIBILI_REQUEST_TYPES, type NetworkRuntimeConfig } from "@cvsa/contracts";
 import Trash2 from "lucide-solid/icons/trash-2";
 
 type NetworkRoutingPolicyProps = {
@@ -24,6 +24,10 @@ export default function NetworkRoutingPolicy(props: NetworkRoutingPolicyProps) {
 	const changeRequestTypes = (names: string[]) => {
 		const adapter =
 			props.config.adapters.find((item) => item.enabled) ?? props.config.adapters[0];
+		if (BILIBILI_REQUEST_TYPES.some((name) => !names.includes(name))) {
+			toast.error(t("network.routing.requiredTypes"));
+			return;
+		}
 		if (!adapter || names.some((name) => name.length > 128)) {
 			toast.error(t("network.routing.invalidType"));
 			return;
@@ -140,6 +144,7 @@ export default function NetworkRoutingPolicy(props: NetworkRoutingPolicyProps) {
 					size="sm"
 					variant="outlined"
 					class="text-error"
+					disabled={BILIBILI_REQUEST_TYPES.includes(binding.requestType)}
 					onClick={() => removeBinding(binding.requestType)}
 				>
 					<Trash2 class="w-3.5 h-3.5" />

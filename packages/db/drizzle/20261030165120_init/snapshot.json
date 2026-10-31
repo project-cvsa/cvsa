@@ -1,0 +1,7005 @@
+{
+  "type": "base",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "a952c725-4fd2-44e2-b168-906709f8ab02",
+  "prevIds": [
+    "00000000-0000-0000-0000-000000000000"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "auth"
+      ],
+      "writes": [
+        "s|sch|auth",
+        "n|sch|auth",
+        "e|sch|auth"
+      ]
+    },
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "core"
+      ],
+      "writes": [
+        "s|sch|core",
+        "n|sch|core",
+        "e|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "meta"
+      ],
+      "writes": [
+        "s|sch|meta",
+        "n|sch|meta",
+        "e|sch|meta"
+      ]
+    },
+    {
+      "statementType": "create_schema",
+      "statementTarget": [
+        "schema",
+        "platform"
+      ],
+      "writes": [
+        "s|sch|platform",
+        "n|sch|platform",
+        "e|sch|platform"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "album"
+      ],
+      "writes": [
+        "s|tbl|core.album",
+        "n|tbl|core.album",
+        "e|tbl|core.album",
+        "n|rel|core.album",
+        "n|type|core.album",
+        "n|rel|core.album_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "group"
+      ],
+      "writes": [
+        "s|tbl|core.group",
+        "n|tbl|core.group",
+        "e|tbl|core.group",
+        "n|rel|core.group",
+        "n|type|core.group",
+        "n|rel|core.group_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_in_album"
+      ],
+      "writes": [
+        "s|tbl|core.song_in_album",
+        "n|tbl|core.song_in_album",
+        "e|tbl|core.song_in_album",
+        "n|rel|core.song_in_album",
+        "n|type|core.song_in_album",
+        "n|rel|core.song_in_album_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_in_series"
+      ],
+      "writes": [
+        "s|tbl|core.song_in_series",
+        "n|tbl|core.song_in_series",
+        "e|tbl|core.song_in_series",
+        "n|rel|core.song_in_series",
+        "n|type|core.song_in_series",
+        "n|rel|core.song_in_series_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_series"
+      ],
+      "writes": [
+        "s|tbl|core.song_series",
+        "n|tbl|core.song_series",
+        "e|tbl|core.song_series",
+        "n|rel|core.song_series",
+        "n|type|core.song_series",
+        "n|rel|core.song_series_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "artist"
+      ],
+      "writes": [
+        "s|tbl|core.artist",
+        "n|tbl|core.artist",
+        "e|tbl|core.artist",
+        "n|rel|core.artist",
+        "n|type|core.artist",
+        "n|rel|core.artist_pkey",
+        "n|rel|core.artist_user_id_key"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "artist_role"
+      ],
+      "writes": [
+        "s|tbl|core.artist_role",
+        "n|tbl|core.artist_role",
+        "e|tbl|core.artist_role",
+        "n|rel|core.artist_role",
+        "n|type|core.artist_role",
+        "n|rel|core.artist_role_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "creation"
+      ],
+      "writes": [
+        "s|tbl|core.creation",
+        "n|tbl|core.creation",
+        "e|tbl|core.creation",
+        "n|rel|core.creation",
+        "n|type|core.creation",
+        "n|rel|core.creation_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "performance"
+      ],
+      "writes": [
+        "s|tbl|core.performance",
+        "n|tbl|core.performance",
+        "e|tbl|core.performance",
+        "n|rel|core.performance",
+        "n|type|core.performance",
+        "n|rel|core.performance_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "singer"
+      ],
+      "writes": [
+        "s|tbl|core.singer",
+        "n|tbl|core.singer",
+        "e|tbl|core.singer",
+        "n|rel|core.singer",
+        "n|type|core.singer",
+        "n|rel|core.singer_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "svs_engine"
+      ],
+      "writes": [
+        "s|tbl|core.svs_engine",
+        "n|tbl|core.svs_engine",
+        "e|tbl|core.svs_engine",
+        "n|rel|core.svs_engine",
+        "n|type|core.svs_engine",
+        "n|rel|core.svs_engine_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "svs_engine_version"
+      ],
+      "writes": [
+        "s|tbl|core.svs_engine_version",
+        "n|tbl|core.svs_engine_version",
+        "e|tbl|core.svs_engine_version",
+        "n|rel|core.svs_engine_version",
+        "n|type|core.svs_engine_version",
+        "n|rel|core.svs_engine_version_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "voicebank"
+      ],
+      "writes": [
+        "s|tbl|core.voicebank",
+        "n|tbl|core.voicebank",
+        "e|tbl|core.voicebank",
+        "n|rel|core.voicebank",
+        "n|type|core.voicebank",
+        "n|rel|core.voicebank_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "lyrics"
+      ],
+      "writes": [
+        "s|tbl|core.lyrics",
+        "n|tbl|core.lyrics",
+        "e|tbl|core.lyrics",
+        "n|rel|core.lyrics",
+        "n|type|core.lyrics",
+        "n|rel|core.lyrics_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "song"
+      ],
+      "writes": [
+        "s|tbl|core.song",
+        "n|tbl|core.song",
+        "e|tbl|core.song",
+        "n|rel|core.song",
+        "n|type|core.song",
+        "n|rel|core.song_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_external_link"
+      ],
+      "writes": [
+        "s|tbl|core.song_external_link",
+        "n|tbl|core.song_external_link",
+        "e|tbl|core.song_external_link",
+        "n|rel|core.song_external_link",
+        "n|type|core.song_external_link",
+        "n|rel|core.song_external_link_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_tag"
+      ],
+      "writes": [
+        "s|tbl|core.song_tag",
+        "n|tbl|core.song_tag",
+        "e|tbl|core.song_tag",
+        "n|rel|core.song_tag",
+        "n|type|core.song_tag",
+        "n|rel|core.song_tag_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "core",
+        "tag"
+      ],
+      "writes": [
+        "s|tbl|core.tag",
+        "n|tbl|core.tag",
+        "e|tbl|core.tag",
+        "n|rel|core.tag",
+        "n|type|core.tag",
+        "n|rel|core.tag_pkey"
+      ],
+      "reads": [
+        "n|sch|core"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "auth",
+        "account"
+      ],
+      "writes": [
+        "s|tbl|auth.account",
+        "n|tbl|auth.account",
+        "e|tbl|auth.account",
+        "n|rel|auth.account",
+        "n|type|auth.account",
+        "n|rel|auth.account_pkey"
+      ],
+      "reads": [
+        "n|sch|auth"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "meta",
+        "permission"
+      ],
+      "writes": [
+        "s|tbl|meta.permission",
+        "n|tbl|meta.permission",
+        "e|tbl|meta.permission",
+        "n|rel|meta.permission",
+        "n|type|meta.permission",
+        "n|rel|meta.permission_pkey"
+      ],
+      "reads": [
+        "n|sch|meta"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "meta",
+        "role"
+      ],
+      "writes": [
+        "s|tbl|meta.role",
+        "n|tbl|meta.role",
+        "e|tbl|meta.role",
+        "n|rel|meta.role",
+        "n|type|meta.role",
+        "n|rel|meta.role_pkey",
+        "n|rel|meta.role_name_key"
+      ],
+      "reads": [
+        "n|sch|meta"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "meta",
+        "role_permission"
+      ],
+      "writes": [
+        "s|tbl|meta.role_permission",
+        "n|tbl|meta.role_permission",
+        "e|tbl|meta.role_permission",
+        "n|rel|meta.role_permission",
+        "n|type|meta.role_permission",
+        "n|rel|meta.role_permission_pkey"
+      ],
+      "reads": [
+        "n|sch|meta"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "auth",
+        "session"
+      ],
+      "writes": [
+        "s|tbl|auth.session",
+        "n|tbl|auth.session",
+        "e|tbl|auth.session",
+        "n|rel|auth.session",
+        "n|type|auth.session",
+        "n|rel|auth.session_pkey",
+        "n|rel|auth.session_token_key"
+      ],
+      "reads": [
+        "n|sch|auth"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "auth",
+        "user"
+      ],
+      "writes": [
+        "s|tbl|auth.user",
+        "n|tbl|auth.user",
+        "e|tbl|auth.user",
+        "n|rel|auth.user",
+        "n|type|auth.user",
+        "n|rel|auth.user_pkey",
+        "n|rel|auth.user_username_key",
+        "n|rel|auth.user_display_username_key",
+        "n|rel|auth.user_email_key"
+      ],
+      "reads": [
+        "n|sch|auth"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "auth",
+        "verification"
+      ],
+      "writes": [
+        "s|tbl|auth.verification",
+        "n|tbl|auth.verification",
+        "e|tbl|auth.verification",
+        "n|rel|auth.verification",
+        "n|type|auth.verification",
+        "n|rel|auth.verification_pkey"
+      ],
+      "reads": [
+        "n|sch|auth"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "platform",
+        "file"
+      ],
+      "writes": [
+        "s|tbl|platform.file",
+        "n|tbl|platform.file",
+        "e|tbl|platform.file",
+        "n|rel|platform.file",
+        "n|type|platform.file",
+        "n|rel|platform.file_pkey"
+      ],
+      "reads": [
+        "n|sch|platform"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "meta",
+        "history"
+      ],
+      "writes": [
+        "s|tbl|meta.history",
+        "n|tbl|meta.history",
+        "e|tbl|meta.history",
+        "n|rel|meta.history",
+        "n|type|meta.history",
+        "n|rel|meta.history_pkey"
+      ],
+      "reads": [
+        "n|sch|meta"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "meta",
+        "outbox"
+      ],
+      "writes": [
+        "s|tbl|meta.outbox",
+        "n|tbl|meta.outbox",
+        "e|tbl|meta.outbox",
+        "n|rel|meta.outbox",
+        "n|type|meta.outbox",
+        "n|rel|meta.outbox_pkey"
+      ],
+      "reads": [
+        "n|sch|meta"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "platform",
+        "post"
+      ],
+      "writes": [
+        "s|tbl|platform.post",
+        "n|tbl|platform.post",
+        "e|tbl|platform.post",
+        "n|rel|platform.post",
+        "n|type|platform.post",
+        "n|rel|platform.post_pkey"
+      ],
+      "reads": [
+        "n|sch|platform"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "platform",
+        "reputation_history"
+      ],
+      "writes": [
+        "s|tbl|platform.reputation_history",
+        "n|tbl|platform.reputation_history",
+        "e|tbl|platform.reputation_history",
+        "n|rel|platform.reputation_history",
+        "n|type|platform.reputation_history",
+        "n|rel|platform.reputation_history_pkey"
+      ],
+      "reads": [
+        "n|sch|platform"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_in_album",
+        "song_in_album_album_id_idx_de2911bb"
+      ],
+      "writes": [
+        "s|idx|core.song_in_album_album_id_idx_de2911bb",
+        "n|idx|core.song_in_album_album_id_idx_de2911bb",
+        "e|idx|core.song_in_album_album_id_idx_de2911bb",
+        "n|rel|core.song_in_album_album_id_idx_de2911bb"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_album",
+        "n|sch|core",
+        "n|col|core.song_in_album.album_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_in_album",
+        "song_in_album_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.song_in_album_song_id_idx_2e2805d0",
+        "n|idx|core.song_in_album_song_id_idx_2e2805d0",
+        "e|idx|core.song_in_album_song_id_idx_2e2805d0",
+        "n|rel|core.song_in_album_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_album",
+        "n|sch|core",
+        "n|col|core.song_in_album.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_in_series",
+        "song_in_series_series_id_idx_57e32972"
+      ],
+      "writes": [
+        "s|idx|core.song_in_series_series_id_idx_57e32972",
+        "n|idx|core.song_in_series_series_id_idx_57e32972",
+        "e|idx|core.song_in_series_series_id_idx_57e32972",
+        "n|rel|core.song_in_series_series_id_idx_57e32972"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_series",
+        "n|sch|core",
+        "n|col|core.song_in_series.series_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_in_series",
+        "song_in_series_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.song_in_series_song_id_idx_2e2805d0",
+        "n|idx|core.song_in_series_song_id_idx_2e2805d0",
+        "e|idx|core.song_in_series_song_id_idx_2e2805d0",
+        "n|rel|core.song_in_series_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_series",
+        "n|sch|core",
+        "n|col|core.song_in_series.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "creation",
+        "creation_artist_id_idx_7b897fc3"
+      ],
+      "writes": [
+        "s|idx|core.creation_artist_id_idx_7b897fc3",
+        "n|idx|core.creation_artist_id_idx_7b897fc3",
+        "e|idx|core.creation_artist_id_idx_7b897fc3",
+        "n|rel|core.creation_artist_id_idx_7b897fc3"
+      ],
+      "reads": [
+        "n|tbl|core.creation",
+        "n|sch|core",
+        "n|col|core.creation.artist_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "creation",
+        "creation_artist_role_id_idx_781168c1"
+      ],
+      "writes": [
+        "s|idx|core.creation_artist_role_id_idx_781168c1",
+        "n|idx|core.creation_artist_role_id_idx_781168c1",
+        "e|idx|core.creation_artist_role_id_idx_781168c1",
+        "n|rel|core.creation_artist_role_id_idx_781168c1"
+      ],
+      "reads": [
+        "n|tbl|core.creation",
+        "n|sch|core",
+        "n|col|core.creation.artist_role_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "creation",
+        "creation_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.creation_song_id_idx_2e2805d0",
+        "n|idx|core.creation_song_id_idx_2e2805d0",
+        "e|idx|core.creation_song_id_idx_2e2805d0",
+        "n|rel|core.creation_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.creation",
+        "n|sch|core",
+        "n|col|core.creation.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "performance",
+        "performance_singer_id_idx_853e5131"
+      ],
+      "writes": [
+        "s|idx|core.performance_singer_id_idx_853e5131",
+        "n|idx|core.performance_singer_id_idx_853e5131",
+        "e|idx|core.performance_singer_id_idx_853e5131",
+        "n|rel|core.performance_singer_id_idx_853e5131"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|col|core.performance.singer_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "performance",
+        "performance_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.performance_song_id_idx_2e2805d0",
+        "n|idx|core.performance_song_id_idx_2e2805d0",
+        "e|idx|core.performance_song_id_idx_2e2805d0",
+        "n|rel|core.performance_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|col|core.performance.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "performance",
+        "performance_svs_engine_id_idx_c8423cc4"
+      ],
+      "writes": [
+        "s|idx|core.performance_svs_engine_id_idx_c8423cc4",
+        "n|idx|core.performance_svs_engine_id_idx_c8423cc4",
+        "e|idx|core.performance_svs_engine_id_idx_c8423cc4",
+        "n|rel|core.performance_svs_engine_id_idx_c8423cc4"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|col|core.performance.svs_engine_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "performance",
+        "performance_svs_engine_version_id_idx_b4f0f98a"
+      ],
+      "writes": [
+        "s|idx|core.performance_svs_engine_version_id_idx_b4f0f98a",
+        "n|idx|core.performance_svs_engine_version_id_idx_b4f0f98a",
+        "e|idx|core.performance_svs_engine_version_id_idx_b4f0f98a",
+        "n|rel|core.performance_svs_engine_version_id_idx_b4f0f98a"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|col|core.performance.svs_engine_version_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "performance",
+        "performance_voicebank_id_idx_a0a32bfa"
+      ],
+      "writes": [
+        "s|idx|core.performance_voicebank_id_idx_a0a32bfa",
+        "n|idx|core.performance_voicebank_id_idx_a0a32bfa",
+        "e|idx|core.performance_voicebank_id_idx_a0a32bfa",
+        "n|rel|core.performance_voicebank_id_idx_a0a32bfa"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|col|core.performance.voicebank_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "svs_engine_version",
+        "svs_engine_version_svs_engine_id_idx_c8423cc4"
+      ],
+      "writes": [
+        "s|idx|core.svs_engine_version_svs_engine_id_idx_c8423cc4",
+        "n|idx|core.svs_engine_version_svs_engine_id_idx_c8423cc4",
+        "e|idx|core.svs_engine_version_svs_engine_id_idx_c8423cc4",
+        "n|rel|core.svs_engine_version_svs_engine_id_idx_c8423cc4"
+      ],
+      "reads": [
+        "n|tbl|core.svs_engine_version",
+        "n|sch|core",
+        "n|col|core.svs_engine_version.svs_engine_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "voicebank",
+        "voicebank_singer_id_idx_853e5131"
+      ],
+      "writes": [
+        "s|idx|core.voicebank_singer_id_idx_853e5131",
+        "n|idx|core.voicebank_singer_id_idx_853e5131",
+        "e|idx|core.voicebank_singer_id_idx_853e5131",
+        "n|rel|core.voicebank_singer_id_idx_853e5131"
+      ],
+      "reads": [
+        "n|tbl|core.voicebank",
+        "n|sch|core",
+        "n|col|core.voicebank.singer_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "voicebank",
+        "voicebank_svs_engine_version_id_idx_b4f0f98a"
+      ],
+      "writes": [
+        "s|idx|core.voicebank_svs_engine_version_id_idx_b4f0f98a",
+        "n|idx|core.voicebank_svs_engine_version_id_idx_b4f0f98a",
+        "e|idx|core.voicebank_svs_engine_version_id_idx_b4f0f98a",
+        "n|rel|core.voicebank_svs_engine_version_id_idx_b4f0f98a"
+      ],
+      "reads": [
+        "n|tbl|core.voicebank",
+        "n|sch|core",
+        "n|col|core.voicebank.svs_engine_version_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "lyrics",
+        "lyrics_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.lyrics_song_id_idx_2e2805d0",
+        "n|idx|core.lyrics_song_id_idx_2e2805d0",
+        "e|idx|core.lyrics_song_id_idx_2e2805d0",
+        "n|rel|core.lyrics_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.lyrics",
+        "n|sch|core",
+        "n|col|core.lyrics.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song",
+        "song_original_song_id_idx_ef45027e"
+      ],
+      "writes": [
+        "s|idx|core.song_original_song_id_idx_ef45027e",
+        "n|idx|core.song_original_song_id_idx_ef45027e",
+        "e|idx|core.song_original_song_id_idx_ef45027e",
+        "n|rel|core.song_original_song_id_idx_ef45027e"
+      ],
+      "reads": [
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.song.original_song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_external_link",
+        "song_external_link_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.song_external_link_song_id_idx_2e2805d0",
+        "n|idx|core.song_external_link_song_id_idx_2e2805d0",
+        "e|idx|core.song_external_link_song_id_idx_2e2805d0",
+        "n|rel|core.song_external_link_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.song_external_link",
+        "n|sch|core",
+        "n|col|core.song_external_link.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_tag",
+        "song_tag_song_id_idx_2e2805d0"
+      ],
+      "writes": [
+        "s|idx|core.song_tag_song_id_idx_2e2805d0",
+        "n|idx|core.song_tag_song_id_idx_2e2805d0",
+        "e|idx|core.song_tag_song_id_idx_2e2805d0",
+        "n|rel|core.song_tag_song_id_idx_2e2805d0"
+      ],
+      "reads": [
+        "n|tbl|core.song_tag",
+        "n|sch|core",
+        "n|col|core.song_tag.song_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "song_tag",
+        "song_tag_tag_id_idx_94b47830"
+      ],
+      "writes": [
+        "s|idx|core.song_tag_tag_id_idx_94b47830",
+        "n|idx|core.song_tag_tag_id_idx_94b47830",
+        "e|idx|core.song_tag_tag_id_idx_94b47830",
+        "n|rel|core.song_tag_tag_id_idx_94b47830"
+      ],
+      "reads": [
+        "n|tbl|core.song_tag",
+        "n|sch|core",
+        "n|col|core.song_tag.tag_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "core",
+        "tag",
+        "tag_parent_id_idx_ab33b399"
+      ],
+      "writes": [
+        "s|idx|core.tag_parent_id_idx_ab33b399",
+        "n|idx|core.tag_parent_id_idx_ab33b399",
+        "e|idx|core.tag_parent_id_idx_ab33b399",
+        "n|rel|core.tag_parent_id_idx_ab33b399"
+      ],
+      "reads": [
+        "n|tbl|core.tag",
+        "n|sch|core",
+        "n|col|core.tag.parent_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "auth",
+        "account",
+        "account_userId_idx_a489d58a"
+      ],
+      "writes": [
+        "s|idx|auth.account_userId_idx_a489d58a",
+        "n|idx|auth.account_userId_idx_a489d58a",
+        "e|idx|auth.account_userId_idx_a489d58a",
+        "n|rel|auth.account_userId_idx_a489d58a"
+      ],
+      "reads": [
+        "n|tbl|auth.account",
+        "n|sch|auth",
+        "n|col|auth.account.userId"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "meta",
+        "role_permission",
+        "role_permission_permission_id_idx_909cec36"
+      ],
+      "writes": [
+        "s|idx|meta.role_permission_permission_id_idx_909cec36",
+        "n|idx|meta.role_permission_permission_id_idx_909cec36",
+        "e|idx|meta.role_permission_permission_id_idx_909cec36",
+        "n|rel|meta.role_permission_permission_id_idx_909cec36"
+      ],
+      "reads": [
+        "n|tbl|meta.role_permission",
+        "n|sch|meta",
+        "n|col|meta.role_permission.permission_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "meta",
+        "role_permission",
+        "role_permission_role_id_idx_d9467c50"
+      ],
+      "writes": [
+        "s|idx|meta.role_permission_role_id_idx_d9467c50",
+        "n|idx|meta.role_permission_role_id_idx_d9467c50",
+        "e|idx|meta.role_permission_role_id_idx_d9467c50",
+        "n|rel|meta.role_permission_role_id_idx_d9467c50"
+      ],
+      "reads": [
+        "n|tbl|meta.role_permission",
+        "n|sch|meta",
+        "n|col|meta.role_permission.role_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "auth",
+        "session",
+        "session_user_id_idx_6c952402"
+      ],
+      "writes": [
+        "s|idx|auth.session_user_id_idx_6c952402",
+        "n|idx|auth.session_user_id_idx_6c952402",
+        "e|idx|auth.session_user_id_idx_6c952402",
+        "n|rel|auth.session_user_id_idx_6c952402"
+      ],
+      "reads": [
+        "n|tbl|auth.session",
+        "n|sch|auth",
+        "n|col|auth.session.user_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "auth",
+        "user",
+        "user_role_id_idx_d9467c50"
+      ],
+      "writes": [
+        "s|idx|auth.user_role_id_idx_d9467c50",
+        "n|idx|auth.user_role_id_idx_d9467c50",
+        "e|idx|auth.user_role_id_idx_d9467c50",
+        "n|rel|auth.user_role_id_idx_d9467c50"
+      ],
+      "reads": [
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|auth.user.role_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "auth",
+        "verification",
+        "verification_identifier_idx_79a0dbb3"
+      ],
+      "writes": [
+        "s|idx|auth.verification_identifier_idx_79a0dbb3",
+        "n|idx|auth.verification_identifier_idx_79a0dbb3",
+        "e|idx|auth.verification_identifier_idx_79a0dbb3",
+        "n|rel|auth.verification_identifier_idx_79a0dbb3"
+      ],
+      "reads": [
+        "n|tbl|auth.verification",
+        "n|sch|auth",
+        "n|col|auth.verification.identifier"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "platform",
+        "file",
+        "file_user_id_idx_6c952402"
+      ],
+      "writes": [
+        "s|idx|platform.file_user_id_idx_6c952402",
+        "n|idx|platform.file_user_id_idx_6c952402",
+        "e|idx|platform.file_user_id_idx_6c952402",
+        "n|rel|platform.file_user_id_idx_6c952402"
+      ],
+      "reads": [
+        "n|tbl|platform.file",
+        "n|sch|platform",
+        "n|col|platform.file.user_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "meta",
+        "history",
+        "history_user_id_idx_6c952402"
+      ],
+      "writes": [
+        "s|idx|meta.history_user_id_idx_6c952402",
+        "n|idx|meta.history_user_id_idx_6c952402",
+        "e|idx|meta.history_user_id_idx_6c952402",
+        "n|rel|meta.history_user_id_idx_6c952402"
+      ],
+      "reads": [
+        "n|tbl|meta.history",
+        "n|sch|meta",
+        "n|col|meta.history.user_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "meta",
+        "outbox",
+        "outbox_status_next_retry_at_idx_e5c71f91"
+      ],
+      "writes": [
+        "s|idx|meta.outbox_status_next_retry_at_idx_e5c71f91",
+        "n|idx|meta.outbox_status_next_retry_at_idx_e5c71f91",
+        "e|idx|meta.outbox_status_next_retry_at_idx_e5c71f91",
+        "n|rel|meta.outbox_status_next_retry_at_idx_e5c71f91"
+      ],
+      "reads": [
+        "n|tbl|meta.outbox",
+        "n|sch|meta",
+        "n|col|meta.outbox.status",
+        "n|col|meta.outbox.next_retry_at"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "platform",
+        "post",
+        "post_user_id_idx_6c952402"
+      ],
+      "writes": [
+        "s|idx|platform.post_user_id_idx_6c952402",
+        "n|idx|platform.post_user_id_idx_6c952402",
+        "e|idx|platform.post_user_id_idx_6c952402",
+        "n|rel|platform.post_user_id_idx_6c952402"
+      ],
+      "reads": [
+        "n|tbl|platform.post",
+        "n|sch|platform",
+        "n|col|platform.post.user_id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "platform",
+        "reputation_history",
+        "reputation_history_user_id_idx_6c952402"
+      ],
+      "writes": [
+        "s|idx|platform.reputation_history_user_id_idx_6c952402",
+        "n|idx|platform.reputation_history_user_id_idx_6c952402",
+        "e|idx|platform.reputation_history_user_id_idx_6c952402",
+        "n|rel|platform.reputation_history_user_id_idx_6c952402"
+      ],
+      "reads": [
+        "n|tbl|platform.reputation_history",
+        "n|sch|platform",
+        "n|col|platform.reputation_history.user_id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_in_album"
+      ],
+      "writes": [
+        "s|fk|core.song_in_album.song_in_album_song_id_fkey",
+        "n|fk|core.song_in_album.song_in_album_song_id_fkey",
+        "e|fk|core.song_in_album.song_in_album_song_id_fkey",
+        "n|con|core.song_in_album.song_in_album_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_album",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.song_in_album.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_in_album"
+      ],
+      "writes": [
+        "s|fk|core.song_in_album.song_in_album_album_id_fkey",
+        "n|fk|core.song_in_album.song_in_album_album_id_fkey",
+        "e|fk|core.song_in_album.song_in_album_album_id_fkey",
+        "n|con|core.song_in_album.song_in_album_album_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_album",
+        "n|sch|core",
+        "n|tbl|core.album",
+        "n|sch|core",
+        "n|col|core.song_in_album.album_id",
+        "n|col|core.album.id",
+        "e|uniqueness|core.album.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_in_series"
+      ],
+      "writes": [
+        "s|fk|core.song_in_series.song_in_series_song_id_fkey",
+        "n|fk|core.song_in_series.song_in_series_song_id_fkey",
+        "e|fk|core.song_in_series.song_in_series_song_id_fkey",
+        "n|con|core.song_in_series.song_in_series_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_series",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.song_in_series.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_in_series"
+      ],
+      "writes": [
+        "s|fk|core.song_in_series.song_in_series_series_id_fkey",
+        "n|fk|core.song_in_series.song_in_series_series_id_fkey",
+        "e|fk|core.song_in_series.song_in_series_series_id_fkey",
+        "n|con|core.song_in_series.song_in_series_series_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_in_series",
+        "n|sch|core",
+        "n|tbl|core.song_series",
+        "n|sch|core",
+        "n|col|core.song_in_series.series_id",
+        "n|col|core.song_series.id",
+        "e|uniqueness|core.song_series.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "artist"
+      ],
+      "writes": [
+        "s|fk|core.artist.artist_user_id_fkey",
+        "n|fk|core.artist.artist_user_id_fkey",
+        "e|fk|core.artist.artist_user_id_fkey",
+        "n|con|core.artist.artist_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.artist",
+        "n|sch|core",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|core.artist.user_id",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "creation"
+      ],
+      "writes": [
+        "s|fk|core.creation.creation_artist_id_fkey",
+        "n|fk|core.creation.creation_artist_id_fkey",
+        "e|fk|core.creation.creation_artist_id_fkey",
+        "n|con|core.creation.creation_artist_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.creation",
+        "n|sch|core",
+        "n|tbl|core.artist",
+        "n|sch|core",
+        "n|col|core.creation.artist_id",
+        "n|col|core.artist.id",
+        "e|uniqueness|core.artist.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "creation"
+      ],
+      "writes": [
+        "s|fk|core.creation.creation_artist_role_id_fkey",
+        "n|fk|core.creation.creation_artist_role_id_fkey",
+        "e|fk|core.creation.creation_artist_role_id_fkey",
+        "n|con|core.creation.creation_artist_role_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.creation",
+        "n|sch|core",
+        "n|tbl|core.artist_role",
+        "n|sch|core",
+        "n|col|core.creation.artist_role_id",
+        "n|col|core.artist_role.id",
+        "e|uniqueness|core.artist_role.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "creation"
+      ],
+      "writes": [
+        "s|fk|core.creation.creation_song_id_fkey",
+        "n|fk|core.creation.creation_song_id_fkey",
+        "e|fk|core.creation.creation_song_id_fkey",
+        "n|con|core.creation.creation_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.creation",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.creation.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "performance"
+      ],
+      "writes": [
+        "s|fk|core.performance.performance_song_id_fkey",
+        "n|fk|core.performance.performance_song_id_fkey",
+        "e|fk|core.performance.performance_song_id_fkey",
+        "n|con|core.performance.performance_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.performance.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "performance"
+      ],
+      "writes": [
+        "s|fk|core.performance.performance_singer_id_fkey",
+        "n|fk|core.performance.performance_singer_id_fkey",
+        "e|fk|core.performance.performance_singer_id_fkey",
+        "n|con|core.performance.performance_singer_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|tbl|core.singer",
+        "n|sch|core",
+        "n|col|core.performance.singer_id",
+        "n|col|core.singer.id",
+        "e|uniqueness|core.singer.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "performance"
+      ],
+      "writes": [
+        "s|fk|core.performance.performance_svs_engine_id_fkey",
+        "n|fk|core.performance.performance_svs_engine_id_fkey",
+        "e|fk|core.performance.performance_svs_engine_id_fkey",
+        "n|con|core.performance.performance_svs_engine_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|tbl|core.svs_engine",
+        "n|sch|core",
+        "n|col|core.performance.svs_engine_id",
+        "n|col|core.svs_engine.id",
+        "e|uniqueness|core.svs_engine.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "performance"
+      ],
+      "writes": [
+        "s|fk|core.performance.performance_svs_engine_version_id_fkey",
+        "n|fk|core.performance.performance_svs_engine_version_id_fkey",
+        "e|fk|core.performance.performance_svs_engine_version_id_fkey",
+        "n|con|core.performance.performance_svs_engine_version_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|tbl|core.svs_engine_version",
+        "n|sch|core",
+        "n|col|core.performance.svs_engine_version_id",
+        "n|col|core.svs_engine_version.id",
+        "e|uniqueness|core.svs_engine_version.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "performance"
+      ],
+      "writes": [
+        "s|fk|core.performance.performance_voicebank_id_fkey",
+        "n|fk|core.performance.performance_voicebank_id_fkey",
+        "e|fk|core.performance.performance_voicebank_id_fkey",
+        "n|con|core.performance.performance_voicebank_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.performance",
+        "n|sch|core",
+        "n|tbl|core.voicebank",
+        "n|sch|core",
+        "n|col|core.performance.voicebank_id",
+        "n|col|core.voicebank.id",
+        "e|uniqueness|core.voicebank.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "svs_engine_version"
+      ],
+      "writes": [
+        "s|fk|core.svs_engine_version.svs_engine_version_svs_engine_id_fkey",
+        "n|fk|core.svs_engine_version.svs_engine_version_svs_engine_id_fkey",
+        "e|fk|core.svs_engine_version.svs_engine_version_svs_engine_id_fkey",
+        "n|con|core.svs_engine_version.svs_engine_version_svs_engine_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.svs_engine_version",
+        "n|sch|core",
+        "n|tbl|core.svs_engine",
+        "n|sch|core",
+        "n|col|core.svs_engine_version.svs_engine_id",
+        "n|col|core.svs_engine.id",
+        "e|uniqueness|core.svs_engine.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "voicebank"
+      ],
+      "writes": [
+        "s|fk|core.voicebank.voicebank_singer_id_fkey",
+        "n|fk|core.voicebank.voicebank_singer_id_fkey",
+        "e|fk|core.voicebank.voicebank_singer_id_fkey",
+        "n|con|core.voicebank.voicebank_singer_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.voicebank",
+        "n|sch|core",
+        "n|tbl|core.singer",
+        "n|sch|core",
+        "n|col|core.voicebank.singer_id",
+        "n|col|core.singer.id",
+        "e|uniqueness|core.singer.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "voicebank"
+      ],
+      "writes": [
+        "s|fk|core.voicebank.voicebank_svs_engine_version_id_fkey",
+        "n|fk|core.voicebank.voicebank_svs_engine_version_id_fkey",
+        "e|fk|core.voicebank.voicebank_svs_engine_version_id_fkey",
+        "n|con|core.voicebank.voicebank_svs_engine_version_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.voicebank",
+        "n|sch|core",
+        "n|tbl|core.svs_engine_version",
+        "n|sch|core",
+        "n|col|core.voicebank.svs_engine_version_id",
+        "n|col|core.svs_engine_version.id",
+        "e|uniqueness|core.svs_engine_version.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "lyrics"
+      ],
+      "writes": [
+        "s|fk|core.lyrics.lyrics_song_id_fkey",
+        "n|fk|core.lyrics.lyrics_song_id_fkey",
+        "e|fk|core.lyrics.lyrics_song_id_fkey",
+        "n|con|core.lyrics.lyrics_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.lyrics",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.lyrics.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song"
+      ],
+      "writes": [
+        "s|fk|core.song.song_original_song_id_fkey",
+        "n|fk|core.song.song_original_song_id_fkey",
+        "e|fk|core.song.song_original_song_id_fkey",
+        "n|con|core.song.song_original_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.song.original_song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_external_link"
+      ],
+      "writes": [
+        "s|fk|core.song_external_link.song_external_link_song_id_fkey",
+        "n|fk|core.song_external_link.song_external_link_song_id_fkey",
+        "e|fk|core.song_external_link.song_external_link_song_id_fkey",
+        "n|con|core.song_external_link.song_external_link_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_external_link",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.song_external_link.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_tag"
+      ],
+      "writes": [
+        "s|fk|core.song_tag.song_tag_song_id_fkey",
+        "n|fk|core.song_tag.song_tag_song_id_fkey",
+        "e|fk|core.song_tag.song_tag_song_id_fkey",
+        "n|con|core.song_tag.song_tag_song_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_tag",
+        "n|sch|core",
+        "n|tbl|core.song",
+        "n|sch|core",
+        "n|col|core.song_tag.song_id",
+        "n|col|core.song.id",
+        "e|uniqueness|core.song.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "song_tag"
+      ],
+      "writes": [
+        "s|fk|core.song_tag.song_tag_tag_id_fkey",
+        "n|fk|core.song_tag.song_tag_tag_id_fkey",
+        "e|fk|core.song_tag.song_tag_tag_id_fkey",
+        "n|con|core.song_tag.song_tag_tag_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.song_tag",
+        "n|sch|core",
+        "n|tbl|core.tag",
+        "n|sch|core",
+        "n|col|core.song_tag.tag_id",
+        "n|col|core.tag.id",
+        "e|uniqueness|core.tag.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "core",
+        "tag"
+      ],
+      "writes": [
+        "s|fk|core.tag.tag_parent_id_fkey",
+        "n|fk|core.tag.tag_parent_id_fkey",
+        "e|fk|core.tag.tag_parent_id_fkey",
+        "n|con|core.tag.tag_parent_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|core.tag",
+        "n|sch|core",
+        "n|tbl|core.tag",
+        "n|sch|core",
+        "n|col|core.tag.parent_id",
+        "n|col|core.tag.id",
+        "e|uniqueness|core.tag.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "auth",
+        "account"
+      ],
+      "writes": [
+        "s|fk|auth.account.account_userId_fkey",
+        "n|fk|auth.account.account_userId_fkey",
+        "e|fk|auth.account.account_userId_fkey",
+        "n|con|auth.account.account_userId_fkey"
+      ],
+      "reads": [
+        "n|tbl|auth.account",
+        "n|sch|auth",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|auth.account.userId",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "meta",
+        "role_permission"
+      ],
+      "writes": [
+        "s|fk|meta.role_permission.role_permission_permission_id_fkey",
+        "n|fk|meta.role_permission.role_permission_permission_id_fkey",
+        "e|fk|meta.role_permission.role_permission_permission_id_fkey",
+        "n|con|meta.role_permission.role_permission_permission_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|meta.role_permission",
+        "n|sch|meta",
+        "n|tbl|meta.permission",
+        "n|sch|meta",
+        "n|col|meta.role_permission.permission_id",
+        "n|col|meta.permission.id",
+        "e|uniqueness|meta.permission.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "meta",
+        "role_permission"
+      ],
+      "writes": [
+        "s|fk|meta.role_permission.role_permission_role_id_fkey",
+        "n|fk|meta.role_permission.role_permission_role_id_fkey",
+        "e|fk|meta.role_permission.role_permission_role_id_fkey",
+        "n|con|meta.role_permission.role_permission_role_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|meta.role_permission",
+        "n|sch|meta",
+        "n|tbl|meta.role",
+        "n|sch|meta",
+        "n|col|meta.role_permission.role_id",
+        "n|col|meta.role.id",
+        "e|uniqueness|meta.role.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "auth",
+        "session"
+      ],
+      "writes": [
+        "s|fk|auth.session.session_user_id_fkey",
+        "n|fk|auth.session.session_user_id_fkey",
+        "e|fk|auth.session.session_user_id_fkey",
+        "n|con|auth.session.session_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|auth.session",
+        "n|sch|auth",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|auth.session.user_id",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "auth",
+        "user"
+      ],
+      "writes": [
+        "s|fk|auth.user.user_role_id_fkey",
+        "n|fk|auth.user.user_role_id_fkey",
+        "e|fk|auth.user.user_role_id_fkey",
+        "n|con|auth.user.user_role_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|tbl|meta.role",
+        "n|sch|meta",
+        "n|col|auth.user.role_id",
+        "n|col|meta.role.id",
+        "e|uniqueness|meta.role.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "platform",
+        "file"
+      ],
+      "writes": [
+        "s|fk|platform.file.file_user_id_fkey",
+        "n|fk|platform.file.file_user_id_fkey",
+        "e|fk|platform.file.file_user_id_fkey",
+        "n|con|platform.file.file_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|platform.file",
+        "n|sch|platform",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|platform.file.user_id",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "meta",
+        "history"
+      ],
+      "writes": [
+        "s|fk|meta.history.history_user_id_fkey",
+        "n|fk|meta.history.history_user_id_fkey",
+        "e|fk|meta.history.history_user_id_fkey",
+        "n|con|meta.history.history_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|meta.history",
+        "n|sch|meta",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|meta.history.user_id",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "platform",
+        "post"
+      ],
+      "writes": [
+        "s|fk|platform.post.post_user_id_fkey",
+        "n|fk|platform.post.post_user_id_fkey",
+        "e|fk|platform.post.post_user_id_fkey",
+        "n|con|platform.post.post_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|platform.post",
+        "n|sch|platform",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|platform.post.user_id",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "platform",
+        "reputation_history"
+      ],
+      "writes": [
+        "s|fk|platform.reputation_history.reputation_history_user_id_fkey",
+        "n|fk|platform.reputation_history.reputation_history_user_id_fkey",
+        "e|fk|platform.reputation_history.reputation_history_user_id_fkey",
+        "n|con|platform.reputation_history.reputation_history_user_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|platform.reputation_history",
+        "n|sch|platform",
+        "n|tbl|auth.user",
+        "n|sch|auth",
+        "n|col|platform.reputation_history.user_id",
+        "n|col|auth.user.id",
+        "e|uniqueness|auth.user.id"
+      ]
+    }
+  ],
+  "ddl": [
+    {
+      "name": "auth",
+      "entityType": "schemas"
+    },
+    {
+      "name": "core",
+      "entityType": "schemas"
+    },
+    {
+      "name": "meta",
+      "entityType": "schemas"
+    },
+    {
+      "name": "platform",
+      "entityType": "schemas"
+    },
+    {
+      "schema": "core",
+      "name": "album",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "group",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "song_in_album",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "song_in_series",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "song_series",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "artist",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "artist_role",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "creation",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "performance",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "singer",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "svs_engine",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "svs_engine_version",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "voicebank",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "lyrics",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "song",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "song_external_link",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "song_tag",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "name": "tag",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "auth",
+      "name": "account",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "meta",
+      "name": "permission",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "meta",
+      "name": "role",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "meta",
+      "name": "role_permission",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "auth",
+      "name": "session",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "auth",
+      "name": "user",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "auth",
+      "name": "verification",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "platform",
+      "name": "file",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "meta",
+      "name": "history",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "meta",
+      "name": "outbox",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "platform",
+      "name": "post",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "platform",
+      "name": "reputation_history",
+      "isRlsEnabled": false,
+      "entityType": "tables"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "cover_url",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "album_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "track_number",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "disc_number",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "series_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "order",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "aliases",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "user_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "artist_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "artist_role_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "singer_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "voicebank_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "svs_engine_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "svs_engine_version_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "avatar_url",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "version_string",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "svs_engine_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "singer_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "svs_engine_version_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "is_translated",
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "plain_text",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "ttml",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "lrc",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "original_song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "language",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'zh'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "duration",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "description",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "localized_descriptions",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "bilibili_aid",
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "bilibili_bvid",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "vocadb_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "vcpedia_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "moegirl_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "cover_url",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "published_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "label",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "url",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "platform",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "platform_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "song_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "tag_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "parent_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "accountId",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "providerId",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "userId",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "accessToken",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "refreshToken",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "idToken",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "accessTokenExpiresAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "refreshTokenExpiresAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "scope",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "password",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "createdAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "updatedAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "permission",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "permission",
+      "name": "action",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "permission",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "permission",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "permission",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "localized_names",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "role_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "permission_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "token",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "user_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "ip_address",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "user_agent",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "expiresAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "username",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "display_username",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "email",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "email_verified",
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "image",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "role_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "reputation",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "identifier",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "value",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "expiresAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "createdAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "updatedAt",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "original_name",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "path",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "user_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "user_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "table",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "object_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "comment",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "old",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "new",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "aggregate_type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "aggregate_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "event_type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "payload",
+      "type": "json",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "status",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'PENDING'",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "retry_count",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "last_error",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "next_retry_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "processed_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "text",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "user_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "updated_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "deleted_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "id",
+      "type": "serial",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "user_id",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "action_type",
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "points",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "source_type",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "source_id",
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "created_at",
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "entityType": "columns"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "song_in_album_album_id_idx_de2911bb",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "album_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "song_in_album_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "song_in_series_series_id_idx_57e32972",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "series_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "song_in_series_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_artist_id_idx_7b897fc3",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "artist_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_artist_role_id_idx_781168c1",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "artist_role_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_singer_id_idx_853e5131",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "singer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_svs_engine_id_idx_c8423cc4",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "svs_engine_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_svs_engine_version_id_idx_b4f0f98a",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "svs_engine_version_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_voicebank_id_idx_a0a32bfa",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "voicebank_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "svs_engine_version_svs_engine_id_idx_c8423cc4",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "svs_engine_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "voicebank_singer_id_idx_853e5131",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "singer_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "voicebank_svs_engine_version_id_idx_b4f0f98a",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "svs_engine_version_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "lyrics_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "song_original_song_id_idx_ef45027e",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "original_song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "song_external_link_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "song_tag_song_id_idx_2e2805d0",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "song_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "song_tag_tag_id_idx_94b47830",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "tag_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "tag_parent_id_idx_ab33b399",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "parent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "account_userId_idx_a489d58a",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "userId",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "role_permission_permission_id_idx_909cec36",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "permission_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "role_permission_role_id_idx_d9467c50",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "role_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "session_user_id_idx_6c952402",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "user_role_id_idx_d9467c50",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "role_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "verification_identifier_idx_79a0dbb3",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "identifier",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "file_user_id_idx_6c952402",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "history_user_id_idx_6c952402",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "outbox_status_next_retry_at_idx_e5c71f91",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "next_retry_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "post_user_id_idx_6c952402",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "reputation_history_user_id_idx_6c952402",
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "entityType": "indexes"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "song_in_album_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "song_in_album_album_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "album_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "album",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "song_in_series_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "song_in_series_series_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "series_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song_series",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "artist_user_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_artist_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "artist_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "artist",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_artist_role_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "artist_role_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "artist_role",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_singer_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "singer_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "singer",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_svs_engine_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "svs_engine_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "svs_engine",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_svs_engine_version_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "svs_engine_version_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "svs_engine_version",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_voicebank_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "voicebank_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "voicebank",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "svs_engine_version_svs_engine_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "svs_engine_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "svs_engine",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "voicebank_singer_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "singer_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "singer",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "voicebank_svs_engine_version_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "svs_engine_version_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "svs_engine_version",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "lyrics_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "song_original_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "original_song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "song_external_link_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "song_tag_song_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "song_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "song",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "song_tag_tag_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "tag_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "tag",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "tag_parent_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "parent_id"
+      ],
+      "schemaTo": "core",
+      "tableTo": "tag",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "account_userId_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "userId"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "entityType": "fks"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "role_permission_permission_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "permission_id"
+      ],
+      "schemaTo": "meta",
+      "tableTo": "permission",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "role_permission_role_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "meta",
+      "tableTo": "role",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "session_user_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "user_role_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "role_id"
+      ],
+      "schemaTo": "meta",
+      "tableTo": "role",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "file_user_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "history_user_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "post_user_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "reputation_history_user_id_fkey",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "auth",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "entityType": "fks"
+    },
+    {
+      "schema": "core",
+      "table": "album",
+      "name": "album_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "group",
+      "name": "group_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_album",
+      "name": "song_in_album_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "song_in_series",
+      "name": "song_in_series_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "song_series",
+      "name": "song_series_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "artist_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "artist_role",
+      "name": "artist_role_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "creation",
+      "name": "creation_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "performance",
+      "name": "performance_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "singer",
+      "name": "singer_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine",
+      "name": "svs_engine_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "svs_engine_version",
+      "name": "svs_engine_version_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "voicebank",
+      "name": "voicebank_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "lyrics",
+      "name": "lyrics_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "song_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "song_external_link_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "song_tag",
+      "name": "song_tag_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "tag",
+      "name": "tag_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "auth",
+      "table": "account",
+      "name": "account_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "meta",
+      "table": "permission",
+      "name": "permission_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "role_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "meta",
+      "table": "role_permission",
+      "name": "role_permission_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "session_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "user_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "auth",
+      "table": "verification",
+      "name": "verification_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "platform",
+      "table": "file",
+      "name": "file_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "history_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "outbox_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "platform",
+      "table": "post",
+      "name": "post_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "platform",
+      "table": "reputation_history",
+      "name": "reputation_history_pkey",
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "artist_user_id_key",
+      "nameExplicit": true,
+      "columns": [
+        "user_id"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "meta",
+      "table": "role",
+      "name": "role_name_key",
+      "nameExplicit": true,
+      "columns": [
+        "name"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "auth",
+      "table": "session",
+      "name": "session_token_key",
+      "nameExplicit": true,
+      "columns": [
+        "token"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "user_username_key",
+      "nameExplicit": true,
+      "columns": [
+        "username"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "user_display_username_key",
+      "nameExplicit": true,
+      "columns": [
+        "display_username"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "auth",
+      "table": "user",
+      "name": "user_email_key",
+      "nameExplicit": true,
+      "columns": [
+        "email"
+      ],
+      "nullsNotDistinct": false,
+      "entityType": "uniques"
+    },
+    {
+      "schema": "core",
+      "table": "artist",
+      "name": "artist_aliases_elem_not_null_3676266c",
+      "value": "array_position(aliases, NULL::text) IS NULL",
+      "entityType": "checks"
+    },
+    {
+      "schema": "core",
+      "table": "song",
+      "name": "song_type_check_f4a93cc7",
+      "value": "\"type\" = ANY (ARRAY['ORIGINAL'::text, 'COVER'::text, 'RETUNE'::text, 'CONTRAFACTUM'::text, 'TRANSLYRICS'::text, 'REMIX'::text, 'REMASTER'::text, 'MASHUP'::text, 'INSTRUMENTAL'::text, 'OTHERS'::text])",
+      "entityType": "checks"
+    },
+    {
+      "schema": "core",
+      "table": "song_external_link",
+      "name": "song_external_link_platform_check_6c190e7f",
+      "value": "\"platform\" = ANY (ARRAY['YOUTUBE'::text, 'NICONICO'::text, 'BILIBILI'::text, 'VOCALOID_WIKI'::text, 'VOCALOID_LYRICS_WIKI'::text, 'SOUNDCLOUD'::text, 'NETEASE_MUSIC'::text, 'QQ_MUSIC'::text, 'FIVE_SING'::text, 'KUGOU'::text, 'SPOTIFY'::text, 'APPLE_MUSIC'::text, 'YOUTUBE_MUSIC'::text, 'WIKIPEDIA'::text, 'BAIDU_BAIKE'::text, 'PIXIV'::text, 'WEIBO'::text, 'TWITTER'::text, 'VOCADB'::text, 'MOEGIRLPEDIA'::text, 'MUSICBRAINZ'::text, 'VCPEDIA'::text, 'XIAOHONGSHU'::text])",
+      "entityType": "checks"
+    },
+    {
+      "schema": "meta",
+      "table": "history",
+      "name": "history_type_check_d6a58d8c",
+      "value": "\"type\" = ANY (ARRAY['CREATE'::text, 'UPDATE'::text, 'DELETE'::text, 'RESTORE'::text])",
+      "entityType": "checks"
+    },
+    {
+      "schema": "meta",
+      "table": "outbox",
+      "name": "outbox_status_check_8a5bce80",
+      "value": "\"status\" = ANY (ARRAY['PENDING'::text, 'PROCESSING'::text, 'PROCESSED'::text, 'FAILED'::text])",
+      "entityType": "checks"
+    }
+  ]
+}

@@ -1,8 +1,21 @@
-import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
+import {
+	AdaptiveRateConfigSchema,
+	BilibiliSessionConfigSchema,
+	CrawlerExecutionConfigSchema,
+} from "@cvsa/contracts";
 import { waitUntil } from "./support/async";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { NetworkRuntimeConfig } from "../src/crawler";
-import { toInstant } from "@cvsa/snapshot-db";
+import { eq, inArray } from "drizzle-orm";
+import {
+	bilibiliVideoMetadata,
+	bilibiliVideoMetadataHistory,
+	crawlerRuntimeConfig,
+	discoverySample,
+	networkRuntimeConfig,
+	toInstant,
+	videoTracking,
+} from "@cvsa/snapshot-db";
 import { crawlerEnv } from "@cvsa/env";
 import { treaty } from "@elysiajs/eden";
 import { crawlerControlPlane } from "../src/controlPlane";
@@ -34,31 +47,15 @@ const TOUCHED_AIDS = [TRACKING_AID, SAMPLE_AID, METADATA_AID];
 
 async function cleanupSeededRows(): Promise<void> {
 	const client = crawlerSnapshotDb.client;
-	for await (const _ of client.orm.public.BilibiliVideoMetadataHistory.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.BilibiliVideoMetadata.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.DiscoverySample.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.VideoTracking.where((row) =>
-		row.aid.in(TOUCHED_AIDS)
-	).deleteAll()) {
-		// drained
-	}
-	for await (const _ of client.orm.public.CrawlerRuntimeConfig.where({
-		key: "discovery",
-	}).deleteAll()) {
-		// drained
-	}
+	await client
+		.delete(bilibiliVideoMetadataHistory)
+		.where(inArray(bilibiliVideoMetadataHistory.aid, TOUCHED_AIDS));
+	await client
+		.delete(bilibiliVideoMetadata)
+		.where(inArray(bilibiliVideoMetadata.aid, TOUCHED_AIDS));
+	await client.delete(discoverySample).where(inArray(discoverySample.aid, TOUCHED_AIDS));
+	await client.delete(videoTracking).where(inArray(videoTracking.aid, TOUCHED_AIDS));
+	await client.delete(crawlerRuntimeConfig).where(eq(crawlerRuntimeConfig.key, "discovery"));
 }
 
 function proxyConfig(baseWeight = 1, proxyUrl = PROXY_URL): NetworkRuntimeConfig {
@@ -103,16 +100,19 @@ const runtimeApi = api.v2["network-runtime"];
 const authorized = { headers: { authorization: `Bearer ${TOKEN}` } };
 
 async function storedRow() {
-	return crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
-		id: "default",
-	}).first();
+	const [row] = await crawlerSnapshotDb.client
+		.select()
+		.from(networkRuntimeConfig)
+		.where(eq(networkRuntimeConfig.id, "default"))
+		.limit(1);
+	return row;
 }
 
 describe("crawler control plane", () => {
 	beforeAll(async () => {
-		await crawlerSnapshotDb.client.orm.public.NetworkRuntimeConfig.where({
-			id: "default",
-		}).deleteAll();
+		await crawlerSnapshotDb.client
+			.delete(networkRuntimeConfig)
+			.where(eq(networkRuntimeConfig.id, "default"));
 		await cleanupSeededRows();
 	});
 
@@ -314,9 +314,11 @@ describe("crawler control plane", () => {
 		expect(status).toBe(200);
 		expect(data?.modelThreshold).toBe(0.42);
 
-		const stored = await crawlerSnapshotDb.client.orm.public.CrawlerRuntimeConfig.where({
-			key: "discovery",
-		}).first();
+		const [stored] = await crawlerSnapshotDb.client
+			.select()
+			.from(crawlerRuntimeConfig)
+			.where(eq(crawlerRuntimeConfig.key, "discovery"))
+			.limit(1);
 		expect(stored?.config).toMatchObject({ modelThreshold: 0.42 });
 	});
 
@@ -392,6 +394,53 @@ describe("crawler control plane", () => {
 		expect(labeled.data?.humanLabel).toBe(1);
 		expect(labeled.data?.labeledAt).not.toBeNull();
 	});
+	test.serial(
+		"session, recovery and adaptive policies persist through the API and reach runtime status",
+		async () => {
+			const current = await runtimeApi.config.get(authorized);
+			if (!current.data) throw new Error("Missing network configuration");
+			const original = current.data.config;
+			try {
+				const config = {
+					...original,
+					session: BilibiliSessionConfigSchema.parse({
+						refreshIntervalMs: 7200000,
+						browser: { family: "safari", safariVersion: "27.2" },
+						recoveryAttempts: 2,
+					}),
+					adaptive: AdaptiveRateConfigSchema.parse({
+						decreaseFactor: 0.6,
+						backgroundFactor: 0.2,
+					}),
+					execution: CrawlerExecutionConfigSchema.parse({
+						maxAdapterAttempts: 2,
+						mqOperationTimeoutMs: 2000,
+						inferenceTimeoutMs: 15000,
+					}),
+				};
+				const saved = await runtimeApi.config.put(
+					{ revision: current.data.revision, config },
+					authorized
+				);
+				expect(saved.status).toBe(200);
+				const loaded = await runtimeApi.config.get(authorized);
+				expect(loaded.data?.config.session).toEqual(config.session);
+				expect(loaded.data?.config.adaptive).toEqual(config.adaptive);
+				expect(loaded.data?.config.execution).toEqual(config.execution);
+				const status = await runtimeApi.status.get(authorized);
+				expect(status.data?.revision).toBe(saved.data?.revision);
+				expect(status.data?.session?.browser).toBe("safari 27.2");
+			} finally {
+				const latest = await runtimeApi.config.get(authorized);
+				if (latest.data)
+					await runtimeApi.config.put(
+						{ revision: latest.data.revision, config: original },
+						authorized
+					);
+			}
+		}
+	);
+
 	test.serial(
 		"saving concurrency through the API changes scheduling on the running worker",
 		async () => {

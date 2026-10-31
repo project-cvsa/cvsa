@@ -1,5 +1,14 @@
-import type { DatabaseClient, SongExternalLink, TxClient } from "@cvsa/db";
-import { toJson, toInstant } from "@cvsa/db";
+import {
+	type DatabaseClient,
+	type SongExternalLink,
+	type TxClient,
+	history,
+	song,
+	songExternalLink,
+	toInstant,
+	toJson,
+} from "@cvsa/db";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../../cache";
@@ -47,43 +56,55 @@ export class SongExternalLinkWriter {
 		await this.invalidateCache(songId);
 	}
 
+	private async requireSong(tx: TxClient, songId: SongId) {
+		const [row] = await tx
+			.select()
+			.from(song)
+			.where(and(eq(song.id, songId), isNull(song.deletedAt)))
+			.limit(1);
+		if (!row) {
+			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
+		}
+		return row;
+	}
+
 	private async createInTransaction(
 		tx: TxClient,
 		actor: Principal,
 		songId: SongId,
 		input: SongExternalLinkCreateInput
 	): Promise<SongExternalLink> {
-		const song = await tx.orm.core.Song.where({ id: songId, deletedAt: null }).first();
-		if (!song) {
-			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
-		}
+		const songRow = await this.requireSong(tx, songId);
+		assertCanManageExternalLinks(actor, songRow);
 
-		assertCanManageExternalLinks(actor, song);
+		const [created] = await tx
+			.insert(songExternalLink)
+			.values({
+				songId,
+				label: input.label,
+				url: input.url,
+				platform: input.platform ?? undefined,
+				platformId: input.platformId,
+			})
+			.returning();
+		if (!created) throw new Error("Failed to insert external link");
 
-		const link = await tx.orm.core.SongExternalLink.create({
-			songId,
-			label: input.label,
-			url: input.url,
-			platform: input.platform ?? undefined,
-			platformId: input.platformId,
-		});
-
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "song_external_link",
-			objectId: link.id,
+			objectId: created.id,
 			type: "CREATE",
-			new: toJson(link),
+			new: toJson(created),
 		});
 
 		await recordOutboxEvent(tx, {
 			aggregateType: "song",
 			aggregateId: songId,
 			eventType: "song.external_link_created",
-			payload: { songId, linkId: link.id },
+			payload: { songId, linkId: created.id },
 		});
 
-		return link;
+		return created;
 	}
 
 	private async updateInTransaction(
@@ -93,33 +114,39 @@ export class SongExternalLinkWriter {
 		linkId: number,
 		input: SongExternalLinkUpdateInput
 	): Promise<SongExternalLink> {
-		const song = await tx.orm.core.Song.where({ id: songId, deletedAt: null }).first();
-		if (!song) {
-			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
-		}
+		const songRow = await this.requireSong(tx, songId);
+		assertCanManageExternalLinks(actor, songRow);
 
-		assertCanManageExternalLinks(actor, song);
-
-		const existing = await tx.orm.core.SongExternalLink.where({
-			id: linkId,
-			songId,
-			deletedAt: null,
-		}).first();
+		const [existing] = await tx
+			.select()
+			.from(songExternalLink)
+			.where(
+				and(
+					eq(songExternalLink.id, linkId),
+					eq(songExternalLink.songId, songId),
+					isNull(songExternalLink.deletedAt)
+				)
+			)
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.externalLink.notfound", "NOT_FOUND", 404);
 		}
 
-		const updated = await tx.orm.core.SongExternalLink.where({ id: linkId }).update({
-			label: input.label,
-			url: input.url,
-			platform: input.platform ?? undefined,
-			platformId: input.platformId,
-		});
+		const [updated] = await tx
+			.update(songExternalLink)
+			.set({
+				label: input.label,
+				url: input.url,
+				platform: input.platform ?? undefined,
+				platformId: input.platformId,
+			})
+			.where(eq(songExternalLink.id, linkId))
+			.returning();
 		if (!updated) {
 			throw new AppError("error.externalLink.notfound", "NOT_FOUND", 404);
 		}
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "song_external_link",
 			objectId: linkId,
@@ -144,26 +171,30 @@ export class SongExternalLinkWriter {
 		songId: SongId,
 		linkId: number
 	): Promise<void> {
-		const song = await tx.orm.core.Song.where({ id: songId, deletedAt: null }).first();
-		if (!song) {
-			throw new AppError("error.song.notfound", "NOT_FOUND", 404);
-		}
+		const songRow = await this.requireSong(tx, songId);
+		assertCanManageExternalLinks(actor, songRow);
 
-		assertCanManageExternalLinks(actor, song);
-
-		const existing = await tx.orm.core.SongExternalLink.where({
-			id: linkId,
-			songId,
-			deletedAt: null,
-		}).first();
+		const [existing] = await tx
+			.select()
+			.from(songExternalLink)
+			.where(
+				and(
+					eq(songExternalLink.id, linkId),
+					eq(songExternalLink.songId, songId),
+					isNull(songExternalLink.deletedAt)
+				)
+			)
+			.limit(1);
 		if (!existing) {
 			throw new AppError("error.externalLink.notfound", "NOT_FOUND", 404);
 		}
 
-		const now = toInstant(new Date());
-		await tx.orm.core.SongExternalLink.where({ id: linkId }).update({ deletedAt: now });
+		await tx
+			.update(songExternalLink)
+			.set({ deletedAt: toInstant(new Date()) })
+			.where(eq(songExternalLink.id, linkId));
 
-		await tx.orm.meta.History.create({
+		await tx.insert(history).values({
 			userId: actor.auditUserId,
 			table: "song_external_link",
 			objectId: linkId,
