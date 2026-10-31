@@ -17,15 +17,15 @@ test("legacy routing gains real purpose bindings while preserving custom reserva
 		expect(
 			config.bindings?.find((binding) => binding.requestType === type)?.adapterIds
 		).toEqual(["exit"]);
-	expect(config.requestTypePolicies.other.reservedShare).toBe(0.6);
+	expect(config.requestTypePolicies?.other?.reservedShare).toBe(0.6);
 	expect(
-		Object.values(config.requestTypePolicies).reduce(
+		Object.values(config.requestTypePolicies ?? {}).reduce(
 			(sum, policy) => sum + policy.reservedShare,
 			0
 		)
 	).toBeLessThanOrEqual(1 + 1e-9);
-	expect(config.requestTypePolicies["bilibili:tracking"].reservedShare).toBeGreaterThan(
-		config.requestTypePolicies["bilibili:search"].reservedShare
+	expect(config.requestTypePolicies?.["bilibili:tracking"]?.reservedShare).toBeGreaterThan(
+		config.requestTypePolicies?.["bilibili:search"]?.reservedShare ?? 0
 	);
 });
 
@@ -42,7 +42,7 @@ test("saved purpose reservations control admission policies even after removing 
 			},
 		})
 	);
-	expect(config.requestTypePolicies["bilibili:tracking"].reservedShare).toBe(0.5);
-	expect(config.requestTypePolicies["bilibili:search"].reservedShare).toBe(0.1);
+	expect(config.requestTypePolicies?.["bilibili:tracking"]?.reservedShare).toBe(0.5);
+	expect(config.requestTypePolicies?.["bilibili:search"]?.reservedShare).toBe(0.1);
 	expect(normalizeBilibiliRuntimeConfig(config)).toEqual(config);
 });

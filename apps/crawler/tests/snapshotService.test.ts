@@ -21,6 +21,17 @@ class FakeSnapshotRepository implements ISnapshotRepository {
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {
 		return (this.historicalSnapshots.get(aid) ?? []).slice(0, limit);
 	}
+
+	async listSnapshots(
+		aid: bigint,
+		options: { limit: number; offset: number }
+	): Promise<{ items: VideoSnapshot[]; total: number }> {
+		const all = this.historicalSnapshots.get(aid) ?? [];
+		return {
+			items: all.slice(options.offset, options.offset + options.limit),
+			total: all.length,
+		};
+	}
 }
 
 /** Seeds the tracking row the way the dispatcher would before a batch runs. */

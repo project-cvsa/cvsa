@@ -86,9 +86,9 @@ export default function VideoHistory(props: VideoHistoryProps) {
 				</span>
 			</div>
 			<Show when={props.historyError() && (props.history()?.items.length ?? 0) > 0}>
-				<p role="alert" class="ts-caption text-error">
+				<div role="alert" class="p-3 bg-error text-on-error ts-caption font-medium">
 					{props.historyError()}
-				</p>
+				</div>
 			</Show>
 			<Show
 				when={(props.history()?.items.length ?? 0) > 0}

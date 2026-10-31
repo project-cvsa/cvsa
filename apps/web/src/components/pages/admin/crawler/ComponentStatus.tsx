@@ -41,7 +41,8 @@ export default function ComponentStatus(props: ComponentStatusProps) {
 	const adapters = () => props.status?.adapters ?? [];
 	const healthy = () =>
 		adapters().filter(
-			(adapter) => adapter.enabled && adapter.healthState.toLowerCase() === "healthy"
+			(adapter) =>
+				adapter.enabled && (adapter.healthState?.toLowerCase() ?? "healthy") === "healthy"
 		).length;
 	const jobs = (state: "active" | "waiting") =>
 		Object.values(props.stats.queues).reduce((sum, queue) => sum + queue[state], 0);

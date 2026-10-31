@@ -260,9 +260,9 @@ export default function GraphExplorer(props: GraphExplorerProps) {
 			</form>
 			<Show when={error()}>
 				{(message) => (
-					<p role="alert" class="text-error ts-caption">
+					<div role="alert" class="p-3 bg-error text-on-error ts-caption font-medium">
 						{message()}
-					</p>
+					</div>
 				)}
 			</Show>
 			<Show when={graph()}>

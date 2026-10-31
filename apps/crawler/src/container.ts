@@ -49,7 +49,11 @@ export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.clien
 export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
 
 export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
-export const manualSnapshotService = new ManualSnapshotService(trackingRepository, snapshotQueue);
+export const manualSnapshotService = new ManualSnapshotService(
+	trackingRepository,
+	snapshotQueue,
+	discoveryRepository
+);
 export const discoveryQueue = createDiscoveryQueue(crawlerMq);
 
 /**
@@ -226,6 +230,7 @@ const baseCrawlerRuntime = createCrawlerRuntime({
 				serviceName: crawlerEnv.OTEL_SERVICE_NAME,
 				serviceVersion: crawlerEnv.OTEL_SERVICE_VERSION,
 				nodeEnv: crawlerEnv.NODE_ENV,
+				otlpEndpoint: crawlerEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
 			});
 		},
 		async shutdown(): Promise<void> {

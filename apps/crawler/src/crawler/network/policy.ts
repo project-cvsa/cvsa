@@ -22,13 +22,13 @@ export function normalizeBilibiliRuntimeConfig(input: NetworkRuntimeConfig): Net
 	for (const requestType of BILIBILI_REQUEST_TYPES)
 		if (!bindings.some((binding) => binding.requestType === requestType))
 			bindings.push({ requestType, adapterIds: [...fallback.adapterIds] });
-	const requestTypePolicies = { ...config.requestTypePolicies };
+	const requestTypePolicies = { ...(config.requestTypePolicies ?? {}) };
 	delete requestTypePolicies["bilibili-api"];
 	const existingTotal = Object.values(requestTypePolicies).reduce(
 		(sum, policy) => sum + policy.reservedShare,
 		0
 	);
-	const missing = Object.entries(DEFAULT_RESERVATIONS).filter(
+	const missing = Object.entries(DEFAULT_RESERVATIONS ?? {}).filter(
 		([name]) => requestTypePolicies[name] === undefined
 	);
 	const requested = missing.reduce((sum, [, policy]) => sum + policy.reservedShare, 0);

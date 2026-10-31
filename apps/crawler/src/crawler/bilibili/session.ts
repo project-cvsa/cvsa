@@ -67,6 +67,12 @@ export class BilibiliSession {
 	private identity(): BilibiliCredentialBundle["identity"] {
 		return this.bundle?.identity ?? this.initialIdentity;
 	}
+	private getRequestIdentity(): BilibiliCredentialBundle["identity"] {
+		if (this.config.browser.family === "auto") {
+			return chooseBrowserIdentity(this.config.browser, this.random);
+		}
+		return this.bundle?.identity ?? this.initialIdentity;
+	}
 	private cookieHeader(bundle = this.bundle): string {
 		return bundle && bundle.expiresAt > this.clock()
 			? `buvid3=${bundle.buvid3}; buvid4=${bundle.buvid4}; b_nut=${bundle.bNut}; bili_ticket=${bundle.ticket}`
@@ -375,25 +381,23 @@ export class BilibiliSession {
 		const cookie = this.cookieHeader(bundle);
 		let response: BilibiliHttpResponse;
 		try {
+			const identity = this.getRequestIdentity();
 			response = await this.requestImpl(url, {
 				...options,
-				headers: browserRequestHeaders(
-					bundle?.identity ?? this.identity(),
-					url,
-					options.method,
-					{
-						...(cookie ? { Cookie: cookie } : {}),
-						...options.headers,
-					}
-				),
+				headers: browserRequestHeaders(identity, url, options.method, {
+					...(cookie ? { Cookie: cookie } : {}),
+					...options.headers,
+				}),
 			});
 		} catch (error) {
-			appLogger.error("Bilibili HTTP request failed", {
+			appLogger.warn("Bilibili HTTP request failed", {
 				component: "bilibili-session",
 				method: options.method ?? "GET",
 				path: requestPath,
+				url,
 				durationMs: Math.round(performance.now() - requestStartedAt),
 				error,
+				...options.context,
 			});
 			throw error;
 		}
@@ -404,15 +408,20 @@ export class BilibiliSession {
 			path: requestPath,
 			status: response.status,
 			durationMs: Math.round(performance.now() - requestStartedAt),
+			...options.context,
 		});
 
 		if (response.status < 200 || response.status >= 300) {
 			const error = new Error(`Bilibili request failed with HTTP ${response.status}`);
-			appLogger.error("Bilibili HTTP status error", {
+			appLogger.warn("Bilibili HTTP status error", {
 				component: "bilibili-session",
 				method: options.method ?? "GET",
 				path: requestPath,
+				url,
 				status: response.status,
+				durationMs: Math.round(performance.now() - requestStartedAt),
+				bodySnippet: response.body ? response.body.slice(0, 500) : undefined,
+				...options.context,
 			});
 			throw error;
 		}

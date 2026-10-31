@@ -49,6 +49,16 @@ export type NetworkApplicationErrorClassifier = (
 	context: NetworkApplicationErrorContext
 ) => NetworkErrorCode | undefined;
 
+export interface NetworkRequestContext {
+	endpoint?: string;
+	aid?: string;
+	bvid?: string;
+	keyword?: string;
+	batchSize?: number;
+	jobId?: string;
+	[key: string]: unknown;
+}
+
 export interface NetworkRequest {
 	url: string;
 	requestType?: string;
@@ -61,6 +71,7 @@ export interface NetworkRequest {
 	adapterId?: string;
 	background?: boolean;
 	replaySafe?: boolean;
+	context?: NetworkRequestContext;
 }
 
 export interface NetworkResponse {
@@ -128,16 +139,16 @@ export type NetworkAdapterHealthState = "healthy" | "degraded" | "open" | "half-
 export interface NetworkAdapterRuntimeStatus {
 	id: string;
 	enabled: boolean;
-	healthState: NetworkAdapterHealthState;
-	healthFactor: number;
-	effectiveWeight: number;
-	consecutiveFailures: number;
+	healthState?: NetworkAdapterHealthState;
+	healthFactor?: number;
+	effectiveWeight?: number;
+	consecutiveFailures?: number;
 	/** Epoch milliseconds until which the adapter stays isolated, or `null`. */
-	openUntil: number | null;
+	openUntil?: number | null;
 	/** Counts since this scheduler instance started, including retries. */
 	requests: number;
 	failures: number;
-	rateLimited: number;
+	rateLimited?: number;
 	averageDurationMs: number | null;
 	configuredRate?: number;
 	effectiveRate?: number;

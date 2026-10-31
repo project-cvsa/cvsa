@@ -8,11 +8,14 @@ import {
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
 	PromoteTrackingVideoRequestSchema,
+	QueueSnapshotQuerySchema,
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
 	TrackingAidParamsSchema,
 	TrackingVideoListQuerySchema,
 	TrackingVideoListResponseSchema,
+	VideoSnapshotListQuerySchema,
+	VideoSnapshotListResponseSchema,
 	type IngestVideoResponse,
 	type TrackingVideoListItem,
 	type TrackingVideoListResponse,
@@ -30,6 +33,7 @@ import {
 	discoveryAdminService,
 	discoveryRepository,
 	manualSnapshotService,
+	snapshotRepository,
 	trackingRepository,
 } from "../container";
 
@@ -95,6 +99,7 @@ function toTrackingListItemDto(
 			? {
 					title: metadata.title,
 					bvid: metadata.bvid,
+					pic: metadata.pic ?? null,
 					ownerName: metadata.ownerName,
 					videoStatus: metadata.videoStatus,
 					filterDecision: metadata.filterDecision,
@@ -287,16 +292,55 @@ export const trackingRoutes = new Elysia()
 			},
 		}
 	)
-	.post("/videos/:aid/snapshots", ({ params }) => manualSnapshotService.enqueue(params.aid), {
-		params: TrackingAidParamsSchema,
-		response: {
-			200: ActionQueuedResponseSchema,
-			401: ErrorResponseSchema,
-			404: ErrorResponseSchema,
-			409: ErrorResponseSchema,
-			422: ErrorResponseSchema,
+	.post(
+		"/videos/:aid/snapshots",
+		({ params, query }) =>
+			manualSnapshotService.enqueue(params.aid, { force: query?.force ?? true }),
+		{
+			params: TrackingAidParamsSchema,
+			query: QueueSnapshotQuerySchema,
+			response: {
+				200: ActionQueuedResponseSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				409: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/videos/:aid/snapshots",
+		async ({ params, query }) => {
+			const aid = BigInt(params.aid);
+			const result = await snapshotRepository.listSnapshots(aid, {
+				limit: query.limit,
+				offset: query.offset,
+			});
+			return {
+				items: result.items.map((item) => ({
+					aid: item.aid.toString(),
+					capturedAt: item.capturedAt.toString(),
+					views: item.views,
+					coins: item.coins,
+					likes: item.likes,
+					favorites: item.favorites,
+					shares: item.shares,
+					danmakus: item.danmakus,
+					replies: item.replies,
+				})),
+				total: result.total,
+			};
 		},
-	})
+		{
+			params: TrackingAidParamsSchema,
+			query: VideoSnapshotListQuerySchema,
+			response: {
+				200: VideoSnapshotListResponseSchema,
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
 	.post(
 		"/videos/:aid/promote",
 		async ({ params, body, status }) => {

@@ -180,7 +180,7 @@ export default function SettingsSection() {
 				}
 			>
 				{(current) => (
-					<fieldset disabled={loading() || saving()} class="min-w-0 border-0 p-0">
+					<fieldset disabled={saving()} class="min-w-0 border-0 p-0">
 						<div class="flex flex-col gap-6">
 							<KeywordListEditor
 								title={t("settings.searchKeywords.title")}

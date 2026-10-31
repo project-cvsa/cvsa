@@ -84,7 +84,7 @@ export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
 		props.adapter?.requestsPerSecond ?? 20
 	);
 	const [limits, setLimits] = createSignal<NetworkRateLimit[]>(
-		props.adapter?.rateLimits.map((limit) => ({ ...limit })) ?? [
+		props.adapter?.rateLimits?.map((limit) => ({ ...limit })) ?? [
 			{ durationSeconds: 60, maxRequests: 120 },
 		]
 	);
