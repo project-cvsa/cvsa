@@ -730,6 +730,30 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		this.runtimeConfigs.set(key, next);
 		return next;
 	}
+
+	readonly exploredWindows = new Set<string>();
+
+	async markSearchWindowsExplored(
+		windows: { keyword: string; windowStart: number }[]
+	): Promise<void> {
+		for (const w of windows) {
+			this.exploredWindows.add(`${w.keyword}:${w.windowStart}`);
+		}
+	}
+
+	async getExploredSearchWindows(
+		keyword: string,
+		fromWindow: number,
+		toWindow: number
+	): Promise<Set<number>> {
+		const result = new Set<number>();
+		for (let w = fromWindow; w <= toWindow; w += 600) {
+			if (this.exploredWindows.has(`${keyword}:${w}`)) {
+				result.add(w);
+			}
+		}
+		return result;
+	}
 }
 
 /** Minimal {@link DiscoveryFilterConfigStore} backed by a map. */

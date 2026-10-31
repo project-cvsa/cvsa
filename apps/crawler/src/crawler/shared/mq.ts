@@ -217,8 +217,16 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 						: context.active();
 
 					await context.with(parentContext, async () => {
+						const effectiveTimeout =
+							rawData &&
+							typeof rawData === "object" &&
+							"_timeoutMs" in rawData &&
+							typeof rawData._timeoutMs === "number" &&
+							rawData._timeoutMs > 0
+								? rawData._timeoutMs
+								: taskTimeoutMs;
 						await runTaskWithDeadline(
-							taskTimeoutMs,
+							effectiveTimeout,
 							async () => {
 								try {
 									await processor(crawlerJob);

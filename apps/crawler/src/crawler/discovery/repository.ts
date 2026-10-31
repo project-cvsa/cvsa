@@ -29,6 +29,7 @@ import {
 	bilibiliVideoRelation,
 	crawlerRuntimeConfig,
 	discoverySample,
+	discoverySearchWindow,
 	toInstant,
 	toJson,
 	videoTracking,
@@ -706,6 +707,37 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					changedFields: toJson(changedFields),
 					snapshot: toJson(row),
 				});
+		});
+	}
+
+	async markSearchWindowsExplored(
+		windows: { keyword: string; windowStart: number }[]
+	): Promise<void> {
+		if (windows.length === 0) return;
+		return traceTask("discovery.markSearchWindowsExplored", async () => {
+			const db = activeTaskResource(this.db);
+			await db.insert(discoverySearchWindow).values(windows).onConflictDoNothing();
+		});
+	}
+
+	async getExploredSearchWindows(
+		keyword: string,
+		fromWindow: number,
+		toWindow: number
+	): Promise<Set<number>> {
+		return traceTask("discovery.getExploredSearchWindows", async () => {
+			const db = activeTaskResource(this.db);
+			const rows = await db
+				.select({ windowStart: discoverySearchWindow.windowStart })
+				.from(discoverySearchWindow)
+				.where(
+					and(
+						eq(discoverySearchWindow.keyword, keyword),
+						gte(discoverySearchWindow.windowStart, fromWindow),
+						lte(discoverySearchWindow.windowStart, toWindow)
+					)
+				);
+			return new Set(rows.map((r) => r.windowStart));
 		});
 	}
 }

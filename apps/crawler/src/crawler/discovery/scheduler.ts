@@ -6,6 +6,10 @@ import type { DiscoveryJobData } from "./worker";
 
 /** Search sweeps are expensive; five minutes keeps the queue busy without thrash. */
 export const DEFAULT_SEARCH_SWEEP_INTERVAL_MS = 5 * 60 * 1_000;
+/** Deep multi-window sweep runs every 30 minutes. */
+export const DEFAULT_DEEP_SWEEP_INTERVAL_MS = 30 * 60 * 1_000;
+/** Deep sweep deadline is up to 25 minutes. */
+export const DEEP_SWEEP_TIMEOUT_MS = 25 * 60 * 1_000;
 /** Recommendation expansion of hot videos, paired with the sweep cadence. */
 export const HOT_SAMPLE_INTERVAL_MS = 5 * 60 * 1_000;
 /** Seeded videos per hot-sample round. */
@@ -27,22 +31,36 @@ export class DiscoveryScheduler {
 	 */
 	async startScheduledSweeps(
 		intervalMs = DEFAULT_SEARCH_SWEEP_INTERVAL_MS,
-		hotSampleIntervalMs = HOT_SAMPLE_INTERVAL_MS
+		hotSampleIntervalMs = HOT_SAMPLE_INTERVAL_MS,
+		deepSweepIntervalMs = DEFAULT_DEEP_SWEEP_INTERVAL_MS
 	): Promise<void> {
 		appLogger.info("Starting repeatable discovery jobs in BullMQ", {
 			component: "discovery-scheduler",
 			intervalMs,
 			hotSampleIntervalMs,
+			deepSweepIntervalMs,
 			relatedDiscoveryEnabled: this.relatedDiscoveryEnabled,
 		});
 
 		await this.discoveryQueue.add(
 			"repeatable-search-sweep",
-			{ type: "search-sweep" },
+			{ type: "search-sweep", mode: "incremental" },
 			{
 				jobId: "repeatable-search-sweep",
 				repeat: {
 					every: intervalMs,
+				},
+				removeOnComplete: { age: 3600, count: 100 },
+			}
+		);
+
+		await this.discoveryQueue.add(
+			"repeatable-deep-sweep",
+			{ type: "search-sweep", mode: "deep", _timeoutMs: DEEP_SWEEP_TIMEOUT_MS },
+			{
+				jobId: "repeatable-deep-sweep",
+				repeat: {
+					every: deepSweepIntervalMs,
 				},
 				removeOnComplete: { age: 3600, count: 100 },
 			}
@@ -64,9 +82,15 @@ export class DiscoveryScheduler {
 	}
 
 	async triggerSearchSweep(config?: Partial<SearchRoverConfig>): Promise<void> {
+		const isDeep = config?.mode === "deep";
 		await this.discoveryQueue.add(
 			`sweep-manual-${Date.now()}`,
-			{ type: "search-sweep", config },
+			{
+				type: "search-sweep",
+				mode: config?.mode ?? "incremental",
+				config,
+				...(isDeep ? { _timeoutMs: DEEP_SWEEP_TIMEOUT_MS } : {}),
+			},
 			{ removeOnComplete: { age: 3600, count: 100 } }
 		);
 	}

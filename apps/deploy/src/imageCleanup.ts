@@ -2,17 +2,29 @@ const SHA_TAG = /^sha-[0-9a-f]{12,40}$/;
 
 export type DockerExec = (args: string[]) => Promise<string>;
 
-async function docker(args: string[]): Promise<string> {
+async function docker(args: string[], timeoutMs = 30_000): Promise<string> {
 	const proc = Bun.spawn(["docker", ...args], { stdout: "pipe", stderr: "pipe" });
-	const [stdout, stderr] = await Promise.all([
-		new Response(proc.stdout).text(),
-		new Response(proc.stderr).text(),
-	]);
-	const code = await proc.exited;
-	if (code !== 0) {
-		throw new Error(`docker ${args.join(" ")} failed (exit ${code}): ${stderr.trim()}`);
+	const timer = setTimeout(() => {
+		try {
+			proc.kill();
+		} catch {
+			// ignored
+		}
+	}, timeoutMs);
+
+	try {
+		const [stdout, stderr] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+		const code = await proc.exited;
+		if (code !== 0) {
+			throw new Error(`docker ${args.join(" ")} failed (exit ${code}): ${stderr.trim()}`);
+		}
+		return stdout;
+	} finally {
+		clearTimeout(timer);
 	}
-	return stdout;
 }
 
 export async function removeStaleImages(
