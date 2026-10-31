@@ -27,6 +27,15 @@ import {
 } from "./outbox";
 import { appLogger } from "@cvsa/logger";
 import { env } from "@cvsa/env";
+import { initOtelSdk } from "@cvsa/observability";
+
+if (process.env.NODE_ENV !== "test") {
+	void initOtelSdk({
+		serviceName: env.OTEL_SERVICE_NAME,
+		serviceVersion: env.OTEL_SERVICE_VERSION,
+		nodeEnv: env.NODE_ENV,
+	});
+}
 
 const [host, port] = getBindingInfo();
 
