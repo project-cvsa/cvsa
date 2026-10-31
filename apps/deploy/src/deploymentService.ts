@@ -4,7 +4,20 @@ import { resolve } from "node:path";
 import { DeployStateSchema, type DeployRequest, type DeployState } from "@cvsa/contracts";
 import { z } from "zod";
 
-const ConfigSchema = z.object({ services: z.record(z.string(), z.object({ image: z.string() })) });
+const ServiceConfigSchema = z
+	.object({
+		image: z.string().optional(),
+	})
+	.passthrough();
+
+const ComposeOverrideSchema = z
+	.object({
+		services: z.record(z.string(), ServiceConfigSchema).optional().default({}),
+	})
+	.passthrough();
+
+export type ComposeOverride = z.infer<typeof ComposeOverrideSchema>;
+
 export class DeploymentService {
 	private active = false;
 	private state: DeployState | undefined;
@@ -50,12 +63,14 @@ export class DeploymentService {
 			});
 		return this.state;
 	}
-	private async atomic(path: string, value: unknown) {
-		await Bun.write(`${path}.tmp`, JSON.stringify(value, null, 2));
+	private async atomic(path: string, value: unknown, format: "json" | "yaml" = "json") {
+		const content =
+			format === "yaml" ? Bun.YAML.stringify(value) : JSON.stringify(value, null, 2);
+		await Bun.write(`${path}.tmp`, content);
 		await rename(`${path}.tmp`, path);
 	}
 	private async persist() {
-		await this.atomic(resolve(this.root, ".deploy.state.json"), this.state);
+		await this.atomic(resolve(this.root, ".deploy.state.json"), this.state, "json");
 	}
 	private async compose(files: string[], args: string[]) {
 		if (this.run) return this.run(files, args);
@@ -72,15 +87,19 @@ export class DeploymentService {
 			const override = resolve(this.root, "docker-compose.override.yml");
 			const candidate = resolve(this.root, ".deploy.candidate.json");
 			const previousFile = Bun.file(override);
-			const previous = (await previousFile.exists())
-				? ConfigSchema.parse(Bun.YAML.parse(await previousFile.text()))
+			const previous: ComposeOverride = (await previousFile.exists())
+				? ComposeOverrideSchema.parse(Bun.YAML.parse(await previousFile.text()))
 				: { services: {} };
 			const next = structuredClone(previous);
-			for (const service of request.services)
+			if (!next.services) next.services = {};
+			for (const service of request.services) {
+				const existingService = next.services[service] ?? {};
 				next.services[service] = {
+					...existingService,
 					image: `${process.env.IMAGE_REGISTRY ?? "ghcr.io/project-cvsa"}/cvsa-${service}:${request.tag}`,
 				};
-			await this.atomic(candidate, next);
+			}
+			await this.atomic(candidate, next, "json");
 			const files = [base, candidate];
 			await this.compose(files, ["config", "--quiet"]);
 			await this.compose(files, ["pull", ...request.services]);
@@ -94,7 +113,7 @@ export class DeploymentService {
 				"180",
 				...request.services,
 			]);
-			await this.atomic(override, next);
+			await this.atomic(override, next, "yaml");
 			if (this.state) this.state.status = "success";
 		} catch (error) {
 			if (this.state) {
