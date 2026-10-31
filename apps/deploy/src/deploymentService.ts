@@ -3,6 +3,7 @@ import { rename } from "node:fs/promises";
 import { resolve } from "node:path";
 import { DeployStateSchema, type DeployRequest, type DeployState } from "@cvsa/contracts";
 import { z } from "zod";
+import { removeStaleImages } from "./imageCleanup";
 
 const ServiceConfigSchema = z
 	.object({
@@ -18,12 +19,18 @@ const ComposeOverrideSchema = z
 
 export type ComposeOverride = z.infer<typeof ComposeOverrideSchema>;
 
+export function imageRegistry() {
+	return process.env.IMAGE_REGISTRY ?? "ghcr.io/project-cvsa";
+}
+
 export class DeploymentService {
 	private active = false;
 	private state: DeployState | undefined;
 	constructor(
 		private root: string,
-		private run?: (files: string[], args: string[]) => Promise<void>
+		private run?: (files: string[], args: string[]) => Promise<void>,
+		private cleanup: (services: readonly string[]) => Promise<void> = (services) =>
+			removeStaleImages(services, imageRegistry())
 	) {}
 	async initialize() {
 		const file = Bun.file(resolve(this.root, ".deploy.state.json"));
@@ -96,7 +103,7 @@ export class DeploymentService {
 				const existingService = next.services[service] ?? {};
 				next.services[service] = {
 					...existingService,
-					image: `${process.env.IMAGE_REGISTRY ?? "ghcr.io/project-cvsa"}/cvsa-${service}:${request.tag}`,
+					image: `${imageRegistry()}/cvsa-${service}:${request.tag}`,
 				};
 			}
 			await this.atomic(candidate, next, "json");
@@ -114,6 +121,13 @@ export class DeploymentService {
 				...request.services,
 			]);
 			await this.atomic(override, next, "yaml");
+			try {
+				await this.cleanup(request.services);
+			} catch (error) {
+				console.warn(
+					`Stale image cleanup failed: ${error instanceof Error ? error.message : String(error)}`
+				);
+			}
 			if (this.state) this.state.status = "success";
 		} catch (error) {
 			if (this.state) {
