@@ -39,6 +39,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 
 # Stage 3: Source & Shared Build
 FROM deps AS source
+ENV NODE_ENV=production
 COPY packages ./packages
 COPY locale ./locale
 RUN bun run --filter @cvsa/network-scheduler build
@@ -71,7 +72,7 @@ FROM base AS crawler
 WORKDIR /app
 COPY --from=crawler-builder /app/apps/crawler/dist ./dist
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun add onnxruntime-node@1.30.0 --no-save
+	bun add onnxruntime-node@1.30.0 sharp@0.35.4 --no-save
 ENV NODE_ENV=production
 ENV CONTROL_API_HOST=0.0.0.0
 ENV CONTROL_API_PORT=16413
@@ -93,7 +94,7 @@ FROM base AS embedding
 WORKDIR /app
 COPY --from=embedding-builder /app/apps/embedding/dist ./dist
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun add onnxruntime-node@1.30.0 --no-save
+	bun add onnxruntime-node@1.30.0 sharp@0.35.4 --no-save
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=14900
@@ -119,7 +120,7 @@ FROM base AS web
 WORKDIR /app
 COPY --from=web-builder /app/apps/web/dist ./dist
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun add opencc@^1.4.1 --no-save
+	bun add opencc@^1.4.1 sharp@0.35.4 --no-save
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=10199

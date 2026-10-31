@@ -4,7 +4,7 @@
 	"module": "src/index.ts",
 	"types": "src/index.ts",
 	"scripts": {
-		"build": "bun build src/index.ts --target bun --outfile dist/index.js --external onnxruntime-node",
+		"build": "bun build src/index.ts --target bun --outfile dist/index.js --external onnxruntime-node --external sharp",
 		"start": "bun run src/index.ts",
 		"dev": "bun run --watch src/index.ts",
 		"test": "bun test"

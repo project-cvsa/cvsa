@@ -4,7 +4,7 @@
 	"version": "0.3.0",
 	"scripts": {
 		"dev": "bunx --bun astro dev --host 0.0.0.0 --port 10199",
-		"build": "bunx --bun astro build && bun build dist/server/entry.mjs --target bun --outfile dist/server/entry.mjs --external opencc",
+		"build": "bunx --bun astro build && bun build dist/server/entry.mjs --target bun --outfile dist/server/entry.mjs --external opencc --external sharp",
 		"preview": "bunx --bun astro preview --port 10199",
 		"astro": "bunx --bun astro",
 		"test": "bunx --bun vitest run",
