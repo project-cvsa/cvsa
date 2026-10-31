@@ -58,8 +58,8 @@ jobs:
       - name: Run Contract & Integration Tests
         run: bun run test
 
-      - name: Verify Production Web Build
-        run: bun run --cwd apps/web build
+      - name: Build Production Bundles
+        run: bunx turbo build
 
       - name: Validate compose file
         run: docker compose config --quiet
