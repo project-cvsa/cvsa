@@ -27,7 +27,7 @@ import {
 } from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliVideoMetadata, BilibiliVideoRelation } from "@cvsa/snapshot-db";
-import { DEFAULT_HOT_SAMPLE_LIMIT } from "../crawler";
+import { DEFAULT_HOT_SAMPLE_LIMIT, RELATED_DISCOVERY_ENABLED } from "../crawler";
 import {
 	bilibiliClient,
 	discoveryFilterService,
@@ -419,7 +419,7 @@ export const discoveryRoutes = new Elysia()
 			let relations = await discoveryRepository.getRelationsBySource(seedAid);
 
 			// If no relations recorded yet, fetch live from Bilibili and persist!
-			if (relations.length === 0) {
+			if (RELATED_DISCOVERY_ENABLED && relations.length === 0) {
 				try {
 					const relatedVideos = await bilibiliClient.getRelatedVideos(seedAid);
 					if (relatedVideos.length > 0) {

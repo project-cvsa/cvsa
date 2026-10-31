@@ -11,6 +11,7 @@ import type { ITrackingRepository } from "../tracking/repository.interface";
 import type { VideoClassifierClient } from "./classifier";
 import { DiscoveryCandidateEvaluator } from "./evaluator";
 import { DiscoveryFilterService } from "./filter";
+import { RELATED_DISCOVERY_ENABLED } from "./flags";
 import { RelationExtractor } from "./relationExtractor";
 import type { IDiscoveryRepository } from "./repository.interface";
 import { SearchRover } from "./searchRover";
@@ -57,7 +58,8 @@ export class DiscoveryPipelineProcessor {
 		private readonly discoveryQueue: CrawlerQueue<DiscoveryJobData>,
 		filterService?: DiscoveryFilterService,
 		classifier?: VideoClassifierClient,
-		stats: StatsRecorder = createNoopStatsRecorder()
+		stats: StatsRecorder = createNoopStatsRecorder(),
+		private readonly relatedDiscoveryEnabled = RELATED_DISCOVERY_ENABLED
 	) {
 		this.filterService = filterService ?? new DiscoveryFilterService();
 		this.relationExtractor = new RelationExtractor(discoveryRepo);
@@ -162,6 +164,13 @@ export class DiscoveryPipelineProcessor {
 		limit = DEFAULT_HOT_SAMPLE_LIMIT,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
+		if (!this.relatedDiscoveryEnabled) {
+			appLogger.debug("Related discovery is paused; skipping hot sample", {
+				component: "discovery-worker",
+			});
+			return;
+		}
+
 		await traceTask("discovery.worker.hotSample", async () => {
 			const seeds = await this.discoveryRepo.listHotSampleCandidates({
 				limit,
@@ -234,6 +243,7 @@ export class DiscoveryPipelineProcessor {
 			});
 
 			if (evaluation.status !== "accepted") return;
+			if (!this.relatedDiscoveryEnabled) return;
 
 			// Rejected/non-relevant videos are not traversed: following their
 			// recommendations is how the crawl drifts out of the target domain.
@@ -255,6 +265,14 @@ export class DiscoveryPipelineProcessor {
 		aidStr: string,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
+		if (!this.relatedDiscoveryEnabled) {
+			appLogger.debug("Related discovery is paused; skipping active discovery", {
+				component: "discovery-worker",
+				aid: aidStr,
+			});
+			return;
+		}
+
 		await traceTask("discovery.worker.activeDiscovery", async () => {
 			const aid = /^BV/i.test(aidStr)
 				? BigInt((await this.bilibiliClient.getVideoDetails(aidStr)).View.aid)
