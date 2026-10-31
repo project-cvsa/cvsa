@@ -423,28 +423,6 @@ export const discoveryRoutes = new Elysia()
 				try {
 					const relatedVideos = await bilibiliClient.getRelatedVideos(seedAid);
 					if (relatedVideos.length > 0) {
-						const capturedAt = new Date().toISOString();
-						await discoveryRepository.bulkUpsertMetadata(
-							relatedVideos.map((item, index) => ({
-								aid: BigInt(item.aid),
-								bvid: item.bvid,
-								title: item.title,
-								pic: item.pic,
-								duration: item.duration ?? 0,
-								ownerName: item.owner?.name ?? null,
-								discoverySource: "related",
-								discoveryContext: {
-									origin: {
-										channel: "related",
-										capturedAt,
-										related: {
-											sourceAid: (seedAid ?? 0n).toString(),
-											position: index + 1,
-										},
-									},
-								},
-							}))
-						);
 						await discoveryRepository.saveRelations(
 							relatedVideos.map((item, idx) => ({
 								sourceAid: seedAid ?? 0n,

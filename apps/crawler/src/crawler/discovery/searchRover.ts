@@ -5,8 +5,7 @@ import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliClient, SearchVideo } from "../bilibili";
 import type { IDiscoveryRepository } from "./repository.interface";
-import { fromSearchTagString } from "./tags";
-import type { DiscoveredCandidate, SearchRoverConfig, UpsertMetadataInput } from "./types";
+import type { DiscoveredCandidate, SearchRoverConfig } from "./types";
 
 const DEFAULT_KEYWORDS = [
 	"洛天依原创",
@@ -31,18 +30,10 @@ function stripHighlightTags(text: string): string {
 	return text.replace(/<[^>]*>/g, "");
 }
 
-function parseDurationString(duration: string): number {
-	const parts = duration.split(":").map(Number);
-	if (parts.some((n) => Number.isNaN(n))) return 0;
-	if (parts.length === 2) return parts[0] * 60 + parts[1];
-	if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-	return 0;
-}
-
 export class SearchRover {
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
-		private readonly discoveryRepo: IDiscoveryRepository
+		readonly _discoveryRepo?: IDiscoveryRepository
 	) {}
 
 	async runSearchQuery(
@@ -71,10 +62,8 @@ export class SearchRover {
 			const videos: SearchVideo[] = res.data.result ?? [];
 			if (videos.length === 0) return [];
 
-			const now = toInstant(new Date());
 			const capturedAt = new Date().toISOString();
 			const candidates: DiscoveredCandidate[] = [];
-			const metadatas: UpsertMetadataInput[] = [];
 
 			for (const [index, video] of videos.entries()) {
 				if (!video?.aid) continue;
@@ -93,37 +82,6 @@ export class SearchRover {
 					},
 				};
 
-				const metadata: UpsertMetadataInput = {
-					aid,
-					bvid: video.bvid,
-					title: cleanTitle,
-					description: video.description ? stripHighlightTags(video.description) : null,
-					pic: video.pic
-						? video.pic.startsWith("//")
-							? `https:${video.pic}`
-							: video.pic
-						: null,
-					pubdate,
-					duration:
-						typeof video.duration === "string"
-							? parseDurationString(video.duration)
-							: 0,
-					mid: video.mid ? BigInt(video.mid) : null,
-					ownerName: video.author ?? null,
-					ownerFace: video.upic
-						? video.upic.startsWith("//")
-							? `https:${video.upic}`
-							: video.upic
-						: null,
-					tid: video.typeid ? Number(video.typeid) : null,
-					tname: video.typename ?? null,
-					tags: fromSearchTagString(video.tag),
-					discoverySource: "search",
-					discoveryContext: { origin },
-					capturedAt: now,
-				};
-
-				metadatas.push(metadata);
 				candidates.push({
 					aid,
 					bvid: video.bvid,
@@ -134,8 +92,6 @@ export class SearchRover {
 					rawVideo: video,
 				});
 			}
-
-			await this.discoveryRepo.bulkUpsertMetadata(metadatas);
 
 			appLogger.info("Search rover completed query", {
 				component: "search-rover",

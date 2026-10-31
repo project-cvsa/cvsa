@@ -19,6 +19,7 @@ export interface IDiscoveryRepository {
 	 * Existing rows are never overwritten, so richer detail metadata survives.
 	 */
 	bulkUpsertMetadata(data: UpsertMetadataInput[]): Promise<void>;
+	deleteMetadata(aid: bigint): Promise<void>;
 	getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null>;
 	getMetadatas(aids: bigint[]): Promise<BilibiliVideoMetadata[]>;
 	getMetadataHistory(aid: bigint, limit?: number): Promise<BilibiliVideoMetadataHistory[]>;
