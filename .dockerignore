@@ -1,27 +1,9 @@
 node_modules
-**/node_modules
 .git
 .jj
-.turbo
-.cache
 dist
-**/dist
-coverage
-logs
-*.log
-.env
-.env.*
-!.env.example
-data
+.output
+.turbo
+.astro
 model
-.DS_Store
-.idea
-.omo
-# The docs site is published by its own workflow and has no place in these
-# images; keep its build output out of the build context.
-apps/docs/out
-apps/docs/.next
-
-.deploy.*
-docker-compose.override.yml
-apps/crawler/ml
+*.log

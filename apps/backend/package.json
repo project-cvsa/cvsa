@@ -3,6 +3,7 @@
 	"type": "module",
 	"version": "2.1.0",
 	"scripts": {
+		"build": "bun build src/index.ts --target bun --outfile dist/index.js && bun build ../../packages/db/scripts/migrate.ts --target bun --outfile dist/migrate.js && rm -rf dist/drizzle && cp -r ../../packages/db/drizzle dist/drizzle",
 		"lint": "bunx --bun biome lint",
 		"dev": "NODE_ENV=development bun --watch src/index.ts",
 		"start": "bun src/index.ts",

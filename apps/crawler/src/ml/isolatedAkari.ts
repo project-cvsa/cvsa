@@ -1,4 +1,5 @@
 import { fork, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
 	AkariWorkerReplySchema,
@@ -9,6 +10,14 @@ import { boundedOperation } from "../crawler/shared/boundedOperation";
 import { getTaskSignal } from "../crawler/shared/taskContext";
 import type { AkariClassificationInput, AkariPrediction, AkariHealth } from "./akari";
 
+function defaultWorkerUrl(): URL {
+	const jsUrl = new URL("./akariWorker.js", import.meta.url);
+	try {
+		if (existsSync(fileURLToPath(jsUrl))) return jsUrl;
+	} catch {}
+	return new URL("./akariWorker.ts", import.meta.url);
+}
+
 /** One native inference process, replaced on cancellation or timeout. */
 export class IsolatedAkariClassifier {
 	private child: ChildProcess | undefined;
@@ -18,7 +27,7 @@ export class IsolatedAkariClassifier {
 	private closed = false;
 	constructor(
 		private readonly timeoutMs: () => number = () => 30000,
-		private readonly workerUrl = new URL("./akariWorker.ts", import.meta.url)
+		private readonly workerUrl = defaultWorkerUrl()
 	) {}
 	private terminate(): void {
 		const child = this.child;

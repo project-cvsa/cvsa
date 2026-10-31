@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { crawlerEnv } from "@cvsa/env";
 import { migrate } from "drizzle-orm/bun-sql/migrator";
 import { createDatabaseClient } from "../src/client";
@@ -12,8 +13,14 @@ import { createDatabaseClient } from "../src/client";
  */
 const client = createDatabaseClient({ connectionString: crawlerEnv.SNAPSHOT_DATABASE_URL });
 
+const migrationsFolder =
+	process.env.MIGRATIONS_FOLDER ??
+	(existsSync(new URL("./drizzle", import.meta.url).pathname)
+		? new URL("./drizzle", import.meta.url).pathname
+		: new URL("../drizzle", import.meta.url).pathname);
+
 try {
-	await migrate(client, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname });
+	await migrate(client, { migrationsFolder });
 	console.log("Snapshot database migrations applied.");
 } finally {
 	await client.$client.close();
