@@ -73,8 +73,8 @@ export async function initOtelSdk(options: OtelSdkOptions = {}): Promise<NodeSDK
 	return sdk;
 }
 
-export function getOtelLogger(serviceName?: string): ReturnType<typeof logs.getLogger> {
-	return logs.getLogger(serviceName ?? env.OTEL_SERVICE_NAME ?? "cvsa");
+export function getOtelLogger(scopeName = "@cvsa/logger"): ReturnType<typeof logs.getLogger> {
+	return logs.getLogger(scopeName);
 }
 
 export const otelLogger = getOtelLogger();

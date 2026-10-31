@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import pino from "pino";
-import { LOG_REDACT_PATHS, createApplicationLogger } from "../src";
+import { LOG_REDACT_PATHS, createApplicationLogger, withLogContext } from "../src";
 
 interface CapturedRecord {
 	level: number;
@@ -108,6 +108,41 @@ describe("createApplicationLogger", () => {
 		expect(capture.records[0]).toMatchObject({
 			msg: "Crawler runtime started",
 			component: "crawler-runtime",
+		});
+	});
+
+	test("automatically injects ambient log context across deep async calls without manual arguments", async () => {
+		const { capture, logger } = createLoggerWithRedaction();
+
+		async function deeplyNestedWork() {
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			logger.info("Deep operation finished");
+		}
+
+		await withLogContext(
+			{
+				jobId: "batch-789",
+				queue: "crawler-discovery",
+				worker: "discovery-worker",
+			},
+			async () => {
+				logger.info("Starting batch job");
+				await deeplyNestedWork();
+			}
+		);
+
+		expect(capture.records).toHaveLength(2);
+		expect(capture.records[0]).toMatchObject({
+			msg: "Starting batch job",
+			jobId: "batch-789",
+			queue: "crawler-discovery",
+			worker: "discovery-worker",
+		});
+		expect(capture.records[1]).toMatchObject({
+			msg: "Deep operation finished",
+			jobId: "batch-789",
+			queue: "crawler-discovery",
+			worker: "discovery-worker",
 		});
 	});
 });
