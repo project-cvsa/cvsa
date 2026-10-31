@@ -239,9 +239,9 @@ export default function TasksSection() {
 			<SectionHeader title={<h2 class="ts-heading-2">{t("tasks.title")}</h2>} />
 			<Show when={error()}>
 				{(message) => (
-					<p role="alert" class="text-error text-label tracking-label">
+					<div role="alert" class="p-3 bg-error text-on-error ts-caption font-medium">
 						{message()}
-					</p>
+					</div>
 				)}
 			</Show>
 			<Show when={stats()}>{(data) => <QueueStatusTable queues={data().queues} />}</Show>
@@ -354,11 +354,15 @@ export default function TasksSection() {
 				</Show>
 				<Show when={detailError()}>
 					{(message) => (
-						<div role="alert" class="flex items-center gap-3 text-error">
+						<div
+							role="alert"
+							class="p-3 bg-error text-on-error ts-caption font-medium flex items-center justify-between gap-3"
+						>
 							<span>{message()}</span>
 							<Button
 								size="sm"
 								variant="outlined"
+								class="border-on-error text-on-error hover:bg-on-error/20"
 								onClick={() => {
 									const job = selected();
 									if (job) void inspect(job);

@@ -4,6 +4,7 @@ import type {
 	NetworkMetricAttributes,
 	NetworkTransportResponse,
 } from "@cvsa/network-scheduler";
+import { BILIBILI_REQUEST_TYPES } from "@cvsa/contracts";
 
 export type NetworkRequestOutcome =
 	| "success"
@@ -24,7 +25,7 @@ export interface NetworkRequestMetricRecorder {
 	createAttemptObserver(context: NetworkAttemptContext): NetworkAttemptObserver;
 }
 
-const REQUEST_TYPES = new Set(["bilibili-api", "default"]);
+const REQUEST_TYPES = new Set(["bilibili-api", "default", ...BILIBILI_REQUEST_TYPES]);
 
 export function createNetworkRequestMetricRecorder(
 	sink: NetworkRequestMetricSink,

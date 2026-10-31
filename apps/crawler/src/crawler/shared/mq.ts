@@ -10,6 +10,7 @@ import {
 } from "bullmq";
 import { RetryLaterError } from "./retryLater";
 import IORedis from "ioredis";
+import { context, propagation } from "@opentelemetry/api";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
 import type {
@@ -86,7 +87,15 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 			return {
 				add: async (jobName: string, data: T, jobOptions?: JobsOptions): Promise<void> => {
 					assertTaskActive();
-					await bounded(() => queue.add(jobName, data, jobOptions));
+					let payload = data;
+					if (typeof data === "object" && data !== null) {
+						const carrier: Record<string, string> = {};
+						propagation.inject(context.active(), carrier);
+						if (Object.keys(carrier).length > 0) {
+							payload = { ...data, _traceCarrier: carrier };
+						}
+					}
+					await bounded(() => queue.add(jobName, payload, jobOptions));
 				},
 				getJobCounts: async (): Promise<CrawlerJobCounts> => {
 					const counts = await bounded(() =>
@@ -197,24 +206,35 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 							return bounded(() => job.updateProgress(progress));
 						},
 					};
-					await runTaskWithDeadline(
-						taskTimeoutMs,
-						async () => {
-							try {
-								await processor(crawlerJob);
-							} catch (error) {
-								if (!(error instanceof RetryLaterError)) throw error;
-								await bounded(() =>
-									job.moveToDelayed(
-										Date.now() + Math.max(1, error.delayMs),
-										token
-									)
-								);
-								throw new DelayedError();
-							}
-						},
-						controller.signal
-					);
+					const rawData = job.data as Record<string, unknown> | null;
+					const carrier =
+						rawData && typeof rawData === "object" && "_traceCarrier" in rawData
+							? (rawData._traceCarrier as Record<string, string>)
+							: undefined;
+					const parentContext = carrier
+						? propagation.extract(context.active(), carrier)
+						: context.active();
+
+					await context.with(parentContext, async () => {
+						await runTaskWithDeadline(
+							taskTimeoutMs,
+							async () => {
+								try {
+									await processor(crawlerJob);
+								} catch (error) {
+									if (!(error instanceof RetryLaterError)) throw error;
+									await bounded(() =>
+										job.moveToDelayed(
+											Date.now() + Math.max(1, error.delayMs),
+											token
+										)
+									);
+									throw new DelayedError();
+								}
+							},
+							controller.signal
+						);
+					});
 				},
 				{ drainDelay: 0.1, ...options, connection, prefix }
 			);

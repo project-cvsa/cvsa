@@ -37,6 +37,9 @@ import type {
 	UpdateDiscoveryFilterConfigRequest,
 	VideoMetadataHistoryListQuery,
 	VideoMetadataHistoryListResponse,
+	VideoSnapshotListQuery,
+	VideoSnapshotListResponse,
+	QueueSnapshotQuery,
 	VideoTrackingDto,
 } from "@cvsa/contracts";
 import type { ApiResult } from "./result";
@@ -149,9 +152,30 @@ async function triggerActive(aid: string): Promise<ApiResult<ActionQueuedRespons
 	return settle(await eden.v2.admin.crawler.active({ aid }).post());
 }
 
-async function queueSnapshot(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {
+async function queueSnapshot(
+	aid: string,
+	query?: QueueSnapshotQuery
+): Promise<ApiResult<ActionQueuedResponse | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler.tracking.videos({ aid }).snapshots.post());
+	return settle(
+		await eden.v2.admin.crawler.tracking.videos({ aid }).snapshots.post({
+			query: { force: query?.force ?? true },
+		})
+	);
+}
+
+async function getVideoSnapshots(
+	aid: string,
+	query: Partial<VideoSnapshotListQuery> = {}
+): Promise<ApiResult<VideoSnapshotListResponse | null>> {
+	const eden = getEdenClient();
+	const params: VideoSnapshotListQuery = {
+		limit: query.limit ?? DEFAULT_PAGE_SIZE,
+		offset: query.offset ?? 0,
+	};
+	return settle(
+		await eden.v2.admin.crawler.tracking.videos({ aid }).snapshots.get({ query: params })
+	);
 }
 
 async function getTracking(aid: string): Promise<ApiResult<VideoTrackingDto | null>> {
@@ -293,6 +317,7 @@ export const crawlerApi = {
 	refreshMetadata,
 	triggerActive,
 	queueSnapshot,
+	getVideoSnapshots,
 	getTracking,
 	deleteTracking,
 	listTrackingVideos,

@@ -1,6 +1,4 @@
 import NetworkSessionPolicy from "../network/NetworkSessionPolicy";
-import NetworkAdaptivePolicy from "../network/NetworkAdaptivePolicy";
-import NetworkExecutionPolicy from "../network/NetworkExecutionPolicy";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
 import { createMemo, createSignal, Show } from "solid-js";
@@ -13,14 +11,12 @@ import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type {
 	CrawlerStatusDto,
-	HealthConfig,
 	NetworkAdapterConfig,
 	NetworkRuntimeConfig,
 	NetworkRuntimeConfigDocument,
 } from "@cvsa/contracts";
 import NetworkAdapterForm from "../network/NetworkAdapterForm";
 import NetworkAdapterList from "../network/NetworkAdapterList";
-import NetworkHealthPolicy from "../network/NetworkHealthPolicy";
 import NetworkRoutingPolicy from "../network/NetworkRoutingPolicy";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
 import Save from "lucide-solid/icons/save";
@@ -219,18 +215,6 @@ export default function NetworkSection(props: NetworkSectionProps) {
 		return true;
 	};
 
-	const updateHealth = (health: HealthConfig) => {
-		const current = networkDoc();
-		if (!current) return;
-		setNetworkDoc({
-			...current,
-			config: {
-				...current.config,
-				health,
-			},
-		});
-	};
-
 	useCrawlerRefresh("network", () => void loadConfig());
 
 	return (
@@ -301,7 +285,7 @@ export default function NetworkSection(props: NetworkSectionProps) {
 				}
 			>
 				{(doc) => (
-					<fieldset disabled={loading() || saving()} class="min-w-0 border-0 p-0">
+					<fieldset disabled={saving()} class="min-w-0 border-0 p-0">
 						<div class="flex flex-col gap-6">
 							<NetworkAdapterList
 								adapters={doc().config.adapters}
@@ -325,17 +309,6 @@ export default function NetworkSection(props: NetworkSectionProps) {
 								onChange={(config) => setNetworkDoc({ ...doc(), config })}
 							/>
 
-							<NetworkExecutionPolicy
-								config={doc().config.execution}
-								status={props.statusData()}
-								onChange={(execution) =>
-									setNetworkDoc({
-										...doc(),
-										config: { ...doc().config, execution },
-									})
-								}
-							/>
-
 							<NetworkSessionPolicy
 								config={doc().config.session}
 								status={props.statusData()?.session}
@@ -345,19 +318,6 @@ export default function NetworkSection(props: NetworkSectionProps) {
 										config: { ...doc().config, session },
 									})
 								}
-							/>
-							<NetworkAdaptivePolicy
-								config={doc().config.adaptive}
-								onChange={(adaptive) =>
-									setNetworkDoc({
-										...doc(),
-										config: { ...doc().config, adaptive },
-									})
-								}
-							/>
-							<NetworkHealthPolicy
-								config={doc().config.health}
-								onChange={updateHealth}
 							/>
 						</div>
 					</fieldset>

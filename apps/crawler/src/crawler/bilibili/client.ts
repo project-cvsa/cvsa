@@ -39,6 +39,7 @@ function createDefaultRequest(options: BilibiliClientOptions): BilibiliRequest {
 				headers: reqOptions?.headers,
 				body: reqOptions?.body,
 				timeoutMs: reqOptions?.timeoutMs ?? options.requestTimeoutMs?.(),
+				context: reqOptions?.context,
 			});
 			return {
 				status: res.status,
@@ -136,7 +137,12 @@ export class BilibiliClient {
 			purpose: bilibiliPurpose("search"),
 			headers: {
 				Origin: "https://search.bilibili.com",
-				Referer: "https://search.bilibili.com/",
+				Referer: `https://search.bilibili.com/all?keyword=${encodeURIComponent(keyword)}`,
+			},
+			context: {
+				endpoint: "video_search",
+				keyword,
+				page: options.page ?? 1,
 			},
 		});
 	}
@@ -158,6 +164,10 @@ export class BilibiliClient {
 				Origin: "https://www.bilibili.com",
 				Referer: "https://www.bilibili.com/",
 			},
+			context: {
+				endpoint: "topic_feed",
+				topicId: options.topicId,
+			},
 		});
 	}
 
@@ -171,6 +181,7 @@ export class BilibiliClient {
 			throw new Error("bvid must be a valid BV identifier");
 		}
 
+		const idRef = byAid ? `av${identifier}` : idStr;
 		const response = await this.session.signedRequest<VideoDetailsResponse>(
 			"/x/web-interface/wbi/view/detail",
 			{ ...(byAid ? { aid: Number(identifier) } : { bvid: idStr }), web_location: 1315875 },
@@ -178,7 +189,12 @@ export class BilibiliClient {
 				purpose: bilibiliPurpose("details"),
 				headers: {
 					Origin: "https://www.bilibili.com",
-					Referer: "https://www.bilibili.com/",
+					Referer: `https://www.bilibili.com/video/${idRef}/`,
+				},
+				context: {
+					endpoint: "video_details",
+					aid: byAid ? idStr : undefined,
+					bvid: byAid ? undefined : idStr,
 				},
 			}
 		);
@@ -190,6 +206,7 @@ export class BilibiliClient {
 				component: "bilibili-client",
 				identifier: idStr,
 				code: response.code,
+				message: response.message,
 				error,
 			});
 			throw error;
@@ -210,13 +227,19 @@ export class BilibiliClient {
 			throw new Error("bvid must be a valid BV identifier");
 		}
 
+		const idRef = byAid ? `av${identifier}` : idStr;
 		const query = new URLSearchParams(byAid ? { aid: idStr } : { bvid: idStr });
 		const response = await this.session.request<BilibiliResponse<BilibiliRelatedVideo[]>>(
 			`${API_ORIGIN}/x/web-interface/archive/related?${query}`,
 			{
 				headers: {
 					Origin: "https://www.bilibili.com",
-					Referer: "https://www.bilibili.com/",
+					Referer: `https://www.bilibili.com/video/${idRef}/`,
+				},
+				context: {
+					endpoint: "related_videos",
+					aid: byAid ? idStr : undefined,
+					bvid: byAid ? undefined : idStr,
 				},
 			}
 		);
@@ -228,6 +251,7 @@ export class BilibiliClient {
 				component: "bilibili-client",
 				identifier: idStr,
 				code: response.code,
+				message: response.message,
 				error,
 			});
 			throw error;
@@ -256,6 +280,11 @@ export class BilibiliClient {
 					Origin: "https://www.bilibili.com",
 					Referer: "https://www.bilibili.com/",
 				},
+				context: {
+					endpoint: "video_view",
+					aid: byAid ? idStr : undefined,
+					bvid: byAid ? undefined : idStr,
+				},
 			}
 		);
 		if (response.code !== 0 || !response.data) {
@@ -266,6 +295,7 @@ export class BilibiliClient {
 				component: "bilibili-client",
 				identifier: idStr,
 				code: response.code,
+				message: response.message,
 				error,
 			});
 			throw error;
@@ -283,14 +313,27 @@ export class BilibiliClient {
 			BilibiliResponse<Array<{ id: number; cnt_info: Record<string, number> }>>
 		>(
 			`${API_ORIGIN}/medialist/gateway/base/resource/infos?resources=${uniqueAids.map((aid) => `${aid}:2`).join(",")}`,
-			{ purpose: "tracking" }
+			{
+				purpose: "tracking",
+				headers: {
+					Origin: "https://www.bilibili.com",
+					Referer: "https://www.bilibili.com/",
+				},
+				context: {
+					endpoint: "video_stats",
+					batchSize: uniqueAids.length,
+					sampleAids: uniqueAids.slice(0, 5),
+				},
+			}
 		);
 
 		if (response.code !== 0) {
 			appLogger.warn("Bilibili bulk video stats request failed with API code", {
 				component: "bilibili-client",
 				code: response.code,
+				message: response.message,
 				requested: uniqueAids.length,
+				sampleAids: uniqueAids.slice(0, 5),
 			});
 			return response.code;
 		}

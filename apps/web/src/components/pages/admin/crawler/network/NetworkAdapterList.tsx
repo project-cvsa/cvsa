@@ -57,58 +57,13 @@ type AdapterCardProps = {
 
 function AdapterCard(props: AdapterCardProps) {
 	const t = getComponentT("crawler");
-	const rateLimit = () =>
-		props.adapter.rateLimits.length
-			? props.adapter.rateLimits
-					.map((limit) => `${limit.maxRequests}/${limit.durationSeconds}s`)
-					.join(", ")
-			: t("common.unlimited");
 	const resultLabel = (result: TestNetworkAdapterResponse) =>
 		result.ok ? `${result.latencyMs} ms` : result.error || t("common.error");
 	const metrics = () => [
 		{ label: t("network.adapters.col.weight"), value: props.adapter.baseWeight },
 		{
-			label: t("network.adapters.transportFailures"),
-			value: props.runtime?.consecutiveFailures ?? 0,
-		},
-		{
-			label: t("network.adapters.recoveryAt"),
-			value: props.runtime?.openUntil
-				? new Date(props.runtime.openUntil).toLocaleString()
-				: "—",
-		},
-		{
 			label: t("network.form.requestsPerSecond"),
 			value: `${props.adapter.requestsPerSecond ?? 20}/s`,
-		},
-		{
-			label: t("network.adapters.effectiveWeight"),
-			value: props.runtime?.effectiveWeight.toFixed(2) ?? "—",
-		},
-		{ label: t("network.adapters.col.rateLimit"), value: rateLimit() },
-		{
-			label: t("network.adaptive.effectiveRate"),
-			value:
-				props.runtime?.effectiveRate == null
-					? "—"
-					: `${props.runtime.effectiveRate.toFixed(2)}/s`,
-		},
-		{
-			label: t("network.adaptive.backgroundRate"),
-			value:
-				props.runtime?.backgroundRate == null
-					? "—"
-					: `${props.runtime.backgroundRate.toFixed(2)}/s`,
-		},
-		{
-			label: t("network.adaptive.factor"),
-			value: `${Math.round((props.runtime?.adaptiveFactor ?? 1) * 100)}%`,
-		},
-		{
-			label: t("network.adaptive.lastThrottled"),
-			value: props.runtime?.lastThrottledAt
-				? new Date(props.runtime.lastThrottledAt).toLocaleString()
-				: "—",
 		},
 		{
 			label: t("network.adapters.requests"),

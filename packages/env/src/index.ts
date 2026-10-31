@@ -70,6 +70,7 @@ export const crawlerEnv = createEnv({
 		LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
 		OTEL_SERVICE_NAME: z.string().default("cvsa-crawler"),
 		OTEL_SERVICE_VERSION: z.string().default("0.0.0"),
+		OTEL_EXPORTER_OTLP_ENDPOINT: z.url().optional(),
 		CONTROL_API_HOST: z.string().default("127.0.0.1"),
 		CONTROL_API_PORT: z.coerce.number().int().min(1).max(65_535).default(16_413),
 		CONTROL_API_URL: z.url().optional(),

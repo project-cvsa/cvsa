@@ -17,6 +17,7 @@ export type BilibiliRequest = (
 		signal?: AbortSignal;
 		purpose?: BilibiliRequestPurpose;
 		adapterId?: string;
+		context?: Record<string, unknown>;
 	}
 ) => Promise<BilibiliHttpResponse>;
 

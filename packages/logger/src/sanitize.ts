@@ -43,6 +43,13 @@ function normalizeKey(key: string): string {
 
 export function isCredentialKey(key: string): boolean {
 	const normalized = normalizeKey(key);
+	if (
+		normalized === "credentialagesec" ||
+		normalized === "sessiongen" ||
+		normalized === "buvidprefix"
+	) {
+		return false;
+	}
 	return CREDENTIAL_KEY_FRAGMENTS.some((fragment) => normalized.includes(fragment));
 }
 

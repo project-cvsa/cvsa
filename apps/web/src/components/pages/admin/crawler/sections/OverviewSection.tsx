@@ -204,9 +204,9 @@ export default function OverviewSection(props: OverviewSectionProps) {
 
 			<Show when={stats() && statsError()}>
 				{(message) => (
-					<p role="alert" class="text-error text-label tracking-label">
+					<div role="alert" class="p-3 bg-error text-on-error ts-caption font-medium">
 						{message()}
-					</p>
+					</div>
 				)}
 			</Show>
 			<Show

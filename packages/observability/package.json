@@ -15,6 +15,7 @@
 		"@cvsa/env": "workspace:*",
 		"@opentelemetry/api": "^1.9.0",
 		"@opentelemetry/api-logs": "^0.222.0",
+		"@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
 		"@opentelemetry/resources": "^2.6.1",
 		"@opentelemetry/sdk-node": "^0.222.0"
 	}

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-	CrawlerExecutionConfigSchema,
 	NetworkScheduler,
 	type NetworkAdapter,
 	type NetworkErrorCode,
@@ -10,37 +9,13 @@ import {
 } from "../src";
 import { FakeRateLimiter } from "../src/testing";
 
-const HEALTH: NonNullable<NetworkRuntimeConfig["health"]> = {
-	failurePenalty: 0.5,
-	recoveryBonus: 0.2,
-	minWeightFactor: 0.05,
-	failureThreshold: 3,
-	cooldownMs: 1_000,
-};
-
-class TestClock {
-	private current = 0;
-
-	readonly now = (): number => this.current;
-
-	advance(milliseconds: number): void {
-		this.current += milliseconds;
-	}
-}
-
 function config(overrides: Partial<NetworkRuntimeConfig> = {}): NetworkRuntimeConfig {
 	return {
 		adapters: [
-			{ id: "direct-a", type: "direct", enabled: true, baseWeight: 1, rateLimits: [] },
+			{ id: "direct-a", type: "direct", enabled: true, baseWeight: 1, requestsPerSecond: 20 },
 		],
 		bindings: [{ requestType: "test", adapterIds: ["direct-a"] }],
 		requestTypePolicies: {},
-		health: HEALTH,
-		execution: CrawlerExecutionConfigSchema.parse({
-			admissionTimeoutMs: 0,
-			throttleCooldownMs: 1000,
-			throttleJitterMs: 0,
-		}),
 		...overrides,
 	};
 }
@@ -61,11 +36,7 @@ function failure(
 }
 
 class ControllableAdapter implements NetworkAdapter {
-	startedCount = 0;
 	private readonly queue: NetworkResponse[] = [];
-	private readonly startedResolvers: Array<() => void> = [];
-	private gate: Promise<void> | undefined;
-	private releaseGate: (() => void) | undefined;
 
 	constructor(readonly id: string = "direct-a") {}
 
@@ -73,574 +44,80 @@ class ControllableAdapter implements NetworkAdapter {
 		this.queue.push(...responses);
 	}
 
-	block(): void {
-		this.gate = new Promise<void>((resolve) => {
-			this.releaseGate = resolve;
-		});
-	}
-
-	unblock(): void {
-		this.releaseGate?.();
-		this.releaseGate = undefined;
-		this.gate = undefined;
-	}
-
 	async execute(_request: NetworkRequest): Promise<NetworkResponse> {
-		this.startedCount += 1;
-		this.startedResolvers.shift()?.();
-		if (this.gate) await this.gate;
-		return this.queue.shift() ?? success(this.id);
-	}
-
-	async waitForStart(count: number): Promise<void> {
-		while (this.startedCount < count) {
-			await new Promise<void>((resolve) => this.startedResolvers.push(resolve));
-		}
+		const next = this.queue.shift();
+		if (!next) return success(this.id);
+		return next;
 	}
 }
 
-function createScheduler(
-	adapter: NetworkAdapter,
-	clock: TestClock,
-	overrides: Partial<NetworkRuntimeConfig> = {}
-): NetworkScheduler {
-	return new NetworkScheduler(
-		config(overrides),
-		new Map([[adapter.id, adapter]]),
-		new FakeRateLimiter([], clock.now),
-		{
-			clock: clock.now,
-			random: () => 0,
-		}
-	);
-}
-
-describe("NetworkScheduler health", () => {
-	for (const code of ["HTTP_429", "APPLICATION_RATE_LIMIT"] satisfies NetworkErrorCode[]) {
-		test(`keeps adapter available after ${code}`, async () => {
-			const adapter = new ControllableAdapter();
-			adapter.enqueue(failure("direct-a", code), success("direct-a"));
-			const clock = new TestClock();
-			const scheduler = createScheduler(adapter, clock);
-
-			const throttled = await scheduler.execute(request());
-			expect(throttled.errorCode).toBe(code);
-			expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-				healthState: "healthy",
-				openUntil: null,
-			});
-
-			expect((await scheduler.execute(request())).retryReason).toBe("upstream");
-			clock.advance(throttled.retryAfterMs ?? 0);
-			expect((await scheduler.execute(request())).errorCode).toBeUndefined();
-			expect(scheduler.getAdapterStatuses()[0].healthState).toBe("healthy");
-		});
-	}
-
-	test("does not turn Retry-After into adapter isolation", async () => {
+describe("NetworkScheduler runtime status and failover", () => {
+	test("starts enabled and reports zero statistics initially", () => {
 		const adapter = new ControllableAdapter();
-		adapter.enqueue({ ...failure("direct-a", "HTTP_429"), headers: { "Retry-After": "120" } });
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-		await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0].openUntil).toBeNull();
-		clock.advance(60_000);
-		expect((await scheduler.execute(request())).retryReason).toBe("upstream");
-		clock.advance(60_000);
-		expect((await scheduler.execute(request())).errorCode).toBeUndefined();
-	});
-
-	test("reports per-adapter attempts and throttling across configuration reloads", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a", "HTTP_429"), success("direct-a"));
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-		await scheduler.execute(request());
-		clock.advance(60_000);
-		await scheduler.execute(request());
-		scheduler.reload(config(), new Map([[adapter.id, adapter]]));
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			requests: 2,
-			failures: 1,
-			rateLimited: 1,
-			averageDurationMs: 1,
-		});
-	});
-
-	test("starts healthy with full effective weight", () => {
-		const adapter = new ControllableAdapter();
-		const scheduler = createScheduler(adapter, new TestClock(), {
-			adapters: [
-				{ id: "direct-a", type: "direct", enabled: true, baseWeight: 2, rateLimits: [] },
-			],
-		});
+		const scheduler = new NetworkScheduler(
+			config(),
+			new Map([[adapter.id, adapter]]),
+			new FakeRateLimiter()
+		);
 
 		expect(scheduler.getAdapterStatuses()).toMatchObject([
 			{
 				id: "direct-a",
 				enabled: true,
-				healthState: "healthy",
-				healthFactor: 1,
-				effectiveWeight: 2,
-				consecutiveFailures: 0,
-				openUntil: null,
+				configuredRate: 20,
+				requests: 0,
+				failures: 0,
+				averageDurationMs: null,
 			},
 		]);
 	});
 
-	test("ignores one transient failure before applying a weight penalty", async () => {
+	test("records requests, failures, and latency statistics", async () => {
 		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a"));
-		const scheduler = createScheduler(adapter, new TestClock());
-
-		const result = await scheduler.execute(request());
-
-		expect(result.errorCode).toBe("NETWORK_FAILURE");
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "healthy",
-			healthFactor: 1,
-			effectiveWeight: 1,
-			consecutiveFailures: 1,
-			openUntil: null,
-		});
-	});
-
-	test("uses different thresholds to degrade and recover without flapping", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(
-			failure("direct-a"),
-			failure("direct-a"),
-			success("direct-a"),
-			success("direct-a"),
-			success("direct-a")
+		adapter.enqueue(success("direct-a"), failure("direct-a", "NETWORK_FAILURE"));
+		const scheduler = new NetworkScheduler(
+			config(),
+			new Map([[adapter.id, adapter]]),
+			new FakeRateLimiter()
 		);
-		const scheduler = createScheduler(adapter, new TestClock());
-		await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
-		await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "degraded",
-			healthFactor: 0.5,
-		});
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("degraded");
-		await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
-	});
-
-	test("alternating isolated failures and successes do not reduce the adapter weight", async () => {
-		const adapter = new ControllableAdapter();
-		for (let index = 0; index < 5; index++)
-			adapter.enqueue(failure("direct-a"), success("direct-a"));
-		const scheduler = createScheduler(adapter, new TestClock());
-		for (let index = 0; index < 10; index++) await scheduler.execute(request());
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "healthy",
-			healthFactor: 1,
-			consecutiveFailures: 0,
-		});
-	});
-
-	test("does not change health for an application error", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a", "APPLICATION_ERROR"), success("direct-a"));
-		const scheduler = createScheduler(adapter, new TestClock());
-
-		const first = await scheduler.execute(request());
-		const second = await scheduler.execute(request());
-
-		expect(first.errorCode).toBe("APPLICATION_ERROR");
-		expect(second.adapterId).toBe("direct-a");
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "healthy",
-			healthFactor: 1,
-			consecutiveFailures: 0,
-		});
-	});
-
-	test("opens the circuit after the failure threshold and stops selecting the adapter", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(
-			failure("direct-a"),
-			failure("direct-a"),
-			failure("direct-a"),
-			success("direct-a")
-		);
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
 
 		await scheduler.execute(request());
 		await scheduler.execute(request());
-		await scheduler.execute(request());
-
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "open",
-			consecutiveFailures: 3,
-			openUntil: HEALTH.cooldownMs,
-			effectiveWeight: 0,
-		});
-		expect(await scheduler.execute(request())).toMatchObject({
-			retryReason: "network_recovery",
-			errorCode: "NO_AVAILABLE_ADAPTER",
-		});
-		expect(adapter.startedCount).toBe(3);
-	});
-
-	test("keeps the circuit open until the cooldown elapses", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a"), failure("direct-a"), failure("direct-a"));
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-
-		clock.advance(HEALTH.cooldownMs - 1);
-		expect(await scheduler.execute(request())).toMatchObject({
-			retryReason: "network_recovery",
-			errorCode: "NO_AVAILABLE_ADAPTER",
-		});
-		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("open");
-	});
-
-	test("recovers to healthy after a successful half-open probe", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a"), failure("direct-a"), failure("direct-a"));
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		clock.advance(HEALTH.cooldownMs + 1);
-
-		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("half-open");
-
-		const probe = await scheduler.execute(request());
-
-		expect(probe.errorCode).toBeUndefined();
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "healthy",
-			healthFactor: 1,
-			effectiveWeight: 1,
-			consecutiveFailures: 0,
-			openUntil: null,
-		});
-	});
-
-	test("reopens the circuit when the half-open probe fails", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(
-			failure("direct-a"),
-			failure("direct-a"),
-			failure("direct-a"),
-			failure("direct-a")
-		);
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		clock.advance(HEALTH.cooldownMs + 1);
-		await scheduler.execute(request());
-
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "open",
-			consecutiveFailures: 4,
-			openUntil: HEALTH.cooldownMs * 2 + 1,
-		});
-	});
-
-	test("closes a probed circuit when the application answers with a business error", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(
-			failure("direct-a"),
-			failure("direct-a"),
-			failure("direct-a"),
-			failure("direct-a", "APPLICATION_ERROR")
-		);
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		clock.advance(HEALTH.cooldownMs + 1);
-		await scheduler.execute(request());
-
-		// The exit demonstrably delivered a response, so it is back in rotation —
-		// but the weight is only repaired by genuine successes.
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "degraded",
-			consecutiveFailures: 0,
-			openUntil: null,
-		});
-	});
-
-	test("allows only one half-open probe at a time", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a"), failure("direct-a"), failure("direct-a"));
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		clock.advance(HEALTH.cooldownMs + 1);
-
-		adapter.block();
-		const probe = scheduler.execute(request());
-		await adapter.waitForStart(4);
-
-		expect(await scheduler.execute(request())).toMatchObject({
-			retryReason: "network_recovery",
-			errorCode: "NO_AVAILABLE_ADAPTER",
-		});
-
-		adapter.unblock();
-		expect((await probe).errorCode).toBeUndefined();
-		expect(scheduler.getAdapterStatuses()[0]?.healthState).toBe("healthy");
-	});
-
-	test("reports manually disabled adapters without health degradation", async () => {
-		const adapter = new ControllableAdapter();
-		const scheduler = createScheduler(adapter, new TestClock(), {
-			adapters: [
-				{ id: "direct-a", type: "direct", enabled: false, baseWeight: 1, rateLimits: [] },
-			],
-		});
 
 		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
 			id: "direct-a",
-			enabled: false,
-			healthState: "healthy",
-			effectiveWeight: 0,
+			requests: 2,
+			failures: 1,
 		});
+	});
+
+	test("does not schedule disabled adapters", async () => {
+		const adapter = new ControllableAdapter();
+		const scheduler = new NetworkScheduler(
+			config({
+				adapters: [{ id: "direct-a", type: "direct", enabled: false, baseWeight: 1 }],
+			}),
+			new Map([[adapter.id, adapter]]),
+			new FakeRateLimiter()
+		);
+
 		await expect(scheduler.execute(request())).rejects.toThrow("No available network adapter");
 	});
 
-	test("reload keeps health for the same adapter id", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a"), failure("direct-a"), failure("direct-a"));
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-
-		scheduler.reload(config(), new Map([[adapter.id, adapter]]));
-
-		expect(scheduler.getAdapterStatuses()[0]).toMatchObject({
-			healthState: "open",
-			consecutiveFailures: 3,
-			openUntil: HEALTH.cooldownMs,
-		});
-	});
-
-	test("reload drops removed adapters and initializes new adapters as healthy", async () => {
-		const adapter = new ControllableAdapter();
-		adapter.enqueue(failure("direct-a"), failure("direct-a"), failure("direct-a"));
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-		await scheduler.execute(request());
-
-		const replacement = new ControllableAdapter("direct-b");
-		scheduler.reload(
-			{
-				...config(),
-				adapters: [
-					{
-						id: "direct-b",
-						type: "direct",
-						enabled: true,
-						baseWeight: 1,
-						rateLimits: [],
-					},
-				],
-				bindings: [{ requestType: "test", adapterIds: ["direct-b"] }],
-			},
-			new Map([["direct-b", replacement]])
-		);
-
-		expect(scheduler.getAdapterStatuses()).toMatchObject([
-			{
-				id: "direct-b",
-				enabled: true,
-				healthState: "healthy",
-				healthFactor: 1,
-				effectiveWeight: 1,
-				consecutiveFailures: 0,
-				openUntil: null,
-			},
-		]);
-	});
-
-	test("a half-open probe completing across reload releases its slot", async () => {
-		const adapter = new ControllableAdapter();
-		const clock = new TestClock();
-		const scheduler = createScheduler(adapter, clock);
-		adapter.enqueue(failure(adapter.id), failure(adapter.id), failure(adapter.id));
-		for (let index = 0; index < HEALTH.failureThreshold; index++)
-			await scheduler.execute(request());
-		clock.advance(HEALTH.cooldownMs);
-		adapter.block();
-		const probe = scheduler.execute(request());
-		await adapter.waitForStart(HEALTH.failureThreshold + 1);
-		scheduler.reload(config(), new Map([[adapter.id, adapter]]));
-		try {
-			expect((await scheduler.execute(request())).retryReason).toBe("network_recovery");
-		} finally {
-			adapter.unblock();
-		}
-		expect((await probe).errorCode).toBeUndefined();
-		expect((await scheduler.execute(request())).errorCode).toBeUndefined();
-	});
-});
-
-test("HTTP 5xx can fail over without penalizing either exit", async () => {
-	const first = new ControllableAdapter("a");
-	const second = new ControllableAdapter("b");
-	first.enqueue(failure("a", "HTTP_5XX"));
-	const settings = config({
-		adapters: ["a", "b"].map((id) => ({
-			id,
-			type: "direct",
-			enabled: true,
-			baseWeight: 1,
-			rateLimits: [],
-		})),
-		bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
-	});
-	const scheduler = new NetworkScheduler(
-		settings,
-		new Map([
-			["a", first],
-			["b", second],
-		]),
-		new FakeRateLimiter(),
-		{ random: () => 0 }
-	);
-	expect((await scheduler.execute(request())).adapterId).toBe("b");
-	for (const item of scheduler.getAdapterStatuses())
-		expect(item).toMatchObject({
-			healthState: "healthy",
-			healthFactor: 1,
-			consecutiveFailures: 0,
-		});
-});
-
-test("failover honors the configured attempt budget and never replays an unsafe POST", async () => {
-	const adapters = ["a", "b", "c"].map((id) => {
-		const adapter = new ControllableAdapter(id);
-		adapter.enqueue(failure(id), failure(id));
-		return adapter;
-	});
-	const settings = config({
-		adapters: adapters.map(({ id }) => ({
-			id,
-			type: "direct",
-			enabled: true,
-			baseWeight: 1,
-			rateLimits: [],
-		})),
-		bindings: [{ requestType: "test", adapterIds: adapters.map(({ id }) => id) }],
-		execution: CrawlerExecutionConfigSchema.parse({ maxAdapterAttempts: 2 }),
-	});
-	const scheduler = new NetworkScheduler(
-		settings,
-		new Map(adapters.map((adapter) => [adapter.id, adapter])),
-		new FakeRateLimiter(),
-		{ random: () => 0 }
-	);
-	expect((await scheduler.execute(request())).retryReason).toBe("network_recovery");
-	expect(adapters.reduce((sum, adapter) => sum + adapter.startedCount, 0)).toBe(2);
-	await scheduler.execute({ ...request(), method: "POST" });
-	expect(adapters.reduce((sum, adapter) => sum + adapter.startedCount, 0)).toBe(3);
-});
-
-test("a waiter resumes after the single half-open probe succeeds", async () => {
-	const adapter = new ControllableAdapter();
-	const clock = new TestClock();
-	const scheduler = createScheduler(adapter, clock);
-	adapter.enqueue(failure(adapter.id), failure(adapter.id), failure(adapter.id));
-	for (let count = 0; count < 3; count++) await scheduler.execute(request());
-	clock.advance(HEALTH.cooldownMs);
-	adapter.block();
-	const probe = scheduler.execute(request());
-	await adapter.waitForStart(4);
-	const waiter = scheduler.execute(request());
-	// Let the waiter reach its bounded admission wait, then finish the probe.
-	for (let index = 0; index < 10; index++) await Promise.resolve();
-	adapter.unblock();
-	expect((await probe).status).toBe(200);
-	expect((await waiter).status).toBe(200);
-	expect(adapter.startedCount).toBe(5);
-});
-
-test("explicit throttle failover recovers the request while retaining the refused exit's cooldown", async () => {
-	const first = new ControllableAdapter("a");
-	const second = new ControllableAdapter("b");
-	first.enqueue(failure("a", "HTTP_429"));
-	const settings = config({
-		adapters: ["a", "b"].map((id) => ({
-			id,
-			type: "direct",
-			enabled: true,
-			baseWeight: 1,
-			rateLimits: [],
-		})),
-		bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
-		execution: CrawlerExecutionConfigSchema.parse({
-			throttleFailover: true,
-			throttleCooldownMs: 5000,
-			throttleJitterMs: 0,
-		}),
-	});
-	const scheduler = new NetworkScheduler(
-		settings,
-		new Map([
-			["a", first],
-			["b", second],
-		]),
-		new FakeRateLimiter(),
-		{ random: () => 0 }
-	);
-	expect((await scheduler.execute(request())).adapterId).toBe("b");
-	expect(first.startedCount).toBe(1);
-	const refused = await scheduler.execute({ ...request(), adapterId: "a" });
-	expect(refused.retryReason).toBe("upstream");
-	expect(first.startedCount).toBe(1);
-	expect(scheduler.getAdapterStatuses()[0].healthState).toBe("healthy");
-});
-
-for (const scenario of ["global", "post"] satisfies Array<"global" | "post">) {
-	test(`throttle failover respects ${scenario === "global" ? "a shared cooldown" : "unsafe POST semantics"}`, async () => {
+	test("fails over to second adapter on network failure", async () => {
 		const first = new ControllableAdapter("a");
+		first.enqueue(failure("a", "NETWORK_FAILURE"));
 		const second = new ControllableAdapter("b");
-		first.enqueue(failure("a", "HTTP_429"));
-		const settings = config({
-			adapters: ["a", "b"].map((id) => ({
-				id,
-				type: "direct",
-				enabled: true,
-				baseWeight: 1,
-				rateLimits: [],
-			})),
-			bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
-			execution: CrawlerExecutionConfigSchema.parse({
-				throttleFailover: true,
-				throttleScope: scenario === "global" ? "request_type" : "adapter",
-			}),
-		});
+		second.enqueue(success("b"));
+
 		const scheduler = new NetworkScheduler(
-			settings,
+			config({
+				adapters: [
+					{ id: "a", type: "direct", enabled: true, baseWeight: 1 },
+					{ id: "b", type: "direct", enabled: true, baseWeight: 1 },
+				],
+				bindings: [{ requestType: "test", adapterIds: ["a", "b"] }],
+			}),
 			new Map([
 				["a", first],
 				["b", second],
@@ -648,14 +125,40 @@ for (const scenario of ["global", "post"] satisfies Array<"global" | "post">) {
 			new FakeRateLimiter(),
 			{ random: () => 0 }
 		);
-		expect(
-			(
-				await scheduler.execute({
-					...request(),
-					method: scenario === "post" ? "POST" : "GET",
-				})
-			).retryReason
-		).toBe("upstream");
-		expect(second.startedCount).toBe(0);
+
+		const res = await scheduler.execute(request());
+		expect(res.adapterId).toBe("b");
+		expect(res.status).toBe(200);
 	});
-}
+
+	test("reload updates adapter configurations", () => {
+		const adapterA = new ControllableAdapter("a");
+		const adapterB = new ControllableAdapter("b");
+
+		const scheduler = new NetworkScheduler(
+			config({ adapters: [{ id: "a", type: "direct", enabled: true, baseWeight: 1 }] }),
+			new Map([["a", adapterA]]),
+			new FakeRateLimiter()
+		);
+
+		scheduler.reload(
+			config({
+				adapters: [
+					{
+						id: "b",
+						type: "direct",
+						enabled: true,
+						baseWeight: 2,
+						requestsPerSecond: 10,
+					},
+				],
+				bindings: [{ requestType: "test", adapterIds: ["b"] }],
+			}),
+			new Map([["b", adapterB]])
+		);
+
+		expect(scheduler.getAdapterStatuses()).toMatchObject([
+			{ id: "b", enabled: true, configuredRate: 10, requests: 0 },
+		]);
+	});
+});

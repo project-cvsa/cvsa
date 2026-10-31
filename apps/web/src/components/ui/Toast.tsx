@@ -3,6 +3,7 @@ import { type ToastType, Toast, Toaster, createToaster } from "@ark-ui/solid/toa
 import Heading2 from "@components/typography/Heading2";
 import "./Toast.css";
 import Paragraph from "@components/typography/Paragraph";
+import { Show } from "solid-js";
 
 const toaster = createToaster({
 	placement: "bottom-end",
@@ -22,13 +23,22 @@ export function ToastContainer() {
 		<Portal>
 			<Toaster toaster={toaster}>
 				{(toast) => (
-					<Toast.Root class="w-fit min-w-20rem max-w-30rem bg-surface px-6 py-4 shadow-md toast-root">
-						<Toast.Title>
-							<Heading2 class="!pt-0">{toast().title}</Heading2>
-						</Toast.Title>
-						<Toast.Description>
-							<Paragraph class="!pt-0">{toast().description}</Paragraph>
-						</Toast.Description>
+					<Toast.Root class="w-fit min-w-20rem max-w-30rem bg-surface px-6 py-4 shadow-md toast-root flex items-center justify-between gap-4">
+						<div class="flex flex-col gap-1 min-w-0">
+							<Show when={toast().title}>
+								<Toast.Title>
+									<Heading2 class="!pt-0">{toast().title}</Heading2>
+								</Toast.Title>
+							</Show>
+							<Toast.Description>
+								<Paragraph class="!pt-0">{toast().description}</Paragraph>
+							</Toast.Description>
+						</div>
+						<Show when={toast().action}>
+							<Toast.ActionTrigger class="px-3 py-1.5 ts-caption font-semibold text-primary hover:bg-hover border border-border shrink-0 cursor-pointer transition-colors bg-surface">
+								{toast().action?.label}
+							</Toast.ActionTrigger>
+						</Show>
 					</Toast.Root>
 				)}
 			</Toaster>
