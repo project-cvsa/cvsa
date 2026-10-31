@@ -90,6 +90,8 @@ services:
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       WEB_ORIGINS: ${WEB_ORIGINS:-}
       SITE_ADDRESS: ${SITE_ADDRESS:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-cvsa-backend}
     depends_on:
       db:
         condition: service_healthy
@@ -126,6 +128,8 @@ services:
       CONTROL_API_TOKEN: ${CONTROL_API_TOKEN:-}
       CRAWLER_MODEL_DIR: ${CRAWLER_MODEL_DIR:-/app/model}
       HF_HOME: ${HF_HOME:-/app/model/.cache/huggingface}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-cvsa-crawler}
     volumes:
       - ${MODEL_DIR:-./model}:/app/model
     depends_on:

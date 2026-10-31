@@ -13,7 +13,7 @@ async function fixture(fail: boolean) {
 	await Bun.write(join(root, ".env"), "IMAGE_TAG=old\n");
 	await Bun.write(
 		join(root, "docker-compose.override.yml"),
-		"services:\n  crawler:\n    image: old-crawler\n"
+		"services:\n  crawler:\n    image: old-crawler\n    networks:\n      - custom-net\nnetworks:\n  custom-net:\n    external: true\n"
 	);
 	const calls: string[][] = [];
 	const service = new DeploymentService(root, async (_files, args) => {
@@ -26,11 +26,20 @@ async function fixture(fail: boolean) {
 	for (let i = 0; i < 100 && state?.status === "deploying"; i++) await Bun.sleep(5);
 	return { root, calls, state };
 }
-test("selective deployment preserves other versions and configuration", async () => {
+test("selective deployment preserves other versions and custom configurations", async () => {
 	const { root, calls, state } = await fixture(false);
 	expect(state?.status).toBe("success");
-	const config = await Bun.file(join(root, "docker-compose.override.yml")).json();
+	const rawText = await Bun.file(join(root, "docker-compose.override.yml")).text();
+	const config = Bun.YAML.parse(rawText) as {
+		services: {
+			crawler: { image: string; networks?: string[] };
+			web: { image: string };
+		};
+		networks: { "custom-net": { external: boolean } };
+	};
 	expect(config.services.crawler.image).toBe("old-crawler");
+	expect(config.services.crawler.networks).toEqual(["custom-net"]);
+	expect(config.networks["custom-net"].external).toBe(true);
 	expect(config.services.web.image).toEndWith(":sha-123456789abc");
 	expect(calls[1]).toEqual(["pull", "web"]);
 	expect(calls[2]).toContain("--no-deps");
