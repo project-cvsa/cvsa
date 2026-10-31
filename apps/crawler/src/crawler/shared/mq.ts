@@ -33,10 +33,12 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"): CrawlerMq {
 	let operationTimeoutMs = 3000;
 	const connection = new IORedis(redisUrl, {
-		// BullMQ requires null for its worker connection; commandTimeout still
-		// bounds every command, and task operations also observe cancellation.
+		// BullMQ requires maxRetriesPerRequest: null.
+		// Note: commandTimeout MUST NOT be set on the shared Redis connection because
+		// BullMQ workers use blocking operations (e.g. bzpopmin) to wait for new jobs.
+		// Setting commandTimeout causes worker blocking commands to abort every N seconds,
+		// leading to command timeouts, worker stalling, and starvation of idle queues.
 		maxRetriesPerRequest: null,
-		commandTimeout: operationTimeoutMs,
 		connectTimeout: 3000,
 		enableOfflineQueue: false,
 	});
@@ -54,7 +56,6 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 	return {
 		setOperationTimeout(timeoutMs) {
 			operationTimeoutMs = timeoutMs;
-			connection.options.commandTimeout = timeoutMs;
 		},
 		async connect(): Promise<void> {
 			await bounded(async () => {
