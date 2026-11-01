@@ -13,6 +13,7 @@ import {
 	DiscoverySweepRequestSchema,
 	DiscoverySweepResponseSchema,
 	DiscoveryQueuedResponseSchema,
+	TriggerHotSampleRequestSchema,
 	ErrorResponseSchema,
 	LabelDiscoverySampleRequestSchema,
 	ProcessRecommendationsResponseSchema,
@@ -242,14 +243,19 @@ export const discoveryRoutes = new Elysia()
 	)
 	.post(
 		"/hot-sample",
-		async (): Promise<DiscoveryQueuedResponse> => {
-			await discoveryScheduler.triggerHotSample(DEFAULT_HOT_SAMPLE_LIMIT);
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			await discoveryScheduler.triggerHotSample(
+				body?.limit ?? DEFAULT_HOT_SAMPLE_LIMIT,
+				body?.timeWindowDays
+			);
 			return { queued: true };
 		},
 		{
+			body: TriggerHotSampleRequestSchema.optional(),
 			response: {
 				200: DiscoveryQueuedResponseSchema,
 				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
 			},
 		}
 	)

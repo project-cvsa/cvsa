@@ -18,6 +18,7 @@ import {
 	DiscoveryStatusDtoSchema,
 	DiscoverySweepRequestSchema,
 	DiscoveryQueuedResponseSchema,
+	TriggerHotSampleRequestSchema,
 	type DiscoveryQueuedResponse,
 	CrawlerQueueJobParamsSchema,
 	CrawlerJobActionResponseSchema,
@@ -239,10 +240,11 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/hot-sample",
-		async (): Promise<DiscoveryQueuedResponse> => {
-			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/hot-sample", "POST");
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/hot-sample", "POST", body);
 		},
 		{
+			body: TriggerHotSampleRequestSchema.optional(),
 			response: {
 				200: DiscoveryQueuedResponseSchema,
 			},

@@ -471,17 +471,21 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				.limit(2_000);
 			const recentlySampled = [...new Set(recentSources.map((r) => r.sourceAid))];
 
+			const conditions = [gt(videoTracking.velocity, 0)];
+			if (recentlySampled.length > 0) {
+				conditions.push(notInArray(videoTracking.aid, recentlySampled));
+			}
+			if (options.timeWindowDays !== undefined && options.timeWindowDays > 0) {
+				const publishedCutoff = toInstant(
+					new Date(options.now.epochMilliseconds - options.timeWindowDays * 86_400_000)
+				);
+				conditions.push(gte(videoTracking.publishedAt, publishedCutoff));
+			}
+
 			const rows = await db
 				.select({ aid: videoTracking.aid })
 				.from(videoTracking)
-				.where(
-					recentlySampled.length > 0
-						? and(
-								gt(videoTracking.velocity, 0),
-								notInArray(videoTracking.aid, recentlySampled)
-							)
-						: gt(videoTracking.velocity, 0)
-				)
+				.where(and(...conditions))
 				.orderBy(desc(videoTracking.velocity))
 				.limit(limit);
 			return rows.map((row) => row.aid);
