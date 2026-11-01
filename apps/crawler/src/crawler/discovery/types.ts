@@ -183,6 +183,7 @@ export interface HotSampleOptions {
 	limit: number;
 	cooldownMinutes: number;
 	now: Temporal.Instant;
+	timeWindowDays?: number;
 }
 
 export interface SearchRoverConfig {

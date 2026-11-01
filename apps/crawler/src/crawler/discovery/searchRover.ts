@@ -199,7 +199,8 @@ export class SearchRover {
 				}
 			};
 
-			const isDeepMode = config.mode === "deep";
+			const isExplicitRange = config.from !== undefined || config.to !== undefined;
+			const isDeepMode = config.mode === "deep" && !isExplicitRange;
 			const isExplicitOrders = config.orders !== undefined && config.orders.length > 0;
 
 			if (isDeepMode) {

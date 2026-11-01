@@ -182,6 +182,12 @@ export const DiscoverySweepRequestSchema = z.object({
 	to: z.number().int().positive().optional(),
 });
 
+export const TriggerHotSampleRequestSchema = z.object({
+	limit: z.number().int().min(1).max(100).optional(),
+	timeWindowDays: z.number().positive().max(365).optional(),
+});
+export type TriggerHotSampleRequest = z.infer<typeof TriggerHotSampleRequestSchema>;
+
 export const DiscoverySweepResponseSchema = z.object({
 	totalDiscovered: z.number().int().nonnegative(),
 	newTracked: z.number().int().nonnegative(),

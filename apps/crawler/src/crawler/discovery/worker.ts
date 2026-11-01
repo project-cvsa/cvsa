@@ -34,7 +34,7 @@ export type DiscoveryJobData =
 			origin?: DiscoveryOrigin;
 	  }
 	| { type: "active-discovery"; aid: string }
-	| { type: "hot-sample"; limit?: number };
+	| { type: "hot-sample"; limit?: number; timeWindowDays?: number };
 
 export const DISCOVERY_QUEUE_NAME = "crawler-discovery";
 
@@ -94,11 +94,24 @@ export class DiscoveryPipelineProcessor {
 				this.filterService.getConfig().searchKeywords ??
 				DEFAULT_KEYWORDS;
 			const isDeep = (data.mode ?? data.config?.mode) === "deep";
-			target = isDeep
-				? `${keywords.length} 个词 · 深度切片`
-				: keywords.length > 1
-					? `${keywords.length} 个关键词 (${keywords[0]} 等)`
-					: (keywords[0] ?? "全量配置词");
+			let windowText = "";
+			if (data.config?.from || data.config?.to) {
+				const fromStr = data.config.from
+					? new Date(Number(data.config.from) * 1000).toISOString().slice(0, 10)
+					: "最早";
+				const toStr = data.config.to
+					? new Date(Number(data.config.to) * 1000).toISOString().slice(0, 10)
+					: "至今";
+				windowText = ` · ${fromStr} ~ ${toStr}`;
+			} else if (data.config?.timeWindowDays) {
+				windowText = ` · 近 ${data.config.timeWindowDays} 天`;
+			}
+			target =
+				isDeep && !data.config?.from
+					? `${keywords.length} 个关键词 · 多维度切片`
+					: keywords.length > 1
+						? `${keywords.length} 个关键词 (${keywords[0]} 等)${windowText}`
+						: `${keywords[0] ?? "全量配置词"}${windowText}`;
 		}
 		await report?.({
 			stage:
@@ -138,7 +151,7 @@ export class DiscoveryPipelineProcessor {
 				await this.handleActiveDiscovery(data.aid, report);
 				break;
 			case "hot-sample":
-				await this.handleHotSample(data.limit, report);
+				await this.handleHotSample(data.limit, data.timeWindowDays, report);
 				break;
 		}
 	}
@@ -193,6 +206,7 @@ export class DiscoveryPipelineProcessor {
 	 */
 	private async handleHotSample(
 		limit = DEFAULT_HOT_SAMPLE_LIMIT,
+		timeWindowDays?: number,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
 		if (!this.relatedDiscoveryEnabled) {
@@ -207,6 +221,7 @@ export class DiscoveryPipelineProcessor {
 				limit,
 				cooldownMinutes: 60,
 				now: toInstant(new Date()),
+				timeWindowDays,
 			});
 			if (seeds.length === 0) {
 				appLogger.debug("Hot sample found no eligible seeds", {

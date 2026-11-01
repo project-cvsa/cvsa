@@ -13,10 +13,10 @@ import type { IDiscoveryRepository } from "./repository.interface";
 import type { DiscoveryJobData } from "./worker";
 import { toSampleItem } from "./sampleDto";
 
-function isDetailFetchTask(job: CrawlerQueueJobSnapshot): boolean {
-	if (job.name.startsWith("detail-")) return true;
+function isSubtask(job: CrawlerQueueJobSnapshot): boolean {
+	if (job.name.startsWith("detail-") || job.name.startsWith("active-")) return true;
 	const data = job.data as Record<string, unknown> | null;
-	return data?.type === "fetch-video-details";
+	return data?.type === "fetch-video-details" || data?.type === "active-discovery";
 }
 
 function activity(job: CrawlerQueueJobSnapshot): DiscoveryStatusDto["activeJobs"][number] {
@@ -54,8 +54,8 @@ export class DiscoveryAdminService {
 		const oldest =
 			counts.waiting > 0 ? await this.queue.getJobs(["waiting"], 1, counts.waiting - 1) : [];
 
-		const filteredActive = active.filter((j) => !isDetailFetchTask(j));
-		const filteredRecent = recent.filter((j) => !isDetailFetchTask(j)).slice(0, 20);
+		const filteredActive = active.filter((j) => !isSubtask(j));
+		const filteredRecent = recent.filter((j) => !isSubtask(j)).slice(0, 20);
 
 		return {
 			active: filteredActive.length > 0 || (active.length > 0 && counts.active > 0),

@@ -95,7 +95,10 @@ export class DiscoveryScheduler {
 		);
 	}
 
-	async triggerHotSample(limit = DEFAULT_HOT_SAMPLE_LIMIT): Promise<void> {
+	async triggerHotSample(
+		limit = DEFAULT_HOT_SAMPLE_LIMIT,
+		timeWindowDays?: number
+	): Promise<void> {
 		if (!this.relatedDiscoveryEnabled) {
 			appLogger.debug("Related discovery is paused; ignoring hot sample trigger", {
 				component: "discovery-scheduler",
@@ -104,7 +107,7 @@ export class DiscoveryScheduler {
 		}
 		await this.discoveryQueue.add(
 			`hot-sample-${Date.now()}`,
-			{ type: "hot-sample", limit },
+			{ type: "hot-sample", limit, timeWindowDays },
 			{ removeOnComplete: { age: 3600, count: 100 } }
 		);
 	}

@@ -20,6 +20,7 @@ import type {
 	DiscoveryStatusDto,
 	DiscoverySweepRequest,
 	DiscoveryQueuedResponse,
+	TriggerHotSampleRequest,
 	CrawlerQueueName,
 	IngestVideoRequest,
 	IngestVideoResponse,
@@ -133,9 +134,11 @@ async function triggerSweep(
 	return settle(await eden.v2.admin.crawler.sweep.post(body));
 }
 
-async function triggerHotSample(): Promise<ApiResult<DiscoveryQueuedResponse | null>> {
+async function triggerHotSample(
+	body?: TriggerHotSampleRequest
+): Promise<ApiResult<DiscoveryQueuedResponse | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler["hot-sample"].post());
+	return settle(await eden.v2.admin.crawler["hot-sample"].post(body));
 }
 
 async function fetchDetail(aid: string): Promise<ApiResult<ActionQueuedResponse | null>> {

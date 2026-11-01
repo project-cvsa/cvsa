@@ -7,12 +7,13 @@ import {
 } from "@ark-ui/solid/date-picker";
 import { parseDateTime } from "@internationalized/date";
 import { cn } from "@lib/cn";
-import { createEffect, createSignal, createUniqueId, For, Index, Show, splitProps } from "solid-js";
+import { createEffect, createSignal, createUniqueId, Index, Show, splitProps } from "solid-js";
 import { Portal } from "solid-js/web";
 import CalendarDays from "lucide-solid/icons/calendar-days";
 import ChevronLeft from "lucide-solid/icons/chevron-left";
 import ChevronRight from "lucide-solid/icons/chevron-right";
 import X from "lucide-solid/icons/x";
+import { controlSizeClass, type ControlSize } from "./controlStyles";
 
 export interface DateFieldProps {
 	id?: string;
@@ -21,6 +22,7 @@ export interface DateFieldProps {
 	value?: string;
 	defaultValue?: string;
 	label: string;
+	size?: ControlSize;
 	locale?: string;
 	granularity?: DateFieldGranularity;
 	hourCycle?: 12 | 24;
@@ -67,6 +69,7 @@ export default function DateField(props: DateFieldProps) {
 		"value",
 		"defaultValue",
 		"label",
+		"size",
 		"locale",
 		"granularity",
 		"hourCycle",
@@ -110,7 +113,16 @@ export default function DateField(props: DateFieldProps) {
 	};
 
 	return (
-		<div class={cn("flex flex-col gap-1.5", local.class)}>
+		<div class={cn("flex flex-col gap-1.5 w-full", local.class)}>
+			<Show when={local.size && local.label}>
+				<label for={fieldId()} class="ts-caption text-secondary font-medium select-none">
+					{local.label}
+					<Show when={local.required}>
+						<span class="text-error"> *</span>
+					</Show>
+				</label>
+			</Show>
+
 			<ArkDatePicker.Root
 				id={`${fieldId()}-picker`}
 				value={dates()}
@@ -165,41 +177,47 @@ export default function DateField(props: DateFieldProps) {
 
 function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 	const dateInput = useDateInputContext();
+	const isCompact = () => Boolean(props.size);
+
 	return (
 		<ArkDateInput.Control
 			class={cn(
-				"group relative flex h-[58px] items-center border bg-surface transition-colors",
+				"group relative flex items-center border bg-surface transition-colors w-full",
+				isCompact() ? controlSizeClass(props.size ?? "md") : "h-[58px]",
 				props.errorText
 					? "border-error"
 					: "border-border hover:border-tertiary data-[focus]:border-primary",
 				props.disabled && "opacity-60"
 			)}
 		>
-			<ArkDateInput.Label
-				class={cn(
-					"absolute left-4 top-2 z-1 ts-caption",
-					props.errorText ? "text-error" : "text-tertiary"
-				)}
-			>
-				{props.label}
-				<Show when={props.required}>
-					<span class="text-error"> *</span>
-				</Show>
-			</ArkDateInput.Label>
+			<Show when={!isCompact()}>
+				<ArkDateInput.Label
+					class={cn(
+						"absolute left-4 top-2 z-1 ts-caption",
+						props.errorText ? "text-error" : "text-tertiary"
+					)}
+				>
+					{props.label}
+					<Show when={props.required}>
+						<span class="text-error"> *</span>
+					</Show>
+				</ArkDateInput.Label>
+			</Show>
 
 			<ArkDateInput.SegmentGroup
-				class="flex h-full min-w-0 flex-1 items-end overflow-hidden px-4 pb-2 pt-6 outline-none"
+				class={cn(
+					"flex h-full min-w-0 flex-1 items-center overflow-hidden outline-none",
+					isCompact() ? "px-2.5" : "px-4 pb-2 pt-6 items-end"
+				)}
 				aria-describedby={props.describedBy}
 			>
 				<Index each={dateInput().getSegments()}>
 					{(segment) => (
-						// Ark's Solid Segment component looks up segments by type. Repeated
-						// literals then all resolve to the first separator, so render the
-						// machine-provided segment directly to preserve `/`, space and `:`.
 						<span
 							{...dateInput().getSegmentProps({ segment: segment() })}
 							class={cn(
-								"min-w-0 rounded-none outline-none ts-body text-primary",
+								"min-w-0 rounded-none outline-none text-primary",
+								isCompact() ? "ts-caption" : "ts-body",
 								segment().type === "literal" ? "px-0" : "px-0.5",
 								segment().type === "hour" && "ml-2",
 								"data-[editable]:focus:bg-primary data-[editable]:focus:text-display-inverted",
@@ -215,35 +233,41 @@ function DateFieldControl(props: DateFieldProps & { describedBy?: string }) {
 			<Show when={dateInput().value.length > 0 && !props.readOnly}>
 				<button
 					type="button"
-					class="flex h-10 w-10 shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-[-4px] focus-visible:outline-primary"
+					class={cn(
+						"flex shrink-0 items-center justify-center text-quaternary outline-none hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-[-4px] focus-visible:outline-primary",
+						isCompact() ? "h-7 w-7" : "h-10 w-10"
+					)}
 					aria-label={props.clearLabel}
 					disabled={props.disabled}
 					onclick={() => {
 						dateInput().clearValue();
 					}}
 				>
-					<X size={17} />
+					<X size={isCompact() ? 14 : 17} />
 				</button>
 			</Show>
 
 			<ArkDatePicker.Trigger
 				type="button"
-				class="mr-1 flex h-10 w-10 shrink-0 items-center justify-center text-quaternary outline-none hover:bg-hover hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-[-4px] focus-visible:outline-primary"
+				class={cn(
+					"mr-1 flex shrink-0 items-center justify-center text-quaternary outline-none hover:bg-hover hover:text-primary focus-visible:outline-1 focus-visible:outline-offset-[-4px] focus-visible:outline-primary",
+					isCompact() ? "h-7 w-7" : "h-10 w-10"
+				)}
 				aria-label={props.calendarLabel}
 			>
-				<CalendarDays size={19} />
+				<CalendarDays size={isCompact() ? 15 : 19} />
 			</ArkDatePicker.Trigger>
 		</ArkDateInput.Control>
 	);
 }
 
-function CalendarContent(props: Pick<DateFieldProps, "todayLabel">) {
+function CalendarContent(_props: Pick<DateFieldProps, "todayLabel">) {
 	const datePicker = useDatePickerContext();
 	return (
 		<Portal>
 			<div class="relative w-full h-full left-0 top-0 z-50">
 				<ArkDatePicker.Positioner class="">
-					<ArkDatePicker.Content class="w-[min(calc(100vw-2rem),20rem)] bg-surface p-4 shadow-xl outline-none">
+					<ArkDatePicker.Content class="w-[min(calc(100vw-2rem),20rem)] bg-surface p-4 shadow-xl outline-none border border-border">
 						<ArkDatePicker.View view="day">
 							<ArkDatePicker.ViewControl class="mb-3 grid grid-cols-[2.75rem_1fr_2.75rem] items-center">
 								<ArkDatePicker.PrevTrigger
@@ -261,64 +285,50 @@ function CalendarContent(props: Pick<DateFieldProps, "todayLabel">) {
 								</ArkDatePicker.NextTrigger>
 							</ArkDatePicker.ViewControl>
 
-							<CalendarTable />
+							<ArkDatePicker.Table class="w-full border-collapse">
+								<ArkDatePicker.TableHead>
+									<ArkDatePicker.TableRow class="grid grid-cols-7 gap-1">
+										<Index each={datePicker().weekDays}>
+											{(weekDay) => (
+												<ArkDatePicker.TableHeader class="flex h-8 items-center justify-center ts-caption text-tertiary">
+													{weekDay().short}
+												</ArkDatePicker.TableHeader>
+											)}
+										</Index>
+									</ArkDatePicker.TableRow>
+								</ArkDatePicker.TableHead>
 
-							<button
-								type="button"
-								class="mt-3 h-10 w-full border border-border ts-label text-primary outline-none hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary"
-								onclick={() => datePicker().selectToday()}
-							>
-								{props.todayLabel}
-							</button>
+								<ArkDatePicker.TableBody>
+									<Index each={datePicker().weeks}>
+										{(week) => (
+											<ArkDatePicker.TableRow class="grid grid-cols-7 gap-1">
+												<Index each={week()}>
+													{(day) => (
+														<ArkDatePicker.TableCell value={day()}>
+															<ArkDatePicker.TableCellTrigger
+																class={cn(
+																	"flex h-9 w-full items-center justify-center ts-caption outline-none transition-colors",
+																	"hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary",
+																	"data-[outside-range]:text-quaternary",
+																	"data-[today]:font-semibold data-[today]:text-primary",
+																	"data-[selected]:bg-primary data-[selected]:text-display-inverted",
+																	"data-[disabled]:cursor-not-allowed data-[disabled]:opacity-40"
+																)}
+															>
+																{day().day}
+															</ArkDatePicker.TableCellTrigger>
+														</ArkDatePicker.TableCell>
+													)}
+												</Index>
+											</ArkDatePicker.TableRow>
+										)}
+									</Index>
+								</ArkDatePicker.TableBody>
+							</ArkDatePicker.Table>
 						</ArkDatePicker.View>
 					</ArkDatePicker.Content>
 				</ArkDatePicker.Positioner>
 			</div>
 		</Portal>
-	);
-}
-
-function CalendarTable() {
-	const datePicker = useDatePickerContext();
-	return (
-		<ArkDatePicker.Table class="w-full table-fixed border-collapse">
-			<ArkDatePicker.TableHead>
-				<ArkDatePicker.TableRow>
-					<For each={datePicker().weekDays}>
-						{(weekDay) => (
-							<ArkDatePicker.TableHeader class="h-8 text-center ts-caption font-normal text-tertiary">
-								{weekDay.narrow}
-							</ArkDatePicker.TableHeader>
-						)}
-					</For>
-				</ArkDatePicker.TableRow>
-			</ArkDatePicker.TableHead>
-			<ArkDatePicker.TableBody>
-				<For each={datePicker().weeks}>
-					{(week) => (
-						<ArkDatePicker.TableRow>
-							<For each={week}>{(day) => <CalendarDay day={day} />}</For>
-						</ArkDatePicker.TableRow>
-					)}
-				</For>
-			</ArkDatePicker.TableBody>
-		</ArkDatePicker.Table>
-	);
-}
-
-function CalendarDay(props: { day: DateValue }) {
-	return (
-		<ArkDatePicker.TableCell value={props.day} class="p-0.5">
-			<ArkDatePicker.TableCellTrigger
-				class={cn(
-					"flex aspect-square w-full items-center justify-center outline-none ts-label text-primary transition-colors",
-					"hover:bg-hover focus-visible:outline-1 focus-visible:outline-primary",
-					"data-[selected]:bg-primary data-[selected]:text-display-inverted",
-					"data-[today]:border data-[today]:border-primary data-[outside-range]:text-quaternary data-[disabled]:opacity-35"
-				)}
-			>
-				{props.day.day}
-			</ArkDatePicker.TableCellTrigger>
-		</ArkDatePicker.TableCell>
 	);
 }
