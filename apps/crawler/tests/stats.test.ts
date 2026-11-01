@@ -67,6 +67,7 @@ describe("CrawlerStatsCollector", () => {
 		collector.recordJobCompleted();
 		collector.recordJobCompleted(2);
 		collector.recordSnapshotsSaved(3);
+		collector.recordVideosDiscovered(2);
 		collector.recordCandidatesScanned();
 		collector.recordInference(20, true);
 		collector.recordNetworkRequest(30, "success");
@@ -77,6 +78,7 @@ describe("CrawlerStatsCollector", () => {
 		expect(stats.counters).toEqual({
 			jobsCompleted: 3,
 			snapshotsSaved: 3,
+			videosDiscovered: 2,
 			candidatesScanned: 1,
 			inferencesRun: 1,
 			networkRequests: 1,

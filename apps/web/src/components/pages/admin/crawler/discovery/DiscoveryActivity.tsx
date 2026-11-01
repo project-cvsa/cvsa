@@ -1,16 +1,84 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
-import type { DiscoverySampleItem, DiscoveryStatusDto } from "@cvsa/contracts";
+import type { DiscoveryActivity, DiscoverySampleItem, DiscoveryStatusDto } from "@cvsa/contracts";
 import Badge from "@components/ui/Badge";
 import Button from "@components/ui/Button";
+import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import { toast } from "@components/ui/Toast";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { api } from "@lib/api";
-import { formatDateTime, formatMetric } from "../format";
+import { formatDateTime, formatMetric, formatWaitSeconds } from "../format";
 import ExternalLink from "lucide-solid/icons/external-link";
 import Compass from "lucide-solid/icons/compass";
 import Trash2 from "lucide-solid/icons/trash-2";
 
-export default function DiscoveryActivity(props: {
+function describeDiscoveryJob(job: DiscoveryActivity): {
+	title: string;
+	variant: "info" | "neutral" | "warning" | "success" | "danger";
+} {
+	if (job.name.includes("deep") || job.target?.includes("d)")) {
+		return { title: "全网深度挖掘", variant: "info" };
+	}
+	if (job.name.includes("search-sweep") || job.name.includes("sweep-manual")) {
+		return { title: "增量时间窗轮巡", variant: "neutral" };
+	}
+	if (job.name.startsWith("detail-")) {
+		return { title: "视频详情评估", variant: "neutral" };
+	}
+	if (job.name.startsWith("hot-sample")) {
+		return { title: "热门推荐扩展", variant: "warning" };
+	}
+	if (job.name.startsWith("active-")) {
+		return { title: "指定关联扩展", variant: "warning" };
+	}
+	return { title: job.name, variant: "neutral" };
+}
+
+function jobStateBadge(state: string) {
+	switch (state) {
+		case "active":
+			return (
+				<Badge variant="info" size="sm">
+					进行中
+				</Badge>
+			);
+		case "completed":
+			return (
+				<Badge variant="success" size="sm">
+					已完成
+				</Badge>
+			);
+		case "failed":
+			return (
+				<Badge variant="danger" size="sm">
+					失败
+				</Badge>
+			);
+		case "delayed":
+			return (
+				<Badge variant="warning" size="sm">
+					延迟重试
+				</Badge>
+			);
+		default:
+			return (
+				<Badge variant="neutral" size="sm">
+					{state}
+				</Badge>
+			);
+	}
+}
+
+function computeJobDuration(job: DiscoveryActivity): string {
+	if (job.processedOn && job.finishedOn && job.finishedOn >= job.processedOn) {
+		return formatWaitSeconds((job.finishedOn - job.processedOn) / 1000);
+	}
+	if (job.processedOn && job.state === "active") {
+		return formatWaitSeconds(Math.max(0, (Date.now() - job.processedOn) / 1000));
+	}
+	return "—";
+}
+
+export default function DiscoveryActivityView(props: {
 	status: DiscoveryStatusDto | null;
 	error: string | null;
 }) {
@@ -24,13 +92,13 @@ export default function DiscoveryActivity(props: {
 		setLoadingSamples(true);
 		const res = await api.crawler.listDiscoverySamples({
 			limit: 8,
-			decision: "model_accepted",
 			sortBy: "capturedAt",
 			sortOrder: "desc",
 		});
 		setLoadingSamples(false);
 		if (res.ok && res.data) {
-			setRecentSamples(res.data.items);
+			// Show all accepted videos (both whitelist and model_accepted, excluding model_rejected)
+			setRecentSamples(res.data.items.filter((item) => item.decision !== "model_rejected"));
 		}
 	};
 
@@ -40,14 +108,12 @@ export default function DiscoveryActivity(props: {
 	});
 
 	const activeJob = () => props.status?.activeJobs?.[0];
-	const latestFinishedJob = () => props.status?.recentJobs?.[0];
 
 	const handleExcludeSample = async (aid: string) => {
 		if (excludingAid()) return;
 
 		setExcludingAid(aid);
 
-		// Optimistic remove
 		const prev = recentSamples();
 		setRecentSamples((items) => items.filter((item) => item.aid !== aid));
 
@@ -61,9 +127,73 @@ export default function DiscoveryActivity(props: {
 		}
 	};
 
+	const taskColumns: TableColumn<DiscoveryActivity>[] = [
+		{
+			id: "type",
+			header: "任务类型 / 模式",
+			class: "font-medium text-primary whitespace-nowrap",
+			cell: (job) => {
+				const info = describeDiscoveryJob(job);
+				return (
+					<div class="flex items-center gap-2">
+						<Badge variant={info.variant} size="sm">
+							{info.title}
+						</Badge>
+					</div>
+				);
+			},
+		},
+		{
+			id: "target",
+			header: "扫描目标",
+			class: "text-secondary",
+			cell: (job) => (
+				<span class="truncate max-w-xs block font-code ts-caption">
+					{job.target ??
+						(job.name.startsWith("detail-") ? job.name.replace("detail-", "AV") : "—")}
+				</span>
+			),
+		},
+		{
+			id: "state",
+			header: "状态",
+			class: "whitespace-nowrap",
+			cell: (job) => jobStateBadge(job.state),
+		},
+		{
+			id: "duration",
+			header: "执行耗时",
+			class: "tabular-nums whitespace-nowrap text-secondary",
+			cell: (job) => computeJobDuration(job),
+		},
+		{
+			id: "yield",
+			header: "发现 / 入队",
+			class: "tabular-nums whitespace-nowrap text-primary",
+			cell: (job) => (
+				<span>
+					{job.progress?.candidates ?? 0} <span class="text-tertiary">/</span>{" "}
+					{job.progress?.queued ?? 0}
+				</span>
+			),
+		},
+		{
+			id: "time",
+			header: "触发 / 完成时间",
+			class: "tabular-nums whitespace-nowrap text-tertiary ts-caption",
+			cell: (job) => (
+				<div class="flex flex-col">
+					<span>
+						{formatDateTime(new Date(job.finishedOn ?? job.timestamp).toISOString())}
+					</span>
+				</div>
+			),
+		},
+	];
+
 	return (
 		<section class="flex flex-col gap-6" aria-label={t("audit.activity")}>
-			{/* Funnel & Active Progress Card */}
+			{/* Top Overview Bar */}
 			<div class="border border-border bg-surface p-4 flex flex-col gap-3">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div class="flex items-center gap-3">
@@ -95,39 +225,22 @@ export default function DiscoveryActivity(props: {
 								{props.status?.counts.waiting ?? 0}
 							</strong>
 						</span>
+						<span>
+							延迟任务:{" "}
+							<strong class="text-primary">
+								{props.status?.counts.delayed ?? 0}
+							</strong>
+						</span>
 					</div>
 				</div>
 
-				<Show
-					when={activeJob()}
-					fallback={
-						<div class="ts-caption text-tertiary bg-surface-container-low p-3 flex items-center justify-between">
-							<span>
-								目前无正在运行的扫描任务。系统按定时计划执行搜索轮巡与推荐扩展。
-							</span>
-							<Show when={latestFinishedJob()}>
-								{(job) => (
-									<span>
-										最近完成: {job().target ?? job().name} (
-										{formatDateTime(
-											new Date(
-												job().finishedOn ?? job().timestamp
-											).toISOString()
-										)}
-										)
-									</span>
-								)}
-							</Show>
-						</div>
-					}
-				>
+				<Show when={activeJob()}>
 					{(job) => (
 						<div class="bg-surface-container-low p-3 flex flex-col gap-2 ts-caption border-l-2 border-primary">
 							<div class="flex items-center justify-between font-medium text-primary">
 								<span>
-									当前阶段:{" "}
-									{t(`audit.stages.${job().progress?.stage ?? "starting"}`)} ·
-									目标: {job().target ?? job().name}
+									正在运行: {describeDiscoveryJob(job()).title} · 目标:{" "}
+									{job().target ?? job().name}
 								</span>
 								<Show when={job().progress?.page}>
 									<span class="text-secondary">
@@ -150,12 +263,32 @@ export default function DiscoveryActivity(props: {
 				</Show>
 			</div>
 
+			{/* Exploration Task History Stream */}
+			<div class="flex flex-col gap-3">
+				<div class="flex items-center justify-between">
+					<h3 class="ts-heading-3 text-primary">探索任务执行记录</h3>
+					<span class="ts-caption text-tertiary">
+						展示后台增量扫描、全网深度挖掘与推荐扩展的执行轨迹与产出
+					</span>
+				</div>
+
+				<DataTable
+					columns={taskColumns}
+					items={props.status?.recentJobs ?? []}
+					empty={
+						<div class="p-8 text-center text-tertiary bg-surface ts-caption">
+							暂无近期探索任务执行记录
+						</div>
+					}
+				/>
+			</div>
+
 			{/* Recent Discovered Songs Feed */}
 			<div class="flex flex-col gap-3">
 				<div class="flex items-center justify-between">
 					<h3 class="ts-heading-3 text-primary">最新发现入库成果</h3>
 					<span class="ts-caption text-tertiary">
-						展示爬虫最近自动发现并判定为曲目的视频
+						展示爬虫最近自动发现并成功入库的曲目（含白名单命中与 AI 分类器判定）
 					</span>
 				</div>
 
@@ -198,33 +331,47 @@ export default function DiscoveryActivity(props: {
 												href={`https://www.bilibili.com/video/${item.bvid}`}
 												target="_blank"
 												rel="noopener noreferrer"
-												class="ts-label font-medium text-primary hover:underline line-clamp-2"
+												class="font-medium text-primary hover:underline truncate inline-flex items-center gap-1 ts-caption"
 												title={item.title}
 											>
-												{item.title}
+												<span class="truncate">{item.title}</span>
+												<ExternalLink class="w-3 h-3 shrink-0 text-tertiary" />
 											</a>
-											<div class="flex items-center gap-1.5 ts-caption text-tertiary">
-												<span>av{item.aid}</span>
-												<ExternalLink class="w-3 h-3" />
+											<div class="flex items-center gap-2 ts-caption text-tertiary">
+												<Badge
+													variant={
+														item.decision === "whitelist"
+															? "success"
+															: "info"
+													}
+													size="sm"
+												>
+													{item.decision === "whitelist"
+														? "白名单"
+														: "模型通过"}
+												</Badge>
+												<span class="tabular-nums">
+													P(歌): {(item.songProbability * 100).toFixed(0)}
+													%
+												</span>
 											</div>
 										</div>
 									</div>
 
 									<div class="flex items-center justify-between pt-2 border-t border-border ts-caption">
-										<Badge variant="success" size="sm">
-											{item.decision === "whitelist"
-												? "白名单"
-												: `模型 ${(item.songProbability * 100).toFixed(0)}%`}
-										</Badge>
+										<span class="text-tertiary tabular-nums">
+											{formatDateTime(item.capturedAt)}
+										</span>
+
 										<Button
-											variant="ghost"
+											variant="outlined"
 											size="sm"
-											class="text-error hover:bg-error hover:text-on-error h-7 px-2 ts-caption gap-1"
+											class="h-6 px-2 ts-caption text-error border-error/50 hover:bg-error hover:text-on-error"
 											disabled={excludingAid() === item.aid}
 											onClick={() => void handleExcludeSample(item.aid)}
 										>
-											<Trash2 class="w-3 h-3" />
-											<span>排除</span>
+											<Trash2 class="w-3 h-3 mr-1" />
+											<span>{t("videos.action.exclude")}</span>
 										</Button>
 									</div>
 								</div>
