@@ -6,31 +6,25 @@ import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import { toast } from "@components/ui/Toast";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { api } from "@lib/api";
-import { formatDateTime, formatMetric, formatWaitSeconds } from "../format";
+import { formatDateTime, formatWaitSeconds } from "../format";
 import ExternalLink from "lucide-solid/icons/external-link";
 import Compass from "lucide-solid/icons/compass";
 import Trash2 from "lucide-solid/icons/trash-2";
 
-function describeDiscoveryJob(job: DiscoveryActivity): {
-	title: string;
-	variant: "info" | "neutral" | "warning" | "success" | "danger";
-} {
-	if (job.name.includes("deep") || job.target?.includes("d)")) {
-		return { title: "全网深度挖掘", variant: "info" };
+function describeDiscoveryJob(job: DiscoveryActivity): string {
+	if (job.name.includes("deep") || job.target?.includes("深度")) {
+		return "全网深度挖掘";
 	}
 	if (job.name.includes("search-sweep") || job.name.includes("sweep-manual")) {
-		return { title: "增量时间窗轮巡", variant: "neutral" };
-	}
-	if (job.name.startsWith("detail-")) {
-		return { title: "视频详情评估", variant: "neutral" };
+		return "增量轮巡";
 	}
 	if (job.name.startsWith("hot-sample")) {
-		return { title: "热门推荐扩展", variant: "warning" };
+		return "热门推荐扩展";
 	}
 	if (job.name.startsWith("active-")) {
-		return { title: "指定关联扩展", variant: "warning" };
+		return "指定关联扩展";
 	}
-	return { title: job.name, variant: "neutral" };
+	return job.name;
 }
 
 function jobStateBadge(state: string) {
@@ -97,7 +91,6 @@ export default function DiscoveryActivityView(props: {
 		});
 		setLoadingSamples(false);
 		if (res.ok && res.data) {
-			// Show all accepted videos (both whitelist and model_accepted, excluding model_rejected)
 			setRecentSamples(res.data.items.filter((item) => item.decision !== "model_rejected"));
 		}
 	};
@@ -107,7 +100,15 @@ export default function DiscoveryActivityView(props: {
 		void loadRecentAccepted();
 	});
 
-	const activeJob = () => props.status?.activeJobs?.[0];
+	const activeJob = () =>
+		props.status?.activeJobs?.find(
+			(job) => !job.name.startsWith("detail-") && job.name !== "fetch-video-details"
+		);
+
+	const explorationJobs = () =>
+		(props.status?.recentJobs ?? []).filter(
+			(job) => !job.name.startsWith("detail-") && job.name !== "fetch-video-details"
+		);
 
 	const handleExcludeSample = async (aid: string) => {
 		if (excludingAid()) return;
@@ -130,28 +131,18 @@ export default function DiscoveryActivityView(props: {
 	const taskColumns: TableColumn<DiscoveryActivity>[] = [
 		{
 			id: "type",
-			header: "任务类型 / 模式",
+			header: "任务类型",
 			class: "font-medium text-primary whitespace-nowrap",
-			cell: (job) => {
-				const info = describeDiscoveryJob(job);
-				return (
-					<div class="flex items-center gap-2">
-						<Badge variant={info.variant} size="sm">
-							{info.title}
-						</Badge>
-					</div>
-				);
-			},
+			cell: (job) => (
+				<span class="text-primary font-medium">{describeDiscoveryJob(job)}</span>
+			),
 		},
 		{
 			id: "target",
 			header: "扫描目标",
 			class: "text-secondary",
 			cell: (job) => (
-				<span class="truncate max-w-xs block font-code ts-caption">
-					{job.target ??
-						(job.name.startsWith("detail-") ? job.name.replace("detail-", "AV") : "—")}
-				</span>
+				<span class="truncate max-w-xs block ts-caption">{job.target ?? "—"}</span>
 			),
 		},
 		{
@@ -193,7 +184,7 @@ export default function DiscoveryActivityView(props: {
 
 	return (
 		<section class="flex flex-col gap-6" aria-label={t("audit.activity")}>
-			{/* Top Overview Bar */}
+			{/* Top Status Card */}
 			<div class="border border-border bg-surface p-4 flex flex-col gap-3">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div class="flex items-center gap-3">
@@ -209,12 +200,6 @@ export default function DiscoveryActivityView(props: {
 					</div>
 
 					<div class="flex items-center gap-4 ts-caption text-secondary">
-						<span>
-							扫描速率:{" "}
-							<strong class="text-primary">
-								{formatMetric(props.status?.candidatesPerMin ?? 0)}/min
-							</strong>
-						</span>
 						<span>
 							队列活跃:{" "}
 							<strong class="text-primary">{props.status?.counts.active ?? 0}</strong>
@@ -239,7 +224,7 @@ export default function DiscoveryActivityView(props: {
 						<div class="bg-surface-container-low p-3 flex flex-col gap-2 ts-caption border-l-2 border-primary">
 							<div class="flex items-center justify-between font-medium text-primary">
 								<span>
-									正在运行: {describeDiscoveryJob(job()).title} · 目标:{" "}
+									正在运行: {describeDiscoveryJob(job())} · 目标:{" "}
 									{job().target ?? job().name}
 								</span>
 								<Show when={job().progress?.page}>
@@ -268,13 +253,13 @@ export default function DiscoveryActivityView(props: {
 				<div class="flex items-center justify-between">
 					<h3 class="ts-heading-3 text-primary">探索任务执行记录</h3>
 					<span class="ts-caption text-tertiary">
-						展示后台增量扫描、全网深度挖掘与推荐扩展的执行轨迹与产出
+						仅展示增量轮巡、全网深度挖掘与推荐扩展的执行轨迹
 					</span>
 				</div>
 
 				<DataTable
 					columns={taskColumns}
-					items={props.status?.recentJobs ?? []}
+					items={explorationJobs()}
 					empty={
 						<div class="p-8 text-center text-tertiary bg-surface ts-caption">
 							暂无近期探索任务执行记录

@@ -14,7 +14,7 @@ import { DiscoveryFilterService } from "./filter";
 import { RELATED_DISCOVERY_ENABLED } from "./flags";
 import { RelationExtractor } from "./relationExtractor";
 import type { IDiscoveryRepository } from "./repository.interface";
-import { SearchRover } from "./searchRover";
+import { DEFAULT_KEYWORDS, SearchRover } from "./searchRover";
 import type { CandidateSource, DiscoveryOrigin, SearchRoverConfig } from "./types";
 
 export type DiscoveryJobData =
@@ -85,12 +85,21 @@ export class DiscoveryPipelineProcessor {
 		report?: (progress: DiscoveryJobProgress) => Promise<void>,
 		checkpoint?: (offset: number) => Promise<void>
 	): Promise<void> {
-		const target =
-			"aid" in data
-				? data.aid
-				: data.type === "search-sweep"
-					? (data.config?.keywords?.join(", ") ?? null)
-					: null;
+		let target: string | null = null;
+		if ("aid" in data) {
+			target = String(data.aid);
+		} else if (data.type === "search-sweep") {
+			const keywords =
+				data.config?.keywords ??
+				this.filterService.getConfig().searchKeywords ??
+				DEFAULT_KEYWORDS;
+			const isDeep = (data.mode ?? data.config?.mode) === "deep";
+			target = isDeep
+				? `${keywords.length} 个词 · 深度切片`
+				: keywords.length > 1
+					? `${keywords.length} 个关键词 (${keywords[0]} 等)`
+					: (keywords[0] ?? "全量配置词");
+		}
 		await report?.({
 			stage:
 				data.type === "search-sweep"
@@ -141,7 +150,8 @@ export class DiscoveryPipelineProcessor {
 		offset = 0,
 		checkpoint?: (offset: number) => Promise<void>
 	): Promise<void> {
-		const keywords = config?.keywords ?? this.filterService.getConfig().searchKeywords;
+		const keywords =
+			config?.keywords ?? this.filterService.getConfig().searchKeywords ?? DEFAULT_KEYWORDS;
 		await this.searchRover.runSearchSweep(
 			{ ...config, mode: mode ?? config?.mode, keywords },
 			report,
@@ -395,9 +405,24 @@ export function createDiscoveryWorker(
 					if (job.data.type === "search-sweep")
 						await job.updateData?.({ ...job.data, offset });
 				});
+				let completedTarget = latest.target;
+				if (job.data.type === "search-sweep") {
+					const sweepKeywords =
+						job.data.config?.keywords ??
+						processor.filterService.getConfig().searchKeywords ??
+						DEFAULT_KEYWORDS;
+					const isDeep = (job.data.mode ?? job.data.config?.mode) === "deep";
+					completedTarget = isDeep
+						? `${sweepKeywords.length} 个词 · 深度时间切片`
+						: sweepKeywords.length > 1
+							? `${sweepKeywords.length} 个关键词 (${sweepKeywords[0]} 等)`
+							: (sweepKeywords[0] ?? "全量配置词");
+				}
+
 				await report({
 					...latest,
 					stage: "completed",
+					target: completedTarget,
 					updatedAt: new Date().toISOString(),
 				});
 				stats.recordJobCompleted();

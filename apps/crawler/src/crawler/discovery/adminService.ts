@@ -13,6 +13,12 @@ import type { IDiscoveryRepository } from "./repository.interface";
 import type { DiscoveryJobData } from "./worker";
 import { toSampleItem } from "./sampleDto";
 
+function isDetailFetchTask(job: CrawlerQueueJobSnapshot): boolean {
+	if (job.name.startsWith("detail-")) return true;
+	const data = job.data as Record<string, unknown> | null;
+	return data?.type === "fetch-video-details";
+}
+
 function activity(job: CrawlerQueueJobSnapshot): DiscoveryStatusDto["activeJobs"][number] {
 	const progress = DiscoveryJobProgressSchema.safeParse(job.progress);
 	const data = job.data;
@@ -42,13 +48,17 @@ export class DiscoveryAdminService {
 	async getStatus(): Promise<DiscoveryStatusDto> {
 		const [counts, active, recent] = await Promise.all([
 			this.queue.getJobCounts(),
-			this.queue.getJobs(["active"], 100),
-			this.queue.getJobs(["completed", "failed"], 20),
+			this.queue.getJobs(["active"], 50),
+			this.queue.getJobs(["completed", "failed"], 100),
 		]);
 		const oldest =
 			counts.waiting > 0 ? await this.queue.getJobs(["waiting"], 1, counts.waiting - 1) : [];
+
+		const filteredActive = active.filter((j) => !isDetailFetchTask(j));
+		const filteredRecent = recent.filter((j) => !isDetailFetchTask(j)).slice(0, 20);
+
 		return {
-			active: counts.active > 0,
+			active: filteredActive.length > 0 || (active.length > 0 && counts.active > 0),
 			counts: {
 				waiting: counts.waiting,
 				active: counts.active,
@@ -58,8 +68,8 @@ export class DiscoveryAdminService {
 					? Math.max(0, (Date.now() - oldest[0].timestamp) / 1000)
 					: 0,
 			},
-			activeJobs: active.map(activity),
-			recentJobs: recent
+			activeJobs: (filteredActive.length > 0 ? filteredActive : active).map(activity),
+			recentJobs: (filteredRecent.length > 0 ? filteredRecent : recent)
 				.sort((a, b) => (b.finishedOn ?? b.timestamp) - (a.finishedOn ?? a.timestamp))
 				.map(activity),
 			candidatesPerMin: this.stats.getWindow("5m").counters.candidatesScanned / 5,
