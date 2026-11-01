@@ -234,35 +234,36 @@ export default function OverviewSection(props: OverviewSectionProps) {
 							</span>
 							<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
 								<MetricCard
-									label={t("overview.snapshotsPerMin")}
-									value={formatMetric(current().snapshotsPerMin)}
-									hint={t("overview.unit.snapshotsPerMin")}
+									label={t("overview.newSnapshots")}
+									value={formatMetric(current().snapshotsSaved ?? 0)}
+									hint={`平均 ${formatMetric(current().snapshotsPerMin)}/分`}
 									variant="success"
 								/>
 								<MetricCard
-									label={t("overview.requestsPerSec")}
-									value={formatMetric(current().requestsPerSec)}
-									hint={t("overview.unit.requestsPerSec")}
-								/>
-								<MetricCard
-									label={t("overview.candidatesPerMin")}
-									value={formatMetric(current().candidatesPerMin)}
-									hint={t("overview.unit.candidatesPerMin")}
-								/>
-								<MetricCard
-									label={t("overview.inferencesPerSec")}
-									value={formatMetric(current().inferencesPerSec)}
-									hint={t("overview.unit.inferencesPerSec")}
-								/>
-								<MetricCard
-									label={t("overview.jobsPerMin")}
-									value={formatMetric(current().jobsPerMin)}
-									hint={t("overview.unit.jobsPerMin")}
+									label={t("overview.newVideos")}
+									value={formatMetric(current().videosDiscovered ?? 0)}
+									hint={t("overview.discoveredHint")}
+									variant="success"
 								/>
 								<MetricCard
 									label={t("overview.jobsPerSec")}
-									value={formatMetric(current().jobsPerSec)}
-									hint={t("overview.unit.jobsPerSec")}
+									value={`${formatMetric(current().jobsPerSec)}/s`}
+									hint={`约 ${formatMetric(current().jobsPerMin)}/分`}
+								/>
+								<MetricCard
+									label={t("overview.requestsPerSec")}
+									value={`${formatMetric(current().requestsPerSec)}/s`}
+									hint={t("overview.unit.requestsPerSec")}
+								/>
+								<MetricCard
+									label={t("overview.inferencesPerSec")}
+									value={`${formatMetric(current().inferencesPerSec)}/s`}
+									hint={t("overview.unit.inferencesPerSec")}
+								/>
+								<MetricCard
+									label={t("overview.successRate")}
+									value={formatPercent(1 - current().errorRate)}
+									hint={`重试率 ${formatPercent(current().retryRate)}`}
 								/>
 							</div>
 

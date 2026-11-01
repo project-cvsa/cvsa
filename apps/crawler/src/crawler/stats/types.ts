@@ -9,6 +9,7 @@ export const STATS_WINDOWS: readonly StatsWindow[] = ["5m", "15m", "30m", "1h", 
 export const STATS_COUNTERS = [
 	"jobsCompleted",
 	"snapshotsSaved",
+	"videosDiscovered",
 	"candidatesScanned",
 	"inferencesRun",
 	"networkRequests",
@@ -97,6 +98,7 @@ export interface StatsRecorder {
 	recordTask(latencyMs: number): void;
 	recordJobCompleted(count?: number): void;
 	recordSnapshotsSaved(count?: number): void;
+	recordVideosDiscovered(count?: number): void;
 	recordCandidatesScanned(count?: number): void;
 	recordInference(latencyMs?: number, succeeded?: boolean): void;
 	recordNetworkRequest(latencyMs?: number, outcome?: StatsNetworkOutcome): void;
@@ -110,6 +112,7 @@ export function createNoopStatsRecorder(): StatsRecorder {
 		recordTask() {},
 		recordJobCompleted() {},
 		recordSnapshotsSaved() {},
+		recordVideosDiscovered() {},
 		recordCandidatesScanned() {},
 		recordInference() {},
 		recordNetworkRequest() {},
@@ -122,6 +125,7 @@ export function emptyCounters(): StatsCounters {
 	return {
 		jobsCompleted: 0,
 		snapshotsSaved: 0,
+		videosDiscovered: 0,
 		candidatesScanned: 0,
 		inferencesRun: 0,
 		networkRequests: 0,

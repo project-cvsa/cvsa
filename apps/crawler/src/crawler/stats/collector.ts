@@ -190,6 +190,10 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		this.incrementCounter("snapshotsSaved", count);
 	}
 
+	recordVideosDiscovered(count = 1): void {
+		this.incrementCounter("videosDiscovered", count);
+	}
+
 	recordCandidatesScanned(count = 1): void {
 		this.incrementCounter("candidatesScanned", count);
 	}

@@ -216,6 +216,8 @@ export class DiscoveryCandidateEvaluator {
 					lastError: null,
 				});
 
+				this.stats.recordVideosDiscovered(1);
+
 				appLogger.info("Discovery candidate accepted and added to tracking", {
 					component: "discovery-evaluator",
 					aid: aid.toString(),

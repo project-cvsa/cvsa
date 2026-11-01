@@ -87,9 +87,29 @@ export class DeploymentService {
 		);
 		if ((await proc.exited) !== 0) throw new Error(`docker compose ${args[0]} failed`);
 	}
+	private async syncRepo() {
+		try {
+			const proc = Bun.spawn(["git", "pull", "--ff-only"], {
+				cwd: this.root,
+				stdout: "inherit",
+				stderr: "inherit",
+			});
+			const code = await proc.exited;
+			if (code !== 0) {
+				console.warn(
+					`git pull --ff-only exited with code ${code}, proceeding with deployment`
+				);
+			}
+		} catch (error) {
+			console.warn(
+				`git pull failed: ${error instanceof Error ? error.message : String(error)}, proceeding with deployment`
+			);
+		}
+	}
 	private async execute(request: DeployRequest) {
 		try {
 			await this.persist();
+			await this.syncRepo();
 			const base = resolve(this.root, "docker-compose.yml");
 			const override = resolve(this.root, "docker-compose.override.yml");
 			const candidate = resolve(this.root, ".deploy.candidate.json");

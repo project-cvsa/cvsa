@@ -818,6 +818,7 @@ export const DiscoveryActivitySchema = z.object({
 	failedReason: z.string().nullable(),
 	progress: DiscoveryJobProgressSchema.nullable(),
 });
+export type DiscoveryActivity = z.infer<typeof DiscoveryActivitySchema>;
 
 export const DiscoveryQueuedResponseSchema = z.object({ queued: z.literal(true) });
 export type DiscoveryQueuedResponse = z.infer<typeof DiscoveryQueuedResponseSchema>;
@@ -843,7 +844,9 @@ export const CrawlerOverviewStatsSchema = z.object({
 	// Throughput
 	jobsPerSec: z.number().nonnegative(),
 	jobsPerMin: z.number().nonnegative(),
+	snapshotsSaved: z.number().int().nonnegative().optional(),
 	snapshotsPerMin: z.number().nonnegative(),
+	videosDiscovered: z.number().int().nonnegative().optional(),
 	candidatesPerMin: z.number().nonnegative(),
 	inferencesPerSec: z.number().nonnegative(),
 	requestsPerSec: z.number().nonnegative(),

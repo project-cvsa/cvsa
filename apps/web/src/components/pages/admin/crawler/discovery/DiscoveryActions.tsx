@@ -1,142 +1,91 @@
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createSignal } from "solid-js";
 import Button from "@components/ui/Button";
-import TextField from "@components/ui/TextField";
-import Select from "@components/ui/Select";
-import Tabs from "@components/ui/Tabs";
 import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
+import Search from "lucide-solid/icons/search";
+import Layers from "lucide-solid/icons/layers";
 
 export default function DiscoveryActions(props: { onQueued: () => void }) {
 	const t = getComponentT("crawler");
-	const [method, setMethod] = createSignal<"search" | "related">("search");
-	const [keyword, setKeyword] = createSignal("");
-	const [seed, setSeed] = createSignal("");
-	const [pages, setPages] = createSignal(2);
-	const [keywords, setKeywords] = createSignal<string[]>([]);
-	const [pending, setPending] = createSignal(false);
-	const [queued, setQueued] = createSignal(false);
-	onMount(async () => {
-		const result = await api.crawler.getDiscoveryConfig();
-		if (result.ok && result.data) setKeywords(result.data.searchKeywords ?? []);
-	});
-	const submit = async (hot = false) => {
-		if (pending()) return;
-		if (
-			!hot &&
-			method() === "related" &&
-			!/^(?:av)?\d+$|^BV[0-9a-z]{10}$/i.test(seed().trim())
-		) {
-			toast.error(t("discoveryUi.identifierRequired"));
-			return;
-		}
-		setPending(true);
-		setQueued(false);
-		const result = hot
-			? await api.crawler.triggerHotSample()
-			: method() === "search"
-				? await api.crawler.triggerSweep({
-						keywords: keyword().trim() ? [keyword().trim()] : undefined,
-						pagesPerQuery: pages(),
-					})
-				: await api.crawler.triggerActive(seed().trim().replace(/^av/i, ""));
-		setPending(false);
+	const [pendingMode, setPendingMode] = createSignal<"incremental" | "deep" | null>(null);
+
+	const trigger = async (mode: "incremental" | "deep") => {
+		if (pendingMode()) return;
+		setPendingMode(mode);
+		const result = await api.crawler.triggerSweep({ mode });
+		setPendingMode(null);
 		if (result.ok) {
-			setQueued(true);
+			toast.success(mode === "deep" ? "已提交全网深度挖掘任务" : "已提交增量时间窗轮巡任务");
 			props.onQueued();
-		} else toast.error(result.error.message || t("common.error"));
+		} else {
+			toast.error(result.error.message || t("common.error"));
+		}
 	};
+
 	return (
-		<section aria-label={t("audit.startDiscovery")} class="py-1">
-			<div class="flex flex-col gap-3">
-				<div class="flex flex-wrap items-center justify-between gap-3">
-					<Tabs
-						size="sm"
-						items={[
-							{ id: "search", label: t("discoveryUi.keywordDiscovery") },
-							{ id: "related", label: t("discoveryUi.relatedDiscovery") },
-						]}
-						value={method()}
-						onChange={(value) => {
-							setMethod(value);
-							setQueued(false);
-						}}
-					/>
-					<Button
-						size="sm"
-						variant="outlined"
-						loading={pending()}
-						onClick={() => void submit(true)}
-					>
-						{t("discoveryUi.sampleHot")}
-					</Button>
-				</div>
-				<form
-					class="flex flex-wrap items-center gap-2"
-					onSubmit={(event) => {
-						event.preventDefault();
-						void submit();
-					}}
-				>
-					<Show
-						when={method() === "search"}
-						fallback={
-							<TextField
-								size="sm"
-								class="w-full sm:w-80"
-								aria-label={t("discoveryUi.seed")}
-								placeholder={t("discoveryUi.seed")}
-								value={seed()}
-								onInput={(event) => setSeed(event.currentTarget.value)}
-							/>
-						}
-					>
-						<TextField
-							size="sm"
-							class="w-full sm:w-80"
-							aria-label={t("discoveryUi.keywordDiscovery")}
-							placeholder={t("audit.keywordPlaceholder")}
-							value={keyword()}
-							onInput={(event) => setKeyword(event.currentTarget.value)}
-						/>
-						<div class="w-32">
-							<Select
-								size="sm"
-								aria-label={t("audit.depth")}
-								options={[1, 2, 3, 5].map((value) => ({
-									value: String(value),
-									label: t("audit.pages").replace("{count}", String(value)),
-								}))}
-								value={String(pages())}
-								onValueChange={(value) => setPages(Number(value) || 2)}
-							/>
+		<section aria-label="触发探索扫描" class="flex flex-col gap-3">
+			<div class="flex items-center justify-between">
+				<h3 class="ts-heading-3 text-primary">触发探索扫描</h3>
+				<span class="ts-caption text-tertiary">
+					手动触发后台探索任务，无需等待定时轮巡计划
+				</span>
+			</div>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+				{/* Incremental Sweep Card */}
+				<div class="border border-border bg-surface p-4 flex flex-col justify-between gap-4">
+					<div class="flex flex-col gap-1.5">
+						<div class="flex items-center gap-2 text-primary font-medium ts-body">
+							<Search class="w-4 h-4 text-primary" />
+							<span>增量时间窗轮巡 (Incremental Sweep)</span>
 						</div>
-					</Show>
-					<Button size="sm" type="submit" loading={pending()}>
-						{t("audit.start")}
-					</Button>
-					<Show when={queued()}>
-						<span role="status" class="ts-caption text-primary">
-							{t("audit.submitted")}
-						</span>
-					</Show>
-				</form>
-				<Show when={method() === "search" && keywords().length > 0}>
-					<div class="flex flex-wrap items-center gap-1.5">
-						<For each={keywords()}>
-							{(word) => (
-								<button
-									type="button"
-									class="px-2 py-1 ts-caption border border-border text-secondary hover:bg-hover"
-									aria-pressed={keyword() === word}
-									onClick={() => setKeyword(word)}
-								>
-									{word}
-								</button>
-							)}
-						</For>
+						<p class="ts-caption text-secondary">
+							基于 10
+							分钟时间槽账本，针对尚未扫描的时间窗口对最新发布视频进行增量收割，自动跳过已覆盖区间。
+						</p>
 					</div>
-				</Show>
+
+					<div class="flex items-center justify-between pt-2 border-t border-border">
+						<span class="ts-caption text-tertiary">定时周期: 每 5 分钟自动执行</span>
+						<Button
+							size="sm"
+							variant="filled"
+							loading={pendingMode() === "incremental"}
+							disabled={pendingMode() !== null}
+							onClick={() => void trigger("incremental")}
+						>
+							立即增量轮巡
+						</Button>
+					</div>
+				</div>
+
+				{/* Deep Sweep Card */}
+				<div class="border border-border bg-surface p-4 flex flex-col justify-between gap-4">
+					<div class="flex flex-col gap-1.5">
+						<div class="flex items-center gap-2 text-primary font-medium ts-body">
+							<Layers class="w-4 h-4 text-primary" />
+							<span>全网深度挖掘 (Deep Sweep)</span>
+						</div>
+						<p class="ts-caption text-secondary">
+							跨越 1 天、3 天、7 天、14 天与 30
+							天时间切片，按播放量与全站综合热度进行全网广度挖掘，捕捉冷门与高潜好曲。
+						</p>
+					</div>
+
+					<div class="flex items-center justify-between pt-2 border-t border-border">
+						<span class="ts-caption text-tertiary">定时周期: 每 30 分钟自动执行</span>
+						<Button
+							size="sm"
+							variant="outlined"
+							loading={pendingMode() === "deep"}
+							disabled={pendingMode() !== null}
+							onClick={() => void trigger("deep")}
+						>
+							执行全网深度挖掘
+						</Button>
+					</div>
+				</div>
 			</div>
 		</section>
 	);
