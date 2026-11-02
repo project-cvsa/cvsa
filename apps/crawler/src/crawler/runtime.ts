@@ -13,22 +13,25 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 	const shutdown = async (): Promise<void> => {
 		if (shutdownComplete) return;
 		shutdownComplete = true;
-		await traceTask("crawler.runtime.shutdown", async () => {
-			deps.dispatcher?.stop();
-			deps.statsCollector?.stopPeriodicFlush();
-			if (deps.discoveryWorker) await deps.discoveryWorker.close();
-			if (deps.worker) await deps.worker.close();
-			if (deps.networkRuntime?.close) await deps.networkRuntime.close();
-			else deps.networkRuntime?.stopPolling();
-			try {
-				await deps.statsCollector?.flush?.();
-			} finally {
-				await deps.mq.close();
-				await deps.snapshotDb.disconnect();
-				await deps.observability.shutdown();
-			}
-		});
-		deps.metrics?.runtimeShutdowns.add(1);
+		try {
+			await traceTask("crawler.runtime.shutdown", async () => {
+				deps.dispatcher?.stop();
+				deps.statsCollector?.stopPeriodicFlush();
+				if (deps.discoveryWorker) await deps.discoveryWorker.close();
+				if (deps.worker) await deps.worker.close();
+				if (deps.networkRuntime?.close) await deps.networkRuntime.close();
+				else deps.networkRuntime?.stopPolling();
+				try {
+					await deps.statsCollector?.flush?.();
+				} finally {
+					await deps.mq.close();
+					await deps.snapshotDb.disconnect();
+					deps.metrics?.runtimeShutdowns.add(1);
+				}
+			});
+		} finally {
+			await deps.observability.shutdown();
+		}
 		appLogger.info("Crawler runtime shut down", { component: "crawler-runtime" });
 	};
 
@@ -37,8 +40,8 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 			if (started) return;
 
 			try {
+				await deps.observability.init();
 				await traceTask("crawler.runtime.start", async () => {
-					await deps.observability.init();
 					await deps.snapshotDb.connect();
 					await deps.snapshotDb.healthCheck();
 					await deps.mq.connect();

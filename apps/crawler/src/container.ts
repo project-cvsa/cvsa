@@ -1,3 +1,4 @@
+import { createStatsMetrics } from "./crawler/stats/telemetry";
 import { assertTaskActive } from "./crawler/shared/taskContext";
 import { AdapterProbeService } from "./crawler/network/adapterProbeService";
 import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
@@ -33,7 +34,7 @@ import {
 	TrackingRepository,
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
-import { initOtelSdk } from "@cvsa/observability";
+import { crawlerObservability } from "./observability";
 import { and, asc, isNotNull, lte } from "drizzle-orm";
 import { createSnapshotDb, type VideoTracking, videoTracking } from "@cvsa/snapshot-db";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
@@ -45,13 +46,14 @@ export const crawlerMq = createCrawlerMq(
 );
 
 export const statsCollector = new CrawlerStatsCollector({
+	metrics: createStatsMetrics(),
 	overview: {
 		async queueCounts() {
 			const [snapshot, discovery] = await Promise.all([
 				snapshotQueue.getJobCounts(),
 				discoveryQueue.getJobCounts(),
 			]);
-			return [snapshot, discovery];
+			return { tracking: snapshot, discovery };
 		},
 		countOverdue(now) {
 			return trackingRepository.countOverdueVideos(now);
@@ -210,32 +212,31 @@ networkRuntime.onExecutionChange((config) => {
 	trackingDispatcher.configure(config.queueCap);
 });
 
-let otelSdk: Awaited<ReturnType<typeof initOtelSdk>> | undefined;
-
 const baseCrawlerRuntime = createCrawlerRuntime({
 	mq: crawlerMq,
 	snapshotDb: crawlerSnapshotDb,
 	metrics: createCrawlerMetrics(),
-	networkRuntime,
+	networkRuntime: {
+		load: () => networkRuntime.load(),
+		startPolling: () => networkRuntime.startPolling(),
+		stopPolling: () => networkRuntime.stopPolling(),
+		async close() {
+			try {
+				await metadataRefreshScheduler.close();
+			} finally {
+				await bilibiliClient.stop();
+				videoClassifierClient.close();
+				await networkRuntime.close();
+			}
+		},
+	},
 	dispatcher: trackingDispatcher,
 	worker: snapshotBatchWorker,
 	discoveryWorker,
 	discoveryScheduler,
 	discoveryFilter: discoveryFilterService,
 	statsCollector,
-	observability: {
-		async init(): Promise<void> {
-			otelSdk = await initOtelSdk({
-				serviceName: crawlerEnv.OTEL_SERVICE_NAME,
-				serviceVersion: crawlerEnv.OTEL_SERVICE_VERSION,
-				nodeEnv: crawlerEnv.NODE_ENV,
-				otlpEndpoint: crawlerEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
-			});
-		},
-		async shutdown(): Promise<void> {
-			if (otelSdk) await otelSdk.shutdown();
-		},
-	},
+	observability: crawlerObservability,
 });
 
 /**
@@ -253,7 +254,5 @@ export const crawlerRuntime = {
 	async shutdown(): Promise<void> {
 		metadataRefreshScheduler.stop();
 		await baseCrawlerRuntime.shutdown();
-		await bilibiliClient.stop();
-		videoClassifierClient.close();
 	},
 };

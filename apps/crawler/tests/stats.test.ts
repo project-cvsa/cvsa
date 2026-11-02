@@ -6,7 +6,7 @@ import { emptyMinute } from "../src/crawler/stats/aggregation";
 import type { SaveStatsRollupInput } from "../src/crawler/stats/rollup";
 import { describe, expect, test } from "bun:test";
 import { toInstant } from "@cvsa/snapshot-db";
-import type { CrawlerJobCounts } from "../src/crawler/shared/types";
+import type { StatsQueueCounts } from "../src/crawler/stats/types";
 import { CrawlerStatsCollector } from "../src/crawler/stats/collector";
 import {
 	InMemoryTrackingRepository,
@@ -142,11 +142,11 @@ describe("CrawlerStatsCollector", () => {
 		const collector = new CrawlerStatsCollector({
 			now: () => now.getTime(),
 			overview: {
-				async queueCounts(): Promise<CrawlerJobCounts[]> {
-					return [
-						{ waiting: 5, active: 2, delayed: 1, failed: 3, completed: 10 },
-						{ waiting: 1, active: 1, delayed: 0, failed: 0, completed: 4 },
-					];
+				async queueCounts(): Promise<StatsQueueCounts> {
+					return {
+						tracking: { waiting: 5, active: 2, delayed: 1, failed: 3, completed: 10 },
+						discovery: { waiting: 1, active: 1, delayed: 0, failed: 0, completed: 4 },
+					};
 				},
 				countOverdue: (instant) => tracking.countOverdueVideos(instant),
 			},
@@ -306,7 +306,10 @@ describe("CrawlerStatsCollector", () => {
 		let waiting = 7;
 		const overview = {
 			async queueCounts() {
-				return [{ waiting, active: 2, delayed: 0, failed: 0, completed: 0 }];
+				return {
+					tracking: { waiting, active: 2, delayed: 0, failed: 0, completed: 0 },
+					discovery: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0 },
+				};
 			},
 			async countOverdue() {
 				return { overdueCount: 5, maxOverdueLagSec: 30 };

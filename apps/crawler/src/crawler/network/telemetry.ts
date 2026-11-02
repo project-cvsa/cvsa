@@ -1,4 +1,5 @@
-import { metrics } from "@opentelemetry/api";
+import { createMetricInstruments } from "@cvsa/observability";
+import { CRAWLER_LATENCY_BOUNDS_MS } from "@cvsa/contracts";
 import type {
 	NetworkMetricAttributes,
 	NetworkMetrics,
@@ -7,6 +8,7 @@ import type {
 import {
 	createNetworkRequestMetricRecorder,
 	parseNetworkRequestOutcome,
+	requestTypeLabel,
 	type NetworkRequestMetricSink,
 	type NetworkRequestOutcome,
 } from "./requestMetrics";
@@ -43,39 +45,46 @@ export interface NetworkMetricsHooks {
  * callback for its sliding windows.
  */
 export function createNetworkMetrics(hooks: NetworkMetricsHooks = {}): NetworkMetrics {
-	const meter = metrics.getMeter("cvsa-crawler");
-	const requests = meter.createCounter(NETWORK_METRIC_NAMES.requests);
-	const requestDurationMs = meter.createHistogram(NETWORK_METRIC_NAMES.requestDurationMs);
-	const scheduleAttempts = meter.createHistogram(NETWORK_METRIC_NAMES.scheduleAttempts);
-	const requestsInFlight = meter.createUpDownCounter(NETWORK_METRIC_NAMES.requestsInFlight);
+	const instruments = createMetricInstruments("cvsa-crawler", (meter) => ({
+		requests: meter.createCounter(NETWORK_METRIC_NAMES.requests),
+		requestDurationMs: meter.createHistogram(NETWORK_METRIC_NAMES.requestDurationMs, {
+			unit: "ms",
+			advice: { explicitBucketBoundaries: [...CRAWLER_LATENCY_BOUNDS_MS] },
+		}),
+		scheduleAttempts: meter.createHistogram(NETWORK_METRIC_NAMES.scheduleAttempts),
+		requestsInFlight: meter.createUpDownCounter(NETWORK_METRIC_NAMES.requestsInFlight),
+	}));
 
 	const sink: NetworkRequestMetricSink = {
-		requestStarted(attributes: NetworkMetricAttributes): void {
-			requests.add(1, attributes);
-		},
+		requestStarted(): void {},
 		requestDurationMs(value: number, attributes: NetworkMetricAttributes): void {
-			requestDurationMs.record(value, attributes);
+			instruments().requests.add(1, attributes);
+			instruments().requestDurationMs.record(value, attributes);
 			const outcome = parseNetworkRequestOutcome(attributes.outcome);
 			hooks.onRequestFinished?.(value, outcome);
 			hooks.onRequestFinishedWithAttributes?.(value, outcome, attributes);
 		},
 		requestsInFlight(delta: number, attributes: NetworkMetricAttributes): void {
-			requestsInFlight.add(delta, attributes);
+			instruments().requestsInFlight.add(delta, attributes);
 		},
 	};
 
 	const recorder = createNetworkRequestMetricRecorder(sink);
 
 	return {
-		requests: { add: (value, attributes) => requests.add(value, attributes) },
+		requests: { add: (value, attributes) => instruments().requests.add(value, attributes) },
 		requestDurationMs: {
-			record: (value, attributes) => requestDurationMs.record(value, attributes),
+			record: (value, attributes) =>
+				instruments().requestDurationMs.record(value, attributes),
 		},
 		scheduleAttempts: {
-			record: (value, attributes) => scheduleAttempts.record(value, attributes),
+			record: (value, attributes) =>
+				instruments().scheduleAttempts.record(value, {
+					requestType: requestTypeLabel(attributes.requestType),
+				}),
 		},
 		requestsInFlight: {
-			add: (value, attributes) => requestsInFlight.add(value, attributes),
+			add: (value, attributes) => instruments().requestsInFlight.add(value, attributes),
 		},
 		createAttemptObserver: (context: {
 			request: NetworkRequest;

@@ -64,6 +64,19 @@ export interface StatsOverview {
 
 export type StatsRollupMetrics = CrawlerMinuteMetrics;
 
+export type StatsQueueName = keyof CrawlerMinuteMetrics["jobs"];
+export type StatsQueueCounts = Record<StatsQueueName, CrawlerJobCounts>;
+
+export interface StatsMetricSink {
+	recordCounter(kind: StatsCounter, count: number): void;
+	recordError(kind: StatsErrorKind): void;
+	recordJobOutcome(queue: StatsQueueName, outcome: "completed" | "failed" | "deferred"): void;
+	recordLatency(kind: StatsLatencyKind, ms: number): void;
+	recordRetry(count: number): void;
+	recordQueue(queue: StatsQueueName, counts: CrawlerJobCounts): void;
+	recordTracking(tracking: OverdueTrackingSummary): void;
+}
+
 /**
  * The recording surface consumers depend on.
  *

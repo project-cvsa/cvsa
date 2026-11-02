@@ -19,7 +19,8 @@
 		"@elysiajs/eden": "^1.4.9",
 		"@types/bun": "latest",
 		"@types/pg": "^8.11.11",
-		"pg": "^8.23.0"
+		"pg": "^8.23.0",
+		"@opentelemetry/sdk-metrics": "^2.6.1"
 	},
 	"dependencies": {
 		"@cvsa/contracts": "workspace:*",

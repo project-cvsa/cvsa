@@ -5,12 +5,13 @@ import {
 	type CrawlerMinuteMetrics,
 } from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
-import type { CrawlerJobCounts } from "../shared/types";
 import type { OverdueTrackingSummary } from "../tracking/repository.interface";
 import type { StatsRollupStore, StatsRollupRow } from "./rollup";
 import { emptyMinute, mergeMinute, windowMetrics, chartMetrics } from "./aggregation";
 import type {
 	StatsCounter,
+	StatsMetricSink,
+	StatsQueueCounts,
 	StatsErrorKind,
 	StatsLatencyKind,
 	StatsNetworkOutcome,
@@ -20,13 +21,14 @@ import type {
 
 const MINUTE_MS = 60_000;
 export interface StatsOverviewDeps {
-	queueCounts?: () => Promise<CrawlerJobCounts[]>;
+	queueCounts?: () => Promise<StatsQueueCounts>;
 	countOverdue?: (now: ReturnType<typeof toInstant>) => Promise<OverdueTrackingSummary>;
 }
 export interface CrawlerStatsCollectorOptions {
 	now?: () => number;
 	overview?: StatsOverviewDeps;
 	rollup?: StatsRollupStore;
+	metrics?: StatsMetricSink;
 }
 
 export class CrawlerStatsCollector implements StatsRecorder {
@@ -38,6 +40,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	private heartbeatAt: number;
 	private readonly overviewDeps: StatsOverviewDeps;
 	private readonly rollup: StatsRollupStore | undefined;
+	private readonly metrics: StatsMetricSink | undefined;
 	private flushTimer: ReturnType<typeof setInterval> | undefined;
 	private flushing: Promise<number> | undefined;
 
@@ -47,10 +50,12 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		this.heartbeatAt = this.startedAt;
 		this.overviewDeps = options.overview ?? {};
 		this.rollup = options.rollup;
+		this.metrics = options.metrics;
 	}
 
 	recordCount(counter: StatsCounter, count = 1): void {
 		this.bucket().counters[counter] += count;
+		this.metrics?.recordCounter(counter, count);
 	}
 	recordJobCompleted(count = 1): void {
 		this.recordCount("jobsCompleted", count);
@@ -60,6 +65,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		outcome: "completed" | "failed" | "deferred"
 	): void {
 		this.bucket().jobs[queue][outcome]++;
+		this.metrics?.recordJobOutcome(queue, outcome);
 		if (outcome === "completed") this.recordJobCompleted();
 	}
 	recordSnapshotsSaved(count = 1): void {
@@ -114,9 +120,11 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	}
 	recordRetry(count = 1): void {
 		this.bucket().retries += count;
+		this.metrics?.recordRetry(count);
 	}
 	recordError(kind: StatsErrorKind): void {
 		this.bucket().errors[kind]++;
+		this.metrics?.recordError(kind);
 	}
 
 	private bucket(at = this.now()): CrawlerMinuteMetrics {
@@ -151,6 +159,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		const bucket = this.bucket();
 		bucket.latency[kind][index < 0 ? CRAWLER_LATENCY_BOUNDS_MS.length : index] += 1;
 		bucket.latencyMaxMs[kind] = Math.max(bucket.latencyMaxMs[kind], ms);
+		this.metrics?.recordLatency(kind, ms);
 	}
 	private rangeStart(window: StatsWindow, at: number, minutes?: number): number {
 		return (
@@ -220,12 +229,13 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			});
 		}
 		const [counts, tracking] = await Promise.all([
-			this.overviewDeps.queueCounts?.() ?? Promise.resolve([]),
+			this.overviewDeps.queueCounts?.() ?? Promise.resolve<Partial<StatsQueueCounts>>({}),
 			this.overviewDeps.countOverdue?.(toInstant(new Date(at))) ??
 				Promise.resolve({ overdueCount: 0, maxOverdueLagSec: 0 }),
 		]);
+		this.recordGauges(counts, tracking);
 		const queue = { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0, inFlight: 0 };
-		for (const count of counts) {
+		for (const count of Object.values(counts)) {
 			queue.waiting += count.waiting;
 			queue.active += count.active;
 			queue.delayed += count.delayed;
@@ -246,6 +256,15 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		return this.getReport(window, minutes);
 	}
 
+	private recordGauges(
+		queues: Partial<StatsQueueCounts>,
+		tracking: OverdueTrackingSummary
+	): void {
+		if (queues.tracking) this.metrics?.recordQueue("tracking", queues.tracking);
+		if (queues.discovery) this.metrics?.recordQueue("discovery", queues.discovery);
+		this.metrics?.recordTracking(tracking);
+	}
+
 	flush(at = this.now()): Promise<number> {
 		const persist = () => this.persist(at);
 		const pending = this.flushing ? this.flushing.then(persist, persist) : persist();
@@ -264,10 +283,11 @@ export class CrawlerStatsCollector implements StatsRecorder {
 					this.overviewDeps.queueCounts(),
 					this.overviewDeps.countOverdue(toInstant(new Date(at))),
 				]);
+				this.recordGauges(queues, tracking);
 				this.bucket(at).gauges = {
 					sampledAt: at,
-					waiting: queues.reduce((n, q) => n + q.waiting, 0),
-					active: queues.reduce((n, q) => n + q.active, 0),
+					waiting: Object.values(queues).reduce((n, q) => n + q.waiting, 0),
+					active: Object.values(queues).reduce((n, q) => n + q.active, 0),
 					overdue: tracking.overdueCount,
 				};
 			} catch (error) {

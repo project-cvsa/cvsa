@@ -27,39 +27,49 @@ export interface NetworkRequestMetricRecorder {
 
 const REQUEST_TYPES = new Set(["bilibili-api", "default", ...BILIBILI_REQUEST_TYPES]);
 
+class NetworkAttemptMetricObserver implements NetworkAttemptObserver {
+	private startedAt?: number;
+	private isCompleted = false;
+	private readonly attributes: NetworkMetricAttributes;
+
+	constructor(
+		context: NetworkAttemptContext,
+		private readonly sink: NetworkRequestMetricSink,
+		private readonly clock: () => number
+	) {
+		this.attributes = createRequestAttributes(context);
+	}
+
+	started = (): void => {
+		if (this.startedAt !== undefined) return;
+		this.startedAt = this.clock();
+		this.sink.requestStarted(this.attributes);
+		this.sink.requestsInFlight(1, this.attributes);
+	};
+
+	completed = (response: NetworkTransportResponse): void => {
+		if (this.startedAt === undefined || this.isCompleted) return;
+		this.isCompleted = true;
+
+		const elapsed = this.clock() - this.startedAt;
+		const durationMs = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
+		try {
+			this.sink.requestDurationMs(durationMs, {
+				...this.attributes,
+				outcome: networkRequestOutcome(response),
+			});
+		} finally {
+			this.sink.requestsInFlight(-1, this.attributes);
+		}
+	};
+}
+
 export function createNetworkRequestMetricRecorder(
 	sink: NetworkRequestMetricSink,
 	clock: () => number = () => performance.now()
 ): NetworkRequestMetricRecorder {
 	return {
-		createAttemptObserver(context) {
-			const attributes = createRequestAttributes(context);
-			let startedAt: number | undefined;
-			let completed = false;
-
-			return {
-				started() {
-					if (startedAt !== undefined) return;
-					startedAt = clock();
-					sink.requestStarted(attributes);
-					sink.requestsInFlight(1, attributes);
-				},
-				completed(response) {
-					if (startedAt === undefined || completed) return;
-					completed = true;
-					const elapsed = clock() - startedAt;
-					const durationMs = Number.isFinite(elapsed) ? Math.max(0, elapsed) : 0;
-					try {
-						sink.requestDurationMs(durationMs, {
-							...attributes,
-							outcome: networkRequestOutcome(response),
-						});
-					} finally {
-						sink.requestsInFlight(-1, attributes);
-					}
-				},
-			};
-		},
+		createAttemptObserver: (context) => new NetworkAttemptMetricObserver(context, sink, clock),
 	};
 }
 
@@ -111,10 +121,19 @@ export function parseNetworkRequestOutcome(value: unknown): NetworkRequestOutcom
 	}
 }
 
+export function requestTypeLabel(value: string | number | undefined): string {
+	if (typeof value === "string" && REQUEST_TYPES.has(value)) {
+		return value;
+	}
+	if (value === undefined) {
+		return "default";
+	}
+	return "other";
+}
+
 function createRequestAttributes(context: NetworkAttemptContext): NetworkMetricAttributes {
-	const requestType = context.request.requestType ?? "default";
 	return {
-		requestType: REQUEST_TYPES.has(requestType) ? requestType : "other",
+		requestType: requestTypeLabel(context.request.requestType),
 		endpoint: endpointLabel(context.request.url),
 		egress: context.adapterId,
 		retry: context.retry ? 1 : 0,
