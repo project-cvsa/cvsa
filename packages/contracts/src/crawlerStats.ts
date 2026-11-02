@@ -58,6 +58,7 @@ export const CRAWLER_DEFERRAL_REASONS = [
 	"local_budget",
 	"upstream_throttle",
 	"egress_unavailable",
+	"task_retry",
 	"queue_capacity",
 	"model_unavailable",
 ] as const;
@@ -139,6 +140,8 @@ export const CRAWLER_STATS_COUNTER_KEYS = [
 	"deferralLocalBudget",
 	"deferralUpstreamThrottle",
 	"deferralEgressUnavailable",
+	"deferralTaskRetry",
+	"trackingLateExecutions",
 	"deferralQueueCapacity",
 	"deferralModelUnavailable",
 	"deferralRequestedMs",

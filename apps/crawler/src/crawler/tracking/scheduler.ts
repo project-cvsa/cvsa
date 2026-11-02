@@ -1,5 +1,10 @@
 import { getClosetMilestone, getMilestoneEtaFactor } from "./milestone";
-import { getNextInitialSampleAt, resolveTrackingPolicy } from "./policy";
+import {
+	getNextInitialSampleAt,
+	resolveTrackingPolicy,
+	trackingRetryMs,
+	milestoneDelayMs,
+} from "./policy";
 import type {
 	NextScheduleResult,
 	SnapshotSample,
@@ -14,6 +19,14 @@ const SECOND = 1_000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+export const MILESTONE_HISTORY_WINDOWS_MS = [
+	3 * MINUTE,
+	20 * MINUTE,
+	HOUR,
+	3 * HOUR,
+	6 * HOUR,
+	72 * HOUR,
+];
 
 function getRegularNextSnapshotAt(
 	now: number,
@@ -172,14 +185,15 @@ export function getRegularSnapshotIntervalHours(
 export function calculateMilestoneEta(
 	currentViews: number,
 	currentTimeMs: number,
-	recentSnapshots: SnapshotSample[]
+	recentSnapshots: SnapshotSample[],
+	requestedTarget?: number | null
 ): {
 	targetMilestone: number;
 	etaHours: number;
 	adjustedEtaHours: number;
 	maxVelocity: number;
 } | null {
-	const targetMilestone = getClosetMilestone(currentViews);
+	const targetMilestone = requestedTarget ?? getClosetMilestone(currentViews);
 	const viewsRemaining = targetMilestone - currentViews;
 	if (viewsRemaining <= 0) return null;
 
@@ -194,7 +208,7 @@ export function calculateMilestoneEta(
 
 	if (sortedSnapshots.length === 0) return null;
 
-	const windows = [3 * MINUTE, 20 * MINUTE, HOUR, 3 * HOUR, 6 * HOUR, 72 * HOUR];
+	const windows = MILESTONE_HISTORY_WINDOWS_MS;
 	let minAdjustedEta = Infinity;
 	let maxVelocity = 0;
 
@@ -267,17 +281,21 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 		}
 
 		// Retry cadence is an error-policy exception to the regular-state interval floor.
-		const backoffMs = Math.min(DAY, 5 * MINUTE * 2 ** Math.min(consecutiveFails - 1, 6));
+		const backoffMs = trackingRetryMs(context.currentState, policy);
 		return {
 			nextState: context.currentState,
 			nextSnapshotAt: new Date(now + backoffMs),
 			velocity: 0,
-			priority: 3,
+			priority:
+				context.currentState === "milestone"
+					? 1
+					: context.currentState === "new"
+						? 2
+						: context.currentState === "archive"
+							? 4
+							: 3,
 			consecutiveFails,
-			reason:
-				consecutiveFails >= 10
-					? "transient_error_retry_backoff_capped"
-					: "error_retry_backoff",
+			reason: "transient_error_retry",
 		};
 	}
 
@@ -300,7 +318,12 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 	// Multi-window milestone calculation
 	const milestoneInfo =
 		context.recentSnapshots && context.recentSnapshots.length > 0
-			? calculateMilestoneEta(context.currentViews, now, context.recentSnapshots)
+			? calculateMilestoneEta(
+					context.currentViews,
+					now,
+					context.recentSnapshots,
+					context.currentState === "milestone" ? context.targetMilestone : undefined
+				)
 			: null;
 
 	if (milestoneInfo && milestoneInfo.maxVelocity > velocity) {
@@ -344,10 +367,7 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 			};
 		}
 
-		const sprintDelayMs = Math.max(
-			2 * SECOND,
-			Math.min(HOUR, Math.round(milestoneInfo.adjustedEtaHours * HOUR))
-		);
+		const sprintDelayMs = milestoneDelayMs(milestoneInfo.adjustedEtaHours * HOUR, policy);
 		return {
 			nextState: "milestone",
 			nextSnapshotAt: new Date(now + sprintDelayMs),
@@ -361,7 +381,14 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 	}
 
 	// 2. STATE: NEW (matches cvsa-legacy initial rapid sampling + new-video velocity curve)
-	if (context.currentState === "new") {
+	if (
+		context.currentState === "new" &&
+		!(
+			milestoneInfo &&
+			milestoneInfo.adjustedEtaHours <= milestoneMaxEtaHours &&
+			milestoneInfo.maxVelocity > 0
+		)
+	) {
 		const newMaxAgeHours = policy.newMaxAgeHours;
 		const newMinVelocity = policy.newMinVelocityAfter2h;
 		const initialMinutes = policy.initialSamplingMinutes;
@@ -476,10 +503,7 @@ export function evaluateNextSchedule(context: VideoTrackingContext): NextSchedul
 		milestoneInfo.adjustedEtaHours <= milestoneMaxEtaHours &&
 		milestoneInfo.maxVelocity > 0
 	) {
-		const sprintDelayMs = Math.max(
-			2 * SECOND,
-			Math.min(HOUR, Math.round(milestoneInfo.adjustedEtaHours * HOUR))
-		);
+		const sprintDelayMs = milestoneDelayMs(milestoneInfo.adjustedEtaHours * HOUR, policy);
 		return {
 			nextState: "milestone",
 			nextSnapshotAt: new Date(now + sprintDelayMs),

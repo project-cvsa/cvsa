@@ -44,6 +44,10 @@ export class ManualSnapshotService {
 
 		if (options.force) {
 			await this.tracking.releaseLeases([id]);
+			await this.tracking.updateSchedule(id, {
+				nextSnapshotAt: toInstant(new Date(now)),
+				eligibleAt: null,
+			});
 		}
 
 		const claimed = await this.tracking.leaseVideos(
@@ -54,7 +58,16 @@ export class ManualSnapshotService {
 		if (claimed.length === 0)
 			throw new AppError("Video snapshot is already being processed", "ENTITY_CONFLICT", 409);
 		try {
-			await this.queue.add("process-batch", { aids: [aid] }, { priority: 1 });
+			await this.queue.add(
+				"process-batch",
+				{
+					aids: [aid],
+					leaseUntil: new Date(now + LEASE_MS).toISOString(),
+					dueAt: new Date(now).toISOString(),
+					priority: 1,
+				},
+				{ priority: 1, attempts: 1 }
+			);
 		} catch (error) {
 			await this.tracking.releaseLeases([id]);
 			throw error;

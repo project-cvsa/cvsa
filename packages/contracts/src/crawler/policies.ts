@@ -66,6 +66,16 @@ export const TrackingPolicySchema = z.object({
 		.optional(),
 	minRegularIntervalHours: z.number().min(1.5).optional(),
 	milestoneMaxEtaHours: z.number().positive().optional(),
+	milestoneCaptureLeadMs: z.number().int().positive().optional(),
+	milestoneCaptureIntervalMs: z.number().int().min(1000).max(59000).optional(),
+	milestoneRetryMs: z.number().int().min(100).max(59000).optional(),
+	newRetryMs: z.number().int().min(100).optional(),
+	regularRetryMs: z.number().int().min(100).optional(),
+	archiveRetryMs: z.number().int().min(100).optional(),
+	milestoneMaxLatenessMs: z.number().int().positive().optional(),
+	newMaxLatenessMs: z.number().int().positive().optional(),
+	regularMaxLatenessMs: z.number().int().positive().optional(),
+	archiveMaxLatenessMs: z.number().int().positive().optional(),
 	archiveIntervalDays: z.number().positive().optional(),
 	queueCap: z.number().int().positive().optional(),
 });
@@ -87,3 +97,35 @@ export type RegularSpeedTier = z.infer<typeof RegularTrackingTierSchema>;
 export type TrackingPolicyConfig = z.infer<typeof TrackingPolicySchema>;
 export type RetryPolicy = z.infer<typeof RetryPolicySchema>;
 export type TrackingFailureKind = z.infer<typeof TrackingFailureKindSchema>;
+
+export const DEFAULT_REGULAR_DAILY_TIERS: RegularSpeedTier[] = [
+	{ maxDailyViews: 0, intervalHours: 48, priority: 3 },
+	{ maxDailyViews: 6, intervalHours: 24, priority: 3 },
+	{ maxDailyViews: 24, intervalHours: 12, priority: 3 },
+	{ maxDailyViews: 96, intervalHours: 4, priority: 2 },
+	{ maxDailyViews: 192, intervalHours: 2, priority: 2 },
+	{ maxDailyViews: null, intervalHours: 1.5, priority: 2 },
+];
+
+export const DEFAULT_INITIAL_SAMPLING_MINUTES = [1.5, 3, 5, 10];
+
+export const DEFAULT_TRACKING_POLICY: Required<TrackingPolicyConfig> = {
+	initialSamplingMinutes: DEFAULT_INITIAL_SAMPLING_MINUTES,
+	newMaxAgeHours: 48,
+	newMinVelocityAfter2h: 10,
+	regularDailyTiers: DEFAULT_REGULAR_DAILY_TIERS,
+	minRegularIntervalHours: 1.5,
+	milestoneMaxEtaHours: 144,
+	milestoneCaptureLeadMs: 180000,
+	milestoneCaptureIntervalMs: 15000,
+	milestoneRetryMs: 1000,
+	newRetryMs: 5000,
+	regularRetryMs: 30000,
+	archiveRetryMs: 60000,
+	milestoneMaxLatenessMs: 30000,
+	newMaxLatenessMs: 90000,
+	regularMaxLatenessMs: 300000,
+	archiveMaxLatenessMs: 3600000,
+	archiveIntervalDays: 7,
+	queueCap: 200,
+};

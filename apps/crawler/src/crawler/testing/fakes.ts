@@ -260,6 +260,7 @@ export function createFakeSnapshotDb(): FakeSnapshotDbState & {
 }
 
 export interface CreateTrackingOverrides {
+	eligibleAt?: Temporal.Instant | null;
 	state?: TrackingState;
 	nextSnapshotAt?: Temporal.Instant;
 	leaseUntil?: Temporal.Instant | null;
@@ -285,6 +286,7 @@ export function createTrackingRow(
 		aid,
 		state: overrides.state ?? "regular",
 		nextSnapshotAt: now,
+		eligibleAt: overrides.eligibleAt ?? null,
 		leaseUntil: overrides.leaseUntil ?? null,
 		scheduleReason: overrides.scheduleReason ?? "regular",
 		nextMetadataAt: overrides.nextMetadataAt ?? null,
@@ -306,7 +308,10 @@ function isLeaseFree(row: VideoTracking, now: Temporal.Instant): boolean {
 }
 
 function isDue(row: VideoTracking, at: Temporal.Instant): boolean {
-	return row.nextSnapshotAt.epochMilliseconds <= at.epochMilliseconds;
+	return (
+		row.nextSnapshotAt.epochMilliseconds <= at.epochMilliseconds &&
+		(row.eligibleAt === null || row.eligibleAt.epochMilliseconds <= at.epochMilliseconds)
+	);
 }
 
 function byPriorityThenDue(a: VideoTracking, b: VideoTracking): number {
@@ -397,6 +402,8 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 					? input.targetMilestone
 					: (existing?.targetMilestone ?? null),
 			etaHours: input.etaHours !== undefined ? input.etaHours : (existing?.etaHours ?? null),
+			eligibleAt:
+				input.eligibleAt !== undefined ? input.eligibleAt : (existing?.eligibleAt ?? null),
 			publishedAt: input.publishedAt ?? existing?.publishedAt ?? null,
 			priority: input.priority ?? existing?.priority ?? 2,
 			consecutiveFails: input.consecutiveFails ?? existing?.consecutiveFails ?? 0,
@@ -421,6 +428,7 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		this.trackings.set(aid, {
 			...existing,
 			...(update.state ? { state: update.state } : {}),
+			...(update.eligibleAt !== undefined ? { eligibleAt: update.eligibleAt } : {}),
 			nextSnapshotAt: update.nextSnapshotAt ?? existing.nextSnapshotAt,
 			...(update.scheduleReason !== undefined
 				? { scheduleReason: update.scheduleReason }

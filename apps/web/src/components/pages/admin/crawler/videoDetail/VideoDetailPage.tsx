@@ -16,6 +16,7 @@ import VideoMetadataTab from "./VideoMetadataTab";
 import VideoDiscoveryTab from "./VideoDiscoveryTab";
 import VideoHistory from "./VideoHistory";
 import PromoteMilestoneModal from "./PromoteMilestoneModal";
+import VideoMilestones from "./VideoMilestones";
 
 const HISTORY_PAGE_SIZE = 10;
 const SNAPSHOTS_PAGE_SIZE = 10;
@@ -259,6 +260,7 @@ export default function VideoDetailPage(props: { aid: string }) {
 						loadSnapshotsPage={(offset) => loadSnapshots(props.aid, offset)}
 						pageSize={SNAPSHOTS_PAGE_SIZE}
 					/>
+					<VideoMilestones aid={props.aid} />
 				</div>
 			</Show>
 

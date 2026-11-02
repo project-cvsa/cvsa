@@ -171,23 +171,31 @@ export class NetworkScheduler implements NetworkDelegate {
 		let attempts = 0;
 		let lastResponse: NetworkResponse | undefined;
 		let budgetRefused = false;
-		let minDelay = 1000;
+		let minDelay = Infinity;
 
 		while (candidates.length > 0) {
 			request.signal?.throwIfAborted();
 			const candidate = this.takeWeightedCandidate(candidates);
 			const rate = candidate.config.requestsPerSecond ?? 20;
 
-			const allowed = await this.rateLimiter.consume(
-				`adapter:${candidate.config.id}`,
-				1,
-				rate
-			);
+			const scope = `adapter:${candidate.config.id}`;
+			const admission = this.rateLimiter.acquireBudgets
+				? await this.rateLimiter.acquireBudgets(scope, [
+						{ durationSeconds: 1, maxRequests: rate },
+						...(candidate.config.rateLimits ?? []),
+					])
+				: this.rateLimiter.acquire
+					? await this.rateLimiter.acquire(scope, 1, rate)
+					: {
+							allowed: await this.rateLimiter.consume(scope, 1, rate),
+							retryAfterMs: Math.ceil(1000 / rate),
+						};
+			const allowed = admission.allowed;
 			if (!allowed) {
 				const stats = this.statistics.get(candidate.config.id);
 				if (stats) stats.rateLimited += 1;
 				budgetRefused = true;
-				minDelay = Math.min(minDelay, Math.ceil(1000 / rate));
+				minDelay = Math.min(minDelay, admission.retryAfterMs);
 				continue;
 			}
 
@@ -269,6 +277,8 @@ export class NetworkScheduler implements NetworkDelegate {
 			// If transport error and retryable, try next available candidate in pool
 			if (
 				response.errorCode &&
+				(request.replaySafe === true ||
+					["GET", "HEAD"].includes(request.method ?? "GET")) &&
 				RETRYABLE_NETWORK_ERROR_CODES.has(response.errorCode) &&
 				candidates.length > 0
 			) {

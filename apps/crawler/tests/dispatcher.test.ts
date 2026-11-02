@@ -17,6 +17,49 @@ function dueRow(aid: number, overrides: Parameters<typeof createTrackingRow>[1] 
 }
 
 describe("TrackingDispatcher", () => {
+	test("a delayed lower-priority batch yields its slot without losing its retry time", async () => {
+		const repo = new InMemoryTrackingRepository();
+		const mq = createFakeMq();
+		const dispatcher = new TrackingDispatcher(repo, mq, { queueCap: 1 });
+		const now = new Date();
+		const dueAt = toInstant(new Date(now.getTime() - 10000));
+		const eligibleAt = toInstant(new Date(now.getTime() + 60000));
+		const leaseUntil = toInstant(new Date(now.getTime() + 300000));
+		repo.trackings.set(
+			1n,
+			dueRow(1, { priority: 3, nextSnapshotAt: dueAt, eligibleAt, leaseUntil })
+		);
+		await mq
+			.createQueue("snapshot-batch")
+			.add(
+				"batch",
+				{ aids: ["1"], leaseUntil: leaseUntil.toString(), priority: 3 },
+				{ delay: 60000 }
+			);
+		repo.trackings.set(2n, dueRow(2, { state: "milestone", priority: 1 }));
+		expect(await dispatcher.tick(now)).toBe(1);
+		expect(mq.state.queuedJobs[0]?.data).toMatchObject({ aids: ["2"] });
+		expect(repo.trackings.get(1n)?.leaseUntil).toBeNull();
+		expect(repo.trackings.get(1n)?.nextSnapshotAt.toString()).toBe(dueAt.toString());
+		expect((await repo.findDueVideos(10, toInstant(now))).map((row) => row.aid)).not.toContain(
+			1n
+		);
+		expect((await repo.findDueVideos(10, eligibleAt)).map((row) => row.aid)).toContain(1n);
+	});
+	test("a due milestone replaces a waiting lower-priority batch at the queue cap", async () => {
+		const repo = new InMemoryTrackingRepository();
+		const mq = createFakeMq();
+		const dispatcher = new TrackingDispatcher(repo, mq, { queueCap: 1 });
+		repo.trackings.set(1n, dueRow(1, { state: "regular", priority: 3 }));
+		const original = repo.trackings.get(1n)?.nextSnapshotAt.toString();
+		expect(await dispatcher.tick()).toBe(1);
+		repo.trackings.set(2n, dueRow(2, { state: "milestone", priority: 1 }));
+		expect(await dispatcher.tick()).toBe(1);
+		expect(mq.state.queuedJobs).toHaveLength(1);
+		expect(mq.state.queuedJobs[0]?.data).toMatchObject({ aids: ["2"], priority: 1 });
+		expect(repo.trackings.get(1n)?.leaseUntil).toBeNull();
+		expect(repo.trackings.get(1n)?.nextSnapshotAt.toString()).toBe(original);
+	});
 	test("claims due videos with a lease and never rewrites nextSnapshotAt", async () => {
 		const repo = new InMemoryTrackingRepository();
 		for (let i = 1; i <= 35; i++) {
@@ -33,13 +76,13 @@ describe("TrackingDispatcher", () => {
 		const count = await dispatcher.tick(now);
 		expect(count).toBe(35);
 
-		// Two chunks: 30 + 5
-		expect(fakeMq.state.queuedJobs).toHaveLength(2);
+		// Priority classes use separate batches: 1 + 30 + 4
+		expect(fakeMq.state.queuedJobs).toHaveLength(3);
 		expect(fakeMq.state.queuedJobs[0]?.queue).toBe("snapshot-batch");
 		const batch1 = fakeMq.state.queuedJobs[0]?.data as { aids: string[] };
 		const batch2 = fakeMq.state.queuedJobs[1]?.data as { aids: string[] };
-		expect(batch1.aids).toHaveLength(30);
-		expect(batch2.aids).toHaveLength(5);
+		expect(batch1.aids).toHaveLength(1);
+		expect(batch2.aids).toHaveLength(30);
 
 		// The schedule is untouched; only the lease moved forward.
 		for (const [aid, row] of repo.trackings) {

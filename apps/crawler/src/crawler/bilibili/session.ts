@@ -27,8 +27,9 @@ import type {
 
 const API_ORIGIN = "https://api.bilibili.com";
 const BILI_HOME = "https://www.bilibili.com/";
-const BUNDLE_KEY = "cvsa:bilibili:credential-bundle:v2";
+const BUNDLE_KEY = "cvsa:bilibili:credential-bundle:v3";
 const LEGACY_KEYS = [
+	"cvsa:bilibili:credential-bundle:v2",
 	"cvsa:bilibili:device-cookies",
 	"cvsa:bilibili:ticket",
 	"cvsa:bilibili:wbi-keys",
@@ -71,9 +72,6 @@ export class BilibiliSession {
 		return this.bundle?.identity ?? this.initialIdentity;
 	}
 	private getRequestIdentity(): BilibiliCredentialBundle["identity"] {
-		if (this.config.browser.family === "auto") {
-			return chooseBrowserIdentity(this.config.browser, this.random);
-		}
 		return this.bundle?.identity ?? this.initialIdentity;
 	}
 	private cookieHeader(bundle = this.bundle): string {
@@ -311,7 +309,7 @@ export class BilibiliSession {
 				const keys = await this.getWbiKeys();
 				const bundle = this.bundle;
 				return this.requestOnce<T>(
-					`${API_ORIGIN}${path}?${signWbiQuery(params, keys.imgKey, keys.subKey)}`,
+					`${API_ORIGIN}${path}?${signWbiQuery(params, keys.imgKey, keys.subKey, Math.floor(this.clock() / 1000))}`,
 					options,
 					bundle
 				);
@@ -427,7 +425,7 @@ export class BilibiliSession {
 		const cookie = this.cookieHeader(bundle);
 		let response: BilibiliHttpResponse;
 		try {
-			const identity = this.getRequestIdentity();
+			const identity = bundle?.identity ?? this.getRequestIdentity();
 			response = await this.requestImpl(url, {
 				...options,
 				headers: browserRequestHeaders(identity, url, options.method, {

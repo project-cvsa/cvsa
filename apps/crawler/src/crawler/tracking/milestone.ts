@@ -41,7 +41,7 @@ export function getClosetMilestone(views: number, strict = false): number {
 	if (views < 100_000) return 100_000;
 	if (views < 1_000_000) return 1_000_000;
 	if (views < 10_000_000) {
-		return strict ? 10_000_000 : Math.ceil(views / 1_000_000) * 1_000_000;
+		return strict ? 10_000_000 : (Math.floor(views / 1_000_000) + 1) * 1_000_000;
 	}
-	return Math.ceil(views / 1_000_000) * 1_000_000;
+	return (Math.floor(views / 1_000_000) + 1) * 1_000_000;
 }

@@ -1,5 +1,10 @@
 import { boundedOperation } from "./boundedOperation";
-import { assertTaskActive, drainActiveTasks, runTaskWithDeadline } from "./taskContext";
+import {
+	assertTaskActive,
+	drainActiveTasks,
+	runTaskWithDeadline,
+	TaskDeadlineError,
+} from "./taskContext";
 import {
 	Queue,
 	Worker,
@@ -30,6 +35,17 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 	removeOnComplete: true,
 	removeOnFail: { age: 24 * 60 * 60, count: 1_000 },
 };
+
+function queueReadyAt(data: unknown): number | undefined {
+	if (
+		typeof data === "object" &&
+		data !== null &&
+		"_queueReadyAt" in data &&
+		typeof data._queueReadyAt === "number"
+	)
+		return data._queueReadyAt;
+	return undefined;
+}
 
 export function createCrawlerMq(
 	redisUrl = crawlerEnv.REDIS_URL,
@@ -166,6 +182,7 @@ export function createCrawlerMq(
 								attempts: job.attemptsMade,
 								failedReason: job.failedReason ?? null,
 								timestamp: job.timestamp,
+								readyAt: queueReadyAt(job.data),
 								progress: job.progress,
 								processedOn: job.processedOn ?? null,
 								finishedOn: job.finishedOn ?? null,
@@ -202,7 +219,16 @@ export function createCrawlerMq(
 				removeJob: async (id: string): Promise<boolean> => {
 					const job = await bounded(() => queue.getJob(id), "getJob");
 					if (!job) return false;
-					await bounded(() => job.remove(), "remove");
+					try {
+						await bounded(() => job.remove(), "remove");
+					} catch (error) {
+						if (
+							error instanceof Error &&
+							error.message.includes("locked by another worker")
+						)
+							return false;
+						throw error;
+					}
 					return true;
 				},
 				close: () => bounded(() => queue.close(), "close"),
@@ -212,8 +238,11 @@ export function createCrawlerMq(
 		createWorker<T>(
 			name: string,
 			processor: CrawlerProcessor<T>,
-			options: Omit<WorkerOptions, "connection"> = {}
+			options: Omit<WorkerOptions, "connection"> & {
+				onDeadline?: (job: CrawlerJob<T>) => Promise<void>;
+			} = {}
 		): CrawlerWorker {
+			const { onDeadline, ...workerOptions } = options;
 			let taskTimeoutMs = 120_000;
 			const controller = new AbortController();
 			workerControllers.push(controller);
@@ -223,12 +252,14 @@ export function createCrawlerMq(
 					const crawlerJob: CrawlerJob<T> = {
 						id: job.id ?? undefined,
 						data: job.data,
-						enqueuedAt: job.timestamp,
+						enqueuedAt: queueReadyAt(job.data) ?? job.timestamp,
 						startedAt: job.processedOn ?? Date.now(),
-						delayMs: job.opts.delay ?? 0,
-						updateData: (data) => {
+						delayMs: queueReadyAt(job.data) === undefined ? (job.opts.delay ?? 0) : 0,
+						attemptsMade: job.attemptsMade,
+						updateData: async (data) => {
 							assertTaskActive();
-							return bounded(() => job.updateData(data), "updateData");
+							await bounded(() => job.updateData(data), "updateData");
+							crawlerJob.data = data;
 						},
 						updateProgress: (progress) => {
 							assertTaskActive();
@@ -253,35 +284,60 @@ export function createCrawlerMq(
 							rawData._timeoutMs > 0
 								? rawData._timeoutMs
 								: taskTimeoutMs;
-						await withLogContext(
-							{
-								queue: name,
-								jobId: job.id,
-								jobName: job.name,
-							},
-							() =>
-								runTaskWithDeadline(
-									effectiveTimeout,
-									async () => {
-										try {
-											await processor(crawlerJob);
-										} catch (error) {
-											if (!(error instanceof RetryLaterError)) throw error;
-											await bounded(() =>
-												job.moveToDelayed(
-													Date.now() + Math.max(1, error.delayMs),
-													token
+						try {
+							await withLogContext(
+								{
+									queue: name,
+									jobId: job.id,
+									jobName: job.name,
+								},
+								() =>
+									runTaskWithDeadline(
+										effectiveTimeout,
+										async () => {
+											try {
+												await processor(crawlerJob);
+											} catch (error) {
+												if (!(error instanceof RetryLaterError))
+													throw error;
+												const readyAt =
+													Date.now() + Math.max(1, error.delayMs);
+												if (
+													typeof job.data === "object" &&
+													job.data !== null
 												)
-											);
-											throw new DelayedError();
-										}
-									},
-									controller.signal
-								)
-						);
+													await bounded(
+														() =>
+															job.updateData({
+																...job.data,
+																_queueReadyAt: readyAt,
+															}),
+														"updateData"
+													);
+												await bounded(() =>
+													job.moveToDelayed(readyAt, token)
+												);
+												throw new DelayedError();
+											}
+										},
+										controller.signal
+									)
+							);
+						} catch (error) {
+							if (!(error instanceof TaskDeadlineError) || !onDeadline) throw error;
+							await onDeadline(crawlerJob);
+							const readyAt = Date.now() + 1000;
+							if (typeof job.data === "object" && job.data !== null)
+								await bounded(
+									() => job.updateData({ ...job.data, _queueReadyAt: readyAt }),
+									"updateData"
+								);
+							await bounded(() => job.moveToDelayed(readyAt, token));
+							throw new DelayedError();
+						}
 					});
 				},
-				{ drainDelay: 0.1, ...options, connection, prefix }
+				{ drainDelay: 0.1, ...workerOptions, connection, prefix }
 			);
 			worker.on("error", logError);
 			workers.push(worker);

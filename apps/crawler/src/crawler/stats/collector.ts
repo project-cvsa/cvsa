@@ -355,6 +355,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			local_budget: "deferralLocalBudget",
 			upstream_throttle: "deferralUpstreamThrottle",
 			egress_unavailable: "deferralEgressUnavailable",
+			task_retry: "deferralTaskRetry",
 			queue_capacity: "deferralQueueCapacity",
 			model_unavailable: "deferralModelUnavailable",
 		};

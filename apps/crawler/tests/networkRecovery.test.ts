@@ -68,6 +68,35 @@ function runtime(baseUrl: string) {
 	return { manager, config };
 }
 
+test("an upstream Retry-After applies to the deferred request while other requests can continue", async () => {
+	const server = createBilibiliProtocolServer({
+		responseFactory: (request) =>
+			request.path === "/limited"
+				? { status: 429, headers: { "Retry-After": "7" }, body: { code: -509 } }
+				: undefined,
+	});
+	const { manager } = runtime(server.baseUrl);
+	try {
+		await expect(
+			manager.execute({
+				url: "https://api.bilibili.com/limited",
+				requestType: "bilibili:tracking",
+			})
+		).rejects.toMatchObject({ delayMs: 7000, reason: "upstream" });
+		expect(
+			(
+				await manager.execute({
+					url: "https://api.bilibili.com/x/frontend/finger/spi",
+					requestType: "bilibili:tracking",
+				})
+			).status
+		).toBe(200);
+	} finally {
+		await manager.close();
+		await server.close();
+	}
+});
+
 test("concurrent cold starts finish with one credential initialization through real admission", async () => {
 	const server = createBilibiliProtocolServer();
 	const { manager } = runtime(server.baseUrl);

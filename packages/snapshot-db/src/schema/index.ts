@@ -4,3 +4,4 @@ export * from "./metadata";
 export * from "./snapshot";
 export * from "./stats";
 export * from "./tracking";
+export * from "./milestone";

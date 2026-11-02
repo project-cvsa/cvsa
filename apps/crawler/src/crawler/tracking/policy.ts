@@ -1,26 +1,10 @@
-import type { RegularSpeedTier, TrackingPolicyConfig } from "./types";
-
-export const DEFAULT_REGULAR_DAILY_TIERS: RegularSpeedTier[] = [
-	{ maxDailyViews: 0, intervalHours: 48, priority: 3 },
-	{ maxDailyViews: 6, intervalHours: 24, priority: 3 },
-	{ maxDailyViews: 24, intervalHours: 12, priority: 3 },
-	{ maxDailyViews: 96, intervalHours: 4, priority: 2 },
-	{ maxDailyViews: 192, intervalHours: 2, priority: 2 },
-	{ maxDailyViews: null, intervalHours: 1.5, priority: 2 },
-];
-
-export const DEFAULT_INITIAL_SAMPLING_MINUTES = [1.5, 3, 5, 10];
-
-export const DEFAULT_TRACKING_POLICY: Required<TrackingPolicyConfig> = {
-	initialSamplingMinutes: DEFAULT_INITIAL_SAMPLING_MINUTES,
-	newMaxAgeHours: 48,
-	newMinVelocityAfter2h: 10,
-	regularDailyTiers: DEFAULT_REGULAR_DAILY_TIERS,
-	minRegularIntervalHours: 1.5,
-	milestoneMaxEtaHours: 144,
-	archiveIntervalDays: 7,
-	queueCap: 200,
-};
+import type { TrackingPolicyConfig } from "./types";
+import { DEFAULT_TRACKING_POLICY, DEFAULT_REGULAR_DAILY_TIERS } from "@cvsa/contracts";
+export {
+	DEFAULT_INITIAL_SAMPLING_MINUTES,
+	DEFAULT_REGULAR_DAILY_TIERS,
+	DEFAULT_TRACKING_POLICY,
+} from "@cvsa/contracts";
 
 export function resolveTrackingPolicy(
 	policy?: TrackingPolicyConfig
@@ -32,6 +16,35 @@ export function resolveTrackingPolicy(
 			policy?.initialSamplingMinutes ?? DEFAULT_TRACKING_POLICY.initialSamplingMinutes,
 		regularDailyTiers: policy?.regularDailyTiers ?? DEFAULT_REGULAR_DAILY_TIERS,
 	};
+}
+
+export function trackingRetryMs(state: string, policy: TrackingPolicyConfig = {}): number {
+	const resolved = resolveTrackingPolicy(policy);
+	if (state === "milestone") return resolved.milestoneRetryMs;
+	if (state === "new") return resolved.newRetryMs;
+	if (state === "archive") return resolved.archiveRetryMs;
+	return resolved.regularRetryMs;
+}
+
+export function trackingMaxLatenessMs(state: string, policy: TrackingPolicyConfig = {}): number {
+	const resolved = resolveTrackingPolicy(policy);
+	if (state === "milestone") return resolved.milestoneMaxLatenessMs;
+	if (state === "new") return resolved.newMaxLatenessMs;
+	if (state === "archive") return resolved.archiveMaxLatenessMs;
+	return resolved.regularMaxLatenessMs;
+}
+
+export function milestoneDelayMs(adjustedEtaMs: number, policy: TrackingPolicyConfig = {}): number {
+	const resolved = resolveTrackingPolicy(policy);
+	return Math.max(
+		2000,
+		Math.min(
+			adjustedEtaMs <= resolved.milestoneCaptureLeadMs
+				? resolved.milestoneCaptureIntervalMs
+				: 3600000,
+			Math.round(adjustedEtaMs)
+		)
+	);
 }
 
 export function getNextInitialSampleAt(

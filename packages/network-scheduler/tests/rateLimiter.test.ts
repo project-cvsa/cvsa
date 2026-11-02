@@ -76,7 +76,9 @@ describe("RedisRateLimiter contract", () => {
 		expect(await limiter.consume("scope", 1, 10)).toBe(false);
 
 		redis.reply = "unexpected";
-		expect(await limiter.consume("scope", 1, 10)).toBe(false);
+		await expect(limiter.consume("scope", 1, 10)).rejects.toThrow(
+			"Invalid token bucket response"
+		);
 	});
 
 	test("rejects invalid budgets without touching Redis", async () => {

@@ -1,4 +1,5 @@
 import NetworkSessionPolicy from "../network/NetworkSessionPolicy";
+import NetworkExecutionPolicy from "../network/NetworkExecutionPolicy";
 import NetworkStrategySupport from "../network/NetworkStrategySupport";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
@@ -319,6 +320,16 @@ export default function NetworkSection(props: NetworkSectionProps) {
 									setNetworkDoc({
 										...doc(),
 										config: { ...doc().config, session },
+									})
+								}
+							/>
+							<NetworkExecutionPolicy
+								config={doc().config.execution}
+								status={props.statusData()}
+								onChange={(execution) =>
+									setNetworkDoc({
+										...doc(),
+										config: { ...doc().config, execution },
 									})
 								}
 							/>

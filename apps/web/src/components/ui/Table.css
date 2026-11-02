@@ -23,7 +23,3 @@
 	font-weight: 600;
 	white-space: nowrap;
 }
-
-.cvsa-table > tbody > tr:hover {
-	background-color: var(--hover);
-}

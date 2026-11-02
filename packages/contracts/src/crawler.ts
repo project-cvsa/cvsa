@@ -1,9 +1,11 @@
 import { z } from "zod";
+import { TrackingPolicySchema, RetryPolicySchema } from "./crawler/policies";
 
 export const VideoTrackingDtoSchema = z.object({
 	aid: z.string(),
 	state: z.string(),
 	nextSnapshotAt: z.string(),
+	eligibleAt: z.string().nullable().optional(),
 	lastViews: z.number().int(),
 	lastCapturedAt: z.string().nullable(),
 	velocity: z.number(),
@@ -21,6 +23,15 @@ export const VideoTrackingDtoSchema = z.object({
 	nextMetadataAt: z.string().nullable().optional(),
 	/** Most recent failure summary, cleared after a successful refresh. */
 	lastError: z.string().nullable().optional(),
+});
+
+export const SnapshotBatchJobDataSchema = z.object({
+	aids: z.array(z.union([z.string().regex(/^\d+$/), z.number().int().positive()])),
+	leaseUntil: z.string().optional(),
+	dueAt: z.string().optional(),
+	deadlineAt: z.string().optional(),
+	missedDeadline: z.boolean().optional(),
+	priority: z.number().int().positive().optional(),
 });
 
 export const DiscoveryOriginChannelSchema = z.enum(["search", "related", "manual", "graph"]);
@@ -482,25 +493,31 @@ export const BilibiliTicketResponseSchema = z.object({
 	code: z.literal(0),
 	data: z.object({
 		ticket: z.string().min(1),
-		nav: z.object({ img: z.string().min(1), sub: z.string().min(1) }),
+		nav: z.object({
+			img: z
+				.string()
+				.transform((value) => value.slice(value.lastIndexOf("/") + 1).split(".")[0])
+				.pipe(z.string().regex(/^[a-f0-9]{32}$/i)),
+			sub: z
+				.string()
+				.transform((value) => value.slice(value.lastIndexOf("/") + 1).split(".")[0])
+				.pipe(z.string().regex(/^[a-f0-9]{32}$/i)),
+		}),
 	}),
 });
 
 export const CrawlerExecutionConfigSchema = z.object({
-	throttleScope: z.enum(["adapter", "request_type"]).default("adapter"),
-	throttleFailover: z.boolean().default(false),
+	tracking: TrackingPolicySchema.default({}),
+	discoveryRetry: RetryPolicySchema.default({
+		maxAttempts: 5,
+		baseDelayMs: 1000,
+		maxDelayMs: 60000,
+	}),
 	taskTimeoutMs: z.number().int().min(1000).max(240000).default(120000),
 	snapshotConcurrency: z.number().int().min(1).max(200).default(25),
 	discoveryConcurrency: z.number().int().min(1).max(100).default(12),
 	requestTimeoutMs: z.number().int().min(100).max(120000).default(8000),
-	admissionTimeoutMs: z.number().int().min(0).max(10000).default(2000),
-	throttleCooldownMs: z.number().int().min(100).max(3600000).default(5000),
-	throttleJitterMs: z.number().int().min(0).max(60000).default(5000),
 	queueCap: z.number().int().min(1).max(10000).default(200),
-	probeWaitMs: z.number().int().min(10).max(5000).default(100),
-	probeRetryMs: z.number().int().min(100).max(60000).default(1000),
-	probeRetries: z.number().int().min(0).max(5).default(1),
-	maxNetworkCooldownMs: z.number().int().min(1000).max(3600000).default(60000),
 	inferenceTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
 	mqOperationTimeoutMs: z.number().int().min(1000).max(30000).default(3000),
 });

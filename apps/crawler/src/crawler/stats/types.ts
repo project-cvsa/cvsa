@@ -292,6 +292,8 @@ const EMPTY_COUNTERS: CrawlerStatsCountersV2 = {
 	deferralLocalBudget: 0,
 	deferralUpstreamThrottle: 0,
 	deferralEgressUnavailable: 0,
+	deferralTaskRetry: 0,
+	trackingLateExecutions: 0,
 	deferralQueueCapacity: 0,
 	deferralModelUnavailable: 0,
 	deferralRequestedMs: 0,

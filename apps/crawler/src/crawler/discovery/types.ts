@@ -187,6 +187,7 @@ export interface HotSampleOptions {
 }
 
 export interface SearchRoverConfig {
+	asOf?: number;
 	keywords: string[];
 	orders?: Array<"totalrank" | "click" | "pubdate" | "dm" | "stow">;
 	pagesPerQuery?: number;

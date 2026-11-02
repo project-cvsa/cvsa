@@ -70,6 +70,7 @@ function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 		aid: t.aid.toString(),
 		state: t.state,
 		nextSnapshotAt: t.nextSnapshotAt.toString(),
+		eligibleAt: t.eligibleAt?.toString() ?? null,
 		lastViews: t.lastViews,
 		lastCapturedAt: t.lastCapturedAt ? t.lastCapturedAt.toString() : null,
 		velocity: t.velocity,
@@ -355,6 +356,8 @@ export const trackingRoutes = new Elysia()
 			const updated = await trackingRepository.upsertTracking({
 				aid,
 				state: "milestone",
+				eligibleAt: null,
+				leaseUntil: null,
 				targetMilestone: body.targetMilestone ?? existing.targetMilestone,
 				priority: body.priority ?? 1,
 				nextSnapshotAt: toInstant(new Date()),

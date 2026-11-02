@@ -117,6 +117,15 @@ export interface AdaptiveRateState {
 }
 
 export interface NetworkRateLimiter {
+	acquireBudgets?(
+		scope: string,
+		budgets: ReadonlyArray<{ durationSeconds: number; maxRequests: number }>
+	): Promise<{ allowed: boolean; retryAfterMs: number }>;
+	acquire?(
+		scope: string,
+		durationSeconds: number,
+		maxRequests: number
+	): Promise<{ allowed: boolean; retryAfterMs: number }>;
 	getAdaptiveState?(scope: string): Promise<AdaptiveRateState>;
 	recordAdaptiveOutcome?(
 		scope: string,

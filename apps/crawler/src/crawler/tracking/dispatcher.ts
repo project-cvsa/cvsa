@@ -1,9 +1,10 @@
 import { appLogger } from "@cvsa/logger";
+import { SnapshotBatchJobDataSchema } from "@cvsa/contracts";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
 import { SNAPSHOT_BATCH_QUEUE, type SnapshotBatchJobData } from "../snapshot/worker";
 import type { CrawlerJobCounts, CrawlerMq, CrawlerQueue } from "../shared/types";
-import { resolveTrackingPolicy } from "./policy";
+import { resolveTrackingPolicy, trackingMaxLatenessMs } from "./policy";
 import type { ITrackingRepository } from "./repository.interface";
 import type { TrackingPolicyConfig } from "./types";
 import type { StatsRecorder } from "../stats/types";
@@ -52,8 +53,8 @@ export class TrackingDispatcher {
 		return this.policy.queueCap;
 	}
 
-	configure(queueCap: number): void {
-		this.policy.queueCap = queueCap;
+	configure(queueCap: number, policy: TrackingPolicyConfig = {}): void {
+		Object.assign(this.policy, resolveTrackingPolicy(policy), { queueCap });
 	}
 	start(): void {
 		if (this.isRunning) return;
@@ -92,7 +93,30 @@ export class TrackingDispatcher {
 				if (((await this.remainingDelay?.()) ?? 0) > 0) return 0;
 				const counts = await this.queue.getJobCounts();
 				const inFlight = counts.active + counts.waiting + counts.delayed;
-				const capacity = this.queueCap - inFlight;
+				let capacity = this.queueCap - inFlight;
+				if (capacity <= 0) {
+					const [urgent] = await this.trackingRepo.findDueVideos(1, toInstant(now));
+					if (urgent) {
+						const waiting = await this.queue.getJobs(
+							["waiting", "prioritized", "delayed"],
+							this.queueCap
+						);
+						for (const job of waiting.reverse()) {
+							const parsed = SnapshotBatchJobDataSchema.safeParse(job.data);
+							if (!parsed.success || (parsed.data.priority ?? 2) <= urgent.priority)
+								continue;
+							if (!(await this.queue.removeJob(job.id))) continue;
+							await this.trackingRepo.releaseLeases(
+								parsed.data.aids.map(BigInt),
+								parsed.data.leaseUntil
+									? toInstant(new Date(parsed.data.leaseUntil))
+									: undefined
+							);
+							capacity = 1;
+							break;
+						}
+					}
+				}
 				if (capacity <= 0) {
 					this.stats?.recordDeferral({ reason: "queue_capacity" });
 					appLogger.warn("TrackingDispatcher is backpressured by the queue cap", {
@@ -111,24 +135,55 @@ export class TrackingDispatcher {
 					this.leaseDurationMs
 				);
 				if (claimed.length === 0) return 0;
+				claimed.sort(
+					(a, b) =>
+						a.priority - b.priority ||
+						a.nextSnapshotAt.epochMilliseconds - b.nextSnapshotAt.epochMilliseconds
+				);
 
 				// Group into chunks of up to 30 (one Bilibili medialist request each).
-				const chunks: Array<{ aids: bigint[]; priority: number }> = [];
-				for (let i = 0; i < claimed.length; i += CHUNK_SIZE) {
-					const slice = claimed.slice(i, i + CHUNK_SIZE);
+				const chunks: Array<{
+					aids: bigint[];
+					priority: number;
+					dueAt: string;
+					deadlineAt: string;
+				}> = [];
+				for (let i = 0; i < claimed.length; ) {
+					const priority = claimed[i]?.priority;
+					const slice = claimed
+						.slice(i, i + CHUNK_SIZE)
+						.filter((video) => video.priority === priority);
 					chunks.push({
 						aids: slice.map((video) => video.aid),
 						priority: slice.reduce((min, video) => Math.min(min, video.priority), 5),
+						deadlineAt: new Date(
+							Math.min(
+								...slice.map(
+									(video) =>
+										video.nextSnapshotAt.epochMilliseconds +
+										trackingMaxLatenessMs(video.state, this.policy)
+								)
+							)
+						).toISOString(),
+						dueAt: new Date(
+							Math.min(
+								...slice.map((video) => video.nextSnapshotAt.epochMilliseconds)
+							)
+						).toISOString(),
 					});
+					i += slice.length;
 				}
 
 				let dispatched = 0;
 				try {
-					for (const chunk of chunks) {
+					for (const chunk of chunks.slice(0, capacity)) {
 						await this.queue.add(
 							"process-batch",
 							{
 								aids: chunk.aids.map((aid) => aid.toString()),
+								dueAt: chunk.dueAt,
+								deadlineAt: chunk.deadlineAt,
+								priority: chunk.priority,
 								leaseUntil: new Date(
 									now.getTime() + this.leaseDurationMs
 								).toISOString(),
@@ -137,6 +192,9 @@ export class TrackingDispatcher {
 						);
 						dispatched += chunk.aids.length;
 					}
+					await this.trackingRepo.releaseLeases(
+						claimed.slice(dispatched).map((video) => video.aid)
+					);
 				} catch (error) {
 					// Anything that never made it onto the queue must not keep its
 					// lease, or it would be invisible until the lease expires.

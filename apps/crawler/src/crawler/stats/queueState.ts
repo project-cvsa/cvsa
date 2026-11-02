@@ -12,7 +12,9 @@ export async function readQueueSnapshot(queue: CrawlerQueue<unknown>): Promise<S
 		counts.active > 0 ? queue.getJobs(["active"], 1, 0) : Promise.resolve([]),
 	]);
 	const waitingJobs = [...waiting, ...prioritized];
-	const oldest = waitingJobs.sort((a, b) => a.timestamp - b.timestamp)[0];
+	const oldest = waitingJobs.sort(
+		(a, b) => (a.readyAt ?? a.timestamp) - (b.readyAt ?? b.timestamp)
+	)[0];
 	const activeJob = active[0];
 	const now = Date.now();
 	return {
@@ -22,7 +24,9 @@ export async function readQueueSnapshot(queue: CrawlerQueue<unknown>): Promise<S
 		delayed: counts.delayed,
 		failed: counts.failed,
 		completed: counts.completed,
-		oldestWaitSec: oldest ? Math.max(0, (now - oldest.timestamp) / 1000) : 0,
+		oldestWaitSec: oldest
+			? Math.max(0, (now - (oldest.readyAt ?? oldest.timestamp)) / 1000)
+			: 0,
 		activeAgeSec: activeJob
 			? Math.max(0, (now - (activeJob.processedOn ?? activeJob.timestamp)) / 1000)
 			: 0,
@@ -30,11 +34,15 @@ export async function readQueueSnapshot(queue: CrawlerQueue<unknown>): Promise<S
 }
 
 export async function readQueues(
-	queues: Record<CrawlerQueueName, CrawlerQueue<unknown>>
+	queues: Record<CrawlerQueueName, CrawlerQueue<unknown>> & { milestones?: CrawlerQueue<unknown> }
 ): Promise<Record<string, StatsQueueSnapshot>> {
 	const [tracking, discovery] = await Promise.all([
 		readQueueSnapshot(queues.tracking),
 		readQueueSnapshot(queues.discovery),
 	]);
-	return { tracking, discovery };
+	return {
+		tracking,
+		discovery,
+		...(queues.milestones ? { milestones: await readQueueSnapshot(queues.milestones) } : {}),
+	};
 }

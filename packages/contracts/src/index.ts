@@ -10,3 +10,6 @@ export * from "./deploy";
 export * from "./akariWorker";
 
 export * from "./crawlerStats";
+
+export * from "./crawler/policies";
+export * from "./crawler/milestone";

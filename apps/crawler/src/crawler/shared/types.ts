@@ -7,6 +7,7 @@ export interface CrawlerJob<T> {
 	enqueuedAt?: number;
 	startedAt?: number;
 	delayMs?: number;
+	attemptsMade?: number;
 	updateData?: (data: T) => Promise<void>;
 	updateProgress?: (progress: DiscoveryJobProgress) => Promise<void>;
 }
@@ -14,6 +15,7 @@ export interface CrawlerJob<T> {
 export type CrawlerProcessor<T> = (job: CrawlerJob<T>) => Promise<void>;
 
 export type CrawlerQueueJobSnapshot = {
+	readyAt?: number;
 	id: string;
 	name: string;
 	data: unknown;
@@ -69,7 +71,9 @@ export interface CrawlerMq {
 	createWorker<T>(
 		name: string,
 		processor: CrawlerProcessor<T>,
-		options?: Omit<WorkerOptions, "connection">
+		options?: Omit<WorkerOptions, "connection"> & {
+			onDeadline?: (job: CrawlerJob<T>) => Promise<void>;
+		}
 	): CrawlerWorker;
 	close(): Promise<void>;
 }

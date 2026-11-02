@@ -73,7 +73,7 @@ describe("calculateDailyViewsGain", () => {
 describe("evaluateNextSchedule", () => {
 	const baseNow = 1700000000000;
 
-	test("handles error backoff exponentially", () => {
+	test("retries using the tracking state rather than an increasing delay", () => {
 		const res1 = evaluateNextSchedule({
 			aid: 1,
 			currentState: "regular",
@@ -82,8 +82,8 @@ describe("evaluateNextSchedule", () => {
 			consecutiveFails: 1,
 			policy: { minRegularIntervalHours: 6 },
 		});
-		expect(res1.reason).toBe("error_retry_backoff");
-		expect(res1.nextSnapshotAt.getTime() - baseNow).toBe(5 * MINUTE);
+		expect(res1.reason).toBe("transient_error_retry");
+		expect(res1.nextSnapshotAt.getTime() - baseNow).toBe(30000);
 
 		const res3 = evaluateNextSchedule({
 			aid: 1,
@@ -92,7 +92,7 @@ describe("evaluateNextSchedule", () => {
 			currentTime: baseNow,
 			consecutiveFails: 3,
 		});
-		expect(res3.nextSnapshotAt.getTime() - baseNow).toBe(20 * MINUTE); // 5 * 2^2
+		expect(res3.nextSnapshotAt.getTime() - baseNow).toBe(30000);
 
 		const res10 = evaluateNextSchedule({
 			aid: 1,
@@ -102,7 +102,7 @@ describe("evaluateNextSchedule", () => {
 			consecutiveFails: 10,
 		});
 		expect(res10.nextState).toBe("regular");
-		expect(res10.reason).toBe("transient_error_retry_backoff_capped");
+		expect(res10.reason).toBe("transient_error_retry");
 	});
 
 	test("archives only explicit unavailable failures", () => {
