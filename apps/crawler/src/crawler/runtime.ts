@@ -20,9 +20,13 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 			if (deps.worker) await deps.worker.close();
 			if (deps.networkRuntime?.close) await deps.networkRuntime.close();
 			else deps.networkRuntime?.stopPolling();
-			await deps.mq.close();
-			await deps.snapshotDb.disconnect();
-			await deps.observability.shutdown();
+			try {
+				await deps.statsCollector?.flush?.();
+			} finally {
+				await deps.mq.close();
+				await deps.snapshotDb.disconnect();
+				await deps.observability.shutdown();
+			}
 		});
 		deps.metrics?.runtimeShutdowns.add(1);
 		appLogger.info("Crawler runtime shut down", { component: "crawler-runtime" });

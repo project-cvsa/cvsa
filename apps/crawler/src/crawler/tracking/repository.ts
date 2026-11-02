@@ -2,7 +2,8 @@ import { and, asc, count, desc, eq, gt, inArray, isNull, like, lte, or } from "d
 import { activeTaskResource } from "../shared/taskContext";
 import type { DatabaseClient, Temporal, VideoTracking } from "@cvsa/snapshot-db";
 import { bilibiliVideoMetadata, toInstant, videoTracking } from "@cvsa/snapshot-db";
-import { traceTask } from "@cvsa/observability";
+import { createDatabaseTracer } from "../stats/databaseMetrics";
+import type { StatsRecorder } from "../stats/types";
 import type {
 	ITrackingRepository,
 	ListTrackingVideosParams,
@@ -15,10 +16,16 @@ import type {
 const AID = videoTracking.aid;
 
 export class TrackingRepository implements ITrackingRepository {
-	constructor(private readonly db: DatabaseClient) {}
+	private readonly trace;
+	constructor(
+		private readonly db: DatabaseClient,
+		stats?: StatsRecorder
+	) {
+		this.trace = createDatabaseTracer(stats);
+	}
 
 	async findDueVideos(limit: number, beforeTime?: Temporal.Instant): Promise<VideoTracking[]> {
-		return traceTask("tracking.findDueVideos", async () => {
+		return this.trace("tracking.findDueVideos", async () => {
 			const at = beforeTime ?? toInstant(new Date());
 			return activeTaskResource(this.db)
 				.select()
@@ -40,7 +47,7 @@ export class TrackingRepository implements ITrackingRepository {
 		now?: Temporal.Instant
 	): Promise<VideoTracking[]> {
 		if (aids.length === 0) return [];
-		return traceTask("tracking.leaseVideos", async () => {
+		return this.trace("tracking.leaseVideos", async () => {
 			const at = now ?? toInstant(new Date());
 			// `returning()` doubles as the compare-and-set acknowledgement: only rows
 			// whose lease was free (or expired) come back and get dispatched.
@@ -63,7 +70,7 @@ export class TrackingRepository implements ITrackingRepository {
 		limit: number,
 		leaseDurationMs: number
 	): Promise<VideoTracking[]> {
-		return traceTask("tracking.claimDueVideos", async () => {
+		return this.trace("tracking.claimDueVideos", async () => {
 			const due = await this.findDueVideos(limit, now);
 			if (due.length === 0) return [];
 			const leaseUntil = toInstant(new Date(now.epochMilliseconds + leaseDurationMs));
@@ -76,7 +83,7 @@ export class TrackingRepository implements ITrackingRepository {
 	}
 
 	async getTracking(aid: bigint): Promise<VideoTracking | null> {
-		return traceTask("tracking.getTracking", async () => {
+		return this.trace("tracking.getTracking", async () => {
 			const [row] = await activeTaskResource(this.db)
 				.select()
 				.from(videoTracking)
@@ -88,13 +95,13 @@ export class TrackingRepository implements ITrackingRepository {
 
 	async getTrackings(aids: bigint[]): Promise<VideoTracking[]> {
 		if (aids.length === 0) return [];
-		return traceTask("tracking.getTrackings", () =>
+		return this.trace("tracking.getTrackings", () =>
 			activeTaskResource(this.db).select().from(videoTracking).where(inArray(AID, aids))
 		);
 	}
 
 	async upsertTracking(input: UpsertTrackingInput): Promise<VideoTracking> {
-		return traceTask("tracking.upsertTracking", async () => {
+		return this.trace("tracking.upsertTracking", async () => {
 			const existing = await this.getTracking(input.aid);
 			if (existing) {
 				const [updated] = await activeTaskResource(this.db)
@@ -161,7 +168,7 @@ export class TrackingRepository implements ITrackingRepository {
 		update: UpdateScheduleInput,
 		expectedLeaseUntil?: Temporal.Instant
 	): Promise<void> {
-		await traceTask("tracking.updateSchedule", async () => {
+		await this.trace("tracking.updateSchedule", async () => {
 			await activeTaskResource(this.db)
 				.update(videoTracking)
 				.set({
@@ -201,7 +208,7 @@ export class TrackingRepository implements ITrackingRepository {
 
 	async releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void> {
 		if (aids.length === 0) return;
-		await traceTask("tracking.releaseLeases", async () => {
+		await this.trace("tracking.releaseLeases", async () => {
 			await activeTaskResource(this.db)
 				.update(videoTracking)
 				.set({ leaseUntil: null })
@@ -215,7 +222,7 @@ export class TrackingRepository implements ITrackingRepository {
 
 	async postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void> {
 		if (aids.length === 0) return;
-		await traceTask("tracking.postponeSchedule", async () => {
+		await this.trace("tracking.postponeSchedule", async () => {
 			await activeTaskResource(this.db)
 				.update(videoTracking)
 				.set({ nextSnapshotAt })
@@ -224,7 +231,7 @@ export class TrackingRepository implements ITrackingRepository {
 	}
 
 	async countOverdueVideos(now: Temporal.Instant | Date): Promise<OverdueTrackingSummary> {
-		return traceTask("tracking.countOverdueVideos", async () => {
+		return this.trace("tracking.countOverdueVideos", async () => {
 			const at = now instanceof Date ? toInstant(now) : now;
 			const due = and(
 				lte(videoTracking.nextSnapshotAt, at),
@@ -255,7 +262,7 @@ export class TrackingRepository implements ITrackingRepository {
 	}
 
 	async listTrackingVideos(params: ListTrackingVideosParams): Promise<ListTrackingVideosResult> {
-		return traceTask("tracking.listTrackingVideos", async () => {
+		return this.trace("tracking.listTrackingVideos", async () => {
 			const limit = Math.min(Math.max(params.limit, 1), 200);
 			const offset = Math.max(params.offset, 0);
 			const search = params.search?.trim();
@@ -329,7 +336,7 @@ export class TrackingRepository implements ITrackingRepository {
 	}
 
 	async deleteTracking(aid: bigint): Promise<boolean> {
-		return traceTask("tracking.deleteTracking", async () => {
+		return this.trace("tracking.deleteTracking", async () => {
 			const deleted = await activeTaskResource(this.db)
 				.delete(videoTracking)
 				.where(eq(AID, aid))

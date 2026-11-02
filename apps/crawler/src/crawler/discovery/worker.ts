@@ -440,8 +440,12 @@ export function createDiscoveryWorker(
 					target: completedTarget,
 					updatedAt: new Date().toISOString(),
 				});
-				stats.recordJobCompleted();
+				stats.recordJobOutcome("discovery", "completed");
 			} catch (error) {
+				stats.recordJobOutcome(
+					"discovery",
+					error instanceof RetryLaterError ? "deferred" : "failed"
+				);
 				await report({
 					...latest,
 					stage: error instanceof RetryLaterError ? "deferred" : "failed",

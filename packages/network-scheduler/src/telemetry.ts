@@ -6,6 +6,7 @@ export type NetworkMetricAttributes = Record<string, string | number>;
 export interface NetworkAttemptContext {
 	request: NetworkRequest;
 	adapterId: string;
+	retry?: boolean;
 	adapterType: NetworkAdapterConfig["type"];
 }
 

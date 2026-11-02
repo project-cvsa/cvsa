@@ -44,24 +44,6 @@ export const crawlerMq = createCrawlerMq(
 	crawlerEnv.NODE_ENV === "test" ? `cvsa-test-${process.pid}` : "bull"
 );
 
-export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
-export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
-export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
-
-export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
-export const manualSnapshotService = new ManualSnapshotService(
-	trackingRepository,
-	snapshotQueue,
-	discoveryRepository
-);
-export const discoveryQueue = createDiscoveryQueue(crawlerMq);
-
-/**
- * Sliding-window stats + the `crawler_stats_rollup` history.
- *
- * Queue depth and the tracking backlog are pulled lazily by the overview
- * endpoint, so the collector itself stays a pure in-memory counter.
- */
 export const statsCollector = new CrawlerStatsCollector({
 	overview: {
 		async queueCounts() {
@@ -78,6 +60,21 @@ export const statsCollector = new CrawlerStatsCollector({
 	rollup: new CrawlerStatsRepository(crawlerSnapshotDb.client),
 });
 
+export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client, statsCollector);
+export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client, statsCollector);
+export const discoveryRepository = new DiscoveryRepository(
+	crawlerSnapshotDb.client,
+	statsCollector
+);
+
+export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
+export const manualSnapshotService = new ManualSnapshotService(
+	trackingRepository,
+	snapshotQueue,
+	discoveryRepository
+);
+export const discoveryQueue = createDiscoveryQueue(crawlerMq);
+
 export const networkRuntimeConfigRepository = new NetworkRuntimeConfigRepository(
 	crawlerSnapshotDb.client
 );
@@ -93,8 +90,9 @@ export const networkRuntime = new NetworkRuntimeConfigManager(
 	{
 		// Every HTTP attempt lands in both OTel and the sliding-window counters.
 		metrics: createNetworkMetrics({
-			onRequestFinished(latencyMs, outcome) {
-				statsCollector.recordNetworkRequest(latencyMs, outcome);
+			onRequestFinishedWithAttributes(latencyMs, outcome, attributes) {
+				statsCollector.recordNetworkRequest(latencyMs, outcome, attributes);
+				if (attributes.retry === 1) statsCollector.recordRetry();
 			},
 		}),
 	}
@@ -148,6 +146,7 @@ export const discoveryFilterService = new DiscoveryFilterService(
  * is terminated on deadline or cancellation and restarted for subsequent work.
  */
 export const videoClassifierClient = new VideoClassifierClient({
+	stats: statsCollector,
 	timeoutMs: () => networkRuntime.getExecutionConfig().inferenceTimeoutMs,
 });
 

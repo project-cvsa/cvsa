@@ -53,4 +53,31 @@ describe("crawler runtime", () => {
 		expect(dispatcherStopped).toBe(true);
 		expect(workerClosed).toBe(true);
 	});
+	test("releases dependencies when final metrics persistence fails", async () => {
+		const mq = createFakeMq();
+		const snapshotDb = createFakeSnapshotDb();
+		let telemetryStopped = false;
+		const runtime = createCrawlerRuntime({
+			mq,
+			snapshotDb,
+			statsCollector: {
+				startPeriodicFlush() {},
+				stopPeriodicFlush() {},
+				async flush() {
+					throw new Error("metrics write failed");
+				},
+			},
+			observability: {
+				async init() {},
+				async shutdown() {
+					telemetryStopped = true;
+				},
+			},
+		});
+		await runtime.start();
+		await expect(runtime.shutdown()).rejects.toThrow("metrics write failed");
+		expect(mq.state.closed).toBe(true);
+		expect(snapshotDb.disconnected).toBe(true);
+		expect(telemetryStopped).toBe(true);
+	});
 });

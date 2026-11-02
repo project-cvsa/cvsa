@@ -13,7 +13,7 @@ export interface CreateSnapshotInput {
 }
 
 export interface ISnapshotRepository {
-	createSnapshots(snapshots: CreateSnapshotInput[]): Promise<void>;
+	createSnapshots(snapshots: CreateSnapshotInput[]): Promise<number>;
 	getRecentSnapshots(aid: bigint, limit?: number): Promise<VideoSnapshot[]>;
 	listSnapshots(
 		aid: bigint,

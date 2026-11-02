@@ -14,8 +14,9 @@ class FakeSnapshotRepository implements ISnapshotRepository {
 	public createdSnapshots: CreateSnapshotInput[] = [];
 	public historicalSnapshots: Map<bigint, VideoSnapshot[]> = new Map();
 
-	async createSnapshots(snapshots: CreateSnapshotInput[]): Promise<void> {
+	async createSnapshots(snapshots: CreateSnapshotInput[]): Promise<number> {
 		this.createdSnapshots.push(...snapshots);
+		return snapshots.length;
 	}
 
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {

@@ -92,24 +92,29 @@ export class DiscoveryCandidateEvaluator {
 	async evaluate(input: CandidateEvaluationInput): Promise<CandidateEvaluation> {
 		return traceTask("discovery.evaluateCandidate", async () => {
 			const { aid, source } = input;
+			this.stats.recordCount("candidatesSeen");
 			const origin = input.origin ?? fallbackOrigin(source);
 
 			const labeled = await this.discoveryRepo.getSample(aid);
-			if (labeled?.humanLabel === 0) return { status: "skipped", reason: "human_rejected" };
+			if (labeled?.humanLabel === 0) {
+				this.stats.recordCount("candidatesSkipped");
+				return { status: "skipped", reason: "human_rejected" };
+			}
 
 			if (!input.force) {
 				const existing = await this.trackingRepo.getTracking(aid);
-				if (existing) return { status: "skipped", reason: "already_tracked" };
+				if (existing) {
+					this.stats.recordCount("candidatesSkipped");
+					return { status: "skipped", reason: "already_tracked" };
+				}
 			}
 
 			let details: VideoDetailsData;
-			const fetchStartedAt = performance.now();
 			try {
 				details = await this.bilibiliClient.getVideoDetails(aid);
 			} catch (error) {
+				if (!(error instanceof RetryLaterError)) this.stats.recordCount("candidatesFailed");
 				return this.handleFetchFailure(aid, error);
-			} finally {
-				this.stats.recordTask(performance.now() - fetchStartedAt);
 			}
 			this.stats.recordCandidatesScanned();
 
@@ -118,7 +123,6 @@ export class DiscoveryCandidateEvaluator {
 			const tags = details.Tags ?? [];
 			const tagNames = tags.map((tag) => tag.tag_name);
 
-			const classifyStartedAt = performance.now();
 			const decision = await this.filterService.evaluateCandidate(
 				{
 					title: view.title,
@@ -129,9 +133,6 @@ export class DiscoveryCandidateEvaluator {
 				},
 				this.classifier
 			);
-			if (decision.model) {
-				this.stats.recordInference(performance.now() - classifyStartedAt, true);
-			}
 
 			const now = toInstant(new Date());
 			const pubdate = view.pubdate ? toInstant(new Date(view.pubdate * 1_000)) : null;
@@ -204,6 +205,7 @@ export class DiscoveryCandidateEvaluator {
 				// flight; never let that evaluation add it back.
 				const latest = await this.discoveryRepo.getSample(aid);
 				if (latest?.humanLabel === 0) {
+					this.stats.recordCount("candidatesSkipped");
 					return { status: "skipped", reason: "human_rejected" };
 				}
 				await this.trackingRepo.upsertTracking({
@@ -264,6 +266,7 @@ export class DiscoveryCandidateEvaluator {
 				});
 			}
 
+			this.stats.recordCount("candidatesRejected");
 			return { status: "rejected", decision, details };
 		});
 	}

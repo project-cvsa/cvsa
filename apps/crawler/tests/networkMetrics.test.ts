@@ -1,3 +1,11 @@
+import {
+	NetworkScheduler,
+	CrawlerExecutionConfigSchema,
+	type NetworkAdapter,
+} from "@cvsa/network-scheduler";
+import { FakeRateLimiter } from "@cvsa/network-scheduler/testing";
+import { createNetworkMetrics } from "../src/crawler/network/telemetry";
+import { CrawlerStatsCollector } from "../src/crawler/stats/collector";
 import { describe, expect, test } from "bun:test";
 import type { NetworkTransportResponse } from "@cvsa/network-scheduler";
 import type { NetworkMetricAttributes } from "@cvsa/network-scheduler";
@@ -94,7 +102,8 @@ describe("createNetworkRequestMetricRecorder", () => {
 			{
 				requestType: "default",
 				endpoint: "video_view",
-				egress: "direct",
+				egress: "direct-a",
+				retry: 0,
 			},
 		]);
 		expect(sink.durations).toHaveLength(1);
@@ -103,7 +112,7 @@ describe("createNetworkRequestMetricRecorder", () => {
 		expect(sink.inFlight).toEqual([1, -1]);
 	});
 
-	test("labels egress as proxy for a proxied adapter", () => {
+	test("labels requests by the specific egress adapter", () => {
 		const sink = new RecordingSink();
 		const recorder = createNetworkRequestMetricRecorder(sink, () => 0);
 
@@ -121,7 +130,8 @@ describe("createNetworkRequestMetricRecorder", () => {
 		expect(sink.started[0]).toEqual({
 			requestType: "bilibili-api",
 			endpoint: "video_search",
-			egress: "proxy",
+			egress: "proxy-a",
+			retry: 0,
 		});
 	});
 
@@ -147,5 +157,76 @@ describe("createNetworkRequestMetricRecorder", () => {
 		expect(sink.durations).toHaveLength(1);
 		expect(sink.inFlight).toEqual([1, -1]);
 		expect(sink.started[0]?.endpoint).toBe("other");
+	});
+});
+
+describe("scheduler request metrics", () => {
+	test("records real retry attempts and request results by endpoint and egress", async () => {
+		const stats = new CrawlerStatsCollector();
+		const metrics = createNetworkMetrics({
+			onRequestFinishedWithAttributes(ms, outcome, attributes) {
+				stats.recordNetworkRequest(ms, outcome, attributes);
+				if (attributes.retry === 1) stats.recordRetry();
+			},
+		});
+		const failing: NetworkAdapter = {
+			id: "direct-a",
+			async execute(_request, observer) {
+				observer?.started();
+				const result = {
+					...response({ status: 503, errorCode: "NETWORK_FAILURE" }),
+					adapterId: "direct-a",
+				};
+				observer?.completed(result);
+				return result;
+			},
+		};
+		const succeeding: NetworkAdapter = {
+			id: "direct-b",
+			async execute(_request, observer) {
+				observer?.started();
+				const result = { ...response(), adapterId: "direct-b" };
+				observer?.completed(result);
+				return result;
+			},
+		};
+		const scheduler = new NetworkScheduler(
+			{
+				adapters: ["direct-a", "direct-b"].map((id) => ({
+					id,
+					type: "direct",
+					enabled: true,
+					baseWeight: 1,
+					rateLimits: [],
+				})),
+				bindings: [
+					{ requestType: "bilibili:tracking", adapterIds: ["direct-a", "direct-b"] },
+				],
+				requestTypePolicies: {},
+				execution: CrawlerExecutionConfigSchema.parse({}),
+			},
+			new Map([
+				[failing.id, failing],
+				[succeeding.id, succeeding],
+			]),
+			new FakeRateLimiter(),
+			{ metrics, random: () => 0 }
+		);
+		await scheduler.execute({
+			url: "https://api.bilibili.com/medialist/gateway/base/resource/infos",
+			requestType: "bilibili:tracking",
+		});
+		const report = await stats.getReport("5m");
+		expect(report.metrics.counters.networkRequests).toBe(2);
+		expect(report.metrics.retries).toBe(1);
+		expect(report.metrics.network["egress:direct-a"]).toMatchObject({
+			requests: 1,
+			transportFailures: 1,
+		});
+		expect(report.metrics.network["egress:direct-b"]).toMatchObject({
+			requests: 1,
+			success: 1,
+		});
+		expect(report.metrics.network["endpoint:video_stats"]?.requests).toBe(2);
 	});
 });

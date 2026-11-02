@@ -1,37 +1,19 @@
+import {
+	CrawlerStatsCountersSchema,
+	CrawlerStatsErrorsSchema,
+	type CrawlerStatsWindow,
+	type CrawlerMinuteMetrics,
+	type CrawlerStatsCounters,
+	type CrawlerStatsErrors,
+} from "@cvsa/contracts";
 import type { CrawlerJobCounts } from "../shared/types";
 import type { OverdueTrackingSummary } from "../tracking/repository.interface";
 
-export type StatsWindow = "5m" | "15m" | "30m" | "1h" | "6h" | "24h" | "7d";
-
-export const STATS_WINDOWS: readonly StatsWindow[] = ["5m", "15m", "30m", "1h", "6h", "24h", "7d"];
-
-/** Throughput counters tracked per window. */
-export const STATS_COUNTERS = [
-	"jobsCompleted",
-	"snapshotsSaved",
-	"videosDiscovered",
-	"candidatesScanned",
-	"inferencesRun",
-	"networkRequests",
-] as const;
-
-export type StatsCounter = (typeof STATS_COUNTERS)[number];
-
-/** Error taxonomy surfaced by the admin console's health panel. */
-export const STATS_ERROR_KINDS = [
-	"timeout",
-	"networkFailure",
-	"httpFailure",
-	"networkOther",
-	"adapterUnavailable",
-	"rateLimited412Or429",
-	"bilibiliBusinessError",
-	"inferenceError",
-	"dbError",
-	"other",
-] as const;
-
-export type StatsErrorKind = (typeof STATS_ERROR_KINDS)[number];
+export type StatsWindow = CrawlerStatsWindow;
+export const STATS_COUNTERS = CrawlerStatsCountersSchema.keyof().options;
+export type StatsCounter = keyof CrawlerStatsCounters;
+export const STATS_ERROR_KINDS = CrawlerStatsErrorsSchema.keyof().options;
+export type StatsErrorKind = keyof CrawlerStatsErrors;
 
 export type StatsLatencyKind = "task" | "api" | "inference";
 
@@ -47,13 +29,18 @@ export type StatsNetworkOutcome =
 	| "connection_error"
 	| "other_error";
 
-export type StatsCounters = Record<StatsCounter, number>;
-export type StatsErrors = Record<StatsErrorKind, number>;
+export type StatsCounters = CrawlerStatsCounters;
+export type StatsErrors = CrawlerStatsErrors;
 export type StatsLatencyP95 = Record<StatsLatencyKind, number>;
 
 /** One sliding window's aggregate. */
 export interface StatsWindowMetrics {
+	gauges?: CrawlerMinuteMetrics["gauges"];
 	window: StatsWindow;
+	from: number;
+	to: number;
+	jobs: CrawlerMinuteMetrics["jobs"];
+	network: CrawlerMinuteMetrics["network"];
 	counters: StatsCounters;
 	errors: StatsErrors;
 	retries: number;
@@ -75,17 +62,7 @@ export interface StatsOverview {
 	tracking: OverdueTrackingSummary;
 }
 
-/** Payload persisted into `crawler_stats_rollup.metrics`. */
-export interface StatsRollupMetrics {
-	counters: StatsCounters;
-	errors: StatsErrors;
-	retries: number;
-	latencyP95Ms: StatsLatencyP95;
-	queue?: StatsQueueSnapshot;
-	tracking?: OverdueTrackingSummary;
-}
-
-export const STATS_ROLLUP_METRIC_GROUP = "crawler" as const;
+export type StatsRollupMetrics = CrawlerMinuteMetrics;
 
 /**
  * The recording surface consumers depend on.
@@ -95,13 +72,22 @@ export const STATS_ROLLUP_METRIC_GROUP = "crawler" as const;
  * tests can assert on recorded events.
  */
 export interface StatsRecorder {
+	recordCount(counter: StatsCounter, count?: number): void;
+	recordJobOutcome(
+		queue: "tracking" | "discovery",
+		outcome: "completed" | "failed" | "deferred"
+	): void;
 	recordTask(latencyMs: number): void;
 	recordJobCompleted(count?: number): void;
 	recordSnapshotsSaved(count?: number): void;
 	recordVideosDiscovered(count?: number): void;
 	recordCandidatesScanned(count?: number): void;
 	recordInference(latencyMs?: number, succeeded?: boolean): void;
-	recordNetworkRequest(latencyMs?: number, outcome?: StatsNetworkOutcome): void;
+	recordNetworkRequest(
+		latencyMs?: number,
+		outcome?: StatsNetworkOutcome,
+		attributes?: Record<string, string | number>
+	): void;
 	recordRetry(count?: number): void;
 	recordError(kind: StatsErrorKind): void;
 }
@@ -109,6 +95,8 @@ export interface StatsRecorder {
 /** No-op recorder for call sites that run without stats collection. */
 export function createNoopStatsRecorder(): StatsRecorder {
 	return {
+		recordCount() {},
+		recordJobOutcome() {},
 		recordTask() {},
 		recordJobCompleted() {},
 		recordSnapshotsSaved() {},
@@ -129,6 +117,13 @@ export function emptyCounters(): StatsCounters {
 		candidatesScanned: 0,
 		inferencesRun: 0,
 		networkRequests: 0,
+		aidsRequested: 0,
+		aidsReturned: 0,
+		aidsMissing: 0,
+		candidatesSeen: 0,
+		candidatesSkipped: 0,
+		candidatesRejected: 0,
+		candidatesFailed: 0,
 	};
 }
 
@@ -154,6 +149,13 @@ export function emptyLatencyP95(): StatsLatencyP95 {
 export function emptyWindowMetrics(window: StatsWindow): StatsWindowMetrics {
 	return {
 		window,
+		from: 0,
+		to: 0,
+		jobs: {
+			tracking: { completed: 0, failed: 0, deferred: 0 },
+			discovery: { completed: 0, failed: 0, deferred: 0 },
+		},
+		network: {},
 		counters: emptyCounters(),
 		errors: emptyErrors(),
 		retries: 0,

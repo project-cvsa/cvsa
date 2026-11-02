@@ -116,7 +116,8 @@ function createRequestAttributes(context: NetworkAttemptContext): NetworkMetricA
 	return {
 		requestType: REQUEST_TYPES.has(requestType) ? requestType : "other",
 		endpoint: endpointLabel(context.request.url),
-		egress: context.adapterType === "direct" ? "direct" : "proxy",
+		egress: context.adapterId,
+		retry: context.retry ? 1 : 0,
 	};
 }
 

@@ -1,3 +1,4 @@
+import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { ClassifierHealthDto } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
@@ -41,6 +42,7 @@ export interface ClassifierClientOptions {
 	/** Injected for tests; a supervised inference process is created otherwise. */
 	readonly localClassifier?: LocalClassifier;
 	readonly timeoutMs?: () => number;
+	readonly stats?: StatsRecorder;
 }
 
 /** Used when a prediction arrives without its own model version. */
@@ -60,8 +62,10 @@ function toPrediction(prediction: AkariPrediction): ClassifierPrediction {
 
 export class VideoClassifierClient {
 	private readonly classifier: LocalClassifier;
+	private readonly stats: StatsRecorder;
 
 	constructor(options: ClassifierClientOptions = {}) {
+		this.stats = options.stats ?? createNoopStatsRecorder();
 		this.classifier = options.localClassifier ?? new IsolatedAkariClassifier(options.timeoutMs);
 	}
 
@@ -80,6 +84,8 @@ export class VideoClassifierClient {
 	 */
 	async classify(input: ClassifierInput): Promise<ClassifierPrediction | null> {
 		return traceTask("discovery.classifier.classify", async () => {
+			const startedAt = performance.now();
+			let succeeded = false;
 			try {
 				const prediction = await this.classifier.classify({
 					title: input.title,
@@ -94,6 +100,7 @@ export class VideoClassifierClient {
 					modelVersion: prediction.modelVersion,
 				});
 
+				succeeded = true;
 				return toPrediction(prediction);
 			} catch (error) {
 				appLogger.warn("Local classification failed", {
@@ -101,6 +108,8 @@ export class VideoClassifierClient {
 					error: error instanceof Error ? error.message : String(error),
 				});
 				return null;
+			} finally {
+				this.stats.recordInference(performance.now() - startedAt, succeeded);
 			}
 		});
 	}

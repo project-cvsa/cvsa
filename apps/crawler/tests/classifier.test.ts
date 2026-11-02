@@ -1,3 +1,4 @@
+import { CrawlerStatsCollector } from "../src/crawler/stats/collector";
 import { describe, expect, spyOn, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import { DiscoveryFilterService } from "../src/crawler/discovery/filter";
@@ -74,6 +75,31 @@ function clientWith(local: LocalClassifier): VideoClassifierClient {
 }
 
 describe("VideoClassifierClient (in-process ONNX)", () => {
+	test("records successful, unavailable and failed inference attempts", async () => {
+		const stats = new CrawlerStatsCollector();
+		await new VideoClassifierClient({
+			localClassifier: fakeLocal(prediction()),
+			stats,
+		}).classify({ title: "song" });
+		await new VideoClassifierClient({ localClassifier: fakeLocal(null), stats }).classify({
+			title: "song",
+		});
+		const failed: LocalClassifier = {
+			async classify() {
+				throw new Error("inference failed");
+			},
+			async checkHealth() {
+				return healthy();
+			},
+		};
+		await new VideoClassifierClient({ localClassifier: failed, stats }).classify({
+			title: "song",
+		});
+		const report = await stats.getReport("5m");
+		expect(report.metrics.counters.inferencesRun).toBe(3);
+		expect(report.metrics.errors.inferenceError).toBe(2);
+	});
+
 	test("classifies without any HTTP traffic", async () => {
 		const fetchSpy = spyOn(globalThis, "fetch");
 

@@ -1,3 +1,4 @@
+import StatsDetails from "../StatsDetails";
 import ComponentStatus from "../ComponentStatus";
 import Table from "@components/ui/Table";
 import { useCrawlerRefresh } from "../refresh";
@@ -99,6 +100,7 @@ function ErrorRateTable(props: { stats: CrawlerOverviewStats }) {
 					<th>{t("overview.totalAttempts")}</th>
 					<th>{t("overview.errorRate")}</th>
 					<th>{t("overview.retryRate")}</th>
+					<th>{t("metrics.businessErrors")}</th>
 					<th>{t("overview.overdueTracking")}</th>
 					<th>{t("overview.maxOverdueLag")}</th>
 				</tr>
@@ -108,6 +110,7 @@ function ErrorRateTable(props: { stats: CrawlerOverviewStats }) {
 				<td>{formatMetric(props.stats.totalAttempts)}</td>
 				<td>{formatPercent(props.stats.errorRate)}</td>
 				<td>{formatPercent(props.stats.retryRate)}</td>
+				<td>{formatPercent(props.stats.businessErrorRate)}</td>
 				<td>{formatMetric(props.stats.overdueTrackingCount)}</td>
 				<td>{formatWaitSeconds(props.stats.maxOverdueLagSec)}</td>
 			</tr>
@@ -236,7 +239,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								<MetricCard
 									label={t("overview.newSnapshots")}
 									value={formatMetric(current().snapshotsSaved ?? 0)}
-									hint={`平均 ${formatMetric(current().snapshotsPerMin)}/分`}
+									hint={`${formatMetric(current().snapshotsPerMin)}${t("metrics.perMinute")}`}
 									variant="success"
 								/>
 								<MetricCard
@@ -247,27 +250,44 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								/>
 								<MetricCard
 									label={t("overview.jobsPerSec")}
-									value={`${formatMetric(current().jobsPerSec)}/s`}
-									hint={`约 ${formatMetric(current().jobsPerMin)}/分`}
+									value={`${formatMetric(current().jobsPerMin)}${t("metrics.perMinute")}`}
+									hint={t("metrics.completed")}
 								/>
 								<MetricCard
 									label={t("overview.requestsPerSec")}
-									value={`${formatMetric(current().requestsPerSec)}/s`}
-									hint={t("overview.unit.requestsPerSec")}
+									value={`${formatMetric(current().requestsPerMin)}${t("metrics.perMinute")}`}
+									hint={t("metrics.attemptsHint")}
 								/>
 								<MetricCard
 									label={t("overview.inferencesPerSec")}
-									value={`${formatMetric(current().inferencesPerSec)}/s`}
-									hint={t("overview.unit.inferencesPerSec")}
+									value={`${formatMetric(current().inferencesPerMin)}${t("metrics.perMinute")}`}
+									hint={t("metrics.inferenceHint")}
 								/>
 								<MetricCard
 									label={t("overview.successRate")}
-									value={formatPercent(1 - current().errorRate)}
-									hint={`重试率 ${formatPercent(current().retryRate)}`}
+									value={formatPercent(current().requestSuccessRate)}
+									hint={`${t("overview.retryRate")} ${formatPercent(current().retryRate)}`}
 								/>
 							</div>
 
-							<ThroughputChart series={current().series ?? []} />
+							<p class="ts-caption text-secondary">
+								{t("metrics.coverage")
+									.replace(
+										"{from}",
+										new Date(current().coverageFrom).toLocaleString()
+									)
+									.replace(
+										"{to}",
+										new Date(current().generatedAt).toLocaleString()
+									)
+									.replace(
+										"{minutes}",
+										formatMetric(current().coverageSeconds / 60)
+									)}
+							</p>
+							<p class="ts-caption text-secondary">{t("metrics.method")}</p>
+							<ThroughputChart series={current().series} />
+							<StatsDetails stats={current()} />
 						</section>
 
 						<ComponentStatus

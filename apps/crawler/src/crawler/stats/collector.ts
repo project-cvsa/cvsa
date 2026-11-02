@@ -1,419 +1,309 @@
 import { appLogger } from "@cvsa/logger";
+import {
+	CRAWLER_LATENCY_BOUNDS_MS,
+	CRAWLER_WINDOW_MINUTES,
+	type CrawlerMinuteMetrics,
+} from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
 import type { CrawlerJobCounts } from "../shared/types";
 import type { OverdueTrackingSummary } from "../tracking/repository.interface";
-import type { StatsRollupStore } from "./rollup";
-import {
-	emptyCounters,
-	emptyErrors,
-	STATS_COUNTERS,
-	STATS_ERROR_KINDS,
-	STATS_LATENCY_KINDS,
-	STATS_ROLLUP_METRIC_GROUP,
-	STATS_WINDOWS,
-	type StatsCounter,
-	type StatsCounters,
-	type StatsErrorKind,
-	type StatsErrors,
-	type StatsLatencyKind,
-	type StatsLatencyP95,
-	type StatsNetworkOutcome,
-	type StatsOverview,
-	type StatsQueueSnapshot,
-	type StatsRecorder,
-	type StatsRollupMetrics,
-	type StatsWindow,
-	type StatsWindowMetrics,
+import type { StatsRollupStore, StatsRollupRow } from "./rollup";
+import { emptyMinute, mergeMinute, windowMetrics, chartMetrics } from "./aggregation";
+import type {
+	StatsCounter,
+	StatsErrorKind,
+	StatsLatencyKind,
+	StatsNetworkOutcome,
+	StatsRecorder,
+	StatsWindow,
 } from "./types";
 
-/** One minute per bucket: 1440 buckets per 24h, 10080 for 7d. */
-const BUCKET_MS = 60_000;
-const WINDOW_MS: Readonly<Record<StatsWindow, number>> = {
-	"5m": 5 * BUCKET_MS,
-	"15m": 15 * BUCKET_MS,
-	"30m": 30 * BUCKET_MS,
-	"1h": 60 * BUCKET_MS,
-	"6h": 360 * BUCKET_MS,
-	"24h": 1440 * BUCKET_MS,
-	"7d": 7 * 1440 * BUCKET_MS,
-};
-const MAX_BUCKETS = Math.ceil(WINDOW_MS["7d"] / BUCKET_MS);
-
-/**
- * Latency histogram upper bounds in milliseconds. P95 is reported as the first
- * bound whose cumulative count reaches 95% of the samples, which keeps the
- * collector's memory constant instead of retaining every measurement.
- */
-const LATENCY_BOUNDS_MS = [
-	1, 2, 5, 10, 25, 50, 100, 200, 350, 500, 750, 1_000, 2_000, 3_000, 5_000, 8_000, 13_000, 21_000,
-	34_000, 60_000, 120_000, 300_000,
-] as const;
-
-interface Bucket {
-	/** Epoch millisecond start of this slot. */
-	start: number;
-	counters: StatsCounters;
-	errors: StatsErrors;
-	retries: number;
-	/** Histogram counts, index-aligned with {@link LATENCY_BOUNDS_MS}. */
-	latency: Record<StatsLatencyKind, number[]>;
-}
-
+const MINUTE_MS = 60_000;
 export interface StatsOverviewDeps {
-	/** Aggregated queue depth across every crawler queue. */
 	queueCounts?: () => Promise<CrawlerJobCounts[]>;
 	countOverdue?: (now: ReturnType<typeof toInstant>) => Promise<OverdueTrackingSummary>;
 }
-
 export interface CrawlerStatsCollectorOptions {
 	now?: () => number;
 	overview?: StatsOverviewDeps;
 	rollup?: StatsRollupStore;
 }
 
-function createBucket(start: number): Bucket {
-	return {
-		start,
-		counters: emptyCounters(),
-		errors: emptyErrors(),
-		retries: 0,
-		latency: {
-			task: new Array(LATENCY_BOUNDS_MS.length).fill(0),
-			api: new Array(LATENCY_BOUNDS_MS.length).fill(0),
-			inference: new Array(LATENCY_BOUNDS_MS.length).fill(0),
-		},
-	};
-}
-
-function latencyBucketIndex(value: number): number {
-	const bounded = Number.isFinite(value) ? Math.max(0, value) : 0;
-	for (let i = 0; i < LATENCY_BOUNDS_MS.length; i++) {
-		const upper = LATENCY_BOUNDS_MS[i];
-		if (upper !== undefined && bounded <= upper) return i;
-	}
-	return LATENCY_BOUNDS_MS.length - 1;
-}
-
-function percentileFromHistogram(histogram: readonly number[], percentile: number): number {
-	let total = 0;
-	for (const count of histogram) total += count;
-	if (total === 0) return 0;
-
-	const target = Math.ceil(total * percentile);
-	let cumulative = 0;
-	for (let i = 0; i < histogram.length; i++) {
-		cumulative += histogram[i] ?? 0;
-		if (cumulative >= target) return LATENCY_BOUNDS_MS[i] ?? 0;
-	}
-	return LATENCY_BOUNDS_MS[LATENCY_BOUNDS_MS.length - 1] ?? 0;
-}
-
-function sumHistograms(histograms: ReadonlyArray<readonly number[]>): number[] {
-	const total = new Array(LATENCY_BOUNDS_MS.length).fill(0);
-	for (const histogram of histograms) {
-		for (let i = 0; i < total.length; i++) {
-			total[i] += histogram[i] ?? 0;
-		}
-	}
-	return total;
-}
-
-function toErrorKind(outcome: StatsNetworkOutcome): StatsErrorKind | undefined {
-	switch (outcome) {
-		case "success":
-			return undefined;
-		case "timeout":
-			return "timeout";
-		case "rate_limited":
-			return "rateLimited412Or429";
-		case "business_error":
-			return "bilibiliBusinessError";
-		case "http_error":
-			return "httpFailure";
-		case "connection_error":
-			return "networkFailure";
-		case "other_error":
-			return "networkOther";
-	}
-}
-
-function toQueueSnapshot(counts: readonly CrawlerJobCounts[]): StatsQueueSnapshot {
-	const total: StatsQueueSnapshot = {
-		waiting: 0,
-		active: 0,
-		delayed: 0,
-		failed: 0,
-		completed: 0,
-		inFlight: 0,
-	};
-	for (const entry of counts) {
-		total.waiting += entry.waiting;
-		total.active += entry.active;
-		total.delayed += entry.delayed;
-		total.failed += entry.failed;
-		total.completed += entry.completed;
-	}
-	total.inFlight = total.active + total.waiting;
-	return total;
-}
-
-/**
- * In-memory sliding-window metrics for the crawler.
- *
- * Everything is bucketed per minute and folded on read, so a `getOverviewStats`
- * call costs the same whether the window holds ten events or ten million. The
- * collector is intentionally dependency-free apart from the optional rollup
- * repository: it is safe to construct in tests and in the worker process.
- */
 export class CrawlerStatsCollector implements StatsRecorder {
-	private readonly buckets: Array<Bucket | undefined> = new Array(MAX_BUCKETS).fill(undefined);
+	private readonly buckets = new Map<number, CrawlerMinuteMetrics>();
+	private readonly dirty = new Set<number>();
+	private readonly sourceId = crypto.randomUUID();
 	private readonly now: () => number;
+	private readonly startedAt: number;
+	private heartbeatAt: number;
 	private readonly overviewDeps: StatsOverviewDeps;
 	private readonly rollup: StatsRollupStore | undefined;
 	private flushTimer: ReturnType<typeof setInterval> | undefined;
+	private flushing: Promise<number> | undefined;
 
 	constructor(options: CrawlerStatsCollectorOptions = {}) {
-		this.now = options.now ?? (() => Date.now());
+		this.now = options.now ?? Date.now;
+		this.startedAt = this.now();
+		this.heartbeatAt = this.startedAt;
 		this.overviewDeps = options.overview ?? {};
 		this.rollup = options.rollup;
 	}
 
-	recordTask(latencyMs: number): void {
-		this.observeLatency("task", latencyMs);
+	recordCount(counter: StatsCounter, count = 1): void {
+		this.bucket().counters[counter] += count;
 	}
-
 	recordJobCompleted(count = 1): void {
-		this.incrementCounter("jobsCompleted", count);
+		this.recordCount("jobsCompleted", count);
 	}
-
+	recordJobOutcome(
+		queue: "tracking" | "discovery",
+		outcome: "completed" | "failed" | "deferred"
+	): void {
+		this.bucket().jobs[queue][outcome]++;
+		if (outcome === "completed") this.recordJobCompleted();
+	}
 	recordSnapshotsSaved(count = 1): void {
-		this.incrementCounter("snapshotsSaved", count);
+		this.recordCount("snapshotsSaved", count);
 	}
-
 	recordVideosDiscovered(count = 1): void {
-		this.incrementCounter("videosDiscovered", count);
+		this.recordCount("videosDiscovered", count);
 	}
-
 	recordCandidatesScanned(count = 1): void {
-		this.incrementCounter("candidatesScanned", count);
+		this.recordCount("candidatesScanned", count);
 	}
-
-	recordInference(latencyMs?: number, succeeded = true): void {
-		this.incrementCounter("inferencesRun", 1);
-		if (latencyMs !== undefined) this.observeLatency("inference", latencyMs);
+	recordTask(ms: number): void {
+		this.observeLatency("task", ms);
+	}
+	recordInference(ms?: number, succeeded = true): void {
+		this.recordCount("inferencesRun");
+		if (ms !== undefined) this.observeLatency("inference", ms);
 		if (!succeeded) this.recordError("inferenceError");
 	}
-
-	recordNetworkRequest(latencyMs?: number, outcome: StatsNetworkOutcome = "success"): void {
-		this.incrementCounter("networkRequests", 1);
-		if (latencyMs !== undefined) this.observeLatency("api", latencyMs);
-		const errorKind = toErrorKind(outcome);
-		if (errorKind) this.recordError(errorKind);
+	recordNetworkRequest(
+		ms?: number,
+		outcome: StatsNetworkOutcome = "success",
+		attributes: Record<string, string | number> = {}
+	): void {
+		this.recordCount("networkRequests");
+		if (ms !== undefined) this.observeLatency("api", ms);
+		const errors: Record<Exclude<StatsNetworkOutcome, "success">, StatsErrorKind> = {
+			timeout: "timeout",
+			rate_limited: "rateLimited412Or429",
+			business_error: "bilibiliBusinessError",
+			http_error: "httpFailure",
+			connection_error: "networkFailure",
+			other_error: "networkOther",
+		};
+		if (outcome !== "success") this.recordError(errors[outcome]);
+		for (const dimension of ["requestType", "endpoint", "egress"] as const) {
+			const key = `${dimension}:${attributes[dimension] ?? "unknown"}`;
+			const totals = this.bucket().network[key] ?? {
+				requests: 0,
+				success: 0,
+				businessErrors: 0,
+				rateLimited: 0,
+				transportFailures: 0,
+			};
+			totals.requests++;
+			if (outcome === "success") totals.success++;
+			else if (outcome === "business_error") totals.businessErrors++;
+			else if (outcome === "rate_limited") totals.rateLimited++;
+			else totals.transportFailures++;
+			this.bucket().network[key] = totals;
+		}
 	}
-
 	recordRetry(count = 1): void {
 		this.bucket().retries += count;
 	}
-
 	recordError(kind: StatsErrorKind): void {
-		this.bucket().errors[kind] += 1;
+		this.bucket().errors[kind]++;
 	}
 
-	/** Fold every bucket inside `window` into a single snapshot. */
-	getWindow(window: StatsWindow, nowMs = this.now(), minutes?: number): StatsWindowMetrics {
-		const from = nowMs - (minutes === undefined ? WINDOW_MS[window] : minutes * BUCKET_MS);
-		const counters = emptyCounters();
-		const errors = emptyErrors();
-		const latency: Record<StatsLatencyKind, number[][]> = { task: [], api: [], inference: [] };
-		let retries = 0;
-
-		const firstSlot = Math.floor(from / BUCKET_MS);
-		const lastSlot = Math.floor(nowMs / BUCKET_MS);
-		for (let slot = firstSlot; slot <= lastSlot; slot++) {
-			const bucket = this.buckets[((slot % MAX_BUCKETS) + MAX_BUCKETS) % MAX_BUCKETS];
-			if (!bucket || bucket.start !== slot * BUCKET_MS) continue;
-			for (const counter of STATS_COUNTERS) counters[counter] += bucket.counters[counter];
-			for (const kind of STATS_ERROR_KINDS) errors[kind] += bucket.errors[kind];
-			retries += bucket.retries;
-			for (const kind of STATS_LATENCY_KINDS) latency[kind].push(bucket.latency[kind]);
+	private bucket(at = this.now()): CrawlerMinuteMetrics {
+		const start = Math.floor(at / MINUTE_MS) * MINUTE_MS;
+		let bucket = this.buckets.get(start);
+		if (!bucket) {
+			bucket = emptyMinute(Math.max(start, this.startedAt), at);
+			this.buckets.set(start, bucket);
 		}
-
-		const latencyP95Ms: StatsLatencyP95 = {
-			task: percentileFromHistogram(sumHistograms(latency.task), 0.95),
-			api: percentileFromHistogram(sumHistograms(latency.api), 0.95),
-			inference: percentileFromHistogram(sumHistograms(latency.inference), 0.95),
-		};
-
-		return { window, counters, errors, retries, latencyP95Ms };
+		bucket.to = Math.max(bucket.to, at);
+		this.dirty.add(start);
+		return bucket;
 	}
-
-	/**
-	 * Admin-console payload: sliding window metrics plus live queue depth and
-	 * tracking backlog. Both probes are optional so the collector still answers
-	 * when no queue or repository is wired (tests, tooling).
-	 */
-	async getOverviewStats(window: StatsWindow, minutes?: number): Promise<StatsOverview> {
-		const nowMs = this.now();
-		const metrics = this.getWindow(window, nowMs, minutes);
-
-		let queueCounts: CrawlerJobCounts[] = [];
-		if (this.overviewDeps.queueCounts) {
-			try {
-				queueCounts = await this.overviewDeps.queueCounts();
-			} catch (error) {
-				appLogger.warn("Failed to read queue counts for the stats overview", {
-					component: "crawler-stats",
-					error: error instanceof Error ? error.message : String(error),
-				});
-			}
+	private heartbeat(at: number): void {
+		const earliest = Math.floor(at / MINUTE_MS) * MINUTE_MS - 10079 * MINUTE_MS;
+		for (
+			let start = Math.max(Math.floor(this.heartbeatAt / MINUTE_MS) * MINUTE_MS, earliest);
+			start <= at;
+			start += MINUTE_MS
+		) {
+			this.bucket(Math.min(start + MINUTE_MS - 1, at)).to = Math.min(start + MINUTE_MS, at);
 		}
-
-		let tracking: OverdueTrackingSummary = { overdueCount: 0, maxOverdueLagSec: 0 };
-		if (this.overviewDeps.countOverdue) {
-			try {
-				tracking = await this.overviewDeps.countOverdue(toInstant(new Date(nowMs)));
-			} catch (error) {
-				appLogger.warn("Failed to read tracking backlog for the stats overview", {
-					component: "crawler-stats",
-					error: error instanceof Error ? error.message : String(error),
-				});
+		this.heartbeatAt = Math.max(this.heartbeatAt, at);
+		for (const start of this.buckets.keys())
+			if (start < earliest) {
+				this.buckets.delete(start);
+				this.dirty.delete(start);
 			}
+	}
+	private observeLatency(kind: StatsLatencyKind, ms: number): void {
+		const index = CRAWLER_LATENCY_BOUNDS_MS.findIndex((bound) => ms <= bound);
+		const bucket = this.bucket();
+		bucket.latency[kind][index < 0 ? CRAWLER_LATENCY_BOUNDS_MS.length : index] += 1;
+		bucket.latencyMaxMs[kind] = Math.max(bucket.latencyMaxMs[kind], ms);
+	}
+	private rangeStart(window: StatsWindow, at: number, minutes?: number): number {
+		return (
+			Math.floor(at / MINUTE_MS) * MINUTE_MS -
+			((minutes ?? CRAWLER_WINDOW_MINUTES[window]) - 1) * MINUTE_MS
+		);
+	}
+	getWindow(window: StatsWindow, at = this.now(), minutes?: number) {
+		this.heartbeat(at);
+		const start = this.rangeStart(window, at, minutes);
+		const total = emptyMinute(at, at);
+		for (const [time, bucket] of this.buckets)
+			if (time >= start && time <= at) mergeMinute(total, bucket);
+		return windowMetrics(window, total);
+	}
+	async getReport(window: StatsWindow, minutes?: number) {
+		const at = this.now();
+		this.heartbeat(at);
+		const start = this.rangeStart(window, at, minutes);
+		const local = [...this.buckets.entries()]
+			.filter(([time]) => time >= start && time <= at)
+			.map(([time, metrics]) => ({
+				time,
+				metrics: structuredClone(metrics),
+			}));
+		const persisted = this.rollup
+			? await this.rollup.listRollup("crawler:minute", toInstant(new Date(start)))
+			: [];
+		const rows = new Map<string, StatsRollupRow>();
+		for (const row of persisted)
+			if (row.bucketTime.epochMilliseconds <= at)
+				rows.set(`${row.sourceId}:${row.bucketTime.epochMilliseconds}`, row);
+		for (const { time, metrics } of local)
+			if (time >= start && time <= at)
+				rows.set(`${this.sourceId}:${time}`, {
+					sourceId: this.sourceId,
+					bucketTime: toInstant(new Date(time)),
+					metricGroup: "crawler:minute",
+					metrics,
+				});
+		const total = emptyMinute(at, at);
+		const step =
+			Math.max(1, Math.ceil((minutes ?? CRAWLER_WINDOW_MINUTES[window]) / 240)) * MINUTE_MS;
+		const groups = new Map<number, CrawlerMinuteMetrics>();
+		for (const row of rows.values()) {
+			mergeMinute(total, row.metrics);
+			const time =
+				start + Math.floor((row.bucketTime.epochMilliseconds - start) / step) * step;
+			const group =
+				groups.get(time) ??
+				emptyMinute(Math.min(time + step, at), Math.min(time + step, at));
+			mergeMinute(group, row.metrics);
+			groups.set(time, group);
 		}
-
+		const series = [];
+		for (let time = start; time <= at; time += step) {
+			if (time + step <= total.from) continue;
+			const group =
+				groups.get(time) ??
+				emptyMinute(Math.max(time, total.from), Math.min(time + step, at));
+			group.from = Math.max(time, total.from);
+			group.to = Math.min(time + step, at);
+			series.push({
+				bucketTime: new Date(time).toISOString(),
+				metricGroup: "crawler:minute",
+				metrics: chartMetrics(windowMetrics(window, group)),
+			});
+		}
+		const [counts, tracking] = await Promise.all([
+			this.overviewDeps.queueCounts?.() ?? Promise.resolve([]),
+			this.overviewDeps.countOverdue?.(toInstant(new Date(at))) ??
+				Promise.resolve({ overdueCount: 0, maxOverdueLagSec: 0 }),
+		]);
+		const queue = { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0, inFlight: 0 };
+		for (const count of counts) {
+			queue.waiting += count.waiting;
+			queue.active += count.active;
+			queue.delayed += count.delayed;
+			queue.failed += count.failed;
+			queue.completed += count.completed;
+		}
+		queue.inFlight = queue.active + queue.waiting;
 		return {
 			window,
-			generatedAt: new Date(nowMs).toISOString(),
-			metrics,
-			queue: toQueueSnapshot(queueCounts),
+			generatedAt: new Date(at).toISOString(),
+			metrics: windowMetrics(window, total),
+			queue,
 			tracking,
+			series,
 		};
 	}
-
-	/** Every window's metrics, used by {@link flush}. */
-	getAllWindows(nowMs = this.now()): Record<StatsWindow, StatsWindowMetrics> {
-		return {
-			"5m": this.getWindow("5m", nowMs),
-			"15m": this.getWindow("15m", nowMs),
-			"30m": this.getWindow("30m", nowMs),
-			"1h": this.getWindow("1h", nowMs),
-			"6h": this.getWindow("6h", nowMs),
-			"24h": this.getWindow("24h", nowMs),
-			"7d": this.getWindow("7d", nowMs),
-		};
+	async getOverviewStats(window: StatsWindow, minutes?: number) {
+		return this.getReport(window, minutes);
 	}
 
-	/**
-	 * Persist one summary row per window into `crawler_stats_rollup`, truncated
-	 * to the minute so repeated flushes in the same minute upsert one row.
-	 */
-	async flush(nowMs = this.now()): Promise<number> {
-		if (!this.rollup) return 0;
-		const bucketTime = toInstant(new Date(Math.floor(nowMs / BUCKET_MS) * BUCKET_MS));
-		const windows = this.getAllWindows(nowMs);
-		const queueCounts = this.overviewDeps.queueCounts
-			? await this.overviewDeps.queueCounts().catch(() => [])
-			: [];
-		const queue = toQueueSnapshot(queueCounts);
-		const tracking = this.overviewDeps.countOverdue
-			? await this.overviewDeps
-					.countOverdue(toInstant(new Date(nowMs)))
-					.catch(() => ({ overdueCount: 0, maxOverdueLagSec: 0 }))
-			: undefined;
-
-		let written = 0;
-		for (const window of STATS_WINDOWS) {
-			const metrics = windows[window];
-			const payload: StatsRollupMetrics = {
-				counters: metrics.counters,
-				errors: metrics.errors,
-				retries: metrics.retries,
-				latencyP95Ms: metrics.latencyP95Ms,
-				...(queueCounts.length > 0 ? { queue } : {}),
-				...(tracking ? { tracking } : {}),
-			};
-			await this.rollup.saveRollup({
-				bucketTime,
-				metricGroup: `${STATS_ROLLUP_METRIC_GROUP}:${window}`,
-				metrics: payload,
-			});
-			written++;
-		}
-
-		appLogger.debug("Flushed crawler stats rollup", {
-			component: "crawler-stats",
-			bucketTime: bucketTime.toString(),
-			rows: written,
+	flush(at = this.now()): Promise<number> {
+		const persist = () => this.persist(at);
+		const pending = this.flushing ? this.flushing.then(persist, persist) : persist();
+		const result = pending.finally(() => {
+			if (this.flushing === result) this.flushing = undefined;
 		});
-
+		this.flushing = result;
+		return result;
+	}
+	private async persist(at: number): Promise<number> {
+		if (!this.rollup) return 0;
+		this.heartbeat(at);
+		if (this.overviewDeps.queueCounts && this.overviewDeps.countOverdue) {
+			try {
+				const [queues, tracking] = await Promise.all([
+					this.overviewDeps.queueCounts(),
+					this.overviewDeps.countOverdue(toInstant(new Date(at))),
+				]);
+				this.bucket(at).gauges = {
+					sampledAt: at,
+					waiting: queues.reduce((n, q) => n + q.waiting, 0),
+					active: queues.reduce((n, q) => n + q.active, 0),
+					overdue: tracking.overdueCount,
+				};
+			} catch (error) {
+				appLogger.warn("Queue and tracking gauges could not be sampled", { error });
+			}
+		}
+		let written = 0;
+		for (const time of [...this.dirty]) {
+			const bucket = this.buckets.get(time);
+			if (!bucket) continue;
+			this.dirty.delete(time);
+			try {
+				await this.rollup.saveRollup({
+					sourceId: this.sourceId,
+					bucketTime: toInstant(new Date(time)),
+					metricGroup: "crawler:minute",
+					metrics: structuredClone(bucket),
+				});
+				written++;
+			} catch (error) {
+				this.dirty.add(time);
+				throw error;
+			}
+		}
 		return written;
 	}
-
-	startPeriodicFlush(intervalMs = 60_000): void {
+	startPeriodicFlush(intervalMs = MINUTE_MS): void {
 		if (this.flushTimer || !this.rollup) return;
 		this.flushTimer = setInterval(() => {
-			void this.flush().catch((error) => {
-				appLogger.warn("Periodic crawler stats flush failed", {
-					component: "crawler-stats",
-					error: error instanceof Error ? error.message : String(error),
-				});
-			});
+			void this.flush().catch((error) =>
+				appLogger.error("Crawler metrics persistence failed", { error })
+			);
 		}, intervalMs);
-		appLogger.info("Crawler stats periodic flush started", {
-			component: "crawler-stats",
-			intervalMs,
-		});
 	}
-
 	stopPeriodicFlush(): void {
-		if (!this.flushTimer) return;
-		clearInterval(this.flushTimer);
+		if (this.flushTimer) clearInterval(this.flushTimer);
 		this.flushTimer = undefined;
-	}
-
-	/** Historical series for the admin console charts. */
-	async getHistory(
-		window: StatsWindow,
-		since: Date,
-		limit = 240
-	): Promise<Array<{ bucketTime: string; metrics: StatsRollupMetrics | null }>> {
-		if (!this.rollup) return [];
-		const rows = await this.rollup.listRollup(
-			`${STATS_ROLLUP_METRIC_GROUP}:${window}`,
-			toInstant(since),
-			10080
-		);
-		const sampled =
-			rows.length <= limit
-				? rows
-				: Array.from(
-						{ length: limit },
-						(_, index) => rows[Math.round((index * (rows.length - 1)) / (limit - 1))]
-					).filter((row) => row !== undefined);
-		return sampled.map((row) => ({
-			bucketTime: row.bucketTime.toString(),
-			metrics: row.metrics,
-		}));
-	}
-
-	private bucket(nowMs = this.now()): Bucket {
-		const slot = Math.floor(nowMs / BUCKET_MS);
-		const start = slot * BUCKET_MS;
-		const index = ((slot % MAX_BUCKETS) + MAX_BUCKETS) % MAX_BUCKETS;
-		const existing = this.buckets[index];
-		if (existing && existing.start === start) return existing;
-
-		const created = createBucket(start);
-		this.buckets[index] = created;
-		return created;
-	}
-
-	private incrementCounter(counter: StatsCounter, count: number): void {
-		if (count === 0) return;
-		this.bucket().counters[counter] += count;
-	}
-
-	private observeLatency(kind: StatsLatencyKind, latencyMs: number): void {
-		const bucket = this.bucket();
-		bucket.latency[kind][latencyBucketIndex(latencyMs)] += 1;
 	}
 }

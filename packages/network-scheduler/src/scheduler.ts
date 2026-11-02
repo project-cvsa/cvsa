@@ -182,6 +182,7 @@ export class NetworkScheduler implements NetworkDelegate {
 					request,
 					adapterId: candidate.config.id,
 					adapterType: candidate.config.type,
+					retry: attempts > 1,
 				}) ?? this.createDefaultAttemptObserver();
 
 			let response: NetworkResponse;

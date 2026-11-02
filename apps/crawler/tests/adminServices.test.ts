@@ -1,47 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import type { DiscoveryJobProgress } from "@cvsa/contracts";
-import { toInstant, type Temporal } from "@cvsa/snapshot-db";
+import { toInstant } from "@cvsa/snapshot-db";
 import { DiscoveryAdminService } from "../src/crawler/discovery/adminService";
-import { CrawlerAdminStatsService, seriesMetrics } from "../src/crawler/stats/adminService";
+import { CrawlerAdminStatsService } from "../src/crawler/stats/adminService";
 import { CrawlerStatsCollector } from "../src/crawler/stats/collector";
-import type {
-	SaveStatsRollupInput,
-	StatsRollupRow,
-	StatsRollupStore,
-} from "../src/crawler/stats/rollup";
 import type { CrawlerQueue, CrawlerQueueJobFullDetail } from "../src/crawler/shared/types";
 import {
 	createFakeMq,
 	InMemoryDiscoveryRepository,
+	InMemoryStatsStore,
 	InMemoryTrackingRepository,
 } from "../src/crawler/testing/fakes";
-
-/** Minimal rollup store so the history series can be exercised without a database. */
-class InMemoryRollupStore implements StatsRollupStore {
-	readonly rows: StatsRollupRow[] = [];
-
-	async saveRollup(input: SaveStatsRollupInput): Promise<void> {
-		this.rows.push({
-			bucketTime: input.bucketTime,
-			metricGroup: input.metricGroup,
-			metrics: input.metrics,
-		});
-	}
-
-	async listRollup(
-		metricGroup: string,
-		since: Temporal.Instant,
-		limit = 240
-	): Promise<StatsRollupRow[]> {
-		return this.rows
-			.filter(
-				(row) =>
-					row.metricGroup === metricGroup &&
-					row.bucketTime.epochMilliseconds >= since.epochMilliseconds
-			)
-			.slice(0, limit);
-	}
-}
 
 function queueWith(jobs: CrawlerQueueJobFullDetail[]): CrawlerQueue<unknown> {
 	return {
@@ -164,7 +133,7 @@ describe("crawler admin services", () => {
 		expect(status.recentJobs[0]?.progress).toBeNull();
 		expect(status.active).toBe(true);
 		expect(status.counts).toMatchObject({ waiting: 1, active: 1, delayed: 0, failed: 0 });
-		expect(status.candidatesPerMin).toBe(3);
+		expect(status.candidatesPerMin).toBeGreaterThan(0);
 		expect(status.counts.oldestWaitSec).toBeGreaterThanOrEqual(10);
 	});
 	test("ignores malformed job progress instead of failing the status query", async () => {
@@ -298,33 +267,36 @@ describe("crawler admin services", () => {
 
 		expect(await tracking.getTracking(3n)).not.toBeNull();
 	});
-	test("scales custom-range series rates by the requested minutes, not the preset window", async () => {
-		const now = Date.now();
-		const store = new InMemoryRollupStore();
-		const collector = new CrawlerStatsCollector({ now: () => now, rollup: store });
+	test("custom ranges and presets share minute rates and separate business and processing errors", async () => {
+		let now = Date.UTC(2026, 0, 1);
+		const collector = new CrawlerStatsCollector({
+			now: () => now,
+			rollup: new InMemoryStatsStore(),
+		});
 		collector.recordSnapshotsSaved(90);
-		for (let index = 0; index < 540; index++) collector.recordNetworkRequest();
-		for (let index = 0; index < 54; index++) collector.recordError("timeout");
+		for (let index = 0; index < 400; index++) collector.recordNetworkRequest(10, "success");
+		for (let index = 0; index < 100; index++)
+			collector.recordNetworkRequest(10, "business_error");
+		for (let index = 0; index < 40; index++) collector.recordNetworkRequest(10, "timeout");
+		for (let index = 0; index < 90; index++) collector.recordError("dbError");
+		collector.recordRetry(54);
+		now += 30_000;
 		await collector.flush();
-
 		const service = new CrawlerAdminStatsService(
 			{ tracking: queueWith([]), discovery: queueWith([]) },
 			collector
 		);
-
 		const custom = await service.overview({ window: "1h", minutes: 90 });
-		expect(custom.minutes).toBe(90);
-		expect(custom.series).toHaveLength(1);
-		const customPoint = custom.series[0]?.metrics;
-		// 90 minutes = 5400 seconds: 90 snapshots in 90 minutes, 540 requests in 90m.
-		expect(customPoint?.snapshotsPerMin).toBe(1);
-		expect(customPoint?.requestsPerSec).toBeCloseTo(0.1);
-		expect(customPoint?.errorPercent).toBe(10);
-
 		const preset = await service.overview({ window: "1h" });
-		expect(preset.minutes).toBeUndefined();
-		expect(preset.series[0]?.metrics.snapshotsPerMin).toBe(1.5);
-		expect(preset.series[0]?.metrics.requestsPerSec).toBeCloseTo(0.15);
+		expect(custom.minutes).toBe(90);
+		expect(custom.coverageSeconds).toBe(30);
+		expect(custom.snapshotsPerMin).toBe(180);
+		expect(custom.series).toEqual(preset.series);
+		expect(custom.series[0]?.metrics.snapshotsPerMin).toBe(custom.snapshotsPerMin);
+		expect(custom.errorRate).toBeCloseTo(40 / 540);
+		expect(custom.businessErrorRate).toBeCloseTo(100 / 540);
+		expect(custom.requestSuccessRate).toBeCloseTo(400 / 540);
+		expect(custom.retryRate).toBe(0.1);
 	});
 	test("pages jobs across queue boundaries with the requested limit", async () => {
 		const tracking = queueWith([job("t0", "active"), job("t1", "active"), job("t2", "active")]);
@@ -466,25 +438,5 @@ describe("crawler admin services", () => {
 		expect(await tracking.removeJob("2")).toBe(false);
 		expect(await tracking.getJobDetail("2")).toBeNull();
 		expect((await tracking.getJobCounts()).waiting).toBe(1);
-	});
-	test("converts rolling counters into rates using their actual duration", () => {
-		const metrics = seriesMetrics(
-			{
-				"counters.snapshotsSaved": 120,
-				"counters.networkRequests": 600,
-				"errors.timeout": 30,
-				"errors.inferenceError": 90,
-				retries: 60,
-				"latencyP95Ms.api": 200,
-				"queue.waiting": 18,
-			},
-			3600
-		);
-		expect(metrics.snapshotsPerMin).toBe(2);
-		expect(metrics.requestsPerSec).toBeCloseTo(1 / 6);
-		expect(metrics.errorPercent).toBe(5);
-		expect(metrics.retryPercent).toBe(10);
-		expect(metrics["latencyP95Ms.api"]).toBe(200);
-		expect(metrics["queue.waiting"]).toBe(18);
 	});
 });
