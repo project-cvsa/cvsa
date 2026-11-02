@@ -20,3 +20,14 @@ export const crawlerStatsRollup = pgTable(
 
 export type CrawlerStatsRollup = typeof crawlerStatsRollup.$inferSelect;
 export type CrawlerStatsRollupInsert = typeof crawlerStatsRollup.$inferInsert;
+
+export const crawlerStatsMinute = pgTable(
+	"crawler_stats_minute",
+	{
+		bucketTime: temporalInstant("bucket_time").notNull(),
+		sourceId: text("source_id").notNull(),
+		metrics: json("metrics").notNull(),
+	},
+	(table) => [primaryKey({ columns: [table.bucketTime, table.sourceId] })]
+);
+export type CrawlerStatsMinute = typeof crawlerStatsMinute.$inferSelect;

@@ -1,48 +1,18 @@
+import { eq } from "drizzle-orm";
+import { createSnapshotDb, crawlerStatsMinute, videoSnapshot } from "@cvsa/snapshot-db";
+import { CrawlerStatsRepository } from "../src/crawler/stats/rollup";
+import { SnapshotRepository } from "../src/crawler/snapshot/repository";
+import { emptyMinute } from "../src/crawler/stats/aggregation";
+import type { SaveStatsRollupInput } from "../src/crawler/stats/rollup";
 import { describe, expect, test } from "bun:test";
-import { toInstant, type Temporal } from "@cvsa/snapshot-db";
-import type { CrawlerJobCounts } from "../src/crawler/shared/types";
+import { toInstant } from "@cvsa/snapshot-db";
+import type { StatsQueueCounts } from "../src/crawler/stats/types";
 import { CrawlerStatsCollector } from "../src/crawler/stats/collector";
-import type {
-	SaveStatsRollupInput,
-	StatsRollupRow,
-	StatsRollupStore,
-} from "../src/crawler/stats/rollup";
-import { InMemoryTrackingRepository, createTrackingRow } from "../src/crawler/testing/fakes";
-
-class FakeRollupStore implements StatsRollupStore {
-	readonly rows: Array<{
-		metricGroup: string;
-		bucketTime: Temporal.Instant;
-		input: SaveStatsRollupInput;
-	}> = [];
-
-	async saveRollup(input: SaveStatsRollupInput): Promise<void> {
-		this.rows.push({
-			metricGroup: input.metricGroup,
-			bucketTime: input.bucketTime,
-			input,
-		});
-	}
-
-	async listRollup(
-		metricGroup: string,
-		since: Temporal.Instant,
-		limit = 240
-	): Promise<StatsRollupRow[]> {
-		return this.rows
-			.filter(
-				(row) =>
-					row.metricGroup === metricGroup &&
-					row.bucketTime.epochMilliseconds >= since.epochMilliseconds
-			)
-			.slice(0, limit)
-			.map((row) => ({
-				bucketTime: row.bucketTime,
-				metricGroup: row.metricGroup,
-				metrics: row.input.metrics,
-			}));
-	}
-}
+import {
+	InMemoryTrackingRepository,
+	createTrackingRow,
+	InMemoryStatsStore,
+} from "../src/crawler/testing/fakes";
 
 /** Collector pinned to a controllable clock. */
 function createCollector(start = Date.UTC(2026, 0, 1, 0, 0, 0)) {
@@ -75,7 +45,7 @@ describe("CrawlerStatsCollector", () => {
 		collector.recordRetry();
 
 		const stats = collector.getWindow("5m");
-		expect(stats.counters).toEqual({
+		expect(stats.counters).toMatchObject({
 			jobsCompleted: 3,
 			snapshotsSaved: 3,
 			videosDiscovered: 2,
@@ -172,11 +142,11 @@ describe("CrawlerStatsCollector", () => {
 		const collector = new CrawlerStatsCollector({
 			now: () => now.getTime(),
 			overview: {
-				async queueCounts(): Promise<CrawlerJobCounts[]> {
-					return [
-						{ waiting: 5, active: 2, delayed: 1, failed: 3, completed: 10 },
-						{ waiting: 1, active: 1, delayed: 0, failed: 0, completed: 4 },
-					];
+				async queueCounts(): Promise<StatsQueueCounts> {
+					return {
+						tracking: { waiting: 5, active: 2, delayed: 1, failed: 3, completed: 10 },
+						discovery: { waiting: 1, active: 1, delayed: 0, failed: 0, completed: 4 },
+					};
 				},
 				countOverdue: (instant) => tracking.countOverdueVideos(instant),
 			},
@@ -198,63 +168,252 @@ describe("CrawlerStatsCollector", () => {
 		expect(overview.tracking.maxOverdueLagSec).toBe(120);
 	});
 
-	test("survives a failing queue probe", async () => {
+	test("surfaces unavailable live dependencies", async () => {
 		const collector = new CrawlerStatsCollector({
 			overview: {
 				async queueCounts() {
 					throw new Error("redis down");
 				},
+			},
+		});
+		await expect(collector.getOverviewStats("5m")).rejects.toThrow("redis down");
+	});
+
+	test("repeated writes replace a process minute and reads combine persisted and live counts once", async () => {
+		const store = new InMemoryStatsStore();
+		let now = Date.UTC(2026, 0, 1);
+		const collector = new CrawlerStatsCollector({ now: () => now, rollup: store });
+		collector.recordSnapshotsSaved(4);
+		now += 30_000;
+		expect(await collector.flush()).toBe(1);
+		collector.recordSnapshotsSaved(3);
+		await collector.flush();
+		const report = await collector.getReport("5m");
+		expect(store.rows.size).toBe(1);
+		expect(report.metrics.counters.snapshotsSaved).toBe(7);
+		expect(report.series[0]?.metrics.snapshotsPerMin).toBe(14);
+	});
+
+	test("retains other processes and restart history without duplicating overlapping minutes", async () => {
+		const store = new InMemoryStatsStore();
+		const start = Date.UTC(2026, 0, 1);
+		let now = start;
+		const first = new CrawlerStatsCollector({ now: () => now, rollup: store });
+		const second = new CrawlerStatsCollector({ now: () => now, rollup: store });
+		first.recordSnapshotsSaved(3);
+		second.recordSnapshotsSaved(4);
+		now += 60_000;
+		await Promise.all([first.flush(), second.flush()]);
+		const restarted = new CrawlerStatsCollector({ now: () => now, rollup: store });
+		restarted.recordSnapshotsSaved(5);
+		now += 30_000;
+		const report = await restarted.getReport("1h");
+		expect(report.metrics.counters.snapshotsSaved).toBe(12);
+		expect(report.metrics.from).toBe(start);
+		expect(report.metrics.to).toBe(now);
+		expect(report.series.map((point) => point.metrics["counters.snapshotsSaved"])).toEqual([
+			7, 5,
+		]);
+	});
+
+	test("retries failed persistence without losing events recorded after the failure", async () => {
+		const store = new InMemoryStatsStore();
+		const collector = new CrawlerStatsCollector({ rollup: store });
+		collector.recordSnapshotsSaved(2);
+		store.saveError = new Error("write failed");
+		await expect(collector.flush()).rejects.toThrow("write failed");
+		collector.recordSnapshotsSaved(3);
+		store.saveError = undefined;
+		await collector.flush();
+		expect((await collector.getReport("5m")).metrics.counters.snapshotsSaved).toBe(5);
+	});
+
+	test("merges latency sample counts across persisted minutes before calculating P95", async () => {
+		const store = new InMemoryStatsStore();
+		let now = Date.UTC(2026, 0, 1);
+		const collector = new CrawlerStatsCollector({ now: () => now, rollup: store });
+		for (let i = 0; i < 99; i++) collector.recordTask(5);
+		now += 60_000;
+		await collector.flush();
+		const restarted = new CrawlerStatsCollector({ now: () => now, rollup: store });
+		restarted.recordTask(90_000);
+		expect((await restarted.getReport("1h")).metrics.latencyP95Ms.task).toBe(5);
+	});
+
+	test("resampling keeps every event and computes each point using its own duration", async () => {
+		let now = Date.UTC(2026, 0, 1);
+		const collector = new CrawlerStatsCollector({ now: () => now });
+		for (let i = 0; i < 300; i++) {
+			collector.recordSnapshotsSaved(2);
+			now += 60_000;
+		}
+		const report = await collector.getReport("6h");
+		expect(report.series.length).toBeLessThanOrEqual(240);
+		expect(
+			report.series.reduce(
+				(sum, point) => sum + (point.metrics["counters.snapshotsSaved"] ?? 0),
+				0
+			)
+		).toBe(600);
+		expect(report.metrics.counters.snapshotsSaved).toBe(600);
+		expect(report.series[0]?.metrics.snapshotsPerMin).toBe(2);
+	});
+
+	test("uses exactly the selected minute buckets at a window boundary", () => {
+		const { collector, advance } = createCollector();
+		collector.recordSnapshotsSaved(10);
+		advance(5 * 60_000);
+		collector.recordSnapshotsSaved(1);
+		expect(collector.getWindow("5m").counters.snapshotsSaved).toBe(1);
+		expect(collector.getWindow("15m").counters.snapshotsSaved).toBe(11);
+	});
+	test("serializes overlapping flushes and saves measurements received during a write", async () => {
+		const entered = Promise.withResolvers<void>();
+		const release = Promise.withResolvers<void>();
+		class BlockingStore extends InMemoryStatsStore {
+			private block = true;
+			override async saveRollup(input: SaveStatsRollupInput): Promise<void> {
+				if (this.block) {
+					this.block = false;
+					entered.resolve();
+					await release.promise;
+				}
+				await super.saveRollup(input);
+			}
+		}
+		const store = new BlockingStore();
+		const collector = new CrawlerStatsCollector({ rollup: store });
+		collector.recordSnapshotsSaved(2);
+		const first = collector.flush();
+		await entered.promise;
+		collector.recordSnapshotsSaved(3);
+		const second = collector.flush();
+		release.resolve();
+		await Promise.all([first, second]);
+		const restarted = new CrawlerStatsCollector({ rollup: store });
+		expect((await restarted.getReport("5m")).metrics.counters.snapshotsSaved).toBe(5);
+	});
+
+	test("reports the observed maximum for latency samples beyond the histogram bounds", () => {
+		const { collector } = createCollector();
+		collector.recordTask(900_000);
+		expect(collector.getWindow("5m").latencyP95Ms.task).toBe(900_000);
+	});
+
+	test("takes the latest queue gauge across processes instead of adding shared queue depths", async () => {
+		let now = Date.UTC(2026, 0, 1);
+		const store = new InMemoryStatsStore();
+		let waiting = 7;
+		const overview = {
+			async queueCounts() {
+				return {
+					tracking: { waiting, active: 2, delayed: 0, failed: 0, completed: 0 },
+					discovery: { waiting: 0, active: 0, delayed: 0, failed: 0, completed: 0 },
+				};
+			},
+			async countOverdue() {
+				return { overdueCount: 5, maxOverdueLagSec: 30 };
+			},
+		};
+		const first = new CrawlerStatsCollector({ now: () => now, rollup: store, overview });
+		await first.flush();
+		now += 15_000;
+		waiting = 4;
+		const second = new CrawlerStatsCollector({ now: () => now, rollup: store, overview });
+		await second.flush();
+		const report = await first.getReport("5m");
+		expect(report.series[0]?.metrics["queue.waiting"]).toBe(4);
+		expect(report.series[0]?.metrics["queue.active"]).toBe(2);
+	});
+	test("persists counts when live queue gauges are unavailable", async () => {
+		const store = new InMemoryStatsStore();
+		const collector = new CrawlerStatsCollector({
+			rollup: store,
+			overview: {
+				async queueCounts() {
+					throw new Error("queue unavailable");
+				},
 				async countOverdue() {
-					throw new Error("db down");
+					return { overdueCount: 1, maxOverdueLagSec: 5 };
 				},
 			},
 		});
-		const overview = await collector.getOverviewStats("5m");
-		expect(overview.queue.inFlight).toBe(0);
-		expect(overview.tracking).toEqual({ overdueCount: 0, maxOverdueLagSec: 0 });
+		collector.recordSnapshotsSaved(3);
+		await collector.flush();
+		const restarted = new CrawlerStatsCollector({ rollup: store });
+		expect((await restarted.getReport("5m")).metrics.counters.snapshotsSaved).toBe(3);
 	});
+});
 
-	test("flushes one rollup row per window, truncated to the minute", async () => {
-		const store = new FakeRollupStore();
-		const start = Date.UTC(2026, 0, 1, 0, 5, 37, 500);
-		let now = start;
-		const collector = new CrawlerStatsCollector({ now: () => now, rollup: store });
-
-		collector.recordJobCompleted(4);
-		now = start + 1_000;
-		const written = await collector.flush();
-
-		expect(written).toBe(7);
-		expect(store.rows.map((row) => row.metricGroup)).toEqual([
-			"crawler:5m",
-			"crawler:15m",
-			"crawler:30m",
-			"crawler:1h",
-			"crawler:6h",
-			"crawler:24h",
-			"crawler:7d",
-		]);
-		for (const row of store.rows) {
-			expect(row.bucketTime.epochMilliseconds).toBe(Date.UTC(2026, 0, 1, 0, 5, 0, 0));
+describe("crawler metrics persistence", () => {
+	test("replaces one source minute, retains other sources and counts only inserted video stats", async () => {
+		const db = createSnapshotDb();
+		const store = new CrawlerStatsRepository(db.client);
+		const sourceId = crypto.randomUUID();
+		const otherSourceId = crypto.randomUUID();
+		const time = toInstant(new Date(Date.UTC(2070, 0, 1)));
+		const aid = BigInt(`9${Date.now()}`);
+		try {
+			const metrics = emptyMinute(time.epochMilliseconds, time.epochMilliseconds + 30_000);
+			metrics.counters.snapshotsSaved = 3;
+			await store.saveRollup({
+				sourceId,
+				bucketTime: time,
+				metricGroup: "crawler:minute",
+				metrics,
+			});
+			metrics.counters.snapshotsSaved = 5;
+			await store.saveRollup({
+				sourceId,
+				bucketTime: time,
+				metricGroup: "crawler:minute",
+				metrics,
+			});
+			await store.saveRollup({
+				sourceId: otherSourceId,
+				bucketTime: time,
+				metricGroup: "crawler:minute",
+				metrics,
+			});
+			const rows = (await store.listRollup("crawler:minute", time)).filter(
+				(row) => row.sourceId === sourceId || row.sourceId === otherSourceId
+			);
+			expect(rows).toHaveLength(2);
+			expect(rows.reduce((sum, row) => sum + row.metrics.counters.snapshotsSaved, 0)).toBe(
+				10
+			);
+			const snapshots = new SnapshotRepository(db.client);
+			const input = {
+				aid,
+				capturedAt: time,
+				views: 3,
+				likes: 0,
+				coins: 0,
+				shares: 0,
+				favorites: 0,
+				danmakus: 0,
+				replies: 0,
+			};
+			expect(await snapshots.createSnapshots([input])).toBe(1);
+			expect(await snapshots.createSnapshots([input])).toBe(0);
+		} finally {
+			await db.client
+				.delete(crawlerStatsMinute)
+				.where(eq(crawlerStatsMinute.sourceId, sourceId));
+			await db.client
+				.delete(crawlerStatsMinute)
+				.where(eq(crawlerStatsMinute.sourceId, otherSourceId));
+			await db.client.delete(videoSnapshot).where(eq(videoSnapshot.aid, aid));
+			await db.disconnect();
 		}
-		expect(store.rows[0]?.input.metrics.counters.jobsCompleted).toBe(4);
 	});
-
-	test("reads the historical series back", async () => {
-		const store = new FakeRollupStore();
-		const start = Date.UTC(2026, 0, 1, 0, 0, 0);
-		let now = start;
-		const collector = new CrawlerStatsCollector({ now: () => now, rollup: store });
-
-		collector.recordSnapshotsSaved(1);
-		await collector.flush();
-		now = start + 60_000;
-		collector.recordJobCompleted(2);
-		await collector.flush();
-
-		const history = await collector.getHistory("5m", new Date(start));
-		expect(history).toHaveLength(2);
-		expect(history[0]?.bucketTime).toBe(toInstant(new Date(start)).toString());
-		expect(history[1]?.metrics?.counters.jobsCompleted).toBe(2);
+	test("records failed repository operations and preserves their errors", async () => {
+		const db = createSnapshotDb();
+		await db.connect();
+		await db.disconnect();
+		const stats = new CrawlerStatsCollector();
+		const repository = new SnapshotRepository(db.client, stats);
+		await expect(repository.getRecentSnapshots(1n)).rejects.toThrow();
+		expect((await stats.getReport("5m")).metrics.errors.dbError).toBe(1);
 	});
 });

@@ -76,18 +76,21 @@ export class NetworkScheduler implements NetworkDelegate {
 	private syncStatistics(config: NetworkRuntimeConfig): void {
 		const ids = new Set(config.adapters.map((adapter) => adapter.id));
 		for (const id of this.statistics.keys()) {
-			if (!ids.has(id)) this.statistics.delete(id);
+			if (!ids.has(id)) {
+				this.statistics.delete(id);
+			}
 		}
 		for (const id of ids) {
-			if (!this.statistics.has(id)) {
-				this.statistics.set(id, {
-					requests: 0,
-					failures: 0,
-					rateLimited: 0,
-					durationMs: 0,
-					durationSamples: 0,
-				});
+			if (this.statistics.has(id)) {
+				continue;
 			}
+			this.statistics.set(id, {
+				requests: 0,
+				failures: 0,
+				rateLimited: 0,
+				durationMs: 0,
+				durationSamples: 0,
+			});
 		}
 	}
 
@@ -116,11 +119,23 @@ export class NetworkScheduler implements NetworkDelegate {
 	public async execute(request: NetworkRequest): Promise<NetworkResponse> {
 		return this.tracer.traceTask("crawler.network.delegate", async () => {
 			request.signal?.throwIfAborted();
-			return this.executeScheduled(request);
+			let attempts = 0;
+			try {
+				return await this.executeScheduled(request, () => {
+					attempts++;
+				});
+			} finally {
+				this.metrics.scheduleAttempts.record(attempts, {
+					requestType: request.requestType ?? "default",
+				});
+			}
 		});
 	}
 
-	private async executeScheduled(request: NetworkRequest): Promise<NetworkResponse> {
+	private async executeScheduled(
+		request: NetworkRequest,
+		attemptStarted: () => void
+	): Promise<NetworkResponse> {
 		const requestType = request.requestType;
 		const binding = requestType
 			? this.config.bindings?.find((item) => item.requestType === requestType)
@@ -176,17 +191,27 @@ export class NetworkScheduler implements NetworkDelegate {
 				continue;
 			}
 
-			attempts += 1;
 			const observer =
 				this.metrics.createAttemptObserver?.({
 					request,
 					adapterId: candidate.config.id,
 					adapterType: candidate.config.type,
+					retry: attempts > 0,
 				}) ?? this.createDefaultAttemptObserver();
 
 			let response: NetworkResponse;
 			try {
-				response = await candidate.adapter.execute(request, observer);
+				let started = false;
+				response = await candidate.adapter.execute(request, {
+					started() {
+						if (started) return;
+						started = true;
+						attempts++;
+						attemptStarted();
+						observer.started();
+					},
+					completed: (result) => observer.completed(result),
+				});
 			} catch (error) {
 				if (request.signal?.aborted) throw error;
 				response = {

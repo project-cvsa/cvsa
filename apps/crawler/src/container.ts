@@ -1,3 +1,4 @@
+import { createStatsMetrics } from "./crawler/stats/telemetry";
 import { assertTaskActive } from "./crawler/shared/taskContext";
 import { AdapterProbeService } from "./crawler/network/adapterProbeService";
 import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
@@ -33,7 +34,7 @@ import {
 	TrackingRepository,
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
-import { initOtelSdk } from "@cvsa/observability";
+import { crawlerObservability } from "./observability";
 import { and, asc, isNotNull, lte } from "drizzle-orm";
 import { createSnapshotDb, type VideoTracking, videoTracking } from "@cvsa/snapshot-db";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
@@ -44,9 +45,29 @@ export const crawlerMq = createCrawlerMq(
 	crawlerEnv.NODE_ENV === "test" ? `cvsa-test-${process.pid}` : "bull"
 );
 
-export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client);
-export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client);
-export const discoveryRepository = new DiscoveryRepository(crawlerSnapshotDb.client);
+export const statsCollector = new CrawlerStatsCollector({
+	metrics: createStatsMetrics(),
+	overview: {
+		async queueCounts() {
+			const [snapshot, discovery] = await Promise.all([
+				snapshotQueue.getJobCounts(),
+				discoveryQueue.getJobCounts(),
+			]);
+			return { tracking: snapshot, discovery };
+		},
+		countOverdue(now) {
+			return trackingRepository.countOverdueVideos(now);
+		},
+	},
+	rollup: new CrawlerStatsRepository(crawlerSnapshotDb.client),
+});
+
+export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client, statsCollector);
+export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client, statsCollector);
+export const discoveryRepository = new DiscoveryRepository(
+	crawlerSnapshotDb.client,
+	statsCollector
+);
 
 export const snapshotQueue = crawlerMq.createQueue<SnapshotBatchJobData>(SNAPSHOT_BATCH_QUEUE);
 export const manualSnapshotService = new ManualSnapshotService(
@@ -55,28 +76,6 @@ export const manualSnapshotService = new ManualSnapshotService(
 	discoveryRepository
 );
 export const discoveryQueue = createDiscoveryQueue(crawlerMq);
-
-/**
- * Sliding-window stats + the `crawler_stats_rollup` history.
- *
- * Queue depth and the tracking backlog are pulled lazily by the overview
- * endpoint, so the collector itself stays a pure in-memory counter.
- */
-export const statsCollector = new CrawlerStatsCollector({
-	overview: {
-		async queueCounts() {
-			const [snapshot, discovery] = await Promise.all([
-				snapshotQueue.getJobCounts(),
-				discoveryQueue.getJobCounts(),
-			]);
-			return [snapshot, discovery];
-		},
-		countOverdue(now) {
-			return trackingRepository.countOverdueVideos(now);
-		},
-	},
-	rollup: new CrawlerStatsRepository(crawlerSnapshotDb.client),
-});
 
 export const networkRuntimeConfigRepository = new NetworkRuntimeConfigRepository(
 	crawlerSnapshotDb.client
@@ -93,8 +92,9 @@ export const networkRuntime = new NetworkRuntimeConfigManager(
 	{
 		// Every HTTP attempt lands in both OTel and the sliding-window counters.
 		metrics: createNetworkMetrics({
-			onRequestFinished(latencyMs, outcome) {
-				statsCollector.recordNetworkRequest(latencyMs, outcome);
+			onRequestFinishedWithAttributes(latencyMs, outcome, attributes) {
+				statsCollector.recordNetworkRequest(latencyMs, outcome, attributes);
+				if (attributes.retry === 1) statsCollector.recordRetry();
 			},
 		}),
 	}
@@ -148,6 +148,7 @@ export const discoveryFilterService = new DiscoveryFilterService(
  * is terminated on deadline or cancellation and restarted for subsequent work.
  */
 export const videoClassifierClient = new VideoClassifierClient({
+	stats: statsCollector,
 	timeoutMs: () => networkRuntime.getExecutionConfig().inferenceTimeoutMs,
 });
 
@@ -211,32 +212,31 @@ networkRuntime.onExecutionChange((config) => {
 	trackingDispatcher.configure(config.queueCap);
 });
 
-let otelSdk: Awaited<ReturnType<typeof initOtelSdk>> | undefined;
-
 const baseCrawlerRuntime = createCrawlerRuntime({
 	mq: crawlerMq,
 	snapshotDb: crawlerSnapshotDb,
 	metrics: createCrawlerMetrics(),
-	networkRuntime,
+	networkRuntime: {
+		load: () => networkRuntime.load(),
+		startPolling: () => networkRuntime.startPolling(),
+		stopPolling: () => networkRuntime.stopPolling(),
+		async close() {
+			try {
+				await metadataRefreshScheduler.close();
+			} finally {
+				await bilibiliClient.stop();
+				videoClassifierClient.close();
+				await networkRuntime.close();
+			}
+		},
+	},
 	dispatcher: trackingDispatcher,
 	worker: snapshotBatchWorker,
 	discoveryWorker,
 	discoveryScheduler,
 	discoveryFilter: discoveryFilterService,
 	statsCollector,
-	observability: {
-		async init(): Promise<void> {
-			otelSdk = await initOtelSdk({
-				serviceName: crawlerEnv.OTEL_SERVICE_NAME,
-				serviceVersion: crawlerEnv.OTEL_SERVICE_VERSION,
-				nodeEnv: crawlerEnv.NODE_ENV,
-				otlpEndpoint: crawlerEnv.OTEL_EXPORTER_OTLP_ENDPOINT,
-			});
-		},
-		async shutdown(): Promise<void> {
-			if (otelSdk) await otelSdk.shutdown();
-		},
-	},
+	observability: crawlerObservability,
 });
 
 /**
@@ -254,7 +254,5 @@ export const crawlerRuntime = {
 	async shutdown(): Promise<void> {
 		metadataRefreshScheduler.stop();
 		await baseCrawlerRuntime.shutdown();
-		await bilibiliClient.stop();
-		videoClassifierClient.close();
 	},
 };

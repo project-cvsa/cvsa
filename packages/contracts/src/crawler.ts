@@ -1,3 +1,9 @@
+import {
+	CrawlerStatsCountersSchema,
+	CrawlerStatsErrorsSchema,
+	CrawlerMinuteMetricsSchema,
+	CrawlerNetworkTotalsSchema,
+} from "./crawlerStats";
 import { z } from "zod";
 
 export const VideoTrackingDtoSchema = z.object({
@@ -497,7 +503,6 @@ export const CrawlerExecutionConfigSchema = z.object({
 	throttleCooldownMs: z.number().int().min(100).max(3600000).default(5000),
 	throttleJitterMs: z.number().int().min(0).max(60000).default(5000),
 	queueCap: z.number().int().min(1).max(10000).default(200),
-	maxAdapterAttempts: z.number().int().min(1).max(10).default(3),
 	probeWaitMs: z.number().int().min(10).max(5000).default(100),
 	probeRetryMs: z.number().int().min(100).max(60000).default(1000),
 	probeRetries: z.number().int().min(0).max(5).default(1),
@@ -772,18 +777,7 @@ export const CrawlerStatsRollupPointSchema = z.object({
 	metrics: z.record(z.string(), z.number()),
 });
 
-export const CrawlerStatsErrorBreakdownSchema = z.object({
-	timeout: z.number().int().nonnegative(),
-	networkFailure: z.number().int().nonnegative().optional(),
-	httpFailure: z.number().int().nonnegative().optional(),
-	networkOther: z.number().int().nonnegative().optional(),
-	adapterUnavailable: z.number().int().nonnegative().optional(),
-	rateLimited412Or429: z.number().int().nonnegative(),
-	bilibiliBusinessError: z.number().int().nonnegative(),
-	inferenceError: z.number().int().nonnegative(),
-	dbError: z.number().int().nonnegative(),
-	other: z.number().int().nonnegative(),
-});
+export const CrawlerStatsErrorBreakdownSchema = CrawlerStatsErrorsSchema;
 
 export const CrawlerQueueSnapshotSchema = z.object({
 	waiting: z.number().int().nonnegative(),
@@ -847,6 +841,16 @@ export const CrawlerLatencyStatsSchema = z.object({
 export const CrawlerOverviewStatsSchema = z.object({
 	window: CrawlerStatsWindowSchema,
 	minutes: z.number().int().min(1).max(10080).optional(),
+	generatedAt: z.string(),
+	coverageFrom: z.string(),
+	coverageSeconds: z.number().nonnegative(),
+	counters: CrawlerStatsCountersSchema,
+	jobs: CrawlerMinuteMetricsSchema.shape.jobs,
+	network: z.record(z.string(), CrawlerNetworkTotalsSchema),
+	requestsPerMin: z.number().nonnegative(),
+	inferencesPerMin: z.number().nonnegative(),
+	businessErrorRate: z.number().nonnegative(),
+	requestSuccessRate: z.number().nonnegative(),
 	// Throughput
 	jobsPerSec: z.number().nonnegative(),
 	jobsPerMin: z.number().nonnegative(),

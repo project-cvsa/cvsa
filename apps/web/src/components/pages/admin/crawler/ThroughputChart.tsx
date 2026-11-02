@@ -1,19 +1,10 @@
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import type { CrawlerStatsRollupPoint } from "@cvsa/contracts";
+import { CRAWLER_CHART_METRICS, type CrawlerStatsRollupPoint } from "@cvsa/contracts";
 import Select from "@components/ui/Select";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { formatMetric } from "./format";
 
-const METRICS = [
-	{ key: "snapshotsPerMin", label: "snapshots", unit: "/min" },
-	{ key: "requestsPerSec", label: "requests", unit: "/s" },
-	{ key: "errorPercent", label: "errors", unit: "%" },
-	{ key: "retryPercent", label: "retries", unit: "%" },
-	{ key: "latencyP95Ms.api", label: "apiLatency", unit: "ms" },
-	{ key: "latencyP95Ms.task", label: "taskLatency", unit: "ms" },
-	{ key: "queue.waiting", label: "backlog", unit: "" },
-	{ key: "queue.active", label: "workers", unit: "" },
-];
+const METRICS = CRAWLER_CHART_METRICS;
 
 type PlotPoint = { time: number; value: number; x: number; y: number };
 
@@ -154,7 +145,7 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 						value={metric()}
 						options={METRICS.map((item) => ({
 							value: item.key,
-							label: `${t(`audit.chart.${item.label}`)} ${item.unit}`,
+							label: `${t(item.label)} ${item.unit}`,
 						}))}
 						onValueChange={(value) => {
 							if (value) setMetric(value);
@@ -176,7 +167,7 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 						maximum={maximum()}
 						points={coordinates()}
 						path={path()}
-						label={t(`audit.chart.${selected()?.label}`)}
+						label={t(selected()?.label ?? "overview.newSnapshots")}
 						unit={selected()?.unit ?? ""}
 					/>
 				</Show>

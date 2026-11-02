@@ -1,3 +1,4 @@
+import { derivedMetrics } from "../stats/aggregation";
 import {
 	AppError,
 	DiscoveryJobProgressSchema,
@@ -72,7 +73,8 @@ export class DiscoveryAdminService {
 			recentJobs: (filteredRecent.length > 0 ? filteredRecent : recent)
 				.sort((a, b) => (b.finishedOn ?? b.timestamp) - (a.finishedOn ?? a.timestamp))
 				.map(activity),
-			candidatesPerMin: this.stats.getWindow("5m").counters.candidatesScanned / 5,
+			candidatesPerMin: derivedMetrics((await this.stats.getReport("5m")).metrics)
+				.candidatesPerMin,
 		};
 	}
 

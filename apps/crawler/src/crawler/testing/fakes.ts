@@ -1,3 +1,4 @@
+import type { SaveStatsRollupInput, StatsRollupRow, StatsRollupStore } from "../stats/rollup";
 import type {
 	BilibiliVideoMetadata,
 	BilibiliVideoMetadataHistory,
@@ -776,5 +777,26 @@ export class InMemoryFilterConfigStore implements DiscoveryFilterConfigStore {
 		const next = { revision: (existing?.revision ?? 0) + 1, config };
 		this.entries.set(key, next);
 		return next;
+	}
+}
+
+export class InMemoryStatsStore implements StatsRollupStore {
+	readonly rows = new Map<string, StatsRollupRow>();
+	saveError?: Error;
+	async saveRollup(input: SaveStatsRollupInput): Promise<void> {
+		if (this.saveError) throw this.saveError;
+		this.rows.set(`${input.sourceId}:${input.bucketTime.epochMilliseconds}`, {
+			...input,
+			metrics: structuredClone(input.metrics),
+		});
+	}
+	async listRollup(metricGroup: string, since: Temporal.Instant): Promise<StatsRollupRow[]> {
+		return [...this.rows.values()]
+			.filter(
+				(row) =>
+					row.metricGroup === metricGroup &&
+					row.bucketTime.epochMilliseconds >= since.epochMilliseconds
+			)
+			.sort((a, b) => a.bucketTime.epochMilliseconds - b.bucketTime.epochMilliseconds);
 	}
 }

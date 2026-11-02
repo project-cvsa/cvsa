@@ -114,5 +114,6 @@ export interface CrawlerRuntimeDependencies {
 	statsCollector?: {
 		startPeriodicFlush(intervalMs?: number): void;
 		stopPeriodicFlush(): void;
+		flush?(): Promise<number>;
 	};
 }

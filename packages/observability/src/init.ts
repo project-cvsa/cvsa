@@ -1,3 +1,5 @@
+import { diag, DiagConsoleLogger, DiagLogLevel } from "@opentelemetry/api";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
 import { logs } from "@opentelemetry/api-logs";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { NodeSDK } from "@opentelemetry/sdk-node";
@@ -39,11 +41,13 @@ export async function initOtelSdk(options: OtelSdkOptions = {}): Promise<NodeSDK
 
 	const resource = resourceFromAttributes({
 		"service.name": options.serviceName ?? env.OTEL_SERVICE_NAME,
+		"service.instance.id": crypto.randomUUID(),
 		"service.version": options.serviceVersion ?? env.OTEL_SERVICE_VERSION,
 		"deployment.environment": options.nodeEnv ?? env.NODE_ENV ?? "development",
 	});
 
 	const endpoints = resolveOtlpSignalEndpoints(rawEndpoint);
+	if (endpoints.metrics) diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.ERROR);
 
 	const traceExporter = endpoints.traces
 		? new OTLPTraceExporter({ url: endpoints.traces })
@@ -64,9 +68,9 @@ export async function initOtelSdk(options: OtelSdkOptions = {}): Promise<NodeSDK
 
 	const sdk = new NodeSDK({
 		resource,
-		...(traceExporter ? { traceExporter } : {}),
-		...(metricReader ? { metricReader } : {}),
-		...(logRecordProcessor ? { logRecordProcessors: [logRecordProcessor] } : {}),
+		spanProcessors: traceExporter ? [new BatchSpanProcessor(traceExporter)] : [],
+		metricReaders: metricReader ? [metricReader] : [],
+		logRecordProcessors: logRecordProcessor ? [logRecordProcessor] : [],
 	});
 
 	sdk.start();

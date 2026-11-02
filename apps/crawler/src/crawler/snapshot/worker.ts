@@ -48,6 +48,7 @@ export function createSnapshotBatchWorker(
 			try {
 				const result = await snapshotService.processBatch(aids, job.data.leaseUntil);
 				if (result.status === "api_error") {
+					stats.recordJobOutcome("tracking", "failed");
 					appLogger.warn("Snapshot batch encountered API error", {
 						component: "snapshot-worker",
 						jobId: job.id,
@@ -56,7 +57,7 @@ export function createSnapshotBatchWorker(
 					return;
 				}
 
-				stats.recordJobCompleted();
+				stats.recordJobOutcome("tracking", "completed");
 				appLogger.info("Snapshot batch completed successfully", {
 					component: "snapshot-worker",
 					jobId: job.id,
@@ -66,6 +67,7 @@ export function createSnapshotBatchWorker(
 			} catch (error) {
 				const failureKind = snapshotFailureKind(error);
 				if (failureKind !== "other") {
+					stats.recordJobOutcome("tracking", "deferred");
 					await snapshotService.deferLeases(
 						aids,
 						error instanceof RetryLaterError ? error.delayMs : THROTTLE_RETRY_DELAY_MS,
@@ -94,6 +96,7 @@ export function createSnapshotBatchWorker(
 							error: leaseError,
 						});
 					});
+				stats.recordJobOutcome("tracking", "failed");
 				stats.recordError("other");
 				appLogger.warn("Snapshot batch returned to dispatcher after failure", {
 					component: "snapshot-worker",

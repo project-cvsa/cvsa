@@ -1,3 +1,4 @@
+import { traceTask } from "@cvsa/observability";
 import {
 	and,
 	asc,
@@ -35,7 +36,8 @@ import {
 	videoTracking,
 } from "@cvsa/snapshot-db";
 import { DiscoveryContextSchema } from "@cvsa/contracts";
-import { traceTask } from "@cvsa/observability";
+import { createDatabaseTracer } from "../stats/databaseMetrics";
+import type { StatsRecorder } from "../stats/types";
 import type { IDiscoveryRepository } from "./repository.interface";
 import type {
 	DiscoveryContext,
@@ -165,10 +167,16 @@ export function changeTypeForDiff(diff: MetadataFieldDiff): MetadataChangeType |
 const AID = bilibiliVideoMetadata.aid;
 
 export class DiscoveryRepository implements IDiscoveryRepository {
-	constructor(private readonly db: DatabaseClient) {}
+	private readonly trace;
+	constructor(
+		private readonly db: DatabaseClient,
+		stats?: StatsRecorder
+	) {
+		this.trace = createDatabaseTracer(stats);
+	}
 
 	async upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata> {
-		return traceTask("discovery.upsertMetadata", async () => {
+		return this.trace("discovery.upsertMetadata", async () => {
 			const db = activeTaskResource(this.db);
 			const [existing] = await db
 				.select()
@@ -309,7 +317,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	 */
 	async bulkUpsertMetadata(data: UpsertMetadataInput[]): Promise<void> {
 		if (data.length === 0) return;
-		await traceTask("discovery.bulkUpsertMetadata", async () => {
+		await this.trace("discovery.bulkUpsertMetadata", async () => {
 			const unique = new Map<bigint, UpsertMetadataInput>();
 			for (const item of data) {
 				if (!unique.has(item.aid)) unique.set(item.aid, item);
@@ -371,13 +379,13 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async deleteMetadata(aid: bigint): Promise<void> {
-		await traceTask("discovery.deleteMetadata", async () => {
+		await this.trace("discovery.deleteMetadata", async () => {
 			await activeTaskResource(this.db).delete(bilibiliVideoMetadata).where(eq(AID, aid));
 		});
 	}
 
 	async getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null> {
-		return traceTask("discovery.getMetadata", async () => {
+		return this.trace("discovery.getMetadata", async () => {
 			const [row] = await activeTaskResource(this.db)
 				.select()
 				.from(bilibiliVideoMetadata)
@@ -389,7 +397,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async getMetadatas(aids: bigint[]): Promise<BilibiliVideoMetadata[]> {
 		if (aids.length === 0) return [];
-		return traceTask("discovery.getMetadatas", () =>
+		return this.trace("discovery.getMetadatas", () =>
 			activeTaskResource(this.db)
 				.select()
 				.from(bilibiliVideoMetadata)
@@ -398,7 +406,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async getMetadataHistory(aid: bigint, limit = 100): Promise<BilibiliVideoMetadataHistory[]> {
-		return traceTask("discovery.getMetadataHistory", () =>
+		return this.trace("discovery.getMetadataHistory", () =>
 			activeTaskResource(this.db)
 				.select()
 				.from(bilibiliVideoMetadataHistory)
@@ -410,7 +418,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async saveRelations(relations: RelationEdge[]): Promise<void> {
 		if (relations.length === 0) return;
-		await traceTask("discovery.saveRelations", async () => {
+		await this.trace("discovery.saveRelations", async () => {
 			await activeTaskResource(this.db)
 				.insert(bilibiliVideoRelation)
 				.values(
@@ -432,7 +440,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async getRelationsBySource(sourceAid: bigint): Promise<BilibiliVideoRelation[]> {
-		return traceTask("discovery.getRelationsBySource", () =>
+		return this.trace("discovery.getRelationsBySource", () =>
 			activeTaskResource(this.db)
 				.select()
 				.from(bilibiliVideoRelation)
@@ -442,7 +450,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async getIncomingRelations(targetAid: bigint, limit = 50): Promise<BilibiliVideoRelation[]> {
-		return traceTask("discovery.getIncomingRelations", () =>
+		return this.trace("discovery.getIncomingRelations", () =>
 			activeTaskResource(this.db)
 				.select()
 				.from(bilibiliVideoRelation)
@@ -457,7 +465,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	 * videos whose recommendations were not collected within `cooldownMinutes`.
 	 */
 	async listHotSampleCandidates(options: HotSampleOptions): Promise<bigint[]> {
-		return traceTask("discovery.listHotSampleCandidates", async () => {
+		return this.trace("discovery.listHotSampleCandidates", async () => {
 			const cooldownCutoff = toInstant(
 				new Date(options.now.epochMilliseconds - options.cooldownMinutes * 60_000)
 			);
@@ -493,7 +501,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async upsertSample(sample: UpsertDiscoverySampleInput): Promise<DiscoverySample> {
-		return traceTask("discovery.upsertSample", async () => {
+		return this.trace("discovery.upsertSample", async () => {
 			const db = activeTaskResource(this.db);
 			const [existing] = await db
 				.select()
@@ -586,7 +594,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
-		return traceTask("discovery.listSamples", async () => {
+		return this.trace("discovery.listSamples", async () => {
 			const where = await this.sampleWhere(options);
 			const ascending = options.sortOrder === "asc";
 			const direction = ascending ? asc : desc;
@@ -617,7 +625,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async getSample(aid: bigint): Promise<DiscoverySample | null> {
-		return traceTask("discovery.getSample", async () => {
+		return this.trace("discovery.getSample", async () => {
 			const [row] = await activeTaskResource(this.db)
 				.select()
 				.from(discoverySample)
@@ -628,7 +636,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {
-		return traceTask("discovery.labelSample", async () => {
+		return this.trace("discovery.labelSample", async () => {
 			const [row] = await activeTaskResource(this.db)
 				.update(discoverySample)
 				.set({ humanLabel, labeledAt: toInstant(new Date()) })
@@ -639,7 +647,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async getRuntimeConfig(key: string): Promise<{ revision: number; config: unknown } | null> {
-		return traceTask("discovery.getRuntimeConfig", async () => {
+		return this.trace("discovery.getRuntimeConfig", async () => {
 			const [row] = await activeTaskResource(this.db)
 				.select()
 				.from(crawlerRuntimeConfig)
@@ -655,7 +663,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		config: unknown,
 		expectedRevision?: number
 	): Promise<{ revision: number; config: unknown }> {
-		return traceTask("discovery.saveRuntimeConfig", async () => {
+		return this.trace("discovery.saveRuntimeConfig", async () => {
 			const db = activeTaskResource(this.db);
 			const [existing] = await db
 				.select()
@@ -718,7 +726,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		windows: { keyword: string; windowStart: number }[]
 	): Promise<void> {
 		if (windows.length === 0) return;
-		return traceTask("discovery.markSearchWindowsExplored", async () => {
+		return this.trace("discovery.markSearchWindowsExplored", async () => {
 			const db = activeTaskResource(this.db);
 			await db.insert(discoverySearchWindow).values(windows).onConflictDoNothing();
 		});
@@ -729,7 +737,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		fromWindow: number,
 		toWindow: number
 	): Promise<Set<number>> {
-		return traceTask("discovery.getExploredSearchWindows", async () => {
+		return this.trace("discovery.getExploredSearchWindows", async () => {
 			const db = activeTaskResource(this.db);
 			const rows = await db
 				.select({ windowStart: discoverySearchWindow.windowStart })

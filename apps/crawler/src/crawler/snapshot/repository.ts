@@ -2,16 +2,23 @@ import { count, desc, eq } from "drizzle-orm";
 import { activeTaskResource } from "../shared/taskContext";
 import type { DatabaseClient, VideoSnapshot } from "@cvsa/snapshot-db";
 import { videoSnapshot } from "@cvsa/snapshot-db";
-import { traceTask } from "@cvsa/observability";
+import { createDatabaseTracer } from "../stats/databaseMetrics";
+import type { StatsRecorder } from "../stats/types";
 import type { CreateSnapshotInput, ISnapshotRepository } from "./repository.interface";
 
 export class SnapshotRepository implements ISnapshotRepository {
-	constructor(private readonly db: DatabaseClient) {}
+	private readonly trace;
+	constructor(
+		private readonly db: DatabaseClient,
+		stats?: StatsRecorder
+	) {
+		this.trace = createDatabaseTracer(stats);
+	}
 
-	async createSnapshots(snapshots: CreateSnapshotInput[]): Promise<void> {
-		if (snapshots.length === 0) return;
-		await traceTask("snapshot.createSnapshots", async () => {
-			await activeTaskResource(this.db)
+	async createSnapshots(snapshots: CreateSnapshotInput[]): Promise<number> {
+		if (snapshots.length === 0) return 0;
+		return this.trace("snapshot.createSnapshots", async () => {
+			const inserted = await activeTaskResource(this.db)
 				.insert(videoSnapshot)
 				.values(
 					snapshots.map((s) => ({
@@ -29,12 +36,14 @@ export class SnapshotRepository implements ISnapshotRepository {
 				// A retried batch re-delivers rows that were already written.
 				.onConflictDoNothing({
 					target: [videoSnapshot.aid, videoSnapshot.capturedAt],
-				});
+				})
+				.returning({ aid: videoSnapshot.aid });
+			return inserted.length;
 		});
 	}
 
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {
-		return traceTask("snapshot.getRecentSnapshots", () =>
+		return this.trace("snapshot.getRecentSnapshots", () =>
 			activeTaskResource(this.db)
 				.select()
 				.from(videoSnapshot)
@@ -48,7 +57,7 @@ export class SnapshotRepository implements ISnapshotRepository {
 		aid: bigint,
 		options: { limit: number; offset: number }
 	): Promise<{ items: VideoSnapshot[]; total: number }> {
-		return traceTask("snapshot.listSnapshots", async () => {
+		return this.trace("snapshot.listSnapshots", async () => {
 			const db = activeTaskResource(this.db);
 			const [[{ total }], items] = await Promise.all([
 				db.select({ total: count() }).from(videoSnapshot).where(eq(videoSnapshot.aid, aid)),

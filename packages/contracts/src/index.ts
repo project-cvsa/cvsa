@@ -8,3 +8,5 @@ export * from "./embedding";
 export * from "./deploy";
 
 export * from "./akariWorker";
+
+export * from "./crawlerStats";

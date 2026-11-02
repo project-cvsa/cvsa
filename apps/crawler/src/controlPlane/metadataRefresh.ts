@@ -91,7 +91,7 @@ function toMetadataInput(aid: bigint, details: VideoDetailsData): UpsertMetadata
  */
 export class MetadataRefreshScheduler {
 	private timer: ReturnType<typeof setInterval> | undefined;
-	private running = false;
+	private inFlight: Promise<number> | undefined;
 	private retryTimer: ReturnType<typeof setTimeout> | undefined;
 	private retryAt = Infinity;
 	private scheduleRetry(delayMs: number): void {
@@ -150,19 +150,27 @@ export class MetadataRefreshScheduler {
 	}
 
 	/** Refresh every due row up to the batch size, returning how many succeeded. */
-	async refreshDue(now: Temporal.Instant = toInstant(new Date())): Promise<number> {
-		if (this.running) return 0;
-		this.running = true;
-		try {
-			const due = await this.deps.listDueMetadata(now, this.batchSize);
-			let refreshed = 0;
-			for (const tracking of due) {
-				if (await this.refreshOne(tracking, now)) refreshed++;
-			}
-			return refreshed;
-		} finally {
-			this.running = false;
+	refreshDue(now: Temporal.Instant = toInstant(new Date())): Promise<number> {
+		if (this.inFlight) return Promise.resolve(0);
+		const pending = this.refreshBatch(now).finally(() => {
+			this.inFlight = undefined;
+		});
+		this.inFlight = pending;
+		return pending;
+	}
+
+	async close(): Promise<void> {
+		this.stop();
+		await this.inFlight;
+	}
+
+	private async refreshBatch(now: Temporal.Instant): Promise<number> {
+		const due = await this.deps.listDueMetadata(now, this.batchSize);
+		let refreshed = 0;
+		for (const tracking of due) {
+			if (await this.refreshOne(tracking, now)) refreshed++;
 		}
+		return refreshed;
 	}
 
 	private async refreshOne(tracking: VideoTracking, now: Temporal.Instant): Promise<boolean> {

@@ -1,3 +1,4 @@
+import { CRAWLER_ERROR_LABELS, CrawlerStatsErrorsSchema } from "@cvsa/contracts";
 import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import { Show, type JSX } from "solid-js";
 import { cn } from "@lib/cn";
@@ -57,7 +58,7 @@ export function QueueStatusTable(props: {
 			id: "name",
 			header: t("queue.name"),
 			class: "font-medium text-primary",
-			cell: (row) => row.name,
+			cell: (row) => t(`metrics.queue.${row.name}`),
 		},
 		{
 			id: "active",
@@ -99,21 +100,14 @@ export function FailureStatusTable(props: {
 	windowLabel: string;
 }) {
 	const t = getComponentT("crawler");
-	const categories: Array<{ key: keyof CrawlerOverviewStats["breakdown"]; label: string }> = [
-		{ key: "timeout", label: "timeout" },
-		{ key: "networkFailure", label: "networkFailure" },
-		{ key: "httpFailure", label: "httpFailure" },
-		{ key: "networkOther", label: "networkOther" },
-		{ key: "adapterUnavailable", label: "adapterUnavailable" },
-		{ key: "rateLimited412Or429", label: "rateLimited" },
-		{ key: "bilibiliBusinessError", label: "bilibiliBusiness" },
-		{ key: "inferenceError", label: "inference" },
-		{ key: "dbError", label: "db" },
-		{ key: "other", label: "other" },
-	];
+
 	const rows = () =>
-		categories
-			.map((category) => ({ ...category, count: props.breakdown[category.key] ?? 0 }))
+		CrawlerStatsErrorsSchema.keyof()
+			.options.map((key) => ({
+				key,
+				label: CRAWLER_ERROR_LABELS[key],
+				count: props.breakdown[key],
+			}))
 			.filter((row) => row.count > 0)
 			.sort((a, b) => b.count - a.count);
 	type FailureRow = ReturnType<typeof rows>[number];
@@ -122,7 +116,7 @@ export function FailureStatusTable(props: {
 			id: "category",
 			header: t("overview.failures.category"),
 			class: "w-1/2 text-primary",
-			cell: (row) => t(`overview.err.${row.label}`),
+			cell: (row) => t(row.label),
 		},
 		{
 			id: "count",

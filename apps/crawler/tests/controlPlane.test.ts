@@ -413,7 +413,6 @@ describe("crawler control plane", () => {
 						backgroundFactor: 0.2,
 					}),
 					execution: CrawlerExecutionConfigSchema.parse({
-						maxAdapterAttempts: 2,
 						mqOperationTimeoutMs: 2000,
 						inferenceTimeoutMs: 15000,
 					}),

@@ -27,7 +27,6 @@ const FIELDS: Array<{
 	{ key: "throttleCooldownMs", min: 100, max: 3600000 },
 	{ key: "throttleJitterMs", min: 0, max: 60000 },
 	{ key: "queueCap", min: 1, max: 10000 },
-	{ key: "maxAdapterAttempts", min: 1, max: 10 },
 	{ key: "probeWaitMs", min: 10, max: 5000 },
 	{ key: "probeRetryMs", min: 100, max: 60000 },
 	{ key: "probeRetries", min: 0, max: 5 },

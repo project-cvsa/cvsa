@@ -1,3 +1,4 @@
+import { derivedMetrics } from "./aggregation";
 import {
 	AppError,
 	type CrawlerOverviewStats,
@@ -6,53 +7,12 @@ import {
 	type CrawlerQueueJobsResponse,
 	type CrawlerQueueJobsQuery,
 	type CrawlerQueueSnapshot,
-	type CrawlerStatsRollupPoint,
-	type CrawlerStatsWindow,
 	type CrawlerQueueName,
 	type CrawlerStatsQuery,
 } from "@cvsa/contracts";
 import type { JobType } from "bullmq";
 import type { CrawlerQueue, CrawlerJobCounts, CrawlerQueueJobSnapshot } from "../shared/types";
 import type { CrawlerStatsCollector } from "./collector";
-const WINDOW_SECONDS: Readonly<Record<CrawlerStatsWindow, number>> = {
-	"5m": 5 * 60,
-	"15m": 15 * 60,
-	"30m": 30 * 60,
-	"1h": 60 * 60,
-	"6h": 6 * 60 * 60,
-	"24h": 24 * 60 * 60,
-	"7d": 7 * 24 * 60 * 60,
-};
-
-const QUEUE_KEYS: Readonly<Record<string, string>> = {
-	"snapshot-batch": "tracking",
-	"crawler-discovery": "discovery",
-};
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-	return Object.fromEntries(Object.entries(value));
-}
-
-/** P95 timings and counters are nested; the chart contract wants one flat map. */
-function flattenMetrics(value: unknown, prefix = ""): Record<string, number> {
-	const source = asRecord(value);
-	if (!source) return {};
-
-	const flat: Record<string, number> = {};
-	for (const [key, item] of Object.entries(source)) {
-		const name = prefix ? `${prefix}.${key}` : key;
-		if (typeof item === "number" && Number.isFinite(item)) {
-			flat[name] = item;
-			continue;
-		}
-		if (typeof item === "object" && item !== null && !Array.isArray(item)) {
-			Object.assign(flat, flattenMetrics(item, name));
-		}
-	}
-	return flat;
-}
-
 async function readQueue(queue: CrawlerQueue<unknown>): Promise<CrawlerQueueSnapshot> {
 	const counts = await queue.getJobCounts();
 	const oldest =
@@ -70,68 +30,11 @@ async function readQueues(
 	snapshotQueue: CrawlerQueue<unknown>,
 	discoveryQueue: CrawlerQueue<unknown>
 ): Promise<Record<string, CrawlerQueueSnapshot>> {
-	const [snapshot, discovery] = await Promise.allSettled([
+	const [tracking, discovery] = await Promise.all([
 		readQueue(snapshotQueue),
 		readQueue(discoveryQueue),
 	]);
-
-	const queues: Record<string, CrawlerQueueSnapshot> = {};
-	if (snapshot.status === "fulfilled") {
-		queues[QUEUE_KEYS["snapshot-batch"] ?? "snapshot-batch"] = snapshot.value;
-	}
-	if (discovery.status === "fulfilled") {
-		queues[QUEUE_KEYS["crawler-discovery"] ?? "crawler-discovery"] = discovery.value;
-	}
-	return queues;
-}
-
-export function seriesMetrics(
-	metrics: Record<string, number>,
-	windowSeconds: number
-): Record<string, number> {
-	const requests = metrics["counters.networkRequests"] ?? 0;
-	const networkFailures = [
-		"timeout",
-		"networkFailure",
-		"httpFailure",
-		"networkOther",
-		"rateLimited412Or429",
-		"bilibiliBusinessError",
-	].reduce((total, key) => total + (metrics[`errors.${key}`] ?? 0), 0);
-	return {
-		...metrics,
-		snapshotsPerMin: (metrics["counters.snapshotsSaved"] ?? 0) / (windowSeconds / 60),
-		requestsPerSec: requests / windowSeconds,
-		errorPercent: requests > 0 ? Math.min(100, (networkFailures / requests) * 100) : 0,
-		retryPercent: requests > 0 ? Math.min(100, ((metrics.retries ?? 0) / requests) * 100) : 0,
-	};
-}
-
-/** Effective window duration: an explicit `minutes` range overrides the preset. */
-function windowSecondsFor(window: CrawlerStatsWindow, minutes?: number): number {
-	return minutes === undefined ? WINDOW_SECONDS[window] : minutes * 60;
-}
-
-async function readSeries(
-	statsCollector: CrawlerStatsCollector,
-	window: CrawlerStatsWindow,
-	minutes?: number
-): Promise<CrawlerStatsRollupPoint[]> {
-	const windowSeconds = windowSecondsFor(window, minutes);
-	const since = new Date(Date.now() - windowSeconds * 1_000);
-	try {
-		const rows = await statsCollector.getHistory(window, since);
-		return rows.map((row) => ({
-			bucketTime: row.bucketTime,
-			metricGroup: `crawler:${window}`,
-			// Chart rates must divide by the range the operator actually asked for;
-			// reusing the preset width mislabels custom ranges (e.g. 90 minutes).
-			metrics: seriesMetrics(flattenMetrics(row.metrics), windowSeconds),
-		}));
-	} catch {
-		// Rollup history is a chart nicety; the live counters must still answer.
-		return [];
-	}
+	return { tracking, discovery };
 }
 
 function jobItem(job: CrawlerQueueJobSnapshot, queue: CrawlerQueueName): CrawlerQueueJobItem {
@@ -171,46 +74,29 @@ export class CrawlerAdminStatsService {
 	async overview(query: CrawlerStatsQuery): Promise<CrawlerOverviewStats> {
 		const { window, minutes } = query;
 
-		const [overview, queues, series] = await Promise.all([
-			this.collector.getOverviewStats(window, minutes),
+		const [overview, queues] = await Promise.all([
+			this.collector.getReport(window, minutes),
 			readQueues(this.queues.tracking, this.queues.discovery),
-			readSeries(this.collector, window, minutes),
 		]);
 
-		const windowSeconds = windowSecondsFor(window, minutes);
-		const windowMinutes = windowSeconds / 60;
 		const counters = overview.metrics.counters;
 		const errors = overview.metrics.errors;
-		const totalFailures = Object.values(errors).reduce((sum, value) => sum + value, 0);
-		const totalAttempts = counters.networkRequests;
-		const networkFailures =
-			errors.timeout +
-			errors.networkFailure +
-			errors.httpFailure +
-			errors.networkOther +
-			errors.rateLimited412Or429 +
-			errors.bilibiliBusinessError;
+		const derived = derivedMetrics(overview.metrics);
 
 		return {
 			window,
 			minutes,
-			jobsPerSec: counters.jobsCompleted / windowSeconds,
-			jobsPerMin: counters.jobsCompleted / windowMinutes,
+			generatedAt: overview.generatedAt,
+			coverageFrom: new Date(overview.metrics.from).toISOString(),
+			coverageSeconds: (overview.metrics.to - overview.metrics.from) / 1000,
+			counters,
+			jobs: overview.metrics.jobs,
+			network: overview.metrics.network,
+			...derived,
 			snapshotsSaved: counters.snapshotsSaved,
-			snapshotsPerMin: counters.snapshotsSaved / windowMinutes,
 			videosDiscovered: counters.videosDiscovered,
-			candidatesPerMin: counters.candidatesScanned / windowMinutes,
-			inferencesPerSec: counters.inferencesRun / windowSeconds,
-			requestsPerSec: counters.networkRequests / windowSeconds,
-			totalAttempts,
-			totalFailures,
-			networkFailures,
-			errorRate:
-				totalAttempts > 0 ? Math.min(1, Math.max(0, networkFailures / totalAttempts)) : 0,
-			retryRate:
-				totalAttempts > 0
-					? Math.min(1, Math.max(0, overview.metrics.retries / totalAttempts))
-					: 0,
+			totalAttempts: counters.networkRequests,
+			totalFailures: Object.values(errors).reduce((sum, n) => sum + n, 0),
 			breakdown: errors,
 			overdueTrackingCount: overview.tracking.overdueCount,
 			maxOverdueLagSec: overview.tracking.maxOverdueLagSec,
@@ -220,7 +106,7 @@ export class CrawlerAdminStatsService {
 				apiP95: overview.metrics.latencyP95Ms.api,
 				inferenceP95: overview.metrics.latencyP95Ms.inference,
 			},
-			series,
+			series: overview.series,
 		};
 	}
 

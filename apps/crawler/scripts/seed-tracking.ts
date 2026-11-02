@@ -2,7 +2,7 @@ import { appLogger } from "@cvsa/logger";
 import { createDatabaseClient, song } from "@cvsa/db";
 import { and, isNotNull, isNull } from "drizzle-orm";
 import { snapshotDb, toInstant } from "@cvsa/snapshot-db";
-import { TrackingRepository } from "../crawler/tracking/repository";
+import { TrackingRepository } from "../src/crawler/tracking/repository";
 
 async function main(): Promise<void> {
 	appLogger.info("Starting video tracking seed from core catalog database...");
