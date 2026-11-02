@@ -503,7 +503,6 @@ export const CrawlerExecutionConfigSchema = z.object({
 	throttleCooldownMs: z.number().int().min(100).max(3600000).default(5000),
 	throttleJitterMs: z.number().int().min(0).max(60000).default(5000),
 	queueCap: z.number().int().min(1).max(10000).default(200),
-	maxAdapterAttempts: z.number().int().min(1).max(10).default(3),
 	probeWaitMs: z.number().int().min(10).max(5000).default(100),
 	probeRetryMs: z.number().int().min(100).max(60000).default(1000),
 	probeRetries: z.number().int().min(0).max(5).default(1),

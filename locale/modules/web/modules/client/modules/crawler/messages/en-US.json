@@ -735,8 +735,6 @@
 	"network.adaptive.backgroundRate": "Current background rate ceiling",
 	"network.adaptive.factor": "Request rate factor",
 	"network.adaptive.lastThrottled": "Last throttle",
-	"network.execution.maxAdapterAttempts": "Maximum exit attempts per request",
-	"network.execution.maxAdapterAttemptsHelp": "Only requests safe to replay can fail over. Circuit breakers are always respected.",
 	"network.execution.probeWaitMs": "Wait for an active recovery probe (ms)",
 	"network.execution.probeWaitMsHelp": "Briefly wait for the single half-open request. When the wait budget ends, defer the task and release its active slot.",
 	"network.execution.probeRetryMs": "Network recovery retry delay (ms)",

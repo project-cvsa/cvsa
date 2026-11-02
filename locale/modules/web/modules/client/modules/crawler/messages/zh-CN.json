@@ -735,8 +735,6 @@
 	"network.adaptive.backgroundRate": "当前后台发包上限",
 	"network.adaptive.factor": "发包速率系数",
 	"network.adaptive.lastThrottled": "最近限流时间",
-	"network.execution.maxAdapterAttempts": "每次请求最多尝试出口数",
-	"network.execution.maxAdapterAttemptsHelp": "仅可安全重放的请求才换出口重试，且不会突破熔断。",
 	"network.execution.probeWaitMs": "等待正在进行的恢复探测（毫秒）",
 	"network.execution.probeWaitMsHelp": "短暂等待唯一的半开请求；超出次数后将任务延后，释放 active 槽位。",
 	"network.execution.probeRetryMs": "网络恢复重试间隔（毫秒）",
