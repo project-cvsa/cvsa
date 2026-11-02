@@ -1,31 +1,53 @@
-import { For } from "solid-js";
+import { createSignal, For } from "solid-js";
 import type { CrawlerOverviewStats } from "@cvsa/contracts";
 import Table from "@components/ui/Table";
+import Select from "@components/ui/Select";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { formatMetric, formatPercent } from "./format";
-import { MetricCard } from "./statsView";
+import { LatencyTable, MetricCard, RatioTable } from "./statsView";
 
-export default function StatsDetails(props: { stats: CrawlerOverviewStats }) {
+function p95(summary: CrawlerOverviewStats["database"]["durationMs"][string] | undefined): string {
+	const value = summary?.quantiles["0.95"];
+	return value == null ? "—" : `${Math.round(value)} ms`;
+}
+
+export default function StatsDetails(props: {
+	stats: CrawlerOverviewStats;
+	quantiles: readonly number[];
+}) {
 	const t = getComponentT("crawler");
+	const [outcome, setOutcome] = createSignal("all");
+	const latency = () =>
+		outcome() === "all"
+			? props.stats.latency
+			: Object.fromEntries(
+					Object.entries(props.stats.latency).filter(([key]) =>
+						key.endsWith(`:${outcome()}`)
+					)
+				);
 	const flow = () => [
-		{ key: "aidsRequested", value: props.stats.counters.aidsRequested },
-		{ key: "aidsReturned", value: props.stats.counters.aidsReturned },
-		{ key: "aidsMissing", value: props.stats.counters.aidsMissing },
-		{ key: "candidatesSeen", value: props.stats.counters.candidatesSeen },
-		{ key: "candidatesSkipped", value: props.stats.counters.candidatesSkipped },
-		{ key: "candidatesScanned", value: props.stats.counters.candidatesScanned },
-		{ key: "candidatesRejected", value: props.stats.counters.candidatesRejected },
-		{ key: "candidatesFailed", value: props.stats.counters.candidatesFailed },
+		{ key: "candidatesStarted", value: props.stats.counters.candidatesStarted },
+		{ key: "candidatesFinished", value: props.stats.counters.candidatesFinished },
+		{ key: "httpAttemptsStarted", value: props.stats.counters.httpAttemptsStarted },
+		{ key: "httpAttemptsFinished", value: props.stats.counters.httpAttemptsFinished },
+		{ key: "logicalRequestsFinished", value: props.stats.counters.logicalRequestsFinished },
+		{ key: "videosRecorded", value: props.stats.counters.videosRecorded },
+		{ key: "videoInsertConflicts", value: props.stats.counters.videoInsertConflicts },
+		{ key: "trackingCreated", value: props.stats.counters.trackingCreated },
 	];
 	const networks = () =>
 		Object.entries(props.stats.network).map(([key, value]) => {
-			const separator = key.indexOf(":");
+			const separator = key.indexOf("|");
 			return {
-				dimension: key.slice(0, separator),
-				label: key.slice(separator + 1),
+				requestType: key.slice(0, separator),
+				endpoint: key.slice(separator + 1, key.indexOf("|", separator + 1)),
+				egress: key.slice(key.indexOf("|", separator + 1) + 1),
 				...value,
 			};
 		});
+	const discovery = () => Object.entries(props.stats.discovery.byChannel);
+	const database = () => Object.entries(props.stats.database.byOperation);
+	const redis = () => Object.entries(props.stats.redis.byCommand);
 	return (
 		<>
 			<section class="flex flex-col gap-3">
@@ -42,6 +64,13 @@ export default function StatsDetails(props: { stats: CrawlerOverviewStats }) {
 				</div>
 				<p class="ts-caption text-secondary">{t("metrics.flowHelp")}</p>
 			</section>
+
+			<section class="flex flex-col gap-3">
+				<h3 class="ts-label text-primary">{t("metrics.ratios")}</h3>
+				<RatioTable ratios={props.stats.ratios} inputs={props.stats.ratioInputs} />
+				<p class="ts-caption text-secondary">{t("metrics.ratiosHelp")}</p>
+			</section>
+
 			<section class="flex flex-col gap-3">
 				<h3 class="ts-label text-primary">{t("metrics.jobs")}</h3>
 				<Table
@@ -49,8 +78,10 @@ export default function StatsDetails(props: { stats: CrawlerOverviewStats }) {
 						<tr>
 							<th>{t("queue.name")}</th>
 							<th>{t("metrics.completed")}</th>
-							<th>{t("queue.failed")}</th>
+							<th>{t("metrics.failed")}</th>
 							<th>{t("metrics.deferred")}</th>
+							<th>{t("metrics.cancelled")}</th>
+							<th>{t("metrics.timeout")}</th>
 						</tr>
 					}
 				>
@@ -61,51 +92,242 @@ export default function StatsDetails(props: { stats: CrawlerOverviewStats }) {
 								<td>{counts.completed}</td>
 								<td>{counts.failed}</td>
 								<td>{counts.deferred}</td>
+								<td>{counts.cancelled}</td>
+								<td>{counts.timeout}</td>
 							</tr>
 						)}
 					</For>
 				</Table>
 				<p class="ts-caption text-secondary">{t("metrics.jobsHelp")}</p>
 			</section>
+
 			<section class="flex flex-col gap-3">
 				<h3 class="ts-label text-primary">{t("metrics.network")}</h3>
 				<Table
 					head={
 						<tr>
-							<th>{t("metrics.dimension")}</th>
-							<th>{t("metrics.name")}</th>
+							<th>{t("metrics.requestType")}</th>
+							<th>{t("metrics.endpoint")}</th>
+							<th>{t("metrics.egress")}</th>
 							<th>{t("overview.totalAttempts")}</th>
-							<th>{t("overview.successRate")}</th>
+							<th>{t("metrics.transportSuccess")}</th>
+							<th>{t("metrics.transportFailure")}</th>
 							<th>{t("metrics.businessErrorCount")}</th>
 							<th>{t("metrics.rateLimited")}</th>
-							<th>{t("metrics.transportFailures")}</th>
+							<th>{t("metrics.cancelled")}</th>
+							<th>{t("metrics.timeout")}</th>
+							<th>{t("metrics.egressResends")}</th>
 						</tr>
 					}
 				>
 					<For each={networks()}>
 						{(row) => (
 							<tr>
-								<td>{t(`metrics.dimension.${row.dimension}`)}</td>
-								<td>
-									{row.dimension === "egress"
-										? row.label
-										: t(`metrics.networkLabel.${row.label}`)}
-								</td>
-								<td>{row.requests}</td>
-								<td>
-									{formatPercent(
-										row.requests > 0 ? row.success / row.requests : 0
-									)}
-								</td>
-								<td>{row.businessErrors}</td>
+								<td>{t(`metrics.requestType.${row.requestType}`)}</td>
+								<td>{t(`metrics.networkLabel.${row.endpoint}`)}</td>
+								<td>{row.egress}</td>
+								<td>{row.attempts}</td>
+								<td>{row.transportSuccess}</td>
+								<td>{row.transportFailure}</td>
+								<td>{row.businessError}</td>
 								<td>{row.rateLimited}</td>
-								<td>{row.transportFailures}</td>
+								<td>{row.cancelled}</td>
+								<td>{row.timeout}</td>
+								<td>{row.egressResends}</td>
 							</tr>
 						)}
 					</For>
 				</Table>
 				<p class="ts-caption text-secondary">{t("metrics.networkHelp")}</p>
 			</section>
+
+			<section class="flex flex-col gap-3">
+				<h3 class="ts-label text-primary">{t("metrics.discovery")}</h3>
+				<Table
+					head={
+						<tr>
+							<th>{t("metrics.channel")}</th>
+							<th>{t("metrics.appeared")}</th>
+							<th>{t("metrics.newTracking")}</th>
+							<th>{t("metrics.existing")}</th>
+							<th>{t("metrics.rejected")}</th>
+							<th>{t("metrics.skipped")}</th>
+							<th>{t("metrics.deferred")}</th>
+							<th>{t("metrics.failed")}</th>
+						</tr>
+					}
+				>
+					<For each={discovery()}>
+						{([channel, counts]) => (
+							<tr>
+								<td>{t(`metrics.channel.${channel}`)}</td>
+								<td>{counts.appeared}</td>
+								<td>{counts.newTracking}</td>
+								<td>{counts.existing}</td>
+								<td>{counts.rejected}</td>
+								<td>{counts.skipped}</td>
+								<td>{counts.deferred}</td>
+								<td>{counts.failure}</td>
+							</tr>
+						)}
+					</For>
+				</Table>
+			</section>
+
+			<section class="flex flex-col gap-3">
+				<div class="flex flex-wrap items-center justify-between gap-2">
+					<h3 class="ts-label text-primary">{t("metrics.latency")}</h3>
+					<div class="w-40">
+						<Select
+							size="sm"
+							aria-label={t("metrics.result")}
+							value={outcome()}
+							options={[
+								"all",
+								"success",
+								"failure",
+								"deferred",
+								"cancelled",
+								"timeout",
+							].map((value) => ({
+								value,
+								label:
+									value === "all"
+										? t("common.all")
+										: t(`metrics.outcome.${value}`),
+							}))}
+							onValueChange={(value) => {
+								if (value) setOutcome(value);
+							}}
+						/>
+					</div>
+				</div>
+				<LatencyTable latency={latency()} quantiles={props.quantiles} />
+			</section>
+
+			<section class="flex flex-col gap-3">
+				<h3 class="ts-label text-primary">{t("metrics.infrastructure")}</h3>
+				<div class="grid gap-3 lg:grid-cols-2">
+					<Table
+						head={
+							<tr>
+								<th>{t("metrics.database")}</th>
+								<th>{t("metrics.success")}</th>
+								<th>{t("metrics.failed")}</th>
+								<th>{t("metrics.cancelled")}</th>
+								<th>{t("metrics.timeout")}</th>
+								<th>P95</th>
+							</tr>
+						}
+					>
+						<For each={database()}>
+							{([key, counts]) => (
+								<tr>
+									<td>{key}</td>
+									<td>{counts.success}</td>
+									<td>{counts.failure}</td>
+									<td>{counts.cancelled}</td>
+									<td>{counts.timeout}</td>
+									<td>{p95(props.stats.database.durationMs[key])}</td>
+								</tr>
+							)}
+						</For>
+					</Table>
+					<Table
+						head={
+							<tr>
+								<th>{t("metrics.redis")}</th>
+								<th>{t("metrics.success")}</th>
+								<th>{t("metrics.failed")}</th>
+								<th>{t("metrics.cancelled")}</th>
+								<th>{t("metrics.timeout")}</th>
+								<th>P95</th>
+							</tr>
+						}
+					>
+						<For each={redis()}>
+							{([key, counts]) => (
+								<tr>
+									<td>{key}</td>
+									<td>{counts.success}</td>
+									<td>{counts.failure}</td>
+									<td>{counts.cancelled}</td>
+									<td>{counts.timeout}</td>
+									<td>{p95(props.stats.redis.durationMs[key])}</td>
+								</tr>
+							)}
+						</For>
+					</Table>
+				</div>
+			</section>
+
+			<section class="flex flex-col gap-3">
+				<h3 class="ts-label text-primary">{t("metrics.labeling")}</h3>
+				<Table
+					head={
+						<tr>
+							<th>{t("metrics.samples")}</th>
+							<th>TP</th>
+							<th>FP</th>
+							<th>TN</th>
+							<th>FN</th>
+							<th>{t("metrics.accuracy")}</th>
+							<th>{t("metrics.precision")}</th>
+							<th>{t("metrics.recall")}</th>
+						</tr>
+					}
+				>
+					<tr>
+						<td>{props.stats.labeling.samples}</td>
+						<td>{props.stats.labeling.truePositive}</td>
+						<td>{props.stats.labeling.falsePositive}</td>
+						<td>{props.stats.labeling.trueNegative}</td>
+						<td>{props.stats.labeling.falseNegative}</td>
+						<td>
+							{props.stats.labeling.accuracy === null
+								? "—"
+								: formatPercent(props.stats.labeling.accuracy)}
+						</td>
+						<td>
+							{props.stats.labeling.precision === null
+								? "—"
+								: formatPercent(props.stats.labeling.precision)}
+						</td>
+						<td>
+							{props.stats.labeling.recall === null
+								? "—"
+								: formatPercent(props.stats.labeling.recall)}
+						</td>
+					</tr>
+				</Table>
+			</section>
+
+			{props.stats.legacy ? (
+				<details class="bg-surface p-4">
+					<summary class="ts-label text-primary cursor-pointer">
+						{t("metrics.legacy")}
+					</summary>
+					<div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+						<MetricCard
+							label={t("metrics.legacySnapshots")}
+							value={formatMetric(props.stats.legacy.counters.snapshotsSaved)}
+						/>
+						<MetricCard
+							label={t("metrics.legacyRequests")}
+							value={formatMetric(props.stats.legacy.counters.networkRequests)}
+						/>
+						<MetricCard
+							label={t("metrics.legacyCandidates")}
+							value={formatMetric(props.stats.legacy.counters.candidatesScanned)}
+						/>
+						<MetricCard
+							label={t("metrics.legacyJobs")}
+							value={formatMetric(props.stats.legacy.counters.jobsCompleted)}
+						/>
+					</div>
+					<p class="ts-caption text-secondary mt-3">{t("metrics.legacyHelp")}</p>
+				</details>
+			) : null}
 		</>
 	);
 }

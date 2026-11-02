@@ -1,4 +1,18 @@
-import { getTaskSignal } from "./taskContext";
+import { TaskDeadlineError, getTaskSignal } from "./taskContext";
+
+export class OperationTimeoutError extends Error {
+	constructor() {
+		super("Crawler operation timed out");
+		this.name = "OperationTimeoutError";
+	}
+}
+
+export class OperationCancelledError extends Error {
+	constructor(reason?: string) {
+		super(reason ?? "Crawler operation cancelled");
+		this.name = "OperationCancelledError";
+	}
+}
 
 export async function boundedOperation<T>(
 	work: () => Promise<T>,
@@ -9,13 +23,17 @@ export async function boundedOperation<T>(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let onAbort: () => void = () => {};
 	const deadline = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error("Crawler operation timed out")), timeoutMs);
-		onAbort = () =>
+		timer = setTimeout(() => reject(new OperationTimeoutError()), timeoutMs);
+		onAbort = () => {
+			const reason = signal?.reason;
+			if (reason instanceof TaskDeadlineError) {
+				reject(reason);
+				return;
+			}
 			reject(
-				signal?.reason instanceof Error
-					? signal.reason
-					: new Error("Crawler operation cancelled")
+				new OperationCancelledError(reason instanceof Error ? reason.message : undefined)
 			);
+		};
 		signal?.addEventListener("abort", onAbort, { once: true });
 	});
 	try {

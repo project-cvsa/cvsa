@@ -1,6 +1,6 @@
 import StatsDetails from "../StatsDetails";
 import ComponentStatus from "../ComponentStatus";
-import Table from "@components/ui/Table";
+import OperationalStatus from "../OperationalStatus";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
 import { createSignal, Show, type Accessor } from "solid-js";
@@ -17,7 +17,7 @@ import type {
 } from "@cvsa/contracts";
 import { CrawlerStatsWindowSchema } from "@cvsa/contracts";
 import { formatMetric, formatPercent, formatWaitSeconds } from "../format";
-import { MetricCard, QueueStatusTable, FailureStatusTable } from "../statsView";
+import { MetricCard, QueueStatusTable } from "../statsView";
 import ThroughputChart from "../ThroughputChart";
 import { createRequestSequence } from "../videoActions";
 
@@ -26,6 +26,13 @@ type OverviewSectionProps = {
 };
 
 const WINDOWS: CrawlerStatsWindow[] = ["5m", "15m", "30m", "1h", "6h", "24h", "7d"];
+
+const QUANTILE_PRESETS = [
+	{ value: "0.5,0.9,0.95,0.99", label: "P50 / P90 / P95 / P99" },
+	{ value: "0.5,0.95,0.99", label: "P50 / P95 / P99" },
+	{ value: "0.5,0.9,0.99", label: "P50 / P90 / P99" },
+	{ value: "0.5,0.99", label: "P50 / P99" },
+];
 
 const WINDOW_MESSAGE_KEYS: Record<CrawlerStatsWindow, string> = {
 	"5m": "overview.range.5m",
@@ -43,6 +50,8 @@ type RangeControlsProps = {
 	onRangeChange: (value: string) => void;
 	onDraftMinutesChange: (value: number) => void;
 	onApplyCustom: () => void;
+	quantileMode: Accessor<string>;
+	onQuantileChange: (value: string) => void;
 };
 
 function RangeControls(props: RangeControlsProps) {
@@ -62,6 +71,17 @@ function RangeControls(props: RangeControlsProps) {
 					options={options()}
 					onValueChange={(value) => {
 						if (value) props.onRangeChange(value);
+					}}
+				/>
+			</div>
+			<div class="w-52 shrink-0">
+				<Select
+					size="sm"
+					aria-label={t("metrics.quantiles")}
+					value={props.quantileMode()}
+					options={QUANTILE_PRESETS}
+					onValueChange={(value) => {
+						if (value) props.onQuantileChange(value);
 					}}
 				/>
 			</div>
@@ -91,31 +111,8 @@ function RangeControls(props: RangeControlsProps) {
 	);
 }
 
-function ErrorRateTable(props: { stats: CrawlerOverviewStats }) {
-	const t = getComponentT("crawler");
-	return (
-		<Table
-			head={
-				<tr>
-					<th>{t("overview.totalAttempts")}</th>
-					<th>{t("overview.errorRate")}</th>
-					<th>{t("overview.retryRate")}</th>
-					<th>{t("metrics.businessErrors")}</th>
-					<th>{t("overview.overdueTracking")}</th>
-					<th>{t("overview.maxOverdueLag")}</th>
-				</tr>
-			}
-		>
-			<tr>
-				<td>{formatMetric(props.stats.totalAttempts)}</td>
-				<td>{formatPercent(props.stats.errorRate)}</td>
-				<td>{formatPercent(props.stats.retryRate)}</td>
-				<td>{formatPercent(props.stats.businessErrorRate)}</td>
-				<td>{formatMetric(props.stats.overdueTrackingCount)}</td>
-				<td>{formatWaitSeconds(props.stats.maxOverdueLagSec)}</td>
-			</tr>
-		</Table>
-	);
+function perMinute(value: number, seconds: number): number {
+	return (value * 60) / Math.max(1, seconds);
 }
 
 export default function OverviewSection(props: OverviewSectionProps) {
@@ -124,6 +121,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 	const [customMinutes, setCustomMinutes] = createSignal<number | undefined>();
 	const [draftMinutes, setDraftMinutes] = createSignal(90);
 	const [rangeMode, setRangeMode] = createSignal("1h");
+	const [quantileMode, setQuantileMode] = createSignal(QUANTILE_PRESETS[0]?.value ?? "");
 	const [statsWindow, setStatsWindow] = createSignal<CrawlerStatsWindow>("1h");
 	const [loadingStats, setLoadingStats] = createSignal(false);
 	const [statsError, setStatsError] = createSignal<string | null>(null);
@@ -134,7 +132,7 @@ export default function OverviewSection(props: OverviewSectionProps) {
 	const loadStats = async (window = statsWindow()) => {
 		const request = statsRequests.start();
 		setLoadingStats(true);
-		const res = await api.crawler.getStats(window, customMinutes());
+		const res = await api.crawler.getStats(window, customMinutes(), quantiles());
 		if (!statsRequests.isCurrent(request)) return;
 		setLoadingStats(false);
 		if (res.ok && res.data) {
@@ -143,6 +141,17 @@ export default function OverviewSection(props: OverviewSectionProps) {
 			return;
 		}
 		setStatsError(res.ok ? t("common.error") : res.error.message || t("common.error"));
+	};
+
+	const quantiles = () =>
+		quantileMode()
+			.split(",")
+			.map(Number)
+			.filter((value) => Number.isFinite(value) && value > 0 && value <= 1);
+
+	const changeQuantiles = (value: string) => {
+		setQuantileMode(value);
+		void loadStats();
 	};
 
 	const selectWindow = async (window: CrawlerStatsWindow) => {
@@ -189,6 +198,10 @@ export default function OverviewSection(props: OverviewSectionProps) {
 		if (!loadingClassifier()) void refreshClassifier();
 	});
 
+	const ratesComplete = (current: CrawlerOverviewStats) => current.coverage.status === "complete";
+	const jobsCompleted = (current: CrawlerOverviewStats) =>
+		current.jobs.tracking.completed + current.jobs.discovery.completed;
+
 	return (
 		<div class="flex flex-col gap-6">
 			<SectionHeader
@@ -201,6 +214,8 @@ export default function OverviewSection(props: OverviewSectionProps) {
 						onRangeChange={changeRange}
 						onDraftMinutesChange={setDraftMinutes}
 						onApplyCustom={applyCustomRange}
+						quantileMode={quantileMode}
+						onQuantileChange={changeQuantiles}
 					/>
 				}
 			/>
@@ -238,35 +253,81 @@ export default function OverviewSection(props: OverviewSectionProps) {
 							<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
 								<MetricCard
 									label={t("overview.newSnapshots")}
-									value={formatMetric(current().snapshotsSaved ?? 0)}
-									hint={`${formatMetric(current().snapshotsPerMin)}${t("metrics.perMinute")}`}
+									value={formatMetric(current().counters.videosRecorded)}
+									hint={
+										ratesComplete(current())
+											? `${formatMetric(
+													perMinute(
+														current().counters.videosRecorded,
+														current().range.seconds
+													)
+												)}${t("metrics.perMinute")}`
+											: "—"
+									}
 									variant="success"
 								/>
 								<MetricCard
 									label={t("overview.newVideos")}
-									value={formatMetric(current().videosDiscovered ?? 0)}
+									value={formatMetric(current().counters.trackingCreated)}
 									hint={t("overview.discoveredHint")}
 									variant="success"
 								/>
 								<MetricCard
 									label={t("overview.jobsPerSec")}
-									value={`${formatMetric(current().jobsPerMin)}${t("metrics.perMinute")}`}
+									value={
+										ratesComplete(current())
+											? `${formatMetric(
+													perMinute(
+														jobsCompleted(current()),
+														current().range.seconds
+													)
+												)}${t("metrics.perMinute")}`
+											: "—"
+									}
 									hint={t("metrics.completed")}
 								/>
 								<MetricCard
 									label={t("overview.requestsPerSec")}
-									value={`${formatMetric(current().requestsPerMin)}${t("metrics.perMinute")}`}
+									value={
+										ratesComplete(current())
+											? `${formatMetric(
+													perMinute(
+														current().counters.httpAttemptsFinished,
+														current().range.seconds
+													)
+												)}${t("metrics.perMinute")}`
+											: "—"
+									}
 									hint={t("metrics.attemptsHint")}
 								/>
 								<MetricCard
 									label={t("overview.inferencesPerSec")}
-									value={`${formatMetric(current().inferencesPerMin)}${t("metrics.perMinute")}`}
+									value={
+										ratesComplete(current())
+											? `${formatMetric(
+													perMinute(
+														current().counters.modelInferenceCalls,
+														current().range.seconds
+													)
+												)}${t("metrics.perMinute")}`
+											: "—"
+									}
 									hint={t("metrics.inferenceHint")}
 								/>
 								<MetricCard
 									label={t("overview.successRate")}
-									value={formatPercent(current().requestSuccessRate)}
-									hint={`${t("overview.retryRate")} ${formatPercent(current().retryRate)}`}
+									value={
+										current().ratios.logicalRequestSuccess === null
+											? "—"
+											: formatPercent(
+													current().ratios.logicalRequestSuccess ?? 0
+												)
+									}
+									hint={`${t("overview.retryRate")} ${
+										current().ratios.egressResendShare === null
+											? "—"
+											: formatPercent(current().ratios.egressResendShare ?? 0)
+									}`}
 								/>
 							</div>
 
@@ -274,20 +335,22 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								{t("metrics.coverage")
 									.replace(
 										"{from}",
-										new Date(current().coverageFrom).toLocaleString()
+										new Date(current().range.from).toLocaleString()
 									)
-									.replace(
-										"{to}",
-										new Date(current().generatedAt).toLocaleString()
-									)
+									.replace("{to}", new Date(current().range.to).toLocaleString())
 									.replace(
 										"{minutes}",
-										formatMetric(current().coverageSeconds / 60)
+										formatMetric(current().range.seconds / 60)
 									)}
+							</p>
+							<p class="ts-caption text-secondary">
+								{t(`metrics.coverage.${current().coverage.status}`)} (
+								{current().coverage.coveredMinutes}/{current().coverage.minutes}{" "}
+								{t("metrics.minutesCovered")})
 							</p>
 							<p class="ts-caption text-secondary">{t("metrics.method")}</p>
 							<ThroughputChart series={current().series} />
-							<StatsDetails stats={current()} />
+							<StatsDetails stats={current()} quantiles={quantiles()} />
 						</section>
 
 						<ComponentStatus
@@ -296,25 +359,53 @@ export default function OverviewSection(props: OverviewSectionProps) {
 							classifier={classifierHealth()}
 						/>
 
+						<OperationalStatus stats={current()} />
+
 						<section class="flex flex-col gap-3">
 							<span class="ts-overline text-tertiary">
 								{t("overview.section.errors")} ({rangeText()})
 							</span>
-
-							<ErrorRateTable stats={current()} />
-
-							<FailureStatusTable
-								breakdown={current().breakdown}
-								totalFailures={current().totalFailures}
-								windowLabel={rangeText()}
-							/>
+							<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+								<MetricCard
+									label={t("overview.overdueTracking")}
+									value={formatMetric(current().current.tracking.dueNow)}
+									hint={formatWaitSeconds(
+										current().current.tracking.maxOverdueLagSec
+									)}
+								/>
+								<MetricCard
+									label={t("overview.totalAttempts")}
+									value={formatMetric(current().counters.httpAttemptsFinished)}
+									hint={`${current().counters.httpAttemptsCancelled} ${t("metrics.cancelled")}`}
+								/>
+								<MetricCard
+									label={t("overview.errorRate")}
+									value={
+										current().ratios.httpTransportSuccess === null
+											? "—"
+											: formatPercent(
+													1 - (current().ratios.httpTransportSuccess ?? 0)
+												)
+									}
+									hint={t("overview.errorRateHint")}
+								/>
+								<MetricCard
+									label={t("metrics.businessErrors")}
+									value={formatMetric(
+										Object.values(current().network).reduce(
+											(sum, totals) => sum + totals.businessError,
+											0
+										)
+									)}
+								/>
+							</div>
 						</section>
 
 						<section class="flex flex-col gap-2.5">
 							<span class="ts-overline text-tertiary">
 								{t("overview.queues.title")}
 							</span>
-							<QueueStatusTable queues={current().queues} />
+							<QueueStatusTable queues={current().current.queues} />
 						</section>
 					</div>
 				)}

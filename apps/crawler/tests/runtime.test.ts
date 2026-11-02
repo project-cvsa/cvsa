@@ -92,7 +92,7 @@ describe("crawler runtime", () => {
 			},
 			trackingRepository: { async updateSchedule() {} },
 			discoveryRepository: {
-				async upsertMetadata() {
+				async upsertMetadataWithResult() {
 					throw new Error("No metadata expected");
 				},
 			},

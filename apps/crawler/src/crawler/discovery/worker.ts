@@ -1,4 +1,5 @@
 import { RetryLaterError } from "../shared/retryLater";
+import { outcomeOfError } from "../stats/outcome";
 import { AppError, type DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
@@ -404,6 +405,11 @@ export function createDiscoveryWorker(
 		DISCOVERY_QUEUE_NAME,
 		async (job) => {
 			const startedAt = performance.now();
+			if (job.enqueuedAt !== undefined)
+				stats.recordQueueWait(
+					Math.max(0, (job.startedAt ?? Date.now()) - job.enqueuedAt - (job.delayMs ?? 0))
+				);
+			stats.recordJobStarted("discovery");
 			let latest: DiscoveryJobProgress = {
 				stage: "starting",
 				target: null,
@@ -440,20 +446,26 @@ export function createDiscoveryWorker(
 					target: completedTarget,
 					updatedAt: new Date().toISOString(),
 				});
-				stats.recordJobOutcome("discovery", "completed");
+				stats.recordJobOutcome("discovery", "success", performance.now() - startedAt);
 			} catch (error) {
-				stats.recordJobOutcome(
-					"discovery",
-					error instanceof RetryLaterError ? "deferred" : "failed"
-				);
+				const outcome = outcomeOfError(error);
+				if (error instanceof RetryLaterError)
+					stats.recordDeferral({
+						reason:
+							error.reason === "local_capacity"
+								? "local_budget"
+								: error.reason === "network_recovery"
+									? "egress_unavailable"
+									: "upstream_throttle",
+						requestedMs: error.delayMs,
+					});
+				stats.recordJobOutcome("discovery", outcome, performance.now() - startedAt);
 				await report({
 					...latest,
 					stage: error instanceof RetryLaterError ? "deferred" : "failed",
 					updatedAt: new Date().toISOString(),
 				});
 				throw error;
-			} finally {
-				stats.recordTask(performance.now() - startedAt);
 			}
 		},
 		{ concurrency }

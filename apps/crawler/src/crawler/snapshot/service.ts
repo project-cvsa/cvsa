@@ -93,20 +93,22 @@ export class SnapshotService {
 			let uniqueBigIntAids = [...new Set(aids.map((aid) => BigInt(aid)))];
 			if (expectedLeaseUntil) {
 				const owned = await this.trackingRepo.getTrackings(uniqueBigIntAids);
-				uniqueBigIntAids = owned
+				const valid = owned
 					.filter(
 						(row) =>
 							row.leaseUntil?.epochMilliseconds ===
 							expectedLeaseUntil.epochMilliseconds
 					)
 					.map((row) => row.aid);
+				if (valid.length < uniqueBigIntAids.length)
+					this.stats.record("staleLeaseItems", uniqueBigIntAids.length - valid.length);
+				uniqueBigIntAids = valid;
 			}
 			if (uniqueBigIntAids.length === 0) {
 				return { status: "success", inserted: 0, missingCount: 0 };
 			}
 
 			const nowMs = Date.now();
-			this.stats.recordCount("aidsRequested", uniqueBigIntAids.length);
 			const response = await this.bilibiliClient.bulkGetVideoStats(
 				uniqueBigIntAids.map((a) => a.toString())
 			);
@@ -155,11 +157,6 @@ export class SnapshotService {
 			const capturedAt = toInstant(new Date(response.time));
 			const receivedStats = response.data;
 			const receivedAidSet = new Set(receivedStats.map((s) => BigInt(s.aid)));
-			this.stats.recordCount("aidsReturned", receivedAidSet.size);
-			this.stats.recordCount(
-				"aidsMissing",
-				uniqueBigIntAids.filter((aid) => !receivedAidSet.has(aid)).length
-			);
 
 			// Bulk write snapshots into VideoSnapshot
 			let inserted = 0;
@@ -177,7 +174,9 @@ export class SnapshotService {
 						replies: stat.replies,
 					}))
 				);
-				this.stats.recordSnapshotsSaved(inserted);
+				this.stats.record("videosRecorded", inserted);
+				if (receivedStats.length > inserted)
+					this.stats.record("videoInsertConflicts", receivedStats.length - inserted);
 			}
 
 			// Retrieve tracking state for all requested videos

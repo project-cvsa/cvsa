@@ -14,6 +14,10 @@ import type {
 
 export interface IDiscoveryRepository {
 	upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata>;
+	upsertMetadataWithResult(data: UpsertMetadataInput): Promise<{
+		row: BilibiliVideoMetadata;
+		change: "inserted" | "changed" | "unchanged";
+	}>;
 	/**
 	 * Insert-only bulk write for shallow (search/recommendation) payloads.
 	 * Existing rows are never overwritten, so richer detail metadata survives.

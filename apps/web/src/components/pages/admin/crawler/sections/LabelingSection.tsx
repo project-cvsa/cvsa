@@ -18,6 +18,7 @@ import {
 } from "../discoveryFilters";
 import Pagination, { CompactPager } from "../TablePagination";
 import DiscoveryCandidate from "../discovery/DiscoveryCandidate";
+import LabelingStats from "../LabelingStats";
 
 export default function LabelingSection(props: { active: boolean }) {
 	const t = getComponentT("crawler");
@@ -194,6 +195,8 @@ export default function LabelingSection(props: { active: boolean }) {
 				}
 			/>
 
+			<LabelingStats />
+
 			<section class="flex flex-col gap-3" aria-label={t("discoveryUi.review")}>
 				<form
 					class="flex flex-col gap-3 w-full"
@@ -210,7 +213,7 @@ export default function LabelingSection(props: { active: boolean }) {
 								size="sm"
 								class="w-full"
 								aria-label={t("audit.search")}
-								placeholder="按 AID / BVID / 标题快速查找..."
+								placeholder={t("audit.search")}
 								value={search()}
 								onInput={(event) => setSearch(event.currentTarget.value)}
 							/>
@@ -313,7 +316,6 @@ export default function LabelingSection(props: { active: boolean }) {
 
 						{/* Explicit sorting area */}
 						<div class="flex items-center gap-2 shrink-0">
-							<span class="ts-caption text-tertiary">排序:</span>
 							<div class="w-44">
 								<Select
 									size="sm"

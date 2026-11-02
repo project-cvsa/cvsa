@@ -46,12 +46,10 @@ function IngestResult(props: { result: IngestVideoResponse }) {
 					</a>
 					<div class="flex items-center gap-2 ts-caption text-secondary">
 						<span>{props.result.bvid}</span>
-						<span>·</span>
 						<span>
 							{t("videoDetail.uploader")}:{" "}
 							{props.result.ownerName ?? t("ingest.unknown")}
 						</span>
-						<span>·</span>
 						<span>
 							{t("videoDetail.videoStatus")}: {props.result.state}
 						</span>

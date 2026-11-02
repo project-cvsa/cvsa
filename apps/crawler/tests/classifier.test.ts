@@ -76,7 +76,8 @@ function clientWith(local: LocalClassifier): VideoClassifierClient {
 
 describe("VideoClassifierClient (in-process ONNX)", () => {
 	test("records successful, unavailable and failed inference attempts", async () => {
-		const stats = new CrawlerStatsCollector();
+		let now = Date.UTC(2026, 0, 1);
+		const stats = new CrawlerStatsCollector({ now: () => now });
 		await new VideoClassifierClient({
 			localClassifier: fakeLocal(prediction()),
 			stats,
@@ -95,9 +96,10 @@ describe("VideoClassifierClient (in-process ONNX)", () => {
 		await new VideoClassifierClient({ localClassifier: failed, stats }).classify({
 			title: "song",
 		});
+		now += 60_000;
 		const report = await stats.getReport("5m");
-		expect(report.metrics.counters.inferencesRun).toBe(3);
-		expect(report.metrics.errors.inferenceError).toBe(2);
+		expect(report.minutes.counters.modelInferenceCalls).toBe(3);
+		expect(report.minutes.distributions["modelProcess:failure"]?.count).toBe(2);
 	});
 
 	test("classifies without any HTTP traffic", async () => {

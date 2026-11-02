@@ -63,6 +63,7 @@
         "@cvsa/network-scheduler": "workspace:*",
         "@cvsa/observability": "workspace:*",
         "@cvsa/snapshot-db": "workspace:*",
+        "@datadog/sketches-js": "^2.1.1",
         "@huggingface/transformers": "^4.0.1",
         "@opentelemetry/api": "^1.9.0",
         "bullmq": "5.80.2",
@@ -290,6 +291,7 @@
         "@cvsa/env": "workspace:*",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/api-logs": "^0.222.0",
+        "@opentelemetry/core": "^2.11.0",
         "@opentelemetry/exporter-logs-otlp-proto": "^0.222.0",
         "@opentelemetry/exporter-metrics-otlp-proto": "^0.222.0",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
@@ -608,6 +610,8 @@
     "@cvsa/typescript-config": ["@cvsa/typescript-config@workspace:packages/typescript-config"],
 
     "@cvsa/web": ["@cvsa/web@workspace:apps/web"],
+
+    "@datadog/sketches-js": ["@datadog/sketches-js@2.1.1", "", {}, "sha512-d5RjycE+MObE/hU+8OM5Zp4VjTwiPLRa8299fj7muOmR16fb942z8byoMbCErnGh0lBevvgkGrLclQDvINbIyg=="],
 
     "@elysiajs/cors": ["@elysiajs/cors@1.4.2", "", { "peerDependencies": { "elysia": ">= 1.4.0" } }, "sha512-FTCcbH35brTLigF1W7BYySRZomgI/dBEMK9BgK9RP9Nez7zmpGh4koL/Yr1BFv8nYz7CfhRvcM8d/c+XnwMaVQ=="],
 

@@ -85,7 +85,8 @@ export class BilibiliClient {
 			options.clock,
 			options.random,
 			options.requestTimeoutMs,
-			options.operationTimeoutMs
+			options.operationTimeoutMs,
+			options.stats
 		);
 	}
 

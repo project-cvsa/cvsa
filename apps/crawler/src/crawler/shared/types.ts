@@ -4,6 +4,9 @@ import type { DiscoveryJobProgress } from "@cvsa/contracts";
 export interface CrawlerJob<T> {
 	id: string | undefined;
 	data: T;
+	enqueuedAt?: number;
+	startedAt?: number;
+	delayMs?: number;
 	updateData?: (data: T) => Promise<void>;
 	updateProgress?: (progress: DiscoveryJobProgress) => Promise<void>;
 }
@@ -33,7 +36,10 @@ export type CrawlerQueueJobFullDetail = CrawlerQueueJobSnapshot & {
 
 /** BullMQ job-state counts, normalized so callers never deal with partial maps. */
 export interface CrawlerJobCounts {
+	/** `waiting + prioritized`; the dispatcher's queue cap uses this total. */
 	waiting: number;
+	/** Subset of `waiting` that sits in BullMQ's prioritized list. */
+	prioritized?: number;
 	active: number;
 	delayed: number;
 	failed: number;
@@ -115,5 +121,6 @@ export interface CrawlerRuntimeDependencies {
 		startPeriodicFlush(intervalMs?: number): void;
 		stopPeriodicFlush(): void;
 		flush?(): Promise<number>;
+		close?(): Promise<void>;
 	};
 }

@@ -125,8 +125,9 @@ export default function NetworkSessionPolicy(props: Props) {
 					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 ts-caption text-secondary border border-border p-3">
 						<div>
 							<dt>{t("network.session.identity")}</dt>
-							<dd class="text-primary">
-								{status().browser} · {status().generation}
+							<dd class="flex items-center gap-2 text-primary">
+								<span>{status().browser}</span>
+								<span class="text-tertiary">#{status().generation}</span>
 							</dd>
 						</div>
 						<div>

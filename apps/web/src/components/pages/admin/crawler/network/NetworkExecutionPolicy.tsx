@@ -92,8 +92,8 @@ export default function NetworkExecutionPolicy(props: Props) {
 					<For each={props.status?.cooldowns}>
 						{(item) => (
 							<p class="ts-caption text-secondary">
-								{t("network.execution.reasonUpstream")} · {item.scope} ·{" "}
-								{Math.ceil(item.remainingMs / 1000)}s ·{" "}
+								{t("network.execution.reasonUpstream")}, {item.scope},{" "}
+								{Math.ceil(item.remainingMs / 1000)}s,{" "}
 								{new Date(item.until).toLocaleTimeString()}
 							</p>
 						)}

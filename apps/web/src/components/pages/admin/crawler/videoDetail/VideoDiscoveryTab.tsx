@@ -96,8 +96,8 @@ export default function VideoDiscoveryTab(props: VideoDiscoveryTabProps) {
 										{t("videoDetail.position")}
 									</span>
 									<span class="text-primary font-medium">
-										{t("videoDetail.page")} {search().page} · 第{" "}
-										{search().position} 位
+										{t("videoDetail.page")} {search().page},{" "}
+										{t("videoDetail.position")} {search().position}
 									</span>
 								</div>
 							</>
@@ -123,7 +123,10 @@ export default function VideoDiscoveryTab(props: VideoDiscoveryTabProps) {
 										{t("videoDetail.position")}
 									</span>
 									<span class="text-primary font-medium">
-										第 {related().position} 位
+										{t("videoDetail.positionValue").replace(
+											"{position}",
+											String(related().position)
+										)}
 									</span>
 								</div>
 							</>
@@ -147,7 +150,7 @@ export default function VideoDiscoveryTab(props: VideoDiscoveryTabProps) {
 									{t("videoDetail.decision")}
 								</span>
 								<span class="text-primary font-medium">
-									{outcomeLabel(val().outcome)} · {reasonLabel(val().reason)}
+									{outcomeLabel(val().outcome)}, {reasonLabel(val().reason)}
 								</span>
 							</div>
 
@@ -236,7 +239,7 @@ export default function VideoDiscoveryTab(props: VideoDiscoveryTabProps) {
 												class="text-secondary hover:text-primary inline-flex items-center gap-0.5 hover:underline"
 												title={t("videoDetail.viewInCrawler")}
 											>
-												<span>详情</span>
+												<span>{t("videoDetail.viewInCrawler")}</span>
 												<ArrowRight class="w-3 h-3" />
 											</a>
 											<a

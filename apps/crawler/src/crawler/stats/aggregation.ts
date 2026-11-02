@@ -1,154 +1,267 @@
 import {
-	CRAWLER_LATENCY_BOUNDS_MS,
+	CRAWLER_DISCOVERY_RESULTS,
+	type CrawlerDistribution,
 	CRAWLER_RATE_METRICS,
-	type CrawlerMinuteMetrics,
+	CRAWLER_STATS_OUTCOMES,
+	type CrawlerStatsMinuteV2,
+	type CrawlerStatsOutcomeCounts,
+	type CrawlerStatsRatio,
+	type CrawlerStatsRatioInputs,
 	type CrawlerStatsWindow,
 } from "@cvsa/contracts";
 import {
-	emptyCounters,
-	emptyErrors,
 	STATS_COUNTERS,
-	STATS_ERROR_KINDS,
-	STATS_LATENCY_KINDS,
-	type StatsWindowMetrics,
+	emptyDiscoveryCounts,
+	emptyMinute,
+	emptyNetworkTotals,
+	emptyOutcomeCounts,
+	type StatsMinute,
+	type StatsOperation,
+	type StatsOutcome,
 } from "./types";
+import {
+	createSketch,
+	mergeDistributionInto,
+	mergeDistributions as mergeSketchDistributions,
+	serializeSketch,
+	summarizeDistribution,
+	summarizeSketch,
+} from "./sketch";
 
-export function emptyMinute(from: number, to = from): CrawlerMinuteMetrics {
-	return {
-		from,
-		to,
-		counters: emptyCounters(),
-		errors: emptyErrors(),
-		retries: 0,
-		latency: {
-			task: Array.from({ length: CRAWLER_LATENCY_BOUNDS_MS.length + 1 }, () => 0),
-			api: Array.from({ length: CRAWLER_LATENCY_BOUNDS_MS.length + 1 }, () => 0),
-			inference: Array.from({ length: CRAWLER_LATENCY_BOUNDS_MS.length + 1 }, () => 0),
-		},
-		latencyMaxMs: { task: 0, api: 0, inference: 0 },
-		jobs: {
-			tracking: { completed: 0, failed: 0, deferred: 0 },
-			discovery: { completed: 0, failed: 0, deferred: 0 },
-		},
-		network: {},
-	};
-}
+const NETWORK_FIELDS = [
+	"attempts",
+	"transportSuccess",
+	"transportFailure",
+	"businessSuccess",
+	"businessError",
+	"rateLimited",
+	"cancelled",
+	"timeout",
+	"egressResends",
+	"sessionResends",
+] as const;
 
-export function mergeMinute(target: CrawlerMinuteMetrics, source: CrawlerMinuteMetrics): void {
-	if (source.gauges && (!target.gauges || source.gauges.sampledAt > target.gauges.sampledAt))
-		target.gauges = source.gauges;
+export const DEFAULT_QUANTILES = [0.5, 0.9, 0.95, 0.99] as const;
+
+export function mergeMinute(target: StatsMinute, source: StatsMinute): void {
 	target.from = Math.min(target.from, source.from);
 	target.to = Math.max(target.to, source.to);
 	for (const key of STATS_COUNTERS) target.counters[key] += source.counters[key];
-	for (const key of STATS_ERROR_KINDS) target.errors[key] += source.errors[key];
-	target.retries += source.retries;
-	for (const kind of STATS_LATENCY_KINDS) {
-		target.latencyMaxMs[kind] = Math.max(target.latencyMaxMs[kind], source.latencyMaxMs[kind]);
-		for (let i = 0; i <= CRAWLER_LATENCY_BOUNDS_MS.length; i++)
-			target.latency[kind][i] += source.latency[kind][i] ?? 0;
-	}
-	for (const queue of ["tracking", "discovery"] as const) {
-		for (const outcome of ["completed", "failed", "deferred"] as const)
+	for (const queue of ["tracking", "discovery"] as const)
+		for (const outcome of ["completed", "failed", "deferred", "cancelled", "timeout"] as const)
 			target.jobs[queue][outcome] += source.jobs[queue][outcome];
-	}
 	for (const [key, totals] of Object.entries(source.network)) {
-		const sum = target.network[key] ?? {
-			requests: 0,
-			success: 0,
-			businessErrors: 0,
-			rateLimited: 0,
-			transportFailures: 0,
-		};
-		sum.requests += totals.requests;
-		sum.success += totals.success;
-		sum.businessErrors += totals.businessErrors;
-		sum.rateLimited += totals.rateLimited;
-		sum.transportFailures += totals.transportFailures;
+		const sum = target.network[key] ?? emptyNetworkTotals();
+		for (const field of NETWORK_FIELDS) sum[field] += totals[field];
 		target.network[key] = sum;
 	}
-}
-
-function p95(histogram: number[], maximum: number): number {
-	const target = Math.ceil(histogram.reduce((sum, n) => sum + n, 0) * 0.95);
-	if (target === 0) return 0;
-	let count = 0;
-	for (let i = 0; i < histogram.length; i++) {
-		count += histogram[i] ?? 0;
-		if (count >= target) return CRAWLER_LATENCY_BOUNDS_MS[i] ?? maximum;
+	for (const [channel, counts] of Object.entries(source.discovery)) {
+		const sum = target.discovery[channel] ?? emptyDiscoveryCounts();
+		for (const result of CRAWLER_DISCOVERY_RESULTS) sum[result] += counts[result];
+		target.discovery[channel] = sum;
 	}
-	return 0;
+	mergeOutcomeRecord(target.database, source.database);
+	mergeOutcomeRecord(target.redis, source.redis);
+	for (const [key, value] of Object.entries(source.discoveryReasons)) {
+		const existing = target.discoveryReasons[key] ?? { accepted: 0, rejected: 0 };
+		existing.accepted += value.accepted;
+		existing.rejected += value.rejected;
+		target.discoveryReasons[key] = existing;
+	}
+	for (const [key, value] of Object.entries(source.deferrals))
+		target.deferrals[key] = (target.deferrals[key] ?? 0) + value;
+	mergeDistributions(target.distributions, source.distributions);
 }
 
-export function windowMetrics(
-	window: CrawlerStatsWindow,
-	metrics: CrawlerMinuteMetrics
-): StatsWindowMetrics {
+function mergeOutcomeRecord(
+	target: Record<string, CrawlerStatsOutcomeCounts>,
+	source: Record<string, CrawlerStatsOutcomeCounts>
+): void {
+	for (const [key, counts] of Object.entries(source)) {
+		const sum = target[key] ?? emptyOutcomeCounts();
+		for (const outcome of CRAWLER_STATS_OUTCOMES) sum[outcome] += counts[outcome];
+		target[key] = sum;
+	}
+}
+
+function mergeDistributions(
+	target: Record<string, CrawlerDistribution>,
+	source: Record<string, CrawlerDistribution>
+): void {
+	const sketches = new Map<string, ReturnType<typeof createSketch>>();
+	for (const key of Object.keys(target)) {
+		const distribution = target[key];
+		if (!distribution || distribution.count === 0) continue;
+		const sketch = createSketch();
+		mergeDistributionInto(sketch, distribution);
+		sketches.set(key, sketch);
+	}
+	for (const key of Object.keys(source)) {
+		const distribution = source[key];
+		if (!distribution || distribution.count === 0) continue;
+		let sketch = sketches.get(key);
+		if (!sketch) {
+			sketch = createSketch();
+			sketches.set(key, sketch);
+		}
+		mergeDistributionInto(sketch, distribution);
+	}
+	for (const key of sketches.keys()) {
+		const sketch = sketches.get(key);
+		if (sketch) target[key] = serializeSketch(sketch);
+	}
+}
+
+export function mergeMinutes(
+	minutes: readonly StatsMinute[],
+	from: number,
+	to: number
+): StatsMinute {
+	const total = emptyMinute(from, to);
+	for (const minute of minutes) mergeMinute(total, minute);
+	return total;
+}
+
+export function distributionKey(operation: StatsOperation, outcome: StatsOutcome): string {
+	return `${operation}:${outcome}`;
+}
+
+export function summarizeLatency(
+	minute: StatsMinute,
+	quantiles: readonly number[] = DEFAULT_QUANTILES
+): Record<string, ReturnType<typeof summarizeSketch>> {
+	const result: Record<string, ReturnType<typeof summarizeSketch>> = {};
+	for (const [key, distribution] of Object.entries(minute.distributions)) {
+		if (distribution.count === 0) continue;
+		const sketch = createSketch();
+		mergeDistributionInto(sketch, distribution);
+		result[key] = summarizeSketch(sketch, quantiles);
+	}
+	return result;
+}
+
+export function ratioInputs(minute: StatsMinute): CrawlerStatsRatioInputs {
+	const counters = minute.counters;
 	return {
-		...metrics,
-		window,
-		latencyP95Ms: {
-			task: p95(metrics.latency.task, metrics.latencyMaxMs.task),
-			api: p95(metrics.latency.api, metrics.latencyMaxMs.api),
-			inference: p95(metrics.latency.inference, metrics.latencyMaxMs.inference),
-		},
+		httpAttemptsFinished: counters.httpAttemptsFinished,
+		httpAttemptsCancelled: counters.httpAttemptsCancelled,
+		httpTransportSuccess: counters.httpAttemptsTransportSuccess,
+		logicalRequests:
+			counters.logicalRequestSuccess +
+			counters.logicalRequestFailure +
+			counters.logicalRequestTimeout,
+		logicalRequestSuccess: counters.logicalRequestSuccess,
+		egressResends: counters.egressSwitchResends,
+		sessionResends: counters.sessionRecoveryResends,
+		retriedLogicalRequests: counters.retriedLogicalRequests,
+		retriedLogicalRequestSuccess: counters.retriedLogicalRequestSuccess,
+		videosRecorded: counters.videosRecorded,
 	};
 }
 
-export function derivedMetrics(metrics: StatsWindowMetrics) {
-	const seconds = Math.max(1, (metrics.to - metrics.from) / 1000);
-	const requests = metrics.counters.networkRequests;
-	const errors = metrics.errors;
-	const networkFailures =
-		errors.timeout +
-		errors.networkFailure +
-		errors.httpFailure +
-		errors.networkOther +
-		errors.rateLimited412Or429;
-	const errorRate = requests > 0 ? networkFailures / requests : 0;
-	const retryRate = requests > 0 ? metrics.retries / requests : 0;
-	const businessErrorRate = requests > 0 ? errors.bilibiliBusinessError / requests : 0;
-	const rates = {
-		snapshotsPerMin: 0,
-		jobsPerMin: 0,
-		requestsPerMin: 0,
-		inferencesPerMin: 0,
-		candidatesPerMin: 0,
+function ratio(numerator: number, denominator: number): number | null {
+	return denominator > 0 ? numerator / denominator : null;
+}
+
+export function computeRatios(minute: StatsMinute): CrawlerStatsRatio {
+	const inputs = ratioInputs(minute);
+	const httpDenominator = Math.max(0, inputs.httpAttemptsFinished - inputs.httpAttemptsCancelled);
+	return {
+		httpTransportSuccess: ratio(inputs.httpTransportSuccess, httpDenominator),
+		logicalRequestSuccess: ratio(inputs.logicalRequestSuccess, inputs.logicalRequests),
+		egressResendShare: ratio(inputs.egressResends, inputs.httpAttemptsFinished),
+		sessionResendShare: ratio(inputs.sessionResends, inputs.httpAttemptsFinished),
+		retryRecoverySuccess: ratio(
+			inputs.retriedLogicalRequestSuccess,
+			inputs.retriedLogicalRequests
+		),
+		requestsPerRecord: ratio(inputs.httpAttemptsFinished, inputs.videosRecorded),
 	};
+}
+
+export function derivedChartMetrics(minute: StatsMinute): Record<string, number | null> {
+	const seconds = Math.max(1, (minute.to - minute.from) / 1000);
+	const rates: Record<string, number> = {};
 	for (const metric of CRAWLER_RATE_METRICS)
-		rates[metric.key] = (metrics.counters[metric.counter] * 60) / seconds;
+		rates[metric.key] = (minute.counters[metric.counter] * 60) / seconds;
+	const ratios = computeRatios(minute);
+	const latencies = summarizeLatency(minute);
+	const p95 = (operation: StatsOperation) =>
+		latencies[distributionKey(operation, "success")]?.quantiles["0.95"] ?? null;
 	return {
 		...rates,
-		jobsPerSec: metrics.counters.jobsCompleted / seconds,
-		requestsPerSec: requests / seconds,
-		inferencesPerSec: metrics.counters.inferencesRun / seconds,
-		networkFailures,
-		errorRate,
-		retryRate,
-		businessErrorRate,
-		requestSuccessRate:
-			requests > 0
-				? (requests - networkFailures - errors.bilibiliBusinessError) / requests
-				: 0,
-		errorPercent: errorRate * 100,
-		retryPercent: retryRate * 100,
+		"ratios.httpTransportSuccess": ratios.httpTransportSuccess,
+		"ratios.logicalRequestSuccess": ratios.logicalRequestSuccess,
+		"ratios.egressResendShare": ratios.egressResendShare,
+		"ratios.sessionResendShare": ratios.sessionResendShare,
+		"ratios.retryRecoverySuccess": ratios.retryRecoverySuccess,
+		"ratios.requestsPerRecord": ratios.requestsPerRecord,
+		"latencyP95Ms.trackingExecution": p95("trackingExecution"),
+		"latencyP95Ms.httpAttempt": p95("httpAttempt"),
+		"latencyP95Ms.modelProcess": p95("modelProcess"),
+		...Object.fromEntries(
+			Object.entries(minute.counters).map(([key, value]) => [`counters.${key}`, value])
+		),
 	};
 }
 
-export function chartMetrics(metrics: StatsWindowMetrics): Record<string, number> {
-	return {
-		...derivedMetrics(metrics),
-		...(metrics.gauges
-			? {
-					"queue.waiting": metrics.gauges.waiting,
-					"queue.active": metrics.gauges.active,
-					"tracking.overdue": metrics.gauges.overdue,
-				}
-			: {}),
-		...Object.fromEntries(
-			Object.entries(metrics.counters).map(([k, v]) => [`counters.${k}`, v])
-		),
-		"latencyP95Ms.task": metrics.latencyP95Ms.task,
-		"latencyP95Ms.api": metrics.latencyP95Ms.api,
-		"latencyP95Ms.inference": metrics.latencyP95Ms.inference,
+export function windowMinutes(window: CrawlerStatsWindow): number {
+	const map: Record<CrawlerStatsWindow, number> = {
+		"5m": 5,
+		"15m": 15,
+		"30m": 30,
+		"1h": 60,
+		"6h": 360,
+		"24h": 1440,
+		"7d": 10080,
 	};
+	return map[window];
+}
+
+export function pickGranularity(
+	minutes: number,
+	widthMinutes = 1
+): { stepMinutes: number; fromHours: boolean } {
+	const maxPoints = 240;
+	for (const step of [1, 2, 5, 10, 15, 30, 60, 120, 180, 240, 360, 720, 1440]) {
+		if (Math.ceil(minutes / step) <= maxPoints)
+			return { stepMinutes: Math.max(widthMinutes, step), fromHours: step >= 60 };
+	}
+	return { stepMinutes: Math.max(widthMinutes, Math.ceil(minutes / maxPoints)), fromHours: true };
+}
+
+export function distributionSummariesForPrefix(
+	distributions: StatsMinute["distributions"],
+	prefix: string
+): Record<string, ReturnType<typeof summarizeDistribution>> {
+	const grouped = new Map<string, StatsMinute["distributions"][string][]>();
+	for (const key of Object.keys(distributions)) {
+		if (!key.startsWith(`${prefix}:`)) continue;
+		const rest = key.slice(prefix.length + 1);
+		const separator = rest.lastIndexOf(":");
+		if (separator <= 0) continue;
+		const operation = rest.slice(0, separator);
+		const entries = grouped.get(operation) ?? [];
+		const distribution = distributions[key];
+		if (distribution) entries.push(distribution);
+		grouped.set(operation, entries);
+	}
+	return Object.fromEntries(
+		[...grouped.entries()].map(([operation, entries]) => [
+			operation,
+			summarizeDistribution(mergeSketchDistributions(entries)),
+		])
+	);
+}
+
+export function emptyOutcomeRecord(): CrawlerStatsOutcomeCounts {
+	return emptyOutcomeCounts();
+}
+
+export function isLegacyMinute(metrics: unknown): metrics is CrawlerStatsMinuteV2 {
+	return (
+		typeof metrics === "object" &&
+		metrics !== null &&
+		(metrics as { version?: unknown }).version === 2
+	);
 }

@@ -47,12 +47,13 @@ function queueWith(jobs: CrawlerQueueJobFullDetail[]): CrawlerQueue<unknown> {
 		async close() {},
 	};
 }
+let nextTimestamp = Date.now() - 1_000_000;
 function job(id: string, state = "waiting"): CrawlerQueueJobFullDetail {
 	return {
 		id,
 		state,
 		name: `job-${id}`,
-		timestamp: Date.now() - 10000,
+		timestamp: nextTimestamp++,
 		attempts: 1,
 		data: { aid: id },
 		opts: { attempts: 3 },
@@ -116,8 +117,10 @@ describe("crawler admin services", () => {
 			job("waiting"),
 			job("done", "completed"),
 		]);
-		const stats = new CrawlerStatsCollector();
-		stats.recordCandidatesScanned(15);
+		let now = Date.UTC(2026, 0, 1);
+		const stats = new CrawlerStatsCollector({ now: () => now });
+		stats.record("candidatesFinished", 15);
+		now += 60_000;
 		const service = new DiscoveryAdminService(
 			queue,
 			new InMemoryDiscoveryRepository(),
@@ -267,36 +270,37 @@ describe("crawler admin services", () => {
 
 		expect(await tracking.getTracking(3n)).not.toBeNull();
 	});
-	test("custom ranges and presets share minute rates and separate business and processing errors", async () => {
+	test("custom ranges use the same minute rates and keep transport and business results separate", async () => {
 		let now = Date.UTC(2026, 0, 1);
 		const collector = new CrawlerStatsCollector({
 			now: () => now,
-			rollup: new InMemoryStatsStore(),
+			store: new InMemoryStatsStore(),
 		});
-		collector.recordSnapshotsSaved(90);
-		for (let index = 0; index < 400; index++) collector.recordNetworkRequest(10, "success");
-		for (let index = 0; index < 100; index++)
-			collector.recordNetworkRequest(10, "business_error");
-		for (let index = 0; index < 40; index++) collector.recordNetworkRequest(10, "timeout");
-		for (let index = 0; index < 90; index++) collector.recordError("dbError");
-		collector.recordRetry(54);
+		collector.record("videosRecorded", 90);
+		for (let index = 0; index < 400; index++) collector.recordHttpAttempt(10, "success");
+		for (let index = 0; index < 100; index++) collector.recordHttpAttempt(10, "business_error");
+		for (let index = 0; index < 40; index++) collector.recordHttpAttempt(10, "timeout");
+		for (let index = 0; index < 90; index++)
+			collector.recordDatabase("tracking", "query", 10, "failure");
 		now += 30_000;
 		await collector.flush();
+		now += 30_000;
 		const service = new CrawlerAdminStatsService(
 			{ tracking: queueWith([]), discovery: queueWith([]) },
 			collector
 		);
 		const custom = await service.overview({ window: "1h", minutes: 90 });
-		const preset = await service.overview({ window: "1h" });
 		expect(custom.minutes).toBe(90);
-		expect(custom.coverageSeconds).toBe(30);
-		expect(custom.snapshotsPerMin).toBe(180);
-		expect(custom.series).toEqual(preset.series);
-		expect(custom.series[0]?.metrics.snapshotsPerMin).toBe(custom.snapshotsPerMin);
-		expect(custom.errorRate).toBeCloseTo(40 / 540);
-		expect(custom.businessErrorRate).toBeCloseTo(100 / 540);
-		expect(custom.requestSuccessRate).toBeCloseTo(400 / 540);
-		expect(custom.retryRate).toBe(0.1);
+		expect(custom.range.seconds).toBe(5400);
+		expect(custom.counters.videosRecorded).toBe(90);
+		expect(custom.ratios.httpTransportSuccess).toBeCloseTo(500 / 540);
+		expect(custom.network["default|other|unknown"]?.businessError).toBe(100);
+		expect(custom.network["default|other|unknown"]?.timeout).toBe(40);
+		const point = custom.series.find(
+			(item) => Date.parse(item.bucketTime) === Date.UTC(2026, 0, 1)
+		);
+		expect(point?.metrics.videosPerMin).toBe(90);
+		expect(custom.database.byOperation["tracking.query"]?.failure).toBe(90);
 	});
 	test("pages jobs across queue boundaries with the requested limit", async () => {
 		const tracking = queueWith([job("t0", "active"), job("t1", "active"), job("t2", "active")]);
@@ -336,10 +340,10 @@ describe("crawler admin services", () => {
 			new CrawlerStatsCollector()
 		);
 
-		// Flattened order: waiting w0,w1,w2,w3 then failed f0,f1,f2.
+		// First-enqueue order: tracking w0,w1,w2,f0,f1 then discovery w3,f2.
 		const page = await service.jobs({ limit: 3, offset: 2 });
 		expect(page.total).toBe(7);
-		expect(page.items.map((item) => item.id)).toEqual(["w2", "w3", "f0"]);
+		expect(page.items.map((item) => item.id)).toEqual(["w2", "f0", "f1"]);
 	});
 	test("keeps the full total when a page is smaller than a state's depth", async () => {
 		const tracking = queueWith(Array.from({ length: 130 }, (_, index) => job(String(index))));
@@ -371,13 +375,13 @@ describe("crawler admin services", () => {
 
 		const page = await service.jobs({ limit: 100 });
 		expect(page.total).toBe(6);
-		// States are flattened in contract order, then queues in tracking/discovery order.
+		// Jobs are ordered by first-enqueue time, then queue and id.
 		expect(page.items.map((item) => `${item.queue}:${item.id}:${item.state}`)).toEqual([
 			"tracking:w0:waiting",
 			"tracking:w1:waiting",
-			"discovery:w2:waiting",
 			"tracking:f0:failed",
 			"tracking:c0:completed",
+			"discovery:w2:waiting",
 			"discovery:c1:completed",
 		]);
 		expect(page.items.filter((item) => item.state === "completed")).toHaveLength(2);

@@ -1,4 +1,3 @@
-import { derivedMetrics } from "../stats/aggregation";
 import {
 	AppError,
 	DiscoveryJobProgressSchema,
@@ -73,9 +72,14 @@ export class DiscoveryAdminService {
 			recentJobs: (filteredRecent.length > 0 ? filteredRecent : recent)
 				.sort((a, b) => (b.finishedOn ?? b.timestamp) - (a.finishedOn ?? a.timestamp))
 				.map(activity),
-			candidatesPerMin: derivedMetrics((await this.stats.getReport("5m")).metrics)
-				.candidatesPerMin,
+			candidatesPerMin: await this.candidatesPerMin(),
 		};
+	}
+
+	private async candidatesPerMin(): Promise<number> {
+		const report = await this.stats.getReport("5m");
+		const seconds = Math.max(1, (report.to - report.from) / 1000);
+		return (report.minutes.counters.candidatesFinished * 60) / seconds;
 	}
 
 	async label(aid: bigint, humanLabel: 0 | 1) {

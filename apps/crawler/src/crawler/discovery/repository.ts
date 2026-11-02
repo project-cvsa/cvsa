@@ -172,10 +172,17 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		private readonly db: DatabaseClient,
 		stats?: StatsRecorder
 	) {
-		this.trace = createDatabaseTracer(stats);
+		this.trace = createDatabaseTracer(stats, "discovery");
 	}
 
 	async upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata> {
+		return (await this.upsertMetadataWithResult(data)).row;
+	}
+
+	async upsertMetadataWithResult(data: UpsertMetadataInput): Promise<{
+		row: BilibiliVideoMetadata;
+		change: "inserted" | "changed" | "unchanged";
+	}> {
 		return this.trace("discovery.upsertMetadata", async () => {
 			const db = activeTaskResource(this.db);
 			const [existing] = await db
@@ -256,9 +263,9 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					if (changeType) {
 						await this.appendMetadataHistory(updated, changeType, diff);
 					}
-					return updated;
+					return { row: updated, change: changeType ? "changed" : "unchanged" };
 				}
-				return existing;
+				return { row: existing, change: "unchanged" };
 			}
 
 			const [created] = await db
@@ -303,7 +310,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 			if (!created) throw new Error(`Failed to insert metadata for aid=${data.aid}`);
 			await this.appendMetadataHistory(created, "created", {});
-			return created;
+			return { row: created, change: "inserted" };
 		});
 	}
 

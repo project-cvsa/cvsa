@@ -2,7 +2,7 @@ import { Show } from "solid-js";
 import Button from "@components/ui/Button";
 import Select from "@components/ui/Select";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import { formatPageLabel, hasNextPage } from "./pagination";
+import { hasNextPage } from "./pagination";
 import ChevronLeft from "lucide-solid/icons/chevron-left";
 import ChevronRight from "lucide-solid/icons/chevron-right";
 
@@ -13,6 +13,7 @@ export function CompactPager(props: {
 	busy?: boolean;
 	onPageChange: (page: number) => void;
 }) {
+	const t = getComponentT("crawler");
 	const totalPages = () => Math.max(1, Math.ceil(props.total / props.pageSize));
 	const currentPage = () => props.page + 1;
 
@@ -24,7 +25,7 @@ export function CompactPager(props: {
 				class="h-6 w-6 p-0"
 				disabled={props.page === 0 || props.busy}
 				onClick={() => props.onPageChange(props.page - 1)}
-				aria-label="Previous Page"
+				aria-label={t("common.previousPage")}
 			>
 				<ChevronLeft class="w-3.5 h-3.5" />
 			</Button>
@@ -37,7 +38,7 @@ export function CompactPager(props: {
 				class="h-6 w-6 p-0"
 				disabled={!hasNextPage(props.page, props.total, props.pageSize) || props.busy}
 				onClick={() => props.onPageChange(props.page + 1)}
-				aria-label="Next Page"
+				aria-label={t("common.nextPage")}
 			>
 				<ChevronRight class="w-3.5 h-3.5" />
 			</Button>
@@ -61,9 +62,8 @@ export default function Pagination(props: PaginationProps) {
 	const currentPage = () => props.page + 1;
 
 	return (
-		<footer class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border ts-caption text-secondary">
+		<footer class="flex flex-wrap items-center justify-between gap-3 pt-2 ts-caption text-secondary">
 			<div class="flex items-center gap-3">
-				<span>{formatPageLabel(props.page, props.total, props.pageSize)}</span>
 				<Show when={props.pageSizeOptions && props.onPageSizeChange}>
 					<div class="w-28">
 						<Select
@@ -72,7 +72,7 @@ export default function Pagination(props: PaginationProps) {
 							options={
 								props.pageSizeOptions?.map((size) => ({
 									value: String(size),
-									label: `${size} 条/页`,
+									label: t("common.rowsPerPage").replace("{count}", String(size)),
 								})) ?? []
 							}
 							onValueChange={(val) => {

@@ -244,7 +244,9 @@ export default function TasksSection() {
 					</div>
 				)}
 			</Show>
-			<Show when={stats()}>{(data) => <QueueStatusTable queues={data().queues} />}</Show>
+			<Show when={stats()}>
+				{(data) => <QueueStatusTable queues={data().current.queues} />}
+			</Show>
 			<section class="flex flex-col gap-3">
 				<div class="flex flex-wrap items-center gap-2">
 					<h3 class="ts-label mr-auto">{t("tasks.jobs.title")}</h3>

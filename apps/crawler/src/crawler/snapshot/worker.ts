@@ -1,7 +1,8 @@
 import { RetryLaterError } from "../shared/retryLater";
 import { appLogger } from "@cvsa/logger";
 import { AppError } from "@cvsa/contracts";
-import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
+import { createNoopStatsRecorder, type StatsDeferral, type StatsRecorder } from "../stats/types";
+import { outcomeOfError } from "../stats/outcome";
 import type { CrawlerMq, CrawlerWorker } from "../shared/types";
 import type { SnapshotService } from "./service";
 
@@ -20,6 +21,17 @@ export function snapshotFailureKind(
 	)
 		return "rate_limit";
 	return "other";
+}
+
+function deferralFor(error: unknown, kind: ReturnType<typeof snapshotFailureKind>): StatsDeferral {
+	const requestedMs = error instanceof RetryLaterError ? error.delayMs : THROTTLE_RETRY_DELAY_MS;
+	const reason =
+		kind === "unavailable"
+			? "egress_unavailable"
+			: kind === "local_capacity"
+				? "local_budget"
+				: "upstream_throttle";
+	return { reason, requestedMs };
 }
 
 export interface SnapshotBatchJobData {
@@ -45,10 +57,15 @@ export function createSnapshotBatchWorker(
 			});
 
 			const startedAt = performance.now();
+			if (job.enqueuedAt !== undefined)
+				stats.recordQueueWait(
+					Math.max(0, (job.startedAt ?? Date.now()) - job.enqueuedAt - (job.delayMs ?? 0))
+				);
+			stats.recordJobStarted("tracking");
 			try {
 				const result = await snapshotService.processBatch(aids, job.data.leaseUntil);
 				if (result.status === "api_error") {
-					stats.recordJobOutcome("tracking", "failed");
+					stats.recordJobOutcome("tracking", "failure", performance.now() - startedAt);
 					appLogger.warn("Snapshot batch encountered API error", {
 						component: "snapshot-worker",
 						jobId: job.id,
@@ -57,7 +74,8 @@ export function createSnapshotBatchWorker(
 					return;
 				}
 
-				stats.recordJobOutcome("tracking", "completed");
+				if (result.inserted === 0) stats.record("executionsWithoutOutput");
+				stats.recordJobOutcome("tracking", "success", performance.now() - startedAt);
 				appLogger.info("Snapshot batch completed successfully", {
 					component: "snapshot-worker",
 					jobId: job.id,
@@ -67,14 +85,25 @@ export function createSnapshotBatchWorker(
 			} catch (error) {
 				const failureKind = snapshotFailureKind(error);
 				if (failureKind !== "other") {
-					stats.recordJobOutcome("tracking", "deferred");
-					await snapshotService.deferLeases(
-						aids,
-						error instanceof RetryLaterError ? error.delayMs : THROTTLE_RETRY_DELAY_MS,
-						failureKind,
-						job.data.leaseUntil
-					);
-					if (failureKind === "unavailable") stats.recordError("adapterUnavailable");
+					try {
+						await snapshotService.deferLeases(
+							aids,
+							error instanceof RetryLaterError
+								? error.delayMs
+								: THROTTLE_RETRY_DELAY_MS,
+							failureKind,
+							job.data.leaseUntil
+						);
+					} catch (deferError) {
+						stats.recordJobOutcome(
+							"tracking",
+							"failure",
+							performance.now() - startedAt
+						);
+						throw deferError;
+					}
+					stats.recordDeferral(deferralFor(error, failureKind));
+					stats.recordJobOutcome("tracking", "deferred", performance.now() - startedAt);
 					appLogger.warn(
 						"Snapshot batch deferred after throttling or unavailable exits",
 						{
@@ -96,15 +125,15 @@ export function createSnapshotBatchWorker(
 							error: leaseError,
 						});
 					});
-				stats.recordJobOutcome("tracking", "failed");
-				stats.recordError("other");
+				stats.recordJobOutcome(
+					"tracking",
+					outcomeOfError(error),
+					performance.now() - startedAt
+				);
 				appLogger.warn("Snapshot batch returned to dispatcher after failure", {
 					component: "snapshot-worker",
 					error,
 				});
-				return;
-			} finally {
-				stats.recordTask(performance.now() - startedAt);
 			}
 		},
 		{

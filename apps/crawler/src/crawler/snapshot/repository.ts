@@ -12,7 +12,7 @@ export class SnapshotRepository implements ISnapshotRepository {
 		private readonly db: DatabaseClient,
 		stats?: StatsRecorder
 	) {
-		this.trace = createDatabaseTracer(stats);
+		this.trace = createDatabaseTracer(stats, "snapshot");
 	}
 
 	async createSnapshots(snapshots: CreateSnapshotInput[]): Promise<number> {

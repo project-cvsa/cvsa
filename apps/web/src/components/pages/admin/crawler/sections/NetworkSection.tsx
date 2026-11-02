@@ -1,4 +1,5 @@
 import NetworkSessionPolicy from "../network/NetworkSessionPolicy";
+import NetworkStrategySupport from "../network/NetworkStrategySupport";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
 import { createMemo, createSignal, Show } from "solid-js";
@@ -249,6 +250,8 @@ export default function NetworkSection(props: NetworkSectionProps) {
 					</>
 				}
 			/>
+
+			<NetworkStrategySupport />
 
 			<Show
 				when={networkDoc()}

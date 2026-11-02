@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
 	ActionQueuedResponseSchema,
-	CrawlerOverviewStatsSchema,
 	CrawlerStatsQuerySchema,
 	DiscoverySampleListQuerySchema,
 	DiscoverySampleListResponseSchema,
@@ -18,6 +17,7 @@ import {
 	type VideoMetadataHistoryItem,
 	type VideoSnapshotItem,
 } from "../../src/crawler";
+import { CRAWLER_STATS_COUNTER_KEYS, CrawlerOverviewStatsSchema } from "../../src/crawlerStats";
 
 const tracking = {
 	aid: "170001",
@@ -153,80 +153,137 @@ describe("crawler admin contracts", () => {
 		expect(parsed.items[0]?.title).toBe("song");
 	});
 
-	it("defaults the stats window and validates an overview payload", () => {
+	it("defaults the stats window and validates a V2 overview payload", () => {
 		expect(CrawlerStatsQuerySchema.parse({})).toEqual({ window: "1h" });
 		expect(CrawlerStatsQuerySchema.safeParse({ window: "7d" }).success).toBe(true);
 		expect(CrawlerStatsQuerySchema.safeParse({ window: "invalid" }).success).toBe(false);
 
+		const counters = Object.fromEntries(CRAWLER_STATS_COUNTER_KEYS.map((key) => [key, 0]));
+		const jobTotals = { completed: 0, failed: 0, deferred: 0, cancelled: 0, timeout: 0 };
 		const overview = {
+			version: 2,
 			window: "1h",
 			generatedAt: "2026-10-26T12:01:00.000Z",
-			coverageFrom: "2026-10-26T12:00:00.000Z",
-			coverageSeconds: 60,
-			counters: {
-				jobsCompleted: 30,
-				snapshotsSaved: 120,
-				videosDiscovered: 1,
-				candidatesScanned: 60,
-				inferencesRun: 12,
-				networkRequests: 90,
-				aidsRequested: 125,
-				aidsReturned: 120,
-				aidsMissing: 5,
-				candidatesSeen: 70,
-				candidatesSkipped: 10,
-				candidatesRejected: 59,
-				candidatesFailed: 0,
+			range: {
+				from: "2026-10-26T11:00:00.000Z",
+				to: "2026-10-26T12:00:00.000Z",
+				seconds: 3600,
 			},
+			coverage: {
+				status: "complete",
+				from: "2026-10-26T11:00:00.000Z",
+				to: "2026-10-26T12:00:00.000Z",
+				minutes: 60,
+				coveredMinutes: 60,
+				missingMinutes: 0,
+				unconfirmedFrom: null,
+				legacy: false,
+				enabledAt: null,
+				unavailableMetrics: [],
+			},
+			counters,
 			jobs: {
-				tracking: { completed: 20, failed: 1, deferred: 2 },
-				discovery: { completed: 10, failed: 0, deferred: 0 },
+				tracking: jobTotals,
+				discovery: jobTotals,
 			},
 			network: {},
-			requestsPerMin: 90,
-			inferencesPerMin: 12,
-			businessErrorRate: 1 / 90,
-			requestSuccessRate: 87 / 90,
-			jobsPerSec: 0.5,
-			jobsPerMin: 30,
-			snapshotsPerMin: 120,
-			candidatesPerMin: 60,
-			inferencesPerSec: 0.2,
-			requestsPerSec: 1.5,
-			totalAttempts: 90,
-			totalFailures: 4,
-			errorRate: 2 / 90,
-			retryRate: 2 / 90,
-			breakdown: {
-				networkFailure: 0,
-				httpFailure: 0,
-				networkOther: 0,
-				adapterUnavailable: 0,
-				timeout: 1,
-				rateLimited412Or429: 1,
-				bilibiliBusinessError: 1,
-				inferenceError: 1,
-				dbError: 0,
-				other: 0,
+			ratios: {
+				httpTransportSuccess: null,
+				logicalRequestSuccess: null,
+				egressResendShare: null,
+				sessionResendShare: null,
+				retryRecoverySuccess: null,
+				requestsPerRecord: null,
 			},
-			overdueTrackingCount: 3,
-			maxOverdueLagSec: 42,
-			queues: {
-				tracking: { waiting: 1, active: 2, delayed: 0, failed: 0, oldestWaitSec: 5 },
+			ratioInputs: {
+				httpAttemptsFinished: 0,
+				httpAttemptsCancelled: 0,
+				httpTransportSuccess: 0,
+				logicalRequests: 0,
+				logicalRequestSuccess: 0,
+				egressResends: 0,
+				sessionResends: 0,
+				retriedLogicalRequests: 0,
+				retriedLogicalRequestSuccess: 0,
+				videosRecorded: 0,
 			},
-			latencyMs: { taskP95: 100, apiP95: 250, inferenceP95: 80 },
-			series: [
-				{
-					bucketTime: "2026-10-26T12:00:00.000Z",
-					metricGroup: "throughput",
-					metrics: { jobsPerMin: 30 },
+			latency: {},
+			persistence: {
+				state: "ok",
+				lastSuccessAt: null,
+				lastHeartbeatAt: null,
+				lastError: null,
+				pendingMinutes: 0,
+				oldestPendingAgeSec: null,
+				writeSuccesses: 0,
+				writeFailures: 0,
+				writeDurationMs: null,
+				pendingHours: 0,
+				oldestPendingHourAgeSec: null,
+				rollupFailures: 0,
+			},
+			instances: [],
+			current: {
+				sampledAt: null,
+				stale: true,
+				queues: {},
+				tracking: {
+					total: 0,
+					byState: {},
+					byPriority: {},
+					neverCaptured: 0,
+					freshness: { count: 0, meanSec: null, quantilesSec: {}, maxSec: null },
+					freshnessByState: {},
+					freshnessByPriority: {},
+					dueNow: 0,
+					metadataDue: 0,
+					maxOverdueLagSec: 0,
 				},
-			],
+				model: {
+					reachable: null,
+					modelsLoaded: null,
+					modelVersion: null,
+					activeRequests: 0,
+					waitingRequests: 0,
+					loadFailures: 0,
+					starts: 0,
+					exits: 0,
+					timeoutTerminations: 0,
+					cancelTerminations: 0,
+				},
+				resources: null,
+				export: {
+					enabled: false,
+					successes: 0,
+					failures: 0,
+					lastSuccessAt: null,
+					durationMs: null,
+					lastResult: "not_exported",
+					lastError: null,
+				},
+				strategies: [],
+			},
+			discovery: { byChannel: {}, byReason: {}, byModelVersion: {} },
+			labeling: {
+				samples: 0,
+				truePositive: 0,
+				falsePositive: 0,
+				trueNegative: 0,
+				falseNegative: 0,
+				accuracy: null,
+				precision: null,
+				recall: null,
+			},
+			videoCoverage: null,
+			database: { byOperation: {}, durationMs: {} },
+			redis: { byCommand: {}, durationMs: {} },
+			series: [],
+			legacy: null,
 		};
 
-		expect(CrawlerOverviewStatsSchema.parse(overview).series).toHaveLength(1);
-		expect(CrawlerOverviewStatsSchema.safeParse({ ...overview, window: "24h" }).success).toBe(
-			true
+		expect(CrawlerOverviewStatsSchema.parse(overview).version).toBe(2);
+		expect(CrawlerOverviewStatsSchema.safeParse({ ...overview, version: 1 }).success).toBe(
+			false
 		);
 	});
 });

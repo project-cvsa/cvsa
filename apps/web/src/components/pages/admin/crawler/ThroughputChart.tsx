@@ -2,19 +2,24 @@ import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-j
 import { CRAWLER_CHART_METRICS, type CrawlerStatsRollupPoint } from "@cvsa/contracts";
 import Select from "@components/ui/Select";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import { formatMetric } from "./format";
+import { formatMetric, formatPercent } from "./format";
 
 const METRICS = CRAWLER_CHART_METRICS;
 
 type PlotPoint = { time: number; value: number; x: number; y: number };
 
+function formatValue(value: number, format: string, unit: string): string {
+	return format === "percent" ? formatPercent(value) : `${formatMetric(value)}${unit}`;
+}
+
 function TrendPlot(props: {
 	width: number;
 	maximum: number;
-	points: PlotPoint[];
-	path: string;
+	segments: PlotPoint[][];
+	points: { time: number; x: number }[];
 	label: string;
 	unit: string;
+	format: string;
 }) {
 	const timeLabel = (time: number) =>
 		new Date(time).toLocaleString(document.documentElement.lang, {
@@ -51,20 +56,25 @@ function TrendPlot(props: {
 							fill="currentColor"
 							font-size="11"
 						>
-							{formatMetric(props.maximum * ratio)}
-							{props.unit}
+							{formatValue(props.maximum * ratio, props.format, props.unit)}
 						</text>
 					</g>
 				)}
 			</For>
-			<path
-				d={props.path}
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				vector-effect="non-scaling-stroke"
-				stroke-linejoin="round"
-			/>
+			<For each={props.segments}>
+				{(segment) => (
+					<path
+						d={segment
+							.map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`)
+							.join(" ")}
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						vector-effect="non-scaling-stroke"
+						stroke-linejoin="round"
+					/>
+				)}
+			</For>
 			<For
 				each={props.points.filter(
 					(_, index, rows) =>
@@ -107,38 +117,55 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 		observer.observe(plot);
 		onCleanup(() => observer.disconnect());
 	});
-	const [metric, setMetric] = createSignal("snapshotsPerMin");
+	const [metric, setMetric] = createSignal("videosPerMin");
 	const selected = () => METRICS.find((item) => item.key === metric()) ?? METRICS[0];
-	const points = createMemo(() =>
+	const values = createMemo(() =>
 		props.series
 			.flatMap((point) => {
 				const value = point.metrics[metric()];
 				const time = Date.parse(point.bucketTime);
-				return value === undefined || !Number.isFinite(time) ? [] : [{ time, value }];
+				return Number.isFinite(time) ? [{ time, value }] : [];
 			})
 			.sort((a, b) => a.time - b.time)
 	);
-	const maximum = () => Math.max(1, ...points().map((point) => point.value)) * 1.1;
-	const coordinates = createMemo(() => {
-		const rows = points();
-		const start = rows[0]?.time ?? 0;
-		const end = rows[rows.length - 1]?.time ?? start;
-		return rows.map((point) => ({
-			...point,
-			x: 76 + ((point.time - start) / Math.max(1, end - start)) * (width() - 92),
-			y: 196 - (point.value / maximum()) * 172,
-		}));
+	const maximum = () => Math.max(1, ...values().map((point) => point.value ?? 0)) * 1.1;
+	const start = () => values()[0]?.time ?? 0;
+	const end = () => values()[values().length - 1]?.time ?? start();
+	const x = (time: number) =>
+		76 + ((time - start()) / Math.max(1, end() - start())) * (width() - 92);
+	const coordinates = createMemo(() =>
+		values().map((point) => ({
+			time: point.time,
+			x: x(point.time),
+			value: point.value,
+		}))
+	);
+	const segments = createMemo(() => {
+		const result: PlotPoint[][] = [];
+		let current: PlotPoint[] = [];
+		for (const point of coordinates()) {
+			if (point.value === null) {
+				if (current.length > 0) result.push(current);
+				current = [];
+				continue;
+			}
+			current.push({
+				time: point.time,
+				x: point.x,
+				value: point.value,
+				y: 196 - (point.value / maximum()) * 172,
+			});
+		}
+		if (current.length > 0) result.push(current);
+		return result;
 	});
-	const path = () =>
-		coordinates()
-			.map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`)
-			.join(" ");
+	const labels = createMemo(() => coordinates().map(({ time, x }) => ({ time, x })));
 
 	return (
 		<section class="flex flex-col gap-3" aria-label={t("audit.trends")}>
 			<div class="flex flex-wrap items-center justify-between gap-3">
 				<h3 class="ts-label text-primary">{t("audit.trends")}</h3>
-				<div class="w-48">
+				<div class="w-56">
 					<Select
 						size="sm"
 						aria-label={t("audit.metric")}
@@ -155,7 +182,7 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 			</div>
 			<div ref={plot} class="w-full min-w-0">
 				<Show
-					when={points().length >= 2}
+					when={segments().some((segment) => segment.length >= 2)}
 					fallback={
 						<div class="py-10 border-y border-border text-center ts-caption text-tertiary">
 							{t("audit.noHistory")}
@@ -165,10 +192,11 @@ export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint
 					<TrendPlot
 						width={width()}
 						maximum={maximum()}
-						points={coordinates()}
-						path={path()}
+						segments={segments()}
+						points={labels()}
 						label={t(selected()?.label ?? "overview.newSnapshots")}
 						unit={selected()?.unit ?? ""}
+						format={selected()?.format ?? "number"}
 					/>
 				</Show>
 			</div>

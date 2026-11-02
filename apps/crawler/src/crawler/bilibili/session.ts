@@ -16,6 +16,8 @@ import { browserRequestHeaders, chooseBrowserIdentity } from "./browserHeaders";
 import { boundedOperation } from "../shared/boundedOperation";
 import { outsideCrawlerTask } from "../shared/taskContext";
 import { RetryLaterError } from "../shared/retryLater";
+import { createNoopStatsRecorder, type StatsOutcome, type StatsRecorder } from "../stats/types";
+import { outcomeOfError } from "../stats/outcome";
 import type {
 	BilibiliHttpResponse,
 	BilibiliRequest,
@@ -58,7 +60,8 @@ export class BilibiliSession {
 		private readonly clock: () => number = Date.now,
 		private readonly random: () => number = Math.random,
 		private readonly requestTimeoutMs: () => number = () => 8000,
-		private readonly operationTimeoutMs: () => number = () => 3000
+		private readonly operationTimeoutMs: () => number = () => 3000,
+		private readonly stats: StatsRecorder = createNoopStatsRecorder()
 	) {
 		this.cache = cache ?? new MemoryBilibiliCache();
 		this.config = BilibiliSessionConfigSchema.parse(config ?? {});
@@ -179,8 +182,10 @@ export class BilibiliSession {
 	}
 	async refreshCredentials(): Promise<BilibiliCredentialBundle> {
 		if (!this.credentialsInFlight) {
+			const startedAt = performance.now();
 			this.credentialsInFlight = outsideCrawlerTask(() => this.obtainCredentials())
 				.then(async (bundle) => {
+					this.stats.recordCredentialsRefresh("success", performance.now() - startedAt);
 					await boundedOperation(
 						() =>
 							this.cache.set(
@@ -200,6 +205,10 @@ export class BilibiliSession {
 					return bundle;
 				})
 				.catch((error) => {
+					this.stats.recordCredentialsRefresh(
+						outcomeOfError(error),
+						performance.now() - startedAt
+					);
 					this.noteFailure(error);
 					throw error;
 				})
@@ -250,7 +259,7 @@ export class BilibiliSession {
 				/\b(wbi|w_rid|bili_ticket|buvid)\b/i.test(message ?? ""))
 		);
 	}
-	private async recover<T>(work: () => Promise<T>): Promise<T> {
+	private async recover<T>(work: () => Promise<T>): Promise<{ value: T; attempts: number }> {
 		let attempts = 0;
 		while (true) {
 			const generation = this.generation;
@@ -262,7 +271,7 @@ export class BilibiliSession {
 					!this.eligible(envelope.data.code, envelope.data.message) ||
 					attempts >= this.config.recoveryAttempts
 				)
-					return value;
+					return { value, attempts };
 			} catch (error) {
 				if (
 					!(error instanceof RetryLaterError) ||
@@ -272,30 +281,67 @@ export class BilibiliSession {
 					throw error;
 			}
 			attempts++;
-			if (generation === this.generation) await this.refreshCredentials();
+			const retryStartedAt = performance.now();
+			try {
+				if (generation === this.generation) await this.refreshCredentials();
+				this.stats.recordSessionRecovery(performance.now() - retryStartedAt, "success");
+			} catch (error) {
+				this.stats.recordSessionRecovery(
+					performance.now() - retryStartedAt,
+					outcomeOfError(error)
+				);
+				throw error;
+			}
 		}
 	}
 	async request<T>(
 		url: string,
 		options: NonNullable<Parameters<BilibiliRequest>[1]> = {}
 	): Promise<T> {
-		return this.recover(() => this.requestOnce<T>(url, options));
+		return this.logicalRequest(() => this.recover(() => this.requestOnce<T>(url, options)));
 	}
 	async signedRequest<T>(
 		path: string,
 		params: Record<string, string | number | boolean>,
 		options: NonNullable<Parameters<BilibiliRequest>[1]> = {}
 	): Promise<T> {
-		await this.getWbiKeys();
-		return this.recover(async () => {
-			const keys = await this.getWbiKeys();
-			const bundle = this.bundle;
-			return this.requestOnce<T>(
-				`${API_ORIGIN}${path}?${signWbiQuery(params, keys.imgKey, keys.subKey)}`,
-				options,
-				bundle
-			);
+		return this.logicalRequest(async () => {
+			await this.getWbiKeys();
+			return this.recover(async () => {
+				const keys = await this.getWbiKeys();
+				const bundle = this.bundle;
+				return this.requestOnce<T>(
+					`${API_ORIGIN}${path}?${signWbiQuery(params, keys.imgKey, keys.subKey)}`,
+					options,
+					bundle
+				);
+			});
 		});
+	}
+	private async logicalRequest<T>(
+		work: () => Promise<{ value: T; attempts: number }>
+	): Promise<T> {
+		const startedAt = performance.now();
+		this.stats.record("logicalRequestsStarted");
+		try {
+			const result = await work();
+			const envelope = BilibiliEnvelopeSchema.safeParse(result.value);
+			const outcome: StatsOutcome =
+				envelope.success && envelope.data.code !== 0 ? "failure" : "success";
+			this.stats.recordLogicalRequest(
+				performance.now() - startedAt,
+				outcome,
+				result.attempts + 1
+			);
+			return result.value;
+		} catch (error) {
+			this.stats.recordLogicalRequest(
+				performance.now() - startedAt,
+				outcomeOfError(error),
+				1
+			);
+			throw error;
+		}
 	}
 	async diagnostic(adapterId: string): Promise<BilibiliHttpResponse> {
 		const cookie = this.cookieHeader();

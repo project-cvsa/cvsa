@@ -222,7 +222,7 @@ export default function DiscoveryActivityView(props: {
 						<div class="bg-surface-container-low p-3 flex flex-col gap-2 ts-caption border-l-2 border-primary">
 							<div class="flex items-center justify-between font-medium text-primary">
 								<span>
-									{t("audit.running")}: {describeDiscoveryJob(job(), t)} ·{" "}
+									{t("audit.running")}: {describeDiscoveryJob(job(), t)},{" "}
 									{t("audit.target")}: {job().target ?? job().name}
 								</span>
 								<Show when={job().progress?.page}>
@@ -340,7 +340,6 @@ export default function DiscoveryActivityView(props: {
 														: t("discoveryActivity.decisionModel")}
 												</Badge>
 												<span class="tabular-nums">
-													{t("discoveryActivity.songProb")}:{" "}
 													{(item.songProbability * 100).toFixed(0)}%
 												</span>
 											</div>

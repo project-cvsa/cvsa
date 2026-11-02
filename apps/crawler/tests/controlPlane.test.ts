@@ -296,12 +296,8 @@ describe("crawler control plane", () => {
 
 		expect(status).toBe(200);
 		expect(data?.window).toBe("5m");
-		expect(data?.queues).toBeDefined();
-		expect(data?.latencyMs).toMatchObject({
-			taskP95: expect.any(Number),
-			apiP95: expect.any(Number),
-			inferenceP95: expect.any(Number),
-		});
+		expect(data?.current.queues).toBeDefined();
+		expect(data?.latency).toBeDefined();
 		expect(Array.isArray(data?.series)).toBe(true);
 	});
 

@@ -17,11 +17,13 @@ const AID = videoTracking.aid;
 
 export class TrackingRepository implements ITrackingRepository {
 	private readonly trace;
+	private readonly stats: StatsRecorder | undefined;
 	constructor(
 		private readonly db: DatabaseClient,
 		stats?: StatsRecorder
 	) {
-		this.trace = createDatabaseTracer(stats);
+		this.trace = createDatabaseTracer(stats, "tracking");
+		this.stats = stats;
 	}
 
 	async findDueVideos(limit: number, beforeTime?: Temporal.Instant): Promise<VideoTracking[]> {
@@ -159,6 +161,7 @@ export class TrackingRepository implements ITrackingRepository {
 				})
 				.returning();
 			if (!created) throw new Error(`Failed to insert tracking row for aid=${input.aid}`);
+			this.stats?.record("trackingCreated");
 			return created;
 		});
 	}

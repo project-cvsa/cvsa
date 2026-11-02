@@ -56,10 +56,19 @@ async function getStatus(): Promise<ApiResult<CrawlerStatusDto | null>> {
 
 async function getStats(
 	window: CrawlerStatsWindow = "1h",
-	minutes?: number
+	minutes?: number,
+	quantiles?: readonly number[]
 ): Promise<ApiResult<CrawlerOverviewStats | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler.stats.get({ query: { window, minutes } }));
+	return settle(
+		await eden.v2.admin.crawler.stats.get({
+			query: {
+				window,
+				minutes,
+				...(quantiles && quantiles.length > 0 ? { quantiles: quantiles.join(",") } : {}),
+			},
+		})
+	);
 }
 
 async function getQueueJobs(

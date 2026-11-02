@@ -27,6 +27,8 @@ export interface NetworkMetricsHooks {
 	 * without making the stats package depend on OpenTelemetry.
 	 */
 	onRequestFinished?(latencyMs: number, outcome: NetworkRequestOutcome): void;
+	/** Called immediately before an attempt is sent. */
+	onRequestStarted?(attributes: NetworkMetricAttributes): void;
 	/** Request type/endpoint of the attempt, for per-endpoint breakdowns. */
 	onRequestFinishedWithAttributes?(
 		latencyMs: number,
@@ -56,7 +58,9 @@ export function createNetworkMetrics(hooks: NetworkMetricsHooks = {}): NetworkMe
 	}));
 
 	const sink: NetworkRequestMetricSink = {
-		requestStarted(): void {},
+		requestStarted(attributes): void {
+			hooks.onRequestStarted?.(attributes);
+		},
 		requestDurationMs(value: number, attributes: NetworkMetricAttributes): void {
 			instruments().requests.add(1, attributes);
 			instruments().requestDurationMs.record(value, attributes);

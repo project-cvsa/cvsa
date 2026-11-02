@@ -1,9 +1,3 @@
-import {
-	CrawlerStatsCountersSchema,
-	CrawlerStatsErrorsSchema,
-	CrawlerMinuteMetricsSchema,
-	CrawlerNetworkTotalsSchema,
-} from "./crawlerStats";
 import { z } from "zod";
 
 export const VideoTrackingDtoSchema = z.object({
@@ -768,16 +762,9 @@ export const CrawlerStatsWindowSchema = z.enum(["5m", "15m", "30m", "1h", "6h", 
 export const CrawlerStatsQuerySchema = z.object({
 	window: CrawlerStatsWindowSchema.default("1h"),
 	minutes: z.coerce.number().int().min(1).max(10080).optional(),
+	/** Comma-separated quantiles in (0, 1]; defaults to 0.5,0.9,0.95,0.99. */
+	quantiles: z.string().optional(),
 });
-
-/** A single persisted rollup bucket for one metric group. */
-export const CrawlerStatsRollupPointSchema = z.object({
-	bucketTime: z.string(),
-	metricGroup: z.string(),
-	metrics: z.record(z.string(), z.number()),
-});
-
-export const CrawlerStatsErrorBreakdownSchema = CrawlerStatsErrorsSchema;
 
 export const CrawlerQueueSnapshotSchema = z.object({
 	waiting: z.number().int().nonnegative(),
@@ -832,53 +819,6 @@ export const DiscoveryStatusDtoSchema = z.object({
 });
 export type DiscoveryStatusDto = z.infer<typeof DiscoveryStatusDtoSchema>;
 
-export const CrawlerLatencyStatsSchema = z.object({
-	taskP95: z.number().nonnegative(),
-	apiP95: z.number().nonnegative(),
-	inferenceP95: z.number().nonnegative(),
-});
-
-export const CrawlerOverviewStatsSchema = z.object({
-	window: CrawlerStatsWindowSchema,
-	minutes: z.number().int().min(1).max(10080).optional(),
-	generatedAt: z.string(),
-	coverageFrom: z.string(),
-	coverageSeconds: z.number().nonnegative(),
-	counters: CrawlerStatsCountersSchema,
-	jobs: CrawlerMinuteMetricsSchema.shape.jobs,
-	network: z.record(z.string(), CrawlerNetworkTotalsSchema),
-	requestsPerMin: z.number().nonnegative(),
-	inferencesPerMin: z.number().nonnegative(),
-	businessErrorRate: z.number().nonnegative(),
-	requestSuccessRate: z.number().nonnegative(),
-	// Throughput
-	jobsPerSec: z.number().nonnegative(),
-	jobsPerMin: z.number().nonnegative(),
-	snapshotsSaved: z.number().int().nonnegative().optional(),
-	snapshotsPerMin: z.number().nonnegative(),
-	videosDiscovered: z.number().int().nonnegative().optional(),
-	candidatesPerMin: z.number().nonnegative(),
-	inferencesPerSec: z.number().nonnegative(),
-	requestsPerSec: z.number().nonnegative(),
-	// Errors
-	totalAttempts: z.number().int().nonnegative(),
-	totalFailures: z.number().int().nonnegative(),
-	networkFailures: z.number().int().nonnegative().optional(),
-	/** Failure fraction for the window (`failures / attempts`). */
-	errorRate: z.number().min(0),
-	/** Retried-attempt fraction for the window. */
-	retryRate: z.number().min(0),
-	breakdown: CrawlerStatsErrorBreakdownSchema,
-	// Backlog & latency
-	overdueTrackingCount: z.number().int().nonnegative(),
-	maxOverdueLagSec: z.number().nonnegative(),
-	/** Queue name (e.g. `tracking`, `discovery`) -> counters. */
-	queues: z.record(z.string(), CrawlerQueueSnapshotSchema),
-	latencyMs: CrawlerLatencyStatsSchema,
-	// Time series
-	series: z.array(CrawlerStatsRollupPointSchema),
-});
-
 export type ActionQueuedResponse = z.infer<typeof ActionQueuedResponseSchema>;
 export type VideoMetadataHistoryItem = z.infer<typeof VideoMetadataHistoryItemSchema>;
 export type VideoMetadataHistoryListQuery = z.infer<typeof VideoMetadataHistoryListQuerySchema>;
@@ -898,11 +838,7 @@ export type TrackingVideoListQuery = z.infer<typeof TrackingVideoListQuerySchema
 export type TrackingVideoListResponse = z.infer<typeof TrackingVideoListResponseSchema>;
 export type CrawlerStatsWindow = z.infer<typeof CrawlerStatsWindowSchema>;
 export type CrawlerStatsQuery = z.infer<typeof CrawlerStatsQuerySchema>;
-export type CrawlerStatsRollupPoint = z.infer<typeof CrawlerStatsRollupPointSchema>;
-export type CrawlerStatsErrorBreakdown = z.infer<typeof CrawlerStatsErrorBreakdownSchema>;
 export type CrawlerQueueSnapshot = z.infer<typeof CrawlerQueueSnapshotSchema>;
-export type CrawlerLatencyStats = z.infer<typeof CrawlerLatencyStatsSchema>;
-export type CrawlerOverviewStats = z.infer<typeof CrawlerOverviewStatsSchema>;
 
 export const CrawlerQueueJobItemSchema = z.object({
 	id: z.string(),

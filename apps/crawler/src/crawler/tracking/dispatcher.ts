@@ -6,6 +6,7 @@ import type { CrawlerJobCounts, CrawlerMq, CrawlerQueue } from "../shared/types"
 import { resolveTrackingPolicy } from "./policy";
 import type { ITrackingRepository } from "./repository.interface";
 import type { TrackingPolicyConfig } from "./types";
+import type { StatsRecorder } from "../stats/types";
 
 const CHUNK_SIZE = 30; // Max aids per Bilibili medialist API request
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1000; // 5 minutes in-flight lease
@@ -17,6 +18,7 @@ export interface TrackingDispatcherOptions extends TrackingPolicyConfig {
 	leaseDurationMs?: number;
 	/** Backpressure ceiling: `active + waiting` jobs the queue may already hold. */
 	queueCap?: number;
+	stats?: StatsRecorder;
 }
 
 export class TrackingDispatcher {
@@ -29,6 +31,7 @@ export class TrackingDispatcher {
 	private readonly leaseDurationMs: number;
 	private readonly remainingDelay: (() => Promise<number>) | undefined;
 	private readonly policy: Required<TrackingPolicyConfig>;
+	private readonly stats: StatsRecorder | undefined;
 
 	constructor(
 		private readonly trackingRepo: ITrackingRepository,
@@ -41,6 +44,7 @@ export class TrackingDispatcher {
 		this.maxPerTick = options.maxPerTick ?? 300;
 		this.leaseDurationMs = options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
 		this.policy = resolveTrackingPolicy(options);
+		this.stats = options.stats;
 	}
 
 	/** Effective `active + waiting` cap; exposed for operators/tests. */
@@ -90,6 +94,7 @@ export class TrackingDispatcher {
 				const inFlight = counts.active + counts.waiting + counts.delayed;
 				const capacity = this.queueCap - inFlight;
 				if (capacity <= 0) {
+					this.stats?.recordDeferral({ reason: "queue_capacity" });
 					appLogger.warn("TrackingDispatcher is backpressured by the queue cap", {
 						component: "tracking-dispatcher",
 						queueCap: this.queueCap,
