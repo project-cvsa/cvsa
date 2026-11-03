@@ -33,6 +33,10 @@ const primitives = {
 } as const;
 
 const baseVariables = {
+	"--chart-p50": { light: "#2563EB", dark: "#60A5FA" },
+	"--chart-p90": { light: "#0F766E", dark: "#2DD4BF" },
+	"--chart-p95": { light: "#C2410C", dark: "#FB923C" },
+	"--chart-p99": { light: "#9333EA", dark: "#C084FC" },
 	"--hover": { light: "#F7F7F7", dark: "#2D2D2D" },
 	"--background": {
 		light: primitives.gray[40],

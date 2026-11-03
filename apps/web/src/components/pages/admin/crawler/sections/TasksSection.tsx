@@ -17,7 +17,8 @@ import type {
 	CrawlerQueueJobsQuery,
 	CrawlerQueueJobsResponse,
 } from "@cvsa/contracts";
-import { formatDateTime } from "../format";
+import { formatDateTime, formatJobTime, jobErrorSummary } from "../format";
+import { queueJobName } from "../labels";
 import { QueueStatusTable } from "../statsView";
 import { createRequestSequence } from "../videoActions";
 
@@ -32,6 +33,7 @@ function JobDetail(props: { job: CrawlerQueueJobDetail }) {
 				<For
 					each={[
 						[t("tasks.jobs.id"), props.job.id],
+						[t("tasks.jobs.type"), props.job.name],
 						[t("tasks.jobs.queue"), t(`audit.queues.${props.job.queue}`)],
 						[t("tasks.jobs.state"), t(`audit.${props.job.state}`)],
 						[t("tasks.jobs.attempts"), String(props.job.attempts)],
@@ -76,6 +78,78 @@ function JobDetail(props: { job: CrawlerQueueJobDetail }) {
 				)}
 			</For>
 		</div>
+	);
+}
+
+export function QueueJobsTable(props: {
+	items: readonly CrawlerQueueJobItem[];
+	busy: boolean;
+	onInspect: (job: CrawlerQueueJobItem) => void;
+}) {
+	const t = getComponentT("crawler");
+	const date = (value: number | null | undefined) =>
+		value ? formatDateTime(new Date(value).toISOString()) : "—";
+	const columns: TableColumn<CrawlerQueueJobItem>[] = [
+		{
+			id: "task",
+			header: t("tasks.jobs.type"),
+			cell: (job) => (
+				<div class="min-w-0">
+					<button
+						type="button"
+						class="bg-transparent border-0 p-0 text-primary hover:underline text-left truncate block max-w-full"
+						title={job.name}
+						onClick={(event) => {
+							event.stopPropagation();
+							props.onInspect(job);
+						}}
+					>
+						{queueJobName(job, t)}
+					</button>
+					<div class="text-tertiary ts-caption truncate">
+						{job.target ? `${job.target} · ` : ""}#{job.id}
+					</div>
+				</div>
+			),
+		},
+		{
+			id: "queue",
+			header: t("tasks.jobs.queue"),
+			class: "w-28",
+			cell: (job) => t(`audit.queues.${job.queue}`),
+		},
+		{
+			id: "state",
+			header: t("tasks.jobs.state"),
+			class: "w-28",
+			cell: (job) => <StateBadge kind="job" state={job.state} />,
+		},
+		{
+			id: "reason",
+			header: t("tasks.jobs.reason"),
+			class: "w-64",
+			cell: (job) => (
+				<span class={job.failedReason ? "block truncate text-error" : "text-tertiary"}>
+					{job.failedReason ? jobErrorSummary(job.failedReason, t) : "—"}
+				</span>
+			),
+		},
+		{
+			id: "time",
+			header: t("tasks.jobs.time"),
+			class: "w-44 whitespace-nowrap text-secondary",
+			cell: (job) => <span title={date(job.timestamp)}>{formatJobTime(job.timestamp)}</span>,
+		},
+	];
+	return (
+		<DataTable
+			tableClass="table-fixed min-w-240"
+			columns={columns}
+			items={props.items}
+			busy={props.busy}
+			onRowClick={props.onInspect}
+			empty={props.busy ? t("common.loading") : t("tasks.jobs.empty")}
+		/>
 	);
 }
 
@@ -170,70 +244,6 @@ export default function TasksSection() {
 		requests.start();
 	});
 
-	const date = (value: number | null | undefined) =>
-		value ? formatDateTime(new Date(value).toISOString()) : "—";
-	const columns: TableColumn<CrawlerQueueJobItem>[] = [
-		{
-			id: "id",
-			header: t("tasks.jobs.id"),
-			class: "w-48 break-all",
-			cell: (job) => (
-				<button
-					type="button"
-					class="text-primary underline text-left"
-					onClick={(event) => {
-						event.stopPropagation();
-						void inspect(job);
-					}}
-				>
-					{job.id}
-				</button>
-			),
-		},
-		{
-			id: "queue",
-			header: t("tasks.jobs.queue"),
-			class: "w-28",
-			cell: (job) => t(`audit.queues.${job.queue}`),
-		},
-		{
-			id: "type",
-			header: t("tasks.jobs.type"),
-			cell: (job) => (
-				<div>
-					<span>{job.name}</span>
-					<Show when={job.target}>
-						<div class="text-tertiary break-all">{job.target}</div>
-					</Show>
-				</div>
-			),
-		},
-		{
-			id: "state",
-			header: t("tasks.jobs.state"),
-			class: "w-28",
-			cell: (job) => <StateBadge kind="job" state={job.state} />,
-		},
-		{
-			id: "attempts",
-			header: t("tasks.jobs.attempts"),
-			class: "w-20",
-			cell: (job) => job.attempts,
-		},
-		{
-			id: "reason",
-			header: t("tasks.jobs.reason"),
-			class: "max-w-xs break-words text-error",
-			cell: (job) => job.failedReason ?? "—",
-		},
-		{
-			id: "time",
-			header: t("tasks.jobs.time"),
-			class: "w-44 whitespace-nowrap text-secondary",
-			cell: (job) => date(job.timestamp),
-		},
-	];
-
 	return (
 		<div class="flex flex-col gap-6">
 			<SectionHeader title={<h2 class="ts-heading-2">{t("tasks.title")}</h2>} />
@@ -302,12 +312,10 @@ export default function TasksSection() {
 						/>
 					</div>
 				</div>
-				<DataTable
-					columns={columns}
+				<QueueJobsTable
 					items={jobs()?.items ?? []}
 					busy={loading()}
-					onRowClick={(job) => void inspect(job)}
-					empty={loading() ? t("common.loading") : t("tasks.jobs.empty")}
+					onInspect={(job) => void inspect(job)}
 				/>
 				<Pagination
 					page={page()}

@@ -4,100 +4,157 @@ import Select from "@components/ui/Select";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { formatMetric, formatPercent } from "./format";
 
-const METRICS = CRAWLER_CHART_METRICS;
+const PERCENTILES = [
+	{ quantile: 0.5, label: "P50", color: "var(--chart-p50)" },
+	{ quantile: 0.9, label: "P90", color: "var(--chart-p90)" },
+	{ quantile: 0.95, label: "P95", color: "var(--chart-p95)" },
+	{ quantile: 0.99, label: "P99", color: "var(--chart-p99)" },
+];
+const LEFT = 64;
+const RIGHT = 16;
+const TOP = 20;
+const BOTTOM = 196;
 
-type PlotPoint = { time: number; value: number; x: number; y: number };
+type ChartLine = {
+	hidden?: boolean;
+	label: string;
+	color: string;
+	points: { time: number; value: number | null }[];
+};
 
-function formatValue(value: number, format: string, unit: string): string {
-	return format === "percent" ? formatPercent(value) : `${formatMetric(value)}${unit}`;
-}
-
-function TrendPlot(props: {
+export function TrendPlot(props: {
 	width: number;
-	maximum: number;
-	segments: PlotPoint[][];
-	points: { time: number; x: number }[];
+	lines: ChartLine[];
 	label: string;
 	unit: string;
 	format: string;
 }) {
+	const times = createMemo(() =>
+		props.lines.flatMap((line) => line.points.map((point) => point.time))
+	);
+	const start = createMemo(() => Math.min(...times()));
+	const end = createMemo(() => Math.max(...times()));
+	const maximum = createMemo(() =>
+		props.format === "percent"
+			? 1
+			: Math.max(
+					1,
+					...props.lines.flatMap((line) => line.points.map((point) => point.value ?? 0))
+				) * 1.1
+	);
+	const x = (time: number) =>
+		LEFT + ((time - start()) / Math.max(1, end() - start())) * (props.width - LEFT - RIGHT);
+	const y = (value: number) => BOTTOM - (value / maximum()) * (BOTTOM - TOP);
+	const locale = () =>
+		typeof document === "undefined" ? undefined : document.documentElement.lang;
+	const tick = (value: number) =>
+		new Intl.NumberFormat(locale(), { notation: "compact", maximumFractionDigits: 1 }).format(
+			props.format === "percent" ? value * 100 : value
+		);
 	const timeLabel = (time: number) =>
-		new Date(time).toLocaleString(document.documentElement.lang, {
-			month: "2-digit",
-			day: "2-digit",
+		new Date(time).toLocaleString(locale(), {
+			...(end() - start() >= 86_400_000
+				? ({ month: "2-digit", day: "2-digit" } satisfies Intl.DateTimeFormatOptions)
+				: {}),
 			hour: "2-digit",
 			minute: "2-digit",
+			hour12: false,
 		});
+	const valueLabel = (value: number) =>
+		props.format === "percent" ? formatPercent(value) : `${formatMetric(value)} ${props.unit}`;
+	const segments = (line: ChartLine) => {
+		const result: Array<Array<{ time: number; value: number }>> = [];
+		let current: Array<{ time: number; value: number }> = [];
+		for (const point of line.points) {
+			if (point.value === null) {
+				if (current.length) result.push(current);
+				current = [];
+			} else current.push({ time: point.time, value: point.value });
+		}
+		if (current.length) result.push(current);
+		return result;
+	};
 	return (
 		<svg
-			viewBox={`0 0 ${props.width} 240`}
+			viewBox={`0 0 ${props.width} 236`}
 			width="100%"
-			height="240"
-			class="block text-primary"
+			height="236"
+			class="block text-secondary ts-caption font-body"
 			role="img"
-			aria-label={`${props.label} ${props.unit}`}
+			aria-label={props.label}
 		>
 			<title>{props.label}</title>
 			<For each={[0, 0.5, 1]}>
 				{(ratio) => (
 					<g>
 						<line
-							x1="76"
-							y1={196 - ratio * 172}
-							x2={props.width - 16}
-							y2={196 - ratio * 172}
+							x1={LEFT}
+							y1={y(maximum() * ratio)}
+							x2={props.width - RIGHT}
+							y2={y(maximum() * ratio)}
 							stroke="currentColor"
 							stroke-opacity="0.15"
 						/>
 						<text
-							x="66"
-							y={200 - ratio * 172}
+							x={LEFT - 12}
+							y={y(maximum() * ratio) + 4}
 							text-anchor="end"
 							fill="currentColor"
-							font-size="11"
 						>
-							{formatValue(props.maximum * ratio, props.format, props.unit)}
+							{tick(maximum() * ratio)}
 						</text>
 					</g>
 				)}
 			</For>
-			<For each={props.segments}>
-				{(segment) => (
-					<path
-						d={segment
-							.map((point, index) => `${index ? "L" : "M"}${point.x},${point.y}`)
-							.join(" ")}
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						vector-effect="non-scaling-stroke"
-						stroke-linejoin="round"
-					/>
+			<For each={props.lines.filter((line) => !line.hidden)}>
+				{(line) => (
+					<For each={segments(line)}>
+						{(segment) => (
+							<g>
+								<path
+									d={segment
+										.map(
+											(point, index) =>
+												`${index ? "L" : "M"}${x(point.time)},${y(point.value)}`
+										)
+										.join(" ")}
+									fill="none"
+									stroke={line.color}
+									stroke-width="2"
+									vector-effect="non-scaling-stroke"
+									stroke-linejoin="round"
+								>
+									<title>{line.label}</title>
+								</path>
+								<For each={segment}>
+									{(point) => (
+										<circle
+											cx={x(point.time)}
+											cy={y(point.value)}
+											r={segment.length === 1 ? 3 : 5}
+											fill={segment.length === 1 ? line.color : "transparent"}
+										>
+											<title>
+												{timeLabel(point.time)} · {line.label}:{" "}
+												{valueLabel(point.value)}
+											</title>
+										</circle>
+									)}
+								</For>
+							</g>
+						)}
+					</For>
 				)}
 			</For>
-			<For
-				each={props.points.filter(
-					(_, index, rows) =>
-						index === 0 ||
-						index === rows.length - 1 ||
-						index === Math.floor(rows.length / 2)
-				)}
-			>
-				{(point) => (
+			<For each={props.width < 480 ? [0, 1] : [0, 0.5, 1]}>
+				{(ratio) => (
 					<text
-						x={point.x}
-						y="228"
-						text-anchor={
-							point.x === 76
-								? "start"
-								: point.x === props.width - 16
-									? "end"
-									: "middle"
-						}
+						x={LEFT + ratio * (props.width - LEFT - RIGHT)}
+						y="226"
+						text-anchor={ratio === 0 ? "start" : ratio === 1 ? "end" : "middle"}
 						fill="currentColor"
-						font-size="11"
 					>
-						{timeLabel(point.time)}
+						{timeLabel(start() + ratio * (end() - start()))}
 					</text>
 				)}
 			</For>
@@ -105,98 +162,120 @@ function TrendPlot(props: {
 	);
 }
 
-export default function ThroughputChart(props: { series: CrawlerStatsRollupPoint[] }) {
+export default function ThroughputChart(props: {
+	series: CrawlerStatsRollupPoint[];
+	initialMetric?: string;
+}) {
 	const t = getComponentT("crawler");
 	const [width, setWidth] = createSignal(800);
+	const [metric, setMetric] = createSignal(props.initialMetric ?? "videosPerMin");
+	const [hidden, setHidden] = createSignal<string[]>([]);
 	let plot: HTMLDivElement | undefined;
 	onMount(() => {
 		if (!plot) return;
 		const observer = new ResizeObserver(([entry]) => {
-			if (entry) setWidth(Math.max(300, entry.contentRect.width));
+			if (entry) setWidth(entry.contentRect.width);
 		});
 		observer.observe(plot);
 		onCleanup(() => observer.disconnect());
 	});
-	const [metric, setMetric] = createSignal("videosPerMin");
-	const selected = () => METRICS.find((item) => item.key === metric()) ?? METRICS[0];
+	const selected = () =>
+		CRAWLER_CHART_METRICS.find((item) => item.key === metric()) ?? CRAWLER_CHART_METRICS[0];
+	const percentiles = () => metric().startsWith("latency.");
+	const unit = () => (selected().format === "percent" ? "%" : selected().unit);
 	const values = createMemo(() =>
-		props.series
-			.flatMap((point) => {
-				const value = point.metrics[metric()];
-				const time = Date.parse(point.bucketTime);
-				return Number.isFinite(time) ? [{ time, value }] : [];
-			})
-			.sort((a, b) => a.time - b.time)
+		[...props.series].sort((a, b) => Date.parse(a.bucketTime) - Date.parse(b.bucketTime))
 	);
-	const maximum = () => Math.max(1, ...values().map((point) => point.value ?? 0)) * 1.1;
-	const start = () => values()[0]?.time ?? 0;
-	const end = () => values()[values().length - 1]?.time ?? start();
-	const x = (time: number) =>
-		76 + ((time - start()) / Math.max(1, end() - start())) * (width() - 92);
-	const coordinates = createMemo(() =>
-		values().map((point) => ({
-			time: point.time,
-			x: x(point.time),
-			value: point.value,
-		}))
-	);
-	const segments = createMemo(() => {
-		const result: PlotPoint[][] = [];
-		let current: PlotPoint[] = [];
-		for (const point of coordinates()) {
-			if (point.value === null) {
-				if (current.length > 0) result.push(current);
-				current = [];
-				continue;
-			}
-			current.push({
-				time: point.time,
-				x: point.x,
-				value: point.value,
-				y: 196 - (point.value / maximum()) * 172,
-			});
-		}
-		if (current.length > 0) result.push(current);
-		return result;
-	});
-	const labels = createMemo(() => coordinates().map(({ time, x }) => ({ time, x })));
-
+	const allLines = (): ChartLine[] =>
+		(percentiles()
+			? PERCENTILES.map((item) => ({
+					key: `${metric()}.${item.quantile}`,
+					label: item.label,
+					color: item.color,
+				}))
+			: [{ key: metric(), label: t(selected().label), color: "var(--primary)" }]
+		).map((line) => ({
+			...line,
+			points: values().map((point) => ({
+				time: Date.parse(point.bucketTime),
+				value: point.metrics[line.key] ?? null,
+			})),
+		}));
+	const lines = () =>
+		allLines().map((line) => ({ ...line, hidden: hidden().includes(line.label) }));
+	const hasData = () =>
+		allLines().some((line) => line.points.some((point) => point.value !== null));
 	return (
 		<section class="flex flex-col gap-3" aria-label={t("audit.trends")}>
 			<div class="flex flex-wrap items-center justify-between gap-3">
-				<h3 class="ts-label text-primary">{t("audit.trends")}</h3>
-				<div class="w-56">
+				<div class="flex items-center gap-3">
+					<h3 class="ts-label text-primary">{t("audit.trends")}</h3>
+					<span class="ts-caption text-tertiary">{unit()}</span>
+				</div>
+				<div class="w-48 max-w-full">
 					<Select
 						size="sm"
 						aria-label={t("audit.metric")}
 						value={metric()}
-						options={METRICS.map((item) => ({
+						options={CRAWLER_CHART_METRICS.map((item) => ({
 							value: item.key,
-							label: `${t(item.label)} ${item.unit}`,
+							label: t(item.label),
 						}))}
 						onValueChange={(value) => {
-							if (value) setMetric(value);
+							if (value) {
+								setMetric(value);
+								setHidden([]);
+							}
 						}}
 					/>
 				</div>
 			</div>
-			<div ref={plot} class="w-full min-w-0">
+			<Show when={percentiles()}>
+				<fieldset
+					class="flex flex-wrap gap-4 border-0 p-0 m-0"
+					aria-label={t("audit.legend")}
+				>
+					<For each={allLines()}>
+						{(line) => (
+							<button
+								type="button"
+								class="inline-flex items-center gap-2 bg-transparent border-0 p-0 text-secondary ts-caption cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary"
+								classList={{ "opacity-40": hidden().includes(line.label) }}
+								aria-pressed={!hidden().includes(line.label)}
+								onClick={() =>
+									setHidden((current) =>
+										current.includes(line.label)
+											? current.filter((label) => label !== line.label)
+											: [...current, line.label]
+									)
+								}
+							>
+								<span
+									class="inline-block w-5 h-0.5"
+									style={{ background: line.color }}
+									aria-hidden="true"
+								/>
+								{line.label}
+							</button>
+						)}
+					</For>
+				</fieldset>
+			</Show>
+			<div ref={plot} class="w-full min-w-0 bg-surface p-2">
 				<Show
-					when={segments().some((segment) => segment.length >= 2)}
+					when={hasData()}
 					fallback={
-						<div class="py-10 border-y border-border text-center ts-caption text-tertiary">
+						<div class="py-10 text-center ts-caption text-tertiary">
 							{t("audit.noHistory")}
 						</div>
 					}
 				>
 					<TrendPlot
-						width={width()}
-						maximum={maximum()}
-						segments={segments()}
-						points={labels()}
-						label={t(selected()?.label ?? "overview.newSnapshots")}
-						unit={selected()?.unit ?? ""}
-						format={selected()?.format ?? "number"}
+						width={Math.max(240, width())}
+						lines={lines()}
+						label={t(selected().label)}
+						unit={unit()}
+						format={selected().format}
 					/>
 				</Show>
 			</div>

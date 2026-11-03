@@ -29,18 +29,7 @@ function healthPresentation(item: CrawlerStatusDto["adapters"][number]): {
 	label: string;
 } {
 	if (!item.enabled) return { variant: "neutral", label: "network.adapters.health.disabled" };
-	switch (item.healthState) {
-		case "healthy":
-			return { variant: "success", label: "network.adapters.health.healthy" };
-		case "degraded":
-			return { variant: "warning", label: "network.adapters.health.degraded" };
-		case "half-open":
-			return { variant: "warning", label: "network.adapters.health.probing" };
-		case "open":
-			return { variant: "danger", label: "network.adapters.health.open" };
-		default:
-			return { variant: "neutral", label: "common.unknown" };
-	}
+	return { variant: "neutral", label: "common.enabled" };
 }
 
 type AdapterCardProps = {

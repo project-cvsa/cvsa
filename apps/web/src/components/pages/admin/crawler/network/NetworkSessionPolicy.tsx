@@ -34,7 +34,6 @@ export default function NetworkSessionPolicy(props: Props) {
 	return (
 		<section class="flex flex-col gap-4">
 			<h3 class="ts-heading-3 text-primary">{t("network.session.title")}</h3>
-			<p class="ts-caption text-secondary">{t("network.session.description")}</p>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<For each={fields}>
 					{(field) => (
@@ -73,53 +72,60 @@ export default function NetworkSessionPolicy(props: Props) {
 							update({ browser: { ...config().browser, family: parsed.data } });
 					}}
 				/>
-				<For
-					each={
-						[
-							"chromeVersion",
-							"edgeVersion",
-							"safariVersion",
-							"language",
-						] satisfies Array<
-							keyof Pick<
-								BilibiliSessionConfig["browser"],
-								"chromeVersion" | "edgeVersion" | "safariVersion" | "language"
+			</div>
+			<details>
+				<summary class="ts-label text-secondary cursor-pointer">
+					{t("common.advanced")}
+				</summary>
+				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+					<For
+						each={
+							[
+								"chromeVersion",
+								"edgeVersion",
+								"safariVersion",
+								"language",
+							] satisfies Array<
+								keyof Pick<
+									BilibiliSessionConfig["browser"],
+									"chromeVersion" | "edgeVersion" | "safariVersion" | "language"
+								>
 							>
-						>
-					}
-				>
-					{(key) => (
-						<TextField
-							size="sm"
-							label={t(`network.session.${key}`)}
-							value={config().browser[key]}
-							onInput={(event) =>
-								update({
-									browser: {
-										...config().browser,
-										[key]: event.currentTarget.value,
-									},
-								})
-							}
-						/>
-					)}
-				</For>
-			</div>
-			<div class="flex flex-col gap-2">
-				<p class="ts-label text-primary">{t("network.session.recoveryCodes")}</p>
-				<TagInput
-					tags={config().recoveryCodes.map(String)}
-					onChange={(values) => {
-						const parsed = BilibiliSessionConfigSchema.shape.recoveryCodes.safeParse(
-							values.map(Number)
-						);
-						if (parsed.success) update({ recoveryCodes: parsed.data });
-					}}
-					clearLabel={t("common.clear")}
-					removeLabel={t("common.delete")}
-				/>
-				<p class="ts-caption text-secondary">{t("network.session.recoveryHelp")}</p>
-			</div>
+						}
+					>
+						{(key) => (
+							<TextField
+								size="sm"
+								label={t(`network.session.${key}`)}
+								value={config().browser[key]}
+								onInput={(event) =>
+									update({
+										browser: {
+											...config().browser,
+											[key]: event.currentTarget.value,
+										},
+									})
+								}
+							/>
+						)}
+					</For>
+				</div>
+				<div class="flex flex-col gap-2">
+					<p class="ts-label text-primary">{t("network.session.recoveryCodes")}</p>
+					<TagInput
+						tags={config().recoveryCodes.map(String)}
+						onChange={(values) => {
+							const parsed =
+								BilibiliSessionConfigSchema.shape.recoveryCodes.safeParse(
+									values.map(Number)
+								);
+							if (parsed.success) update({ recoveryCodes: parsed.data });
+						}}
+						clearLabel={t("common.clear")}
+						removeLabel={t("common.delete")}
+					/>
+				</div>
+			</details>
 			<Show when={props.status}>
 				{(status) => (
 					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 ts-caption text-secondary border border-border p-3">

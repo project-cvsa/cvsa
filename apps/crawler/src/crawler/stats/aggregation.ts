@@ -188,8 +188,25 @@ export function derivedChartMetrics(minute: StatsMinute): Record<string, number 
 	const latencies = summarizeLatency(minute);
 	const p95 = (operation: StatsOperation) =>
 		latencies[distributionKey(operation, "success")]?.quantiles["0.95"] ?? null;
+	const percentileSeries = Object.fromEntries(
+		(["trackingExecution", "httpAttempt", "modelProcess"] satisfies StatsOperation[]).flatMap(
+			(operation) => {
+				const sketch = createSketch();
+				for (const outcome of CRAWLER_STATS_OUTCOMES) {
+					const distribution = minute.distributions[distributionKey(operation, outcome)];
+					if (distribution) mergeDistributionInto(sketch, distribution);
+				}
+				const summary = summarizeSketch(sketch);
+				return DEFAULT_QUANTILES.map((quantile) => [
+					`latency.${operation}.${quantile}`,
+					summary.quantiles[String(quantile)] ?? null,
+				]);
+			}
+		)
+	);
 	return {
 		...rates,
+		...percentileSeries,
 		"ratios.httpTransportSuccess": ratios.httpTransportSuccess,
 		"ratios.logicalRequestSuccess": ratios.logicalRequestSuccess,
 		"ratios.egressResendShare": ratios.egressResendShare,

@@ -8,6 +8,13 @@ import { i18nServer } from "@lib/i18n/server";
 import { DiscoveryStatsTable } from "../src/components/pages/admin/crawler/DiscoveryStats";
 import DiscoveryActivityView from "../src/components/pages/admin/crawler/discovery/DiscoveryActivity";
 import { LatencyTable } from "../src/components/pages/admin/crawler/statsView";
+import ThroughputChart, { TrendPlot } from "../src/components/pages/admin/crawler/ThroughputChart";
+import OverviewSection, {
+	OverviewSummary,
+} from "../src/components/pages/admin/crawler/sections/OverviewSection";
+import CrawlerExecutionPolicy from "../src/components/pages/admin/crawler/settings/CrawlerExecutionPolicy";
+import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
+import { QueueJobsTable } from "../src/components/pages/admin/crawler/sections/TasksSection";
 
 function render(locale: string, content: () => JSX.Element) {
 	return renderToString(() => (
@@ -20,6 +27,140 @@ function render(locale: string, content: () => JSX.Element) {
 }
 
 describe("crawler console translations", () => {
+	test("bounds percentage charts at 100 and includes dates for multi-day ranges", () => {
+		const html = render("en-US", () => (
+			<TrendPlot
+				width={800}
+				lines={[
+					{
+						label: "Success",
+						color: "currentColor",
+						points: [
+							{ time: Date.UTC(2026, 10, 1), value: 0.9 },
+							{ time: Date.UTC(2026, 10, 3), value: 0.8 },
+						],
+					},
+				]}
+				label="Success"
+				unit="%"
+				format="percent"
+			/>
+		));
+		expect(html).toContain("100</text>");
+		expect(html).not.toContain("110</text>");
+		expect(html).toContain("11/01");
+		expect(html).toContain("11/03");
+	});
+	test("keeps long database errors in task details and gives the list a short summary", () => {
+		const html = render("en-US", () => (
+			<QueueJobsTable
+				busy={false}
+				onInspect={() => {}}
+				items={[
+					{
+						id: "259371",
+						queue: "discovery",
+						name: "detail-408177762",
+						target: "408177762",
+						state: "failed",
+						attempts: 1,
+						timestamp: Date.UTC(2026, 10, 3),
+						failedReason: `Failed query: select ${"column, ".repeat(100)} from video_tracking`,
+					},
+				]}
+			/>
+		));
+		expect(html).toContain("Database query failed");
+		expect(html).not.toContain("column, column");
+		expect(html).toContain("259371");
+	});
+	test("keeps the overview filter limited to the time range", () => {
+		const html = render("en-US", () => <OverviewSection statusData={() => null} />);
+		expect(html).not.toContain("P50");
+		expect(html).not.toContain("Quantiles");
+	});
+	test("shows short headline labels and recorded counts without empty rate hints", () => {
+		const html = render("en-US", () => (
+			<OverviewSummary
+				samples={36626}
+				videos={115}
+				jobs={400}
+				requests={2127}
+				inferences={103}
+				success={0.893}
+			/>
+		));
+		for (const value of ["Samples", "New videos", "36626", "2127", "89.3%"])
+			expect(html).toContain(value);
+		expect(html).not.toContain("—");
+		expect(html).not.toContain("Candidates accepted for tracking");
+	});
+	test("shows four colored percentile lines and their legends for request duration", () => {
+		const series = [0, 1, 2].map(
+			(minute) =>
+				({
+					bucketTime: new Date(Date.UTC(2026, 10, 3, 12, minute)).toISOString(),
+					metricGroup: "crawler:minute",
+					coverage: "complete",
+					metrics: {
+						"latency.httpAttempt.0.5": 10 + minute,
+						"latency.httpAttempt.0.9": 20 + minute,
+						"latency.httpAttempt.0.95": 30 + minute,
+						"latency.httpAttempt.0.99": 40 + minute,
+					},
+				}) satisfies import("@cvsa/contracts").CrawlerStatsRollupPoint
+		);
+		const html = render("en-US", () => (
+			<ThroughputChart series={series} initialMetric="latency.httpAttempt" />
+		));
+		for (const percentile of ["P50", "P90", "P95", "P99"]) {
+			expect(html).toContain(`<title>${percentile}</title>`);
+			expect(html).toContain(`var(--chart-${percentile.toLowerCase()})`);
+		}
+		expect(html.match(/aria-pressed="true"/g)).toHaveLength(4);
+	});
+	test("uses compact numeric axis labels and keeps units outside ticks", () => {
+		const html = render("en-US", () => (
+			<TrendPlot
+				width={320}
+				lines={[
+					{
+						label: "Samples",
+						color: "currentColor",
+						points: [
+							{ time: 1000, value: 1040050.5 },
+							{ time: 61000, value: null },
+							{ time: 121000, value: 5000 },
+						],
+					},
+				]}
+				label="Samples"
+				unit="/min"
+				format="number"
+			/>
+		));
+		expect(html).not.toContain("/min</text>");
+		expect(html).not.toContain("1040050.5</text>");
+		expect(html).toContain("1.1M</text>");
+		expect(html).not.toContain("NaN");
+	});
+	test("renders worker and tracking controls together without the network timeout", () => {
+		const html = render("en-US", () => (
+			<CrawlerExecutionPolicy
+				config={CrawlerExecutionConfigSchema.parse({})}
+				onChange={() => {}}
+			/>
+		));
+		for (const label of [
+			"Tracking workers",
+			"Discovery workers",
+			"Lateness alert (s)",
+			"Retry delay (s)",
+		])
+			expect(html).toContain(label);
+		expect(html).not.toContain("HTTP timeout");
+		expect(html).not.toContain("scheduling.");
+	});
 	test.each(["en-US", "zh-CN"])(
 		"renders every measured operation and outcome in %s",
 		(locale) => {
@@ -90,7 +231,7 @@ describe("crawler console translations", () => {
 	);
 
 	test.each([
-		{ locale: "en-US", type: "Incremental Sweep", target: "2 keywords" },
+		{ locale: "en-US", type: "Incremental", target: "2 keywords" },
 		{ locale: "zh-CN", type: "增量搜索", target: "2 个关键词" },
 	])(
 		"renders old task descriptions in $locale and shows why they failed",

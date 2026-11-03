@@ -26,16 +26,6 @@ export default function StatsDetails(props: {
 						key.endsWith(`:${outcome()}`)
 					)
 				);
-	const flow = () => [
-		{ key: "candidatesStarted", value: props.stats.counters.candidatesStarted },
-		{ key: "candidatesFinished", value: props.stats.counters.candidatesFinished },
-		{ key: "httpAttemptsStarted", value: props.stats.counters.httpAttemptsStarted },
-		{ key: "httpAttemptsFinished", value: props.stats.counters.httpAttemptsFinished },
-		{ key: "logicalRequestsFinished", value: props.stats.counters.logicalRequestsFinished },
-		{ key: "videosRecorded", value: props.stats.counters.videosRecorded },
-		{ key: "videoInsertConflicts", value: props.stats.counters.videoInsertConflicts },
-		{ key: "trackingCreated", value: props.stats.counters.trackingCreated },
-	];
 	const networks = () =>
 		Object.entries(props.stats.network).map(([key, value]) => {
 			const separator = key.indexOf("|");
@@ -51,19 +41,45 @@ export default function StatsDetails(props: {
 	return (
 		<>
 			<section class="flex flex-col gap-3">
-				<h3 class="ts-label text-primary">{t("metrics.flow")}</h3>
-				<div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-					<For each={flow()}>
-						{(metric) => (
-							<MetricCard
-								label={t(`metrics.${metric.key}`)}
-								value={formatMetric(metric.value)}
-							/>
+				<h3 class="ts-label">{t("metrics.flow")}</h3>
+				<Table
+					head={
+						<tr>
+							<th>{t("metrics.operation")}</th>
+							<th>{t("metrics.started")}</th>
+							<th>{t("metrics.finished")}</th>
+						</tr>
+					}
+				>
+					<For
+						each={[
+							{
+								label: "overview.candidatesPerMin",
+								started: props.stats.counters.candidatesStarted,
+								finished: props.stats.counters.candidatesFinished,
+							},
+							{
+								label: "metrics.operation.httpAttempt",
+								started: props.stats.counters.httpAttemptsStarted,
+								finished: props.stats.counters.httpAttemptsFinished,
+							},
+							{
+								label: "metrics.operation.logicalRequest",
+								started: props.stats.counters.logicalRequestsStarted,
+								finished: props.stats.counters.logicalRequestsFinished,
+							},
+						]}
+					>
+						{(row) => (
+							<tr>
+								<td>{t(row.label)}</td>
+								<td class="tabular-nums">{row.started}</td>
+								<td class="tabular-nums">{row.finished}</td>
+							</tr>
 						)}
 					</For>
-				</div>
+				</Table>
 			</section>
-
 			<section class="flex flex-col gap-3">
 				<h3 class="ts-label text-primary">{t("metrics.ratios")}</h3>
 				<RatioTable ratios={props.stats.ratios} inputs={props.stats.ratioInputs} />

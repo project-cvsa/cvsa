@@ -49,6 +49,36 @@ async function report(collector: CrawlerStatsCollector, window: "5m" | "1h" | "2
 }
 
 describe("CrawlerStatsCollector", () => {
+	test("includes timeout durations in the percentile chart alongside successful requests", async () => {
+		const { collector, advance } = createCollector();
+		for (let index = 0; index < 50; index++) {
+			collector.recordHttpAttempt(10, "success");
+			collector.recordHttpAttempt(1000, "timeout");
+		}
+		advance(60_000);
+		const result = await report(collector);
+		const point = result.series.find((row) => row.bucketTime === new Date(START).toISOString());
+		expect(point?.metrics["latency.httpAttempt.0.9"]).toBeGreaterThan(900);
+	});
+	test("returns four distinct latency percentile series from each bucket distribution", async () => {
+		const { collector, advance } = createCollector();
+		for (let latency = 1; latency <= 100; latency++)
+			collector.recordHttpAttempt(latency, "success");
+		advance(60_000);
+		const result = await report(collector);
+		const point = result.series.find((row) => row.bucketTime === new Date(START).toISOString());
+		for (const [quantile, expected] of [
+			[0.5, 50],
+			[0.9, 90],
+			[0.95, 95],
+			[0.99, 99],
+		]) {
+			const value = point?.metrics[`latency.httpAttempt.${quantile}`];
+			expect(value).toBeGreaterThan(expected * 0.97);
+			expect(value).toBeLessThan(expected * 1.03);
+		}
+		expect(point?.metrics["latency.modelProcess.0.95"]).toBeNull();
+	});
 	test("counts events and keeps started, finished and inserted counts separate", async () => {
 		const { collector, advance } = createCollector();
 		collector.record("videosRecorded", 3);

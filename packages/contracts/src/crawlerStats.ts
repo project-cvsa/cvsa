@@ -422,19 +422,19 @@ export const CRAWLER_CHART_METRICS = [
 		format: "percent",
 	},
 	{
-		key: "latencyP95Ms.trackingExecution",
+		key: "latency.trackingExecution",
 		label: "audit.chart.taskLatency",
 		unit: "ms",
 		format: "number",
 	},
 	{
-		key: "latencyP95Ms.httpAttempt",
+		key: "latency.httpAttempt",
 		label: "audit.chart.apiLatency",
 		unit: "ms",
 		format: "number",
 	},
 	{
-		key: "latencyP95Ms.modelProcess",
+		key: "latency.modelProcess",
 		label: "metrics.inferenceLatency",
 		unit: "ms",
 		format: "number",

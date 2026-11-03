@@ -62,3 +62,18 @@ function describeTag(tag: unknown): string {
 	const serialized = JSON.stringify(tag);
 	return serialized === undefined ? String(tag) : serialized;
 }
+
+export function formatJobTime(timestamp: number): string {
+	const locale = typeof document === "undefined" ? undefined : document.documentElement.lang;
+	return new Date(timestamp).toLocaleString(locale, {
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	});
+}
+
+export function jobErrorSummary(message: string, t: (key: string) => string): string {
+	return message.startsWith("Failed query:") ? t("tasks.error.database") : message.split("\n")[0];
+}

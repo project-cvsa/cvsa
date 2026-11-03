@@ -1,6 +1,6 @@
 import NetworkSessionPolicy from "../network/NetworkSessionPolicy";
-import NetworkExecutionPolicy from "../network/NetworkExecutionPolicy";
-import NetworkStrategySupport from "../network/NetworkStrategySupport";
+import NumberField from "@components/ui/NumberField";
+import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
 import { createMemo, createSignal, Show } from "solid-js";
@@ -252,8 +252,6 @@ export default function NetworkSection(props: NetworkSectionProps) {
 				}
 			/>
 
-			<NetworkStrategySupport />
-
 			<Show
 				when={networkDoc()}
 				fallback={
@@ -323,13 +321,26 @@ export default function NetworkSection(props: NetworkSectionProps) {
 									})
 								}
 							/>
-							<NetworkExecutionPolicy
-								config={doc().config.execution}
-								status={props.statusData()}
-								onChange={(execution) =>
+							<NumberField
+								class="max-w-sm"
+								size="sm"
+								label={t("network.execution.requestTimeoutMs")}
+								value={(doc().config.execution?.requestTimeoutMs ?? 8000) / 1000}
+								min={0.1}
+								max={120}
+								step={0.1}
+								onChange={(seconds) =>
 									setNetworkDoc({
 										...doc(),
-										config: { ...doc().config, execution },
+										config: {
+											...doc().config,
+											execution: {
+												...CrawlerExecutionConfigSchema.parse(
+													doc().config.execution ?? {}
+												),
+												requestTimeoutMs: Math.round(seconds * 1000),
+											},
+										},
 									})
 								}
 							/>

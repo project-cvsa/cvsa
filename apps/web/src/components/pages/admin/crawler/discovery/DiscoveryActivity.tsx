@@ -3,11 +3,12 @@ import type { DiscoveryActivity, DiscoverySampleItem, DiscoveryStatusDto } from 
 import Badge from "@components/ui/Badge";
 import StateBadge from "../StateBadge";
 import Button from "@components/ui/Button";
+import Modal from "@components/ui/Modal";
 import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import { toast } from "@components/ui/Toast";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { api } from "@lib/api";
-import { formatDateTime, formatWaitSeconds } from "../format";
+import { formatDateTime, formatWaitSeconds, formatJobTime, jobErrorSummary } from "../format";
 import { discoveryJobTarget, discoveryJobTypeMessageKey } from "../labels";
 import ExternalLink from "lucide-solid/icons/external-link";
 import Compass from "lucide-solid/icons/compass";
@@ -37,6 +38,7 @@ export default function DiscoveryActivityView(props: {
 }) {
 	const t = getComponentT("crawler");
 
+	const [selectedJob, setSelectedJob] = createSignal<DiscoveryActivity | null>(null);
 	const [recentSamples, setRecentSamples] = createSignal<DiscoverySampleItem[]>([]);
 	const [loadingSamples, setLoadingSamples] = createSignal(false);
 	const [excludingAid, setExcludingAid] = createSignal<string | null>(null);
@@ -85,9 +87,18 @@ export default function DiscoveryActivityView(props: {
 		{
 			id: "type",
 			header: t("discoveryActivity.type"),
-			class: "font-medium text-primary whitespace-nowrap",
+			class: "w-44 font-medium text-primary",
 			cell: (job) => (
-				<span class="text-primary font-medium">{t(discoveryJobTypeMessageKey(job))}</span>
+				<button
+					type="button"
+					class="bg-transparent border-0 p-0 text-left text-primary font-medium cursor-pointer hover:underline"
+					onClick={(event) => {
+						event.stopPropagation();
+						setSelectedJob(job);
+					}}
+				>
+					{t(discoveryJobTypeMessageKey(job))}
+				</button>
 			),
 		},
 		{
@@ -101,14 +112,14 @@ export default function DiscoveryActivityView(props: {
 		{
 			id: "state",
 			header: t("discoveryActivity.state"),
-			class: "whitespace-nowrap",
+			class: "w-44",
 			cell: (job) => (
-				<div class="flex flex-col gap-1">
+				<div class="flex flex-col items-start gap-1">
 					<StateBadge state={job.state} kind="job" />
 					<Show when={job.failedReason}>
 						{(reason) => (
-							<span class="ts-caption text-error whitespace-normal break-words max-w-xs">
-								{reason()}
+							<span class="ts-caption text-error truncate block max-w-full">
+								{jobErrorSummary(reason(), t)}
 							</span>
 						)}
 					</Show>
@@ -118,13 +129,13 @@ export default function DiscoveryActivityView(props: {
 		{
 			id: "duration",
 			header: t("discoveryActivity.duration"),
-			class: "tabular-nums whitespace-nowrap text-secondary",
+			class: "w-20 tabular-nums whitespace-nowrap text-secondary",
 			cell: (job) => computeJobDuration(job),
 		},
 		{
 			id: "yield",
 			header: t("discoveryActivity.yield"),
-			class: "tabular-nums whitespace-nowrap text-primary",
+			class: "w-28 tabular-nums whitespace-nowrap text-primary",
 			cell: (job) => (
 				<span>
 					{job.progress?.candidates ?? 0} <span class="text-tertiary">/</span>{" "}
@@ -135,12 +146,10 @@ export default function DiscoveryActivityView(props: {
 		{
 			id: "time",
 			header: t("discoveryActivity.time"),
-			class: "tabular-nums whitespace-nowrap text-tertiary ts-caption",
+			class: "w-36 tabular-nums whitespace-nowrap text-tertiary ts-caption",
 			cell: (job) => (
 				<div class="flex flex-col">
-					<span>
-						{formatDateTime(new Date(job.finishedOn ?? job.timestamp).toISOString())}
-					</span>
+					<span>{formatJobTime(job.finishedOn ?? job.timestamp)}</span>
 				</div>
 			),
 		},
@@ -226,6 +235,8 @@ export default function DiscoveryActivityView(props: {
 				</div>
 
 				<DataTable
+					tableClass="table-fixed min-w-200"
+					onRowClick={setSelectedJob}
 					columns={taskColumns}
 					items={explorationJobs()}
 					empty={
@@ -330,6 +341,35 @@ export default function DiscoveryActivityView(props: {
 					</div>
 				</Show>
 			</div>
+			<Modal
+				isOpen={selectedJob() !== null}
+				onClose={() => setSelectedJob(null)}
+				title={t("audit.jobDetail")}
+				closeLabel={t("common.close")}
+			>
+				<Show when={selectedJob()}>
+					{(job) => (
+						<div class="flex flex-col gap-4">
+							<div class="flex items-center gap-3">
+								<h3 class="ts-label">{t(discoveryJobTypeMessageKey(job()))}</h3>
+								<StateBadge kind="job" state={job().state} />
+							</div>
+							<p class="ts-caption text-secondary">
+								{discoveryJobTarget(job(), t)} ·{" "}
+								{formatDateTime(new Date(job().timestamp).toISOString())}
+							</p>
+							<Show when={job().failedReason}>
+								{(reason) => (
+									<pre class="font-code ts-caption whitespace-pre-wrap break-words max-h-80 overflow-auto text-error">
+										{reason()}
+									</pre>
+								)}
+							</Show>
+							<p class="font-code ts-caption text-tertiary break-all">{job().id}</p>
+						</div>
+					)}
+				</Show>
+			</Modal>
 		</section>
 	);
 }

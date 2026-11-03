@@ -1,5 +1,5 @@
 import DataTable, { type TableColumn } from "@components/ui/DataTable";
-import { For, Show, type JSX } from "solid-js";
+import { Show, type JSX } from "solid-js";
 import { cn } from "@lib/cn";
 import type {
 	CrawlerStatsQueueState,
@@ -9,7 +9,7 @@ import type {
 } from "@cvsa/contracts";
 import Badge from "@components/ui/Badge";
 import { getComponentT } from "@lib/i18n/isomorphic";
-import { formatPercent, formatWaitSeconds } from "./format";
+import { formatMetric, formatPercent, formatWaitSeconds } from "./format";
 
 /** One headline metric. */
 export function MetricCard(props: {
@@ -28,7 +28,7 @@ export function MetricCard(props: {
 			)}
 		>
 			<div class="flex items-center justify-between gap-2">
-				<span class="ts-overline text-tertiary select-none">{props.label}</span>
+				<span class="ts-caption text-secondary">{props.label}</span>
 				<Show when={props.icon}>
 					{(Icon) => <div class="text-tertiary shrink-0">{Icon()()}</div>}
 				</Show>
@@ -163,7 +163,12 @@ export function RatioTable(props: { ratios: CrawlerStatsRatio; inputs: CrawlerSt
 			id: "value",
 			header: t("metrics.value"),
 			class: "text-right",
-			cell: (row) => ratio(row.value),
+			cell: (row) =>
+				row.id === "requestsPerRecord"
+					? row.value === null
+						? "—"
+						: formatMetric(row.value)
+					: ratio(row.value),
 		},
 		{
 			id: "detail",
@@ -237,36 +242,10 @@ export function LatencyTable(props: {
 			class: "text-right",
 			cell: (row) => (row.summary.max === null ? "—" : `${Math.round(row.summary.max)} ms`),
 		},
-		{
-			id: "distribution",
-			header: t("metrics.distribution"),
-			class: "w-32",
-			cell: (row) => <QuantileBars summary={row.summary} quantiles={props.quantiles} />,
-		},
 	];
 	return <DataTable columns={columns()} items={rows()} empty={t("metrics.noSamples")} />;
 }
 
 function formatQuantile(value: number | null | undefined): string {
 	return value === null || value === undefined ? "—" : `${Math.round(value)} ms`;
-}
-
-function QuantileBars(props: {
-	summary: CrawlerStatsLatency[string];
-	quantiles: readonly number[];
-}) {
-	const values = props.quantiles.map((key) => props.summary.quantiles[String(key)] ?? null);
-	const maximum = Math.max(1, ...values.map((value) => value ?? 0));
-	return (
-		<div class="flex items-end gap-0.5 h-8" aria-hidden="true">
-			<For each={values}>
-				{(value) => (
-					<div
-						class="w-3 bg-accent/60"
-						style={{ height: `${Math.max(2, ((value ?? 0) / maximum) * 100)}%` }}
-					/>
-				)}
-			</For>
-		</div>
-	);
 }

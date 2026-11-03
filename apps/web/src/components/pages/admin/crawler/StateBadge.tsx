@@ -28,7 +28,11 @@ export default function StateBadge(props: {
 	const t = getComponentT("crawler");
 	const presentation = () => (props.kind === "job" ? JOB_STATES : TRACKING_STATES)[props.state];
 	return (
-		<Badge size={props.size ?? "sm"} variant={presentation()?.variant ?? "neutral"}>
+		<Badge
+			class="w-fit"
+			size={props.size ?? "sm"}
+			variant={presentation()?.variant ?? "neutral"}
+		>
 			{presentation() ? t(presentation()?.key ?? "common.unknown") : props.state}
 		</Badge>
 	);

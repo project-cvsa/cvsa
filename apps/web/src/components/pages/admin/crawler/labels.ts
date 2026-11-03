@@ -1,5 +1,23 @@
-import type { DiscoveryActivity } from "@cvsa/contracts";
+import type { CrawlerQueueJobItem, DiscoveryActivity } from "@cvsa/contracts";
 import { formatDateTime } from "./format";
+
+export function queueJobName(
+	job: Pick<CrawlerQueueJobItem, "queue" | "name">,
+	t: (key: string) => string
+): string {
+	if (job.queue === "tracking") return t("metrics.queue.tracking");
+	if (job.name.startsWith("detail-") || job.name === "fetch-video-details")
+		return t("discoveryActivity.typeDetails");
+	if (job.name.includes("deep")) return t("discoveryActivity.typeDeep");
+	if (job.name.includes("sweep")) return t("discoveryActivity.typeIncremental");
+	if (
+		job.name.includes("hot-sample") ||
+		job.name.startsWith("active-") ||
+		job.name === "active-discovery"
+	)
+		return t("discoveryActivity.typeRelated");
+	return job.name;
+}
 
 export function discoveryJobTypeMessageKey(job: DiscoveryActivity): string {
 	switch (job.task?.type) {
