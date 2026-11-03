@@ -72,7 +72,7 @@ FROM base AS crawler
 WORKDIR /app
 COPY --from=crawler-builder /app/apps/crawler/dist ./dist
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-	bun add onnxruntime-node@1.30.0 sharp@0.35.4 --no-save
+	bun add onnxruntime-node@1.30.0 sharp@0.35.4 header-generator@2.1.89 --no-save
 ENV NODE_ENV=production
 ENV CONTROL_API_HOST=0.0.0.0
 ENV CONTROL_API_PORT=16413

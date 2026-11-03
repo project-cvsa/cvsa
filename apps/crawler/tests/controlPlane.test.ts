@@ -474,7 +474,7 @@ describe("crawler control plane", () => {
 					...original,
 					session: BilibiliSessionConfigSchema.parse({
 						refreshIntervalMs: 7200000,
-						browser: { family: "safari", safariVersion: "27.2" },
+						browser: { family: "safari" },
 						recoveryAttempts: 2,
 					}),
 					adaptive: AdaptiveRateConfigSchema.parse({
@@ -497,7 +497,7 @@ describe("crawler control plane", () => {
 				expect(loaded.data?.config.execution).toEqual(config.execution);
 				const status = await runtimeApi.status.get(authorized);
 				expect(status.data?.revision).toBe(saved.data?.revision);
-				expect(status.data?.session?.browser).toBe("safari 27.2");
+				expect(status.data?.session?.browser).toMatch(/^safari \d+/);
 			} finally {
 				const latest = await runtimeApi.config.get(authorized);
 				if (latest.data)

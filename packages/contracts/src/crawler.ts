@@ -414,18 +414,6 @@ export const BILIBILI_REQUEST_TYPES = [
 ];
 export const BrowserIdentityConfigSchema = z.object({
 	family: z.enum(["auto", "chrome", "edge", "safari"]).default("auto"),
-	chromeVersion: z
-		.string()
-		.regex(/^\d+(\.\d+){0,3}$/)
-		.default("156.0.8078.80"),
-	edgeVersion: z
-		.string()
-		.regex(/^\d+(\.\d+){0,3}$/)
-		.default("156.0.4314.56"),
-	safariVersion: z
-		.string()
-		.regex(/^\d+(\.\d+){0,3}$/)
-		.default("27.0"),
 	language: z
 		.string()
 		.min(1)

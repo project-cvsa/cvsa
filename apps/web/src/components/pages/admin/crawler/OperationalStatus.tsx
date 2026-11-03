@@ -16,35 +16,6 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 	const persistence = () => props.stats.persistence;
 	const exportState = () => props.stats.current.export;
 
-	type InstanceRow = CrawlerOverviewStats["instances"][number];
-	const instanceColumns: TableColumn<InstanceRow>[] = [
-		{ id: "id", header: t("metrics.instance"), cell: (row) => row.instanceId.slice(0, 8) },
-		{
-			id: "started",
-			header: t("metrics.startedAt"),
-			cell: (row) => formatDateTime(row.startedAt),
-		},
-		{
-			id: "covered",
-			header: t("metrics.coveredTo"),
-			cell: (row) => formatDateTime(row.coveredTo),
-		},
-		{
-			id: "heartbeat",
-			header: t("metrics.heartbeat"),
-			cell: (row) => formatDateTime(row.heartbeatAt),
-		},
-		{
-			id: "state",
-			header: t("metrics.state"),
-			cell: (row) => (
-				<Badge size="sm" variant={row.active ? "success" : "neutral"}>
-					{row.active ? t("metrics.active") : t("metrics.stopped")}
-				</Badge>
-			),
-		},
-	];
-
 	type FreshnessRow = CrawlerOverviewStats["current"]["tracking"]["freshness"] & {
 		group: string;
 		kind: string;
@@ -155,7 +126,6 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 								<th>{t("metrics.coverageStatus")}</th>
 								<th>{t("metrics.coveredMinutes")}</th>
 								<th>{t("metrics.missingMinutes")}</th>
-								<th>{t("metrics.enabledAt")}</th>
 								<th>{t("metrics.unconfirmedFrom")}</th>
 								<th>{t("metrics.persistence")}</th>
 								<th>{t("metrics.pendingMinutes")}</th>
@@ -182,7 +152,6 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 							</td>
 							<td>{coverage().coveredMinutes}</td>
 							<td>{coverage().missingMinutes}</td>
-							<td>{formatDateTime(coverage().enabledAt)}</td>
 							<td>{formatUnconfirmed(coverage().unconfirmedFrom)}</td>
 							<td>{t(`metrics.persistenceState.${persistence().state}`)}</td>
 							<td>{persistence().pendingMinutes}</td>
@@ -195,11 +164,6 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 							<td>{persistence().rollupFailures}</td>
 						</tr>
 					</Table>
-					<DataTable
-						columns={instanceColumns}
-						items={props.stats.instances}
-						empty={t("metrics.noInstances")}
-					/>
 				</section>
 
 				<section class="flex flex-col gap-3">

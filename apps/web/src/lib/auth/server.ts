@@ -5,6 +5,7 @@ import {
 	type AuthSessionDto,
 	type CurrentUserInfoDto,
 } from "@cvsa/authentication";
+import { appLogger } from "@cvsa/logger";
 
 export type CurrentAuth = {
 	user: CurrentUserInfoDto | null;
@@ -35,7 +36,10 @@ export async function resolveCurrentAuth(request: Request): Promise<CurrentAuth>
 			session: sessionToDto(authContext.session),
 		};
 	} catch (error) {
-		console.warn("[auth] failed to resolve session, treating visitor as anonymous", error);
+		appLogger.warn("Failed to resolve session, treating visitor as anonymous", {
+			component: "web-auth",
+			error,
+		});
 		return { user: null, session: null };
 	}
 }

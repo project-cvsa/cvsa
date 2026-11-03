@@ -18,6 +18,7 @@
 		"@cvsa/catalog": "workspace:*",
 		"@cvsa/contracts": "workspace:*",
 		"@cvsa/db": "workspace:*",
+		"@cvsa/logger": "workspace:*",
 		"@elysiajs/eden": "^1.4.9",
 		"@fanee/core": "^0.8.1",
 		"@fanee/node": "^0.8.1",

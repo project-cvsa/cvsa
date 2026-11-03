@@ -68,14 +68,14 @@ describe("crawler console translations", () => {
 			expect(html).not.toContain("采集记录");
 		}
 	);
-	test("uses the existing tabs for overview navigation and a modal action for session options", () => {
+	test("uses the existing tabs for overview navigation and renders session policy", () => {
 		const html = render("en-US", () => (
 			<>
 				<OverviewSection statusData={() => null} />
 				<NetworkSessionPolicy onChange={() => {}} />
 			</>
 		));
-		for (const label of ["Summary", "Metrics", "Runtime", "Session options"])
+		for (const label of ["Summary", "Metrics", "Runtime", "Session"])
 			expect(html).toContain(label);
 		expect(html).toContain('role="tablist"');
 		expect(html).not.toContain("<details");

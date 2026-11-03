@@ -314,34 +314,10 @@ export default function NetworkSection(props: NetworkSectionProps) {
 							<NetworkSessionPolicy
 								disabled={saving()}
 								config={doc().config.session}
-								status={props.statusData()?.session}
 								onChange={(session) =>
 									setNetworkDoc({
 										...doc(),
 										config: { ...doc().config, session },
-									})
-								}
-							/>
-							<NumberField
-								class="max-w-sm"
-								size="sm"
-								label={t("network.execution.requestTimeoutMs")}
-								value={(doc().config.execution?.requestTimeoutMs ?? 8000) / 1000}
-								min={0.1}
-								max={120}
-								step={0.1}
-								onChange={(seconds) =>
-									setNetworkDoc({
-										...doc(),
-										config: {
-											...doc().config,
-											execution: {
-												...CrawlerExecutionConfigSchema.parse(
-													doc().config.execution ?? {}
-												),
-												requestTimeoutMs: Math.round(seconds * 1000),
-											},
-										},
 									})
 								}
 							/>
