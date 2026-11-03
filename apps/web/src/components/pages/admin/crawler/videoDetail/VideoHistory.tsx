@@ -27,7 +27,7 @@ type HistoryItem = VideoMetadataHistoryListResponse["items"][number];
 type FieldDiff = ReturnType<typeof toMetadataFieldDiffs>[number];
 
 function HistoryEntry(props: { item: HistoryItem }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const fieldLabel = (field: string) => {
 		const key = metadataFieldMessageKey(field);
 		return key ? t(key) : field;
@@ -76,13 +76,13 @@ function HistoryEntry(props: { item: HistoryItem }) {
 }
 
 export default function VideoHistory(props: VideoHistoryProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	return (
 		<section class="flex flex-col gap-3">
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h3 class="ts-label text-primary">{t("videoDetail.history")}</h3>
 				<span class="ts-caption text-tertiary">
-					{t("videoDetail.changes").replace("{count}", String(props.historyTotal()))}
+					{t("videoDetail.changes", { count: props.historyTotal() })}
 				</span>
 			</div>
 			<Show when={props.historyError() && (props.history()?.items.length ?? 0) > 0}>

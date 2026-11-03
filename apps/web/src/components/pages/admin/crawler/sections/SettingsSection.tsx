@@ -20,7 +20,7 @@ function ModelParameters(props: {
 	config: DiscoveryFilterConfigDto;
 	onChange: (updates: Partial<DiscoveryFilterConfigDto>) => void;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:settings");
 	return (
 		<section class="flex flex-col gap-4">
 			<h3 class="ts-heading-3 text-primary">{t("settings.parameters.title")}</h3>
@@ -71,7 +71,8 @@ function ModelParameters(props: {
 }
 
 export default function SettingsSection() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:settings");
+	const networkT = getComponentT("crawler:network");
 
 	const [config, setConfig] = createSignal<DiscoveryFilterConfigDto | null>(null);
 	const [savedSnapshot, setSavedSnapshot] = createSignal<string>("");
@@ -154,7 +155,7 @@ export default function SettingsSection() {
 					<>
 						<Show when={isDirty()}>
 							<span class="ts-caption text-secondary">
-								{t("network.adapters.draftNotice")}
+								{networkT("network.adapters.draftNotice")}
 							</span>
 						</Show>
 						<Button

@@ -13,8 +13,9 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",
-		"@types/bun": "1.4.2",
-		"@cvsa/typescript-config": "workspace:*"
+		"@cvsa/typescript-config": "workspace:*",
+		"@types/accept-language-parser": "^1.5.8",
+		"@types/bun": "1.4.2"
 	},
 	"dependencies": {
 		"@cvsa/authentication": "workspace:*",
@@ -28,12 +29,13 @@
 		"@elysiajs/eden": "^1.4.9",
 		"@elysiajs/openapi": "^1.4.16",
 		"@elysiajs/opentelemetry": "^1.4.11",
-		"@fanee/core": "^0.8.1",
-		"@fanee/node": "^0.8.1",
+		"@fanee/core": "^0.9.0",
+		"@fanee/node": "^0.9.0",
 		"@opentelemetry/api": "^1.9.1",
 		"@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
 		"@opentelemetry/sdk-trace-node": "^2.6.1",
 		"@t3-oss/env-core": "^0.13.10",
+		"accept-language-parser": "^1.5.0",
 		"argon2": "^0.45.1",
 		"bullmq": "5.80.2",
 		"chalk": "^6.0.0",

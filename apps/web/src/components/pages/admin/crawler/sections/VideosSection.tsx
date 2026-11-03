@@ -32,7 +32,7 @@ type TrackingVideo = TrackingVideoListResponse["items"][number];
 type StatusFilter = "all" | "failing" | "highPriority" | "normal";
 
 function VideoIdentity(props: { item: TrackingVideo }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 	return (
 		<div class="flex items-center gap-3 min-w-0">
 			<div class="w-16 h-10 shrink-0 bg-surface-container-high overflow-hidden flex items-center justify-center border border-border">
@@ -88,7 +88,7 @@ function VideoIdentity(props: { item: TrackingVideo }) {
 }
 
 export default function VideosSection() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 
 	const [stateFilter, setStateFilter] = createSignal<StateFilter>("all");
 	const [statusFilter, setStatusFilter] = createSignal<StatusFilter>("all");
@@ -290,10 +290,7 @@ export default function VideosSection() {
 							<Badge variant="danger" size="sm">
 								{item.videoStatus && item.videoStatus !== "normal"
 									? item.videoStatus
-									: t("videos.fails").replace(
-											"{count}",
-											String(item.consecutiveFails)
-										)}
+									: t("videos.fails", { count: item.consecutiveFails })}
 							</Badge>
 						</span>
 					</Show>

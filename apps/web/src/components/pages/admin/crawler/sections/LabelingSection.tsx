@@ -21,7 +21,7 @@ import DiscoveryCandidate from "../discovery/DiscoveryCandidate";
 import LabelingStats from "../LabelingStats";
 
 export default function LabelingSection(props: { active: boolean }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 
 	const [samples, setSamples] = createSignal<DiscoverySampleListResponse | null>(null);
 	const [loading, setLoading] = createSignal(false);

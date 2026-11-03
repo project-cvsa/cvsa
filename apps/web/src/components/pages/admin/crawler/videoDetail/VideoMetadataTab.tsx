@@ -23,7 +23,7 @@ interface VideoMetadataTabProps {
 }
 
 export default function VideoMetadataTab(props: VideoMetadataTabProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const [expandedDesc, setExpandedDesc] = createSignal(false);
 
 	const tags = () => parseTags(props.data.tags);

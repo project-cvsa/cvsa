@@ -19,7 +19,7 @@ const DEFAULT_HEALTH: HealthConfig = {
 };
 
 export default function NetworkHealthPolicy(props: NetworkHealthPolicyProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const health = () => props.config ?? DEFAULT_HEALTH;
 	const update = (partial: Partial<HealthConfig>) => props.onChange({ ...health(), ...partial });
 

@@ -1,6 +1,4 @@
 import NetworkSessionPolicy from "../network/NetworkSessionPolicy";
-import NumberField from "@components/ui/NumberField";
-import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
 import { useCrawlerRefresh } from "../refresh";
 import SectionHeader from "../SectionHeader";
 import { createMemo, createSignal, Show } from "solid-js";
@@ -29,16 +27,16 @@ type NetworkSectionProps = {
 };
 
 function RevisionBadge(props: { revision: number }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	return (
 		<Badge variant="neutral" size="sm">
-			{t("network.adapters.revision").replace("{revision}", String(props.revision))}
+			{t("network.adapters.revision", { revision: props.revision })}
 		</Badge>
 	);
 }
 
 export default function NetworkSection(props: NetworkSectionProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 
 	const [networkDoc, setNetworkDoc] = createSignal<NetworkRuntimeConfigDocument | null>(null);
 	const [savedSnapshot, setSavedSnapshot] = createSignal<string>("");

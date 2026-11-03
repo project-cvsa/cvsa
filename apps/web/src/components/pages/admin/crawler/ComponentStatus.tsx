@@ -12,7 +12,7 @@ type ComponentStatusProps = {
 };
 
 function ClassifierStatus(props: { health: ClassifierHealthDto | null }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const presentation = (): { variant: BadgeVariant; label: string } => {
 		if (!props.health) return { variant: "neutral", label: t("common.unknown") };
 		if (!props.health.reachable)
@@ -37,7 +37,7 @@ function ClassifierStatus(props: { health: ClassifierHealthDto | null }) {
 }
 
 export default function ComponentStatus(props: ComponentStatusProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const adapters = () => props.status?.adapters ?? [];
 	const enabled = () => adapters().filter((adapter) => adapter.enabled).length;
 	const jobs = (state: "active" | "waiting") =>
@@ -62,9 +62,10 @@ export default function ComponentStatus(props: ComponentStatusProps) {
 			status: (
 				<Show when={props.status} fallback={t("common.unknown")}>
 					<Badge size="sm" variant={enabled() > 0 ? "success" : "danger"}>
-						{t("overview.enabledCount")
-							.replace("{enabled}", String(enabled()))
-							.replace("{total}", String(adapters().length))}
+						{t("overview.enabledCount", {
+							enabled: enabled(),
+							total: adapters().length,
+						})}
 					</Badge>
 				</Show>
 			),

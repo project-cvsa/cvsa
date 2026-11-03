@@ -49,7 +49,7 @@ type RangeControlsProps = {
 };
 
 function RangeControls(props: RangeControlsProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const options = () => [
 		...WINDOWS.map((value) => ({ value, label: t(WINDOW_MESSAGE_KEYS[value]) })),
 		{ value: "custom", label: t("audit.custom") },
@@ -101,7 +101,7 @@ export function OverviewSummary(props: {
 	inferences: number;
 	success: number | null;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	return (
 		<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
 			<MetricCard label={t("overview.newSnapshots")} value={formatMetric(props.snapshots)} />
@@ -121,7 +121,7 @@ export function OverviewSummary(props: {
 }
 
 export default function OverviewSection(props: OverviewSectionProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const [tab, setTab] = createSignal<OverviewTab>("summary");
 	const tabs = (): TabItem<OverviewTab>[] => [
 		{ id: "summary", label: t("overview.summary") },

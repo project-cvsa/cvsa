@@ -6,7 +6,7 @@ import { useCrawlerRefresh } from "./refresh";
 import { MetricCard } from "./statsView";
 
 export default function VideoStats() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
 	const load = async () => {
 		const res = await api.crawler.getStats("24h");

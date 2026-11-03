@@ -166,7 +166,7 @@ export default function ThroughputChart(props: {
 	series: CrawlerStatsRollupPoint[];
 	initialMetric?: string;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const [width, setWidth] = createSignal(800);
 	const [metric, setMetric] = createSignal(props.initialMetric ?? "videosPerMin");
 	const [hidden, setHidden] = createSignal<string[]>([]);

@@ -19,7 +19,7 @@ import {
 import { formatDateTime, formatMetric } from "../format";
 
 export default function VideoMilestones(props: { aid: string }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const [sourcesOpen, setSourcesOpen] = createSignal(false);
 	const [achievements, setAchievements] = createSignal<MilestoneAchievement[]>([]);
 	const [items, setItems] = createSignal<MilestoneRecord[]>([]);

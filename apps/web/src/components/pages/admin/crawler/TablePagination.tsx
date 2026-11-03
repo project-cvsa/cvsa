@@ -72,7 +72,7 @@ export default function Pagination(props: PaginationProps) {
 							options={
 								props.pageSizeOptions?.map((size) => ({
 									value: String(size),
-									label: t("common.rowsPerPage").replace("{count}", String(size)),
+									label: t("common.rowsPerPage", { count: size }),
 								})) ?? []
 							}
 							onValueChange={(val) => {

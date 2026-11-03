@@ -46,7 +46,7 @@ export function QueueStatusTable(props: {
 	queues: Record<string, CrawlerStatsQueueState>;
 	emptyLabel?: string;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const rows = () => Object.entries(props.queues).map(([name, snapshot]) => ({ name, snapshot }));
 
 	type QueueRow = { name: string; snapshot: CrawlerStatsQueueState };
@@ -117,7 +117,7 @@ function ratio(value: number | null): string {
 }
 
 export function RatioTable(props: { ratios: CrawlerStatsRatio; inputs: CrawlerStatsRatioInputs }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	type Row = { id: string; label: string; value: number | null; detail: string };
 	const rows = (): Row[] => [
 		{
@@ -184,7 +184,7 @@ export function LatencyTable(props: {
 	latency: CrawlerStatsLatency;
 	quantiles: readonly number[];
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	type Row = {
 		key: string;
 		operation: string;

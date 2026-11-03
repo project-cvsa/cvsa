@@ -1,4 +1,5 @@
 export * from "./errors";
+export * from "./i18n";
 export * from "./song";
 export * from "./catalog";
 export * from "./crawler";

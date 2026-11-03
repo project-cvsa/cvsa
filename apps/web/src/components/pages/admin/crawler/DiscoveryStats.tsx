@@ -11,7 +11,7 @@ type ChannelRow = ChannelCounts & { channel: string };
 export function DiscoveryStatsTable(props: {
 	byChannel: CrawlerOverviewStats["discovery"]["byChannel"];
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const rows = (): ChannelRow[] =>
 		Object.entries(props.byChannel).map(([channel, counts]) => ({ channel, ...counts }));
 	const columns: TableColumn<ChannelRow>[] = [

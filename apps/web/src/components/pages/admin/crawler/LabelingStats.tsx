@@ -7,7 +7,7 @@ import { MetricCard } from "./statsView";
 import { formatPercent } from "./format";
 
 export default function LabelingStats() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
 	const load = async () => {
 		const res = await api.crawler.getStats("24h");

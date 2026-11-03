@@ -64,7 +64,7 @@ export default function CrawlerSchedulingPolicy(props: {
 	config: CrawlerExecutionConfig;
 	onChange: (config: CrawlerExecutionConfig) => void;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:settings");
 	const tracking = () => ({ ...DEFAULT_TRACKING_POLICY, ...props.config.tracking });
 	const update = (key: NumericTrackingKey, value: number) =>
 		props.onChange({ ...props.config, tracking: { ...props.config.tracking, [key]: value } });

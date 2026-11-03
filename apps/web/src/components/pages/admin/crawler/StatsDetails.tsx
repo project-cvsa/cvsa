@@ -16,7 +16,7 @@ export default function StatsDetails(props: {
 	stats: CrawlerOverviewStats;
 	quantiles: readonly number[];
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const [outcome, setOutcome] = createSignal("all");
 	const latency = () =>
 		outcome() === "all"

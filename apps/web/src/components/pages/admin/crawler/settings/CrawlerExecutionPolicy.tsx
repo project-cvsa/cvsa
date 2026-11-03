@@ -22,7 +22,7 @@ const FIELDS: Array<{
 ];
 
 export default function CrawlerExecutionPolicy(props: Props) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const config = () => CrawlerExecutionConfigSchema.parse(props.config ?? {});
 	return (
 		<section class="flex flex-col gap-4">

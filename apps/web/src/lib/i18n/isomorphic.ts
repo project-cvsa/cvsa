@@ -1,6 +1,6 @@
 import type { TranslateFunction } from "@fanee/core";
-import { useComponentTranslationFactory } from "./component-context";
+import { useT } from "@fanee/solid";
 
 export const getComponentT = (namespace: string): TranslateFunction => {
-	return useComponentTranslationFactory()(namespace);
+	return useT({ namespace });
 };

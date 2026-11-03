@@ -3,7 +3,8 @@ import { renderToString } from "solid-js/web";
 import type { JSX } from "solid-js";
 import type { DiscoveryActivity } from "@cvsa/contracts";
 import { CRAWLER_STATS_OPERATIONS, CRAWLER_STATS_OUTCOMES } from "@cvsa/contracts";
-import { ComponentI18nProvider } from "@lib/i18n/component-context";
+import { FaneeProvider } from "@fanee/solid";
+import { FaneeRuntime } from "@fanee/core";
 import { i18nServer } from "@lib/i18n/server";
 import { DiscoveryStatsTable } from "../src/components/pages/admin/crawler/DiscoveryStats";
 import DiscoveryActivityView from "../src/components/pages/admin/crawler/discovery/DiscoveryActivity";
@@ -19,14 +20,15 @@ import NetworkSessionPolicy from "../src/components/pages/admin/crawler/network/
 import LabelingStats from "../src/components/pages/admin/crawler/LabelingStats";
 import VideoSnapshotHistory from "../src/components/pages/admin/crawler/videoDetail/VideoSnapshotHistory";
 
-function render(locale: string, content: () => JSX.Element) {
-	return renderToString(() => (
-		<ComponentI18nProvider
-			getT={(namespace) => i18nServer.getT({ locale, namespace: `client:${namespace}` })}
-		>
-			{content()}
-		</ComponentI18nProvider>
-	));
+async function render(locale: string, content: () => JSX.Element) {
+	const runtime = new FaneeRuntime().config({
+		currentLocale: locale,
+		defaultLocale: "zh-CN",
+		baseNamespace: "web:client",
+		resources: i18nServer.getAllTranslations(),
+	});
+	await runtime.ready();
+	return renderToString(() => <FaneeProvider runtime={runtime}>{content()}</FaneeProvider>);
 }
 
 describe("crawler console translations", () => {
@@ -40,8 +42,8 @@ describe("crawler console translations", () => {
 		{ locale: "zh-CN", snapshot: "快照", history: "快照历史", labels: "标注样本" },
 	])(
 		"uses the domain terms for snapshots and labeled samples in $locale",
-		({ locale, snapshot, history, labels }) => {
-			const html = render(locale, () => (
+		async ({ locale, snapshot, history, labels }) => {
+			const html = await render(locale, () => (
 				<>
 					<OverviewSummary
 						snapshots={123}
@@ -68,8 +70,8 @@ describe("crawler console translations", () => {
 			expect(html).not.toContain("采集记录");
 		}
 	);
-	test("uses the existing tabs for overview navigation and renders session policy", () => {
-		const html = render("en-US", () => (
+	test("uses the existing tabs for overview navigation and renders session policy", async () => {
+		const html = await render("en-US", () => (
 			<>
 				<OverviewSection statusData={() => null} />
 				<NetworkSessionPolicy onChange={() => {}} />
@@ -81,8 +83,8 @@ describe("crawler console translations", () => {
 		expect(html).not.toContain("<details");
 		expect(html).not.toContain("<summary");
 	});
-	test("bounds percentage charts at 100 and includes dates for multi-day ranges", () => {
-		const html = render("en-US", () => (
+	test("bounds percentage charts at 100 and includes dates for multi-day ranges", async () => {
+		const html = await render("en-US", () => (
 			<TrendPlot
 				width={800}
 				lines={[
@@ -105,8 +107,8 @@ describe("crawler console translations", () => {
 		expect(html).toContain("11/01");
 		expect(html).toContain("11/03");
 	});
-	test("keeps long database errors in task details and gives the list a short summary", () => {
-		const html = render("en-US", () => (
+	test("keeps long database errors in task details and gives the list a short summary", async () => {
+		const html = await render("en-US", () => (
 			<QueueJobsTable
 				busy={false}
 				onInspect={() => {}}
@@ -128,13 +130,13 @@ describe("crawler console translations", () => {
 		expect(html).not.toContain("column, column");
 		expect(html).toContain("259371");
 	});
-	test("keeps the overview filter limited to the time range", () => {
-		const html = render("en-US", () => <OverviewSection statusData={() => null} />);
+	test("keeps the overview filter limited to the time range", async () => {
+		const html = await render("en-US", () => <OverviewSection statusData={() => null} />);
 		expect(html).not.toContain("P50");
 		expect(html).not.toContain("Quantiles");
 	});
-	test("shows short headline labels and recorded counts without empty rate hints", () => {
-		const html = render("en-US", () => (
+	test("shows short headline labels and recorded counts without empty rate hints", async () => {
+		const html = await render("en-US", () => (
 			<OverviewSummary
 				snapshots={36626}
 				videos={115}
@@ -149,7 +151,7 @@ describe("crawler console translations", () => {
 		expect(html).not.toContain("—");
 		expect(html).not.toContain("Candidates accepted for tracking");
 	});
-	test("shows four colored percentile lines and their legends for request duration", () => {
+	test("shows four colored percentile lines and their legends for request duration", async () => {
 		const series = [0, 1, 2].map(
 			(minute) =>
 				({
@@ -164,7 +166,7 @@ describe("crawler console translations", () => {
 					},
 				}) satisfies import("@cvsa/contracts").CrawlerStatsRollupPoint
 		);
-		const html = render("en-US", () => (
+		const html = await render("en-US", () => (
 			<ThroughputChart series={series} initialMetric="latency.httpAttempt" />
 		));
 		for (const percentile of ["P50", "P90", "P95", "P99"]) {
@@ -173,8 +175,8 @@ describe("crawler console translations", () => {
 		}
 		expect(html.match(/aria-pressed="true"/g)).toHaveLength(4);
 	});
-	test("uses compact numeric axis labels and keeps units outside ticks", () => {
-		const html = render("en-US", () => (
+	test("uses compact numeric axis labels and keeps units outside ticks", async () => {
+		const html = await render("en-US", () => (
 			<TrendPlot
 				width={320}
 				lines={[
@@ -198,8 +200,8 @@ describe("crawler console translations", () => {
 		expect(html).toContain("1.1M</text>");
 		expect(html).not.toContain("NaN");
 	});
-	test("renders worker and tracking controls together without the network timeout", () => {
-		const html = render("en-US", () => (
+	test("renders worker and tracking controls together without the network timeout", async () => {
+		const html = await render("en-US", () => (
 			<CrawlerExecutionPolicy
 				config={CrawlerExecutionConfigSchema.parse({})}
 				onChange={() => {}}
@@ -217,7 +219,7 @@ describe("crawler console translations", () => {
 	});
 	test.each(["en-US", "zh-CN"])(
 		"renders every measured operation and outcome in %s",
-		(locale) => {
+		async (locale) => {
 			const summary = {
 				count: 1,
 				mean: 10,
@@ -230,7 +232,7 @@ describe("crawler console translations", () => {
 					CRAWLER_STATS_OUTCOMES.map((outcome) => [`${operation}:${outcome}`, summary])
 				)
 			);
-			const html = render(locale, () => (
+			const html = await render(locale, () => (
 				<LatencyTable latency={latency} quantiles={[0.5, 0.95]} />
 			));
 			expect(html).toContain("P95");
@@ -257,7 +259,7 @@ describe("crawler console translations", () => {
 		},
 	])(
 		"renders every discovery source in $locale",
-		({ locale, title, search, related, manual, hot }) => {
+		async ({ locale, title, search, related, manual, hot }) => {
 			const counts = {
 				appeared: 12,
 				newTracking: 5,
@@ -269,7 +271,7 @@ describe("crawler console translations", () => {
 				cancelled: 0,
 				timeout: 0,
 			};
-			const html = render(locale, () => (
+			const html = await render(locale, () => (
 				<DiscoveryStatsTable
 					byChannel={{
 						search: counts,
@@ -290,7 +292,7 @@ describe("crawler console translations", () => {
 		{ locale: "zh-CN", type: "增量搜索", target: "2 个关键词" },
 	])(
 		"renders old task descriptions in $locale and shows why they failed",
-		({ locale, type, target }) => {
+		async ({ locale, type, target }) => {
 			const job: DiscoveryActivity = {
 				id: "failed-sweep",
 				name: "repeatable-search-sweep",
@@ -307,7 +309,7 @@ describe("crawler console translations", () => {
 				failedReason: "Upstream connection timed out",
 				progress: null,
 			};
-			const html = render(locale, () => (
+			const html = await render(locale, () => (
 				<DiscoveryActivityView
 					error={null}
 					status={{

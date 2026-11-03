@@ -23,7 +23,7 @@ type GraphNodeActions = {
 };
 
 function NodeCover(props: { node: RecommendationGraphNode; seed?: boolean }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 	const duration = () => {
 		const seconds = props.node.duration;
 		return seconds
@@ -64,7 +64,7 @@ function NodeCover(props: { node: RecommendationGraphNode; seed?: boolean }) {
 function GraphNodeCard(
 	props: GraphNodeActions & { node: RecommendationGraphNode; seed?: boolean }
 ) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 	return (
 		<article
 			class={
@@ -96,7 +96,7 @@ function GraphNodeCard(
 					</a>
 					<Show when={props.node.ownerName}>
 						<span class="ts-caption text-secondary">
-							{t("graphUi.uploader").replace("{name}", props.node.ownerName ?? "")}
+							{t("graphUi.uploader", { name: props.node.ownerName ?? "" })}
 						</span>
 					</Show>
 				</div>
@@ -132,7 +132,7 @@ function GraphNodeCard(
 }
 
 function GraphResults(props: GraphNodeActions & { graph: RecommendationGraphResponse }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 	return (
 		<div class="flex flex-col gap-4">
 			<GraphNodeCard
@@ -172,7 +172,7 @@ function GraphResults(props: GraphNodeActions & { graph: RecommendationGraphResp
 }
 
 export default function GraphExplorer(props: GraphExplorerProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 	const [identifier, setIdentifier] = createSignal("");
 	const requests = createRequestSequence();
 	const [loading, setLoading] = createSignal(false);

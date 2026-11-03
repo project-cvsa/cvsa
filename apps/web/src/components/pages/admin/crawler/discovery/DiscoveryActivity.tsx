@@ -36,7 +36,8 @@ export default function DiscoveryActivityView(props: {
 	status: DiscoveryStatusDto | null;
 	error: string | null;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
+	const videoT = getComponentT("crawler:video");
 
 	const [selectedJob, setSelectedJob] = createSignal<DiscoveryActivity | null>(null);
 	const [recentSamples, setRecentSamples] = createSignal<DiscoverySampleItem[]>([]);
@@ -332,7 +333,7 @@ export default function DiscoveryActivityView(props: {
 											onClick={() => void handleExcludeSample(item.aid)}
 										>
 											<Trash2 class="w-3 h-3 mr-1" />
-											<span>{t("videos.action.exclude")}</span>
+											<span>{videoT("videos.action.exclude")}</span>
 										</Button>
 									</div>
 								</div>

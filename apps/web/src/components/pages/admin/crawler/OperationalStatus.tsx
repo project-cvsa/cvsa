@@ -11,7 +11,7 @@ function formatUnconfirmed(value: number | null): string {
 }
 
 export default function OperationalStatus(props: { stats: CrawlerOverviewStats }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const coverage = () => props.stats.coverage;
 	const persistence = () => props.stats.persistence;
 	const exportState = () => props.stats.current.export;
@@ -204,33 +204,28 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 						empty={t("metrics.noSamples")}
 					/>
 					<p class="ts-caption text-secondary">
-						{t("metrics.freshness")
-							.replace(
-								"{mean}",
+						{t("metrics.freshness", {
+							mean:
 								props.stats.current.tracking.freshness.meanSec === null
 									? "—"
 									: formatWaitSeconds(
 											props.stats.current.tracking.freshness.meanSec
-										)
-							)
-							.replace(
-								"{p95}",
+										),
+							p95:
 								props.stats.current.tracking.freshness.quantilesSec["0.95"] == null
 									? "—"
 									: formatWaitSeconds(
 											props.stats.current.tracking.freshness.quantilesSec[
 												"0.95"
 											] ?? 0
-										)
-							)
-							.replace(
-								"{max}",
+										),
+							max:
 								props.stats.current.tracking.freshness.maxSec === null
 									? "—"
 									: formatWaitSeconds(
 											props.stats.current.tracking.freshness.maxSec
-										)
-							)}
+										),
+						})}
 					</p>
 				</section>
 

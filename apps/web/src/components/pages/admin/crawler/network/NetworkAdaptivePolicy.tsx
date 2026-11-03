@@ -19,7 +19,7 @@ const FIELDS: Array<{
 	{ key: "backgroundPenaltyMs", min: 0, max: 3600, scale: 1000 },
 ];
 export default function NetworkAdaptivePolicy(props: Props) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const config = () => AdaptiveRateConfigSchema.parse(props.config ?? {});
 	return (
 		<section class="flex flex-col gap-4">

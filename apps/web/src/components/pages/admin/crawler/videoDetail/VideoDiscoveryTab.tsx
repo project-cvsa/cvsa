@@ -13,7 +13,7 @@ interface VideoDiscoveryTabProps {
 }
 
 export default function VideoDiscoveryTab(props: VideoDiscoveryTabProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const [relations, setRelations] = createSignal<BilibiliVideoRelationDto[]>([]);
 	const [loadingRelations, setLoadingRelations] = createSignal(false);
 
@@ -123,10 +123,9 @@ export default function VideoDiscoveryTab(props: VideoDiscoveryTabProps) {
 										{t("videoDetail.position")}
 									</span>
 									<span class="text-primary font-medium">
-										{t("videoDetail.positionValue").replace(
-											"{position}",
-											String(related().position)
-										)}
+										{t("videoDetail.positionValue", {
+											position: related().position,
+										})}
 									</span>
 								</div>
 							</>

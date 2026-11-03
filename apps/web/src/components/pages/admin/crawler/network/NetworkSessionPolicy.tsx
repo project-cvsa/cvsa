@@ -9,7 +9,7 @@ type Props = {
 	onChange: (config: BilibiliSessionConfig) => void;
 };
 export default function NetworkSessionPolicy(props: Props) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const config = () => props.config ?? BilibiliSessionConfigSchema.parse({});
 	const update = (value: Partial<BilibiliSessionConfig>) =>
 		props.onChange({ ...config(), ...value });

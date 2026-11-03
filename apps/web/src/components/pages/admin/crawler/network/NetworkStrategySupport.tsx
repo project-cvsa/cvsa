@@ -8,7 +8,7 @@ import { useCrawlerRefresh } from "../refresh";
 import { formatMetric } from "../format";
 
 export default function NetworkStrategySupport() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const [strategies, setStrategies] = createSignal<CrawlerStrategyStatus[]>([]);
 	const load = async () => {
 		const res = await api.crawler.getStats("5m");

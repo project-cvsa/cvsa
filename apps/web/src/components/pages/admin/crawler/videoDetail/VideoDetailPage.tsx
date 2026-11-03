@@ -24,7 +24,7 @@ const SNAPSHOTS_PAGE_SIZE = 10;
 type DetailTabId = "snapshots" | "metadata" | "discovery" | "history";
 
 export default function VideoDetailPage(props: { aid: string }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const [activeTab, setActiveTab] = createSignal<DetailTabId>("snapshots");
 	const [loading, setLoading] = createSignal(true);
 	const [error, setError] = createSignal<string | null>(null);

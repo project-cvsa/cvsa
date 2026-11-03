@@ -27,7 +27,8 @@ interface VideoDetailHeroProps {
 }
 
 export default function VideoDetailHero(props: VideoDetailHeroProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
+	const discoveryT = getComponentT("crawler:discovery");
 	const meta = () => props.metadata();
 	const track = () => props.tracking();
 
@@ -53,7 +54,9 @@ export default function VideoDetailHero(props: VideoDetailHeroProps) {
 					<Show
 						when={meta()?.pic}
 						fallback={
-							<span class="ts-caption text-tertiary">{t("discoveryUi.noCover")}</span>
+							<span class="ts-caption text-tertiary">
+								{discoveryT("discoveryUi.noCover")}
+							</span>
 						}
 					>
 						{(pic) => (

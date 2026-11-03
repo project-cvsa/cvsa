@@ -9,7 +9,7 @@ import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
 import CrawlerExecutionPolicy from "./CrawlerExecutionPolicy";
 
 export default function ExecutionSettings() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const [document, setDocument] = createSignal<NetworkRuntimeConfigDocument | null>(null);
 	const [saved, setSaved] = createSignal<string>();
 	const [saving, setSaving] = createSignal(false);

@@ -11,18 +11,22 @@
 		"lint": "bunx --bun turbo run lint",
 		"lint:fix": "bunx --bun biome check --write --unsafe .",
 		"format": "bunx --bun biome format --write .",
-		"ci": "bunx --bun biome ci .",
+		"ci": "bunx --bun biome ci . && bun run i18n:check",
 		"test": "bunx --bun turbo run test:reset && bunx --bun turbo run test",
 		"test:coverage": "bunx --bun turbo run test:reset && bunx --bun turbo run test:coverage",
 		"typecheck": "bunx --bun turbo typecheck",
 		"setup": "bunx --bun turbo setup",
-		"setup:ci": "bunx --bun turbo setup:ci"
+		"setup:ci": "bunx --bun turbo setup:ci",
+		"i18n:check": "bun run --bun fanee check --unused",
+		"i18n:unused": "bun run --bun fanee unused"
 	},
 	"devDependencies": {
+		"@astrojs/compiler-rs": "^0.4.1",
 		"@biomejs/biome": "^2.4.10",
 		"@types/bun": "^1.4.2",
 		"turbo": "^2.11.2",
-		"typescript": "^7.0.2"
+		"typescript": "^7.0.2",
+		"@fanee/tools": "^0.9.0"
 	},
 	"packageManager": "bun@1.4.2",
 	"overrides": {

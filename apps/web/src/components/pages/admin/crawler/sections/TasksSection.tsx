@@ -26,7 +26,7 @@ const jobDate = (value: number | null | undefined) =>
 	value ? formatDateTime(new Date(value).toISOString()) : "—";
 
 function JobDetail(props: { job: CrawlerQueueJobDetail }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:tasks");
 	return (
 		<div class="flex flex-col gap-4 ts-caption">
 			<dl class="grid grid-cols-2 gap-3">
@@ -86,7 +86,8 @@ export function QueueJobsTable(props: {
 	busy: boolean;
 	onInspect: (job: CrawlerQueueJobItem) => void;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:tasks");
+	const discoveryT = getComponentT("crawler:discovery");
 	const date = (value: number | null | undefined) =>
 		value ? formatDateTime(new Date(value).toISOString()) : "—";
 	const columns: TableColumn<CrawlerQueueJobItem>[] = [
@@ -104,7 +105,7 @@ export function QueueJobsTable(props: {
 							props.onInspect(job);
 						}}
 					>
-						{queueJobName(job, t)}
+						{queueJobName(job, discoveryT)}
 					</button>
 					<div class="text-tertiary ts-caption truncate">
 						{job.target ? `${job.target} · ` : ""}#{job.id}
@@ -154,7 +155,7 @@ export function QueueJobsTable(props: {
 }
 
 export default function TasksSection() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:tasks");
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
 	const [jobs, setJobs] = createSignal<CrawlerQueueJobsResponse | null>(null);
 	const [loading, setLoading] = createSignal(false);

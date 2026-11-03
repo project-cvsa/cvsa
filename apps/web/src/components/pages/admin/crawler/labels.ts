@@ -1,11 +1,12 @@
 import type { CrawlerQueueJobItem, DiscoveryActivity } from "@cvsa/contracts";
+import type { TranslateFunction } from "@fanee/core";
 import { formatDateTime } from "./format";
 
 export function queueJobName(
 	job: Pick<CrawlerQueueJobItem, "queue" | "name">,
-	t: (key: string) => string
+	t: TranslateFunction
 ): string {
-	if (job.queue === "tracking") return t("metrics.queue.tracking");
+	if (job.queue === "tracking") return t("audit.queues.tracking");
 	if (job.name.startsWith("detail-") || job.name === "fetch-video-details")
 		return t("discoveryActivity.typeDetails");
 	if (job.name.includes("deep")) return t("discoveryActivity.typeDeep");
@@ -38,14 +39,14 @@ export function discoveryJobTypeMessageKey(job: DiscoveryActivity): string {
 	}
 }
 
-export function discoveryJobTarget(job: DiscoveryActivity, t: (key: string) => string): string {
+export function discoveryJobTarget(job: DiscoveryActivity, t: TranslateFunction): string {
 	if (job.task?.type !== "search-sweep") return job.target ?? "—";
 	const config = job.task.config;
 	const keywords = config?.keywords;
 	const label = keywords?.length
 		? keywords.length === 1
 			? keywords[0]
-			: t("discoveryActivity.keywordCount").replace("{count}", String(keywords.length))
+			: t("discoveryActivity.keywordCount", { count: keywords.length })
 		: t("discoveryActivity.configuredKeywords");
 	const date = (value: string | number | undefined, fallback: string) =>
 		value === undefined
@@ -57,7 +58,7 @@ export function discoveryJobTarget(job: DiscoveryActivity, t: (key: string) => s
 	if (config?.from !== undefined || config?.to !== undefined)
 		return `${label} · ${date(config.from, "discoveryActivity.earliest")} – ${date(config.to, "discoveryActivity.present")}`;
 	if (config?.timeWindowDays !== undefined)
-		return `${label} · ${t("discoveryActivity.lookbackDays").replace("{days}", String(config.timeWindowDays))}`;
+		return `${label} · ${t("discoveryActivity.lookbackDays", { days: config.timeWindowDays })}`;
 	return label;
 }
 

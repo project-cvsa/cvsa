@@ -7,8 +7,6 @@
 	"error.forbidden": "You do not have permission to access this resource.",
 	"error.song.notfound": "This song does not exist.",
 	"error.lyric.notfound": "This lyric does not exist.",
-	"error.signup.failed": "Unable to sign up. Please try again in a moment.",
-	"error.login.failed": "Unable to log in. Please try again in a moment.",
 	"error.not-found": "The requested resource was not found.",
 	"error.invalid-cred": "Invalid Credentials",
 	"error.internal": "Internal Error",

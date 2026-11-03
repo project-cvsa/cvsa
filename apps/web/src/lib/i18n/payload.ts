@@ -1,11 +1,33 @@
-import type { BundleResources, LocaleMessages, NamespaceResources } from "@fanee/core";
+import type { BundleResources } from "@fanee/core";
+import { ClientI18nPayloadSchema, type ClientI18nPayload } from "@cvsa/contracts";
+import { defaultLanguage } from "./const";
+
+export type { ClientI18nPayload } from "@cvsa/contracts";
 
 export const CLIENT_I18N_SCRIPT_ID = "cvsa-i18n";
 
-export interface ClientI18nPayload {
-	locale: string;
-	resources: BundleResources;
-}
+export const createClientI18nPayload = (
+	locale: string,
+	namespaces: readonly string[],
+	resources: BundleResources
+): ClientI18nPayload => ({
+	locale,
+	resources: Object.fromEntries(
+		namespaces.map((namespace) => {
+			const fullNamespace = `web:client:${namespace}`;
+			const messages = resources[fullNamespace];
+			if (!messages) throw new Error(`Unknown client i18n namespace: ${namespace}`);
+			return [
+				fullNamespace,
+				Object.fromEntries(
+					Object.entries(messages).filter(
+						([language]) => language === locale || language === defaultLanguage
+					)
+				),
+			];
+		})
+	),
+});
 
 export const serializeClientI18nPayload = (payload: ClientI18nPayload): string => {
 	return JSON.stringify(payload)
@@ -16,29 +38,7 @@ export const serializeClientI18nPayload = (payload: ClientI18nPayload): string =
 		.replaceAll("\u2029", "\\u2029");
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-};
-
-const isLocaleMessages = (value: unknown): value is LocaleMessages => {
-	return isRecord(value) && Object.values(value).every((message) => typeof message === "string");
-};
-
-const isNamespaceResources = (value: unknown): value is NamespaceResources => {
-	return isRecord(value) && Object.values(value).every(isLocaleMessages);
-};
-
-const isBundleResources = (value: unknown): value is BundleResources => {
-	return isRecord(value) && Object.values(value).every(isNamespaceResources);
-};
-
 export const parseClientI18nPayload = (value: unknown): ClientI18nPayload | undefined => {
-	if (!isRecord(value)) return undefined;
-
-	const { locale, resources } = value;
-	if (typeof locale !== "string" || !isBundleResources(resources)) {
-		return undefined;
-	}
-
-	return { locale, resources };
+	const parsed = ClientI18nPayloadSchema.safeParse(value);
+	return parsed.success ? parsed.data : undefined;
 };
