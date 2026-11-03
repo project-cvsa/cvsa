@@ -6,6 +6,7 @@ import SectionHeader from "../SectionHeader";
 import { createSignal, Show, type Accessor } from "solid-js";
 import Button from "@components/ui/Button";
 import Select from "@components/ui/Select";
+import Tabs, { type TabItem } from "@components/ui/Tabs";
 import NumberField from "@components/ui/NumberField";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
@@ -20,6 +21,8 @@ import { formatMetric, formatPercent } from "../format";
 import { MetricCard, QueueStatusTable } from "../statsView";
 import ThroughputChart from "../ThroughputChart";
 import { createRequestSequence } from "../videoActions";
+
+type OverviewTab = "summary" | "metrics" | "runtime";
 
 type OverviewSectionProps = {
 	statusData: Accessor<CrawlerStatusDto | null>;
@@ -91,7 +94,7 @@ function RangeControls(props: RangeControlsProps) {
 }
 
 export function OverviewSummary(props: {
-	samples: number;
+	snapshots: number;
 	videos: number;
 	jobs: number;
 	requests: number;
@@ -101,7 +104,7 @@ export function OverviewSummary(props: {
 	const t = getComponentT("crawler");
 	return (
 		<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-			<MetricCard label={t("overview.newSnapshots")} value={formatMetric(props.samples)} />
+			<MetricCard label={t("overview.newSnapshots")} value={formatMetric(props.snapshots)} />
 			<MetricCard label={t("overview.newVideos")} value={formatMetric(props.videos)} />
 			<MetricCard label={t("overview.jobsPerSec")} value={formatMetric(props.jobs)} />
 			<MetricCard label={t("overview.requestsPerSec")} value={formatMetric(props.requests)} />
@@ -119,6 +122,12 @@ export function OverviewSummary(props: {
 
 export default function OverviewSection(props: OverviewSectionProps) {
 	const t = getComponentT("crawler");
+	const [tab, setTab] = createSignal<OverviewTab>("summary");
+	const tabs = (): TabItem<OverviewTab>[] => [
+		{ id: "summary", label: t("overview.summary") },
+		{ id: "metrics", label: t("overview.metrics") },
+		{ id: "runtime", label: t("metrics.runtime") },
+	];
 	const [stats, setStats] = createSignal<CrawlerOverviewStats | null>(null);
 	const [customMinutes, setCustomMinutes] = createSignal<number | undefined>();
 	const [draftMinutes, setDraftMinutes] = createSignal(90);
@@ -201,6 +210,8 @@ export default function OverviewSection(props: OverviewSectionProps) {
 				}
 			/>
 
+			<Tabs size="sm" items={tabs()} value={tab()} onChange={setTab} />
+
 			<Show when={stats() && statsError()}>
 				{(message) => (
 					<div role="alert" class="p-3 bg-error text-on-error ts-caption font-medium">
@@ -227,40 +238,36 @@ export default function OverviewSection(props: OverviewSectionProps) {
 			>
 				{(current) => (
 					<div class="flex flex-col gap-6">
-						<OverviewSummary
-							samples={current().counters.videosRecorded}
-							videos={current().counters.trackingCreated}
-							jobs={jobsCompleted(current())}
-							requests={current().counters.httpAttemptsFinished}
-							inferences={current().counters.modelInferenceCalls}
-							success={current().ratios.logicalRequestSuccess}
-						/>
-						<ThroughputChart series={current().series} />
+						<Show when={tab() === "summary"}>
+							<OverviewSummary
+								snapshots={current().counters.videosRecorded}
+								videos={current().counters.trackingCreated}
+								jobs={jobsCompleted(current())}
+								requests={current().counters.httpAttemptsFinished}
+								inferences={current().counters.modelInferenceCalls}
+								success={current().ratios.logicalRequestSuccess}
+							/>
+							<ThroughputChart series={current().series} />
 
-						<ComponentStatus
-							stats={current()}
-							status={props.statusData()}
-							classifier={classifierHealth()}
-						/>
+							<ComponentStatus
+								stats={current()}
+								status={props.statusData()}
+								classifier={classifierHealth()}
+							/>
 
-						<section class="flex flex-col gap-2.5">
-							<span class="ts-overline text-tertiary">
-								{t("overview.queues.title")}
-							</span>
-							<QueueStatusTable queues={current().current.queues} />
-						</section>
-						<details class="border-t border-border pt-4">
-							<summary class="ts-label cursor-pointer text-secondary">
-								{t("overview.details")}
-							</summary>
-							<div class="flex flex-col gap-6 pt-4">
-								<StatsDetails
-									stats={current()}
-									quantiles={[0.5, 0.9, 0.95, 0.99]}
-								/>
-							</div>
-						</details>
-						<OperationalStatus stats={current()} />
+							<section class="flex flex-col gap-2.5">
+								<span class="ts-overline text-tertiary">
+									{t("overview.queues.title")}
+								</span>
+								<QueueStatusTable queues={current().current.queues} />
+							</section>
+						</Show>
+						<Show when={tab() === "metrics"}>
+							<StatsDetails stats={current()} quantiles={[0.5, 0.9, 0.95, 0.99]} />
+						</Show>
+						<Show when={tab() === "runtime"}>
+							<OperationalStatus stats={current()} />
+						</Show>
 					</div>
 				)}
 			</Show>

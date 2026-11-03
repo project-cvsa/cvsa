@@ -1,6 +1,7 @@
 import { createSignal, onMount, Show } from "solid-js";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
+import Modal from "@components/ui/Modal";
 import Button from "@components/ui/Button";
 import TextField from "@components/ui/TextField";
 import NumberField from "@components/ui/NumberField";
@@ -19,6 +20,7 @@ import { formatDateTime, formatMetric } from "../format";
 
 export default function VideoMilestones(props: { aid: string }) {
 	const t = getComponentT("crawler");
+	const [sourcesOpen, setSourcesOpen] = createSignal(false);
 	const [achievements, setAchievements] = createSignal<MilestoneAchievement[]>([]);
 	const [items, setItems] = createSignal<MilestoneRecord[]>([]);
 	const [threshold, setThreshold] = createSignal(100000);
@@ -150,18 +152,26 @@ export default function VideoMilestones(props: { aid: string }) {
 	];
 	return (
 		<section class="flex flex-col gap-4">
-			<h3 class="ts-heading-3 text-primary">{t("milestones.title")}</h3>
+			<div class="flex items-center justify-between gap-3">
+				<h3 class="ts-heading-3 text-primary">{t("milestones.title")}</h3>
+				<Button size="sm" variant="outlined" onClick={() => setSourcesOpen(true)}>
+					{t("milestones.sources")}
+				</Button>
+			</div>
 			<DataTable
 				columns={achievementColumns}
 				items={achievements()}
 				empty={t("milestones.empty")}
 			/>
-			<details>
-				<summary class="ts-label text-secondary cursor-pointer">
-					{t("milestones.sources")}
-				</summary>
+			<Modal
+				isOpen={sourcesOpen()}
+				onClose={() => setSourcesOpen(false)}
+				title={t("milestones.sources")}
+				closeLabel={t("common.close")}
+				size="xl"
+			>
 				<DataTable columns={columns} items={items()} empty={t("milestones.empty")} />
-			</details>
+			</Modal>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<NumberField
 					label={t("milestones.threshold")}

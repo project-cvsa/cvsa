@@ -312,6 +312,7 @@ export default function NetworkSection(props: NetworkSectionProps) {
 							/>
 
 							<NetworkSessionPolicy
+								disabled={saving()}
 								config={doc().config.session}
 								status={props.statusData()?.session}
 								onChange={(session) =>

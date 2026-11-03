@@ -284,10 +284,8 @@ export default function StatsDetails(props: {
 			</section>
 
 			{props.stats.legacy ? (
-				<details class="bg-surface p-4">
-					<summary class="ts-label text-primary cursor-pointer">
-						{t("metrics.legacy")}
-					</summary>
+				<section class="flex flex-col gap-3">
+					<h3 class="ts-label text-primary">{t("metrics.legacy")}</h3>
 					<div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
 						<MetricCard
 							label={t("metrics.legacySnapshots")}
@@ -306,7 +304,7 @@ export default function StatsDetails(props: {
 							value={formatMetric(props.stats.legacy.counters.jobsCompleted)}
 						/>
 					</div>
-				</details>
+				</section>
 			) : null}
 		</>
 	);

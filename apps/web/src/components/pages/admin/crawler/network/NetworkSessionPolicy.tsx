@@ -1,4 +1,6 @@
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
+import Button from "@components/ui/Button";
+import Modal from "@components/ui/Modal";
 import NumberField from "@components/ui/NumberField";
 import TextField from "@components/ui/TextField";
 import Select from "@components/ui/Select";
@@ -12,12 +14,14 @@ import {
 import { getComponentT } from "@lib/i18n/isomorphic";
 
 type Props = {
+	disabled?: boolean;
 	config?: BilibiliSessionConfig;
 	status?: BilibiliSessionStatus;
 	onChange: (config: BilibiliSessionConfig) => void;
 };
 export default function NetworkSessionPolicy(props: Props) {
 	const t = getComponentT("crawler");
+	const [optionsOpen, setOptionsOpen] = createSignal(false);
 	const config = () => props.config ?? BilibiliSessionConfigSchema.parse({});
 	const update = (value: Partial<BilibiliSessionConfig>) =>
 		props.onChange({ ...config(), ...value });
@@ -33,7 +37,12 @@ export default function NetworkSessionPolicy(props: Props) {
 	];
 	return (
 		<section class="flex flex-col gap-4">
-			<h3 class="ts-heading-3 text-primary">{t("network.session.title")}</h3>
+			<div class="flex items-center justify-between gap-3">
+				<h3 class="ts-heading-3 text-primary">{t("network.session.title")}</h3>
+				<Button size="sm" variant="outlined" onClick={() => setOptionsOpen(true)}>
+					{t("network.session.options")}
+				</Button>
+			</div>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<For each={fields}>
 					{(field) => (
@@ -73,59 +82,66 @@ export default function NetworkSessionPolicy(props: Props) {
 					}}
 				/>
 			</div>
-			<details>
-				<summary class="ts-label text-secondary cursor-pointer">
-					{t("common.advanced")}
-				</summary>
-				<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
-					<For
-						each={
-							[
-								"chromeVersion",
-								"edgeVersion",
-								"safariVersion",
-								"language",
-							] satisfies Array<
-								keyof Pick<
-									BilibiliSessionConfig["browser"],
-									"chromeVersion" | "edgeVersion" | "safariVersion" | "language"
+			<Modal
+				isOpen={optionsOpen()}
+				onClose={() => setOptionsOpen(false)}
+				title={t("network.session.options")}
+				closeLabel={t("common.close")}
+			>
+				<fieldset disabled={props.disabled} class="border-0 p-0 flex flex-col gap-4">
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+						<For
+							each={
+								[
+									"chromeVersion",
+									"edgeVersion",
+									"safariVersion",
+									"language",
+								] satisfies Array<
+									keyof Pick<
+										BilibiliSessionConfig["browser"],
+										| "chromeVersion"
+										| "edgeVersion"
+										| "safariVersion"
+										| "language"
+									>
 								>
-							>
-						}
-					>
-						{(key) => (
-							<TextField
-								size="sm"
-								label={t(`network.session.${key}`)}
-								value={config().browser[key]}
-								onInput={(event) =>
-									update({
-										browser: {
-											...config().browser,
-											[key]: event.currentTarget.value,
-										},
-									})
-								}
-							/>
-						)}
-					</For>
-				</div>
-				<div class="flex flex-col gap-2">
-					<p class="ts-label text-primary">{t("network.session.recoveryCodes")}</p>
-					<TagInput
-						tags={config().recoveryCodes.map(String)}
-						onChange={(values) => {
-							const parsed =
-								BilibiliSessionConfigSchema.shape.recoveryCodes.safeParse(
-									values.map(Number)
-								);
-							if (parsed.success) update({ recoveryCodes: parsed.data });
-						}}
-						clearLabel={t("common.clear")}
-						removeLabel={t("common.delete")}
-					/>
-				</div>
-			</details>
+							}
+						>
+							{(key) => (
+								<TextField
+									size="sm"
+									label={t(`network.session.${key}`)}
+									value={config().browser[key]}
+									onInput={(event) =>
+										update({
+											browser: {
+												...config().browser,
+												[key]: event.currentTarget.value,
+											},
+										})
+									}
+								/>
+							)}
+						</For>
+					</div>
+					<div class="flex flex-col gap-2">
+						<p class="ts-label text-primary">{t("network.session.recoveryCodes")}</p>
+						<TagInput
+							tags={config().recoveryCodes.map(String)}
+							onChange={(values) => {
+								const parsed =
+									BilibiliSessionConfigSchema.shape.recoveryCodes.safeParse(
+										values.map(Number)
+									);
+								if (parsed.success) update({ recoveryCodes: parsed.data });
+							}}
+							clearLabel={t("common.clear")}
+							removeLabel={t("common.delete")}
+						/>
+					</div>
+				</fieldset>
+			</Modal>
 			<Show when={props.status}>
 				{(status) => (
 					<dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 ts-caption text-secondary border border-border p-3">

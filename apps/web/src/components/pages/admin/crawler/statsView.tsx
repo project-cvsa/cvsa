@@ -225,7 +225,7 @@ export function LatencyTable(props: {
 		},
 		{
 			id: "count",
-			header: t("metrics.samples"),
+			header: t("metrics.count"),
 			class: "text-right",
 			cell: (row) => row.summary.count,
 		},

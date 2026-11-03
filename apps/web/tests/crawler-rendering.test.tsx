@@ -15,6 +15,9 @@ import OverviewSection, {
 import CrawlerExecutionPolicy from "../src/components/pages/admin/crawler/settings/CrawlerExecutionPolicy";
 import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
 import { QueueJobsTable } from "../src/components/pages/admin/crawler/sections/TasksSection";
+import NetworkSessionPolicy from "../src/components/pages/admin/crawler/network/NetworkSessionPolicy";
+import LabelingStats from "../src/components/pages/admin/crawler/LabelingStats";
+import VideoSnapshotHistory from "../src/components/pages/admin/crawler/videoDetail/VideoSnapshotHistory";
 
 function render(locale: string, content: () => JSX.Element) {
 	return renderToString(() => (
@@ -27,6 +30,57 @@ function render(locale: string, content: () => JSX.Element) {
 }
 
 describe("crawler console translations", () => {
+	test.each([
+		{
+			locale: "en-US",
+			snapshot: "Snapshots",
+			history: "Snapshot history",
+			labels: "Labeled samples",
+		},
+		{ locale: "zh-CN", snapshot: "快照", history: "快照历史", labels: "标注样本" },
+	])(
+		"uses the domain terms for snapshots and labeled samples in $locale",
+		({ locale, snapshot, history, labels }) => {
+			const html = render(locale, () => (
+				<>
+					<OverviewSummary
+						snapshots={123}
+						videos={4}
+						jobs={5}
+						requests={6}
+						inferences={7}
+						success={1}
+					/>
+					<VideoSnapshotHistory
+						snapshots={() => ({ items: [], total: 0 })}
+						snapshotsTotal={() => 0}
+						snapshotsPage={() => 0}
+						snapshotsError={() => null}
+						loadingSnapshots={() => false}
+						loadSnapshotsPage={async () => {}}
+						pageSize={20}
+					/>
+					<LabelingStats />
+				</>
+			));
+			for (const value of [snapshot, history, labels]) expect(html).toContain(value);
+			expect(html).not.toContain("Stats records");
+			expect(html).not.toContain("采集记录");
+		}
+	);
+	test("uses the existing tabs for overview navigation and a modal action for session options", () => {
+		const html = render("en-US", () => (
+			<>
+				<OverviewSection statusData={() => null} />
+				<NetworkSessionPolicy onChange={() => {}} />
+			</>
+		));
+		for (const label of ["Summary", "Metrics", "Runtime", "Session options"])
+			expect(html).toContain(label);
+		expect(html).toContain('role="tablist"');
+		expect(html).not.toContain("<details");
+		expect(html).not.toContain("<summary");
+	});
 	test("bounds percentage charts at 100 and includes dates for multi-day ranges", () => {
 		const html = render("en-US", () => (
 			<TrendPlot
@@ -82,7 +136,7 @@ describe("crawler console translations", () => {
 	test("shows short headline labels and recorded counts without empty rate hints", () => {
 		const html = render("en-US", () => (
 			<OverviewSummary
-				samples={36626}
+				snapshots={36626}
 				videos={115}
 				jobs={400}
 				requests={2127}
@@ -90,7 +144,7 @@ describe("crawler console translations", () => {
 				success={0.893}
 			/>
 		));
-		for (const value of ["Samples", "New videos", "36626", "2127", "89.3%"])
+		for (const value of ["Snapshots", "New tracking", "36626", "2127", "89.3%"])
 			expect(html).toContain(value);
 		expect(html).not.toContain("—");
 		expect(html).not.toContain("Candidates accepted for tracking");
@@ -125,7 +179,7 @@ describe("crawler console translations", () => {
 				width={320}
 				lines={[
 					{
-						label: "Samples",
+						label: "Snapshots",
 						color: "currentColor",
 						points: [
 							{ time: 1000, value: 1040050.5 },
@@ -134,7 +188,7 @@ describe("crawler console translations", () => {
 						],
 					},
 				]}
-				label="Samples"
+				label="Snapshots"
 				unit="/min"
 				format="number"
 			/>
@@ -152,7 +206,7 @@ describe("crawler console translations", () => {
 			/>
 		));
 		for (const label of [
-			"Tracking workers",
+			"Snapshot workers",
 			"Discovery workers",
 			"Lateness alert (s)",
 			"Retry delay (s)",
@@ -180,6 +234,7 @@ describe("crawler console translations", () => {
 				<LatencyTable latency={latency} quantiles={[0.5, 0.95]} />
 			));
 			expect(html).toContain("P95");
+			expect(html).toContain(locale === "en-US" ? ">Count</th>" : ">次数</th>");
 			expect(html).not.toContain("metrics.");
 		}
 	);

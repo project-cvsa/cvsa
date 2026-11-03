@@ -22,7 +22,7 @@ export default function VideoSnapshotHistory(props: VideoSnapshotHistoryProps) {
 	const columns: TableColumn<VideoSnapshotItem>[] = [
 		{
 			id: "capturedAt",
-			header: t("videoDetail.captured"),
+			header: t("videoDetail.snapshotTime"),
 			class: "text-secondary whitespace-nowrap",
 			cell: (item) => formatDateTime(item.capturedAt),
 		},

@@ -57,7 +57,7 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 		},
 		{
 			id: "samples",
-			header: t("metrics.samples"),
+			header: t("metrics.videoCount"),
 			class: "text-right",
 			cell: (row) => row.count,
 		},
@@ -145,9 +145,8 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 	];
 
 	return (
-		<details class="bg-surface p-4">
-			<summary class="ts-label text-primary cursor-pointer">{t("metrics.statsFlow")}</summary>
-			<div class="mt-4 flex flex-col gap-6">
+		<section aria-label={t("metrics.runtime")}>
+			<div class="flex flex-col gap-6">
 				<section class="flex flex-col gap-3">
 					<h3 class="ts-label text-primary">{t("metrics.coverageSection")}</h3>
 					<Table
@@ -338,6 +337,6 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 					<DataTable columns={strategyColumns} items={props.stats.current.strategies} />
 				</section>
 			</div>
-		</details>
+		</section>
 	);
 }
