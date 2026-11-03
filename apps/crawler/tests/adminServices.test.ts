@@ -113,7 +113,15 @@ describe("crawler admin services", () => {
 			updatedAt: new Date().toISOString(),
 		};
 		const queue = queueWith([
-			{ ...job("active", "active"), progress },
+			{
+				...job("active", "active"),
+				data: {
+					type: "search-sweep",
+					mode: "deep",
+					config: { keywords: ["洛天依", "乐正绫"], from: 1767225600, to: 1767312000 },
+				},
+				progress,
+			},
 			job("waiting"),
 			job("done", "completed"),
 		]);
@@ -132,6 +140,11 @@ describe("crawler admin services", () => {
 		expect(status.activeJobs[0]?.progress?.page).toBe(2);
 		expect(status.activeJobs[0]?.progress?.queued).toBe(3);
 		expect(status.activeJobs[0]?.target).toBe("洛天依");
+		expect(status.activeJobs[0]?.task).toEqual({
+			type: "search-sweep",
+			mode: "deep",
+			config: { keywords: ["洛天依", "乐正绫"], from: 1767225600, to: 1767312000 },
+		});
 		expect(status.recentJobs[0]?.id).toBe("done");
 		expect(status.recentJobs[0]?.progress).toBeNull();
 		expect(status.active).toBe(true);

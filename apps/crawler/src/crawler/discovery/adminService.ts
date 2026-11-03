@@ -1,6 +1,7 @@
 import {
 	AppError,
 	DiscoveryJobProgressSchema,
+	DiscoveryTaskDescriptionSchema,
 	type DiscoveryStatusDto,
 	type DiscoverySampleListQuery,
 	type DiscoverySampleListResponse,
@@ -15,12 +16,16 @@ import { toSampleItem } from "./sampleDto";
 
 function isSubtask(job: CrawlerQueueJobSnapshot): boolean {
 	if (job.name.startsWith("detail-") || job.name.startsWith("active-")) return true;
-	const data = job.data as Record<string, unknown> | null;
-	return data?.type === "fetch-video-details" || data?.type === "active-discovery";
+	const task = DiscoveryTaskDescriptionSchema.safeParse(job.data);
+	return (
+		task.success &&
+		(task.data.type === "fetch-video-details" || task.data.type === "active-discovery")
+	);
 }
 
 function activity(job: CrawlerQueueJobSnapshot): DiscoveryStatusDto["activeJobs"][number] {
 	const progress = DiscoveryJobProgressSchema.safeParse(job.progress);
+	const task = DiscoveryTaskDescriptionSchema.safeParse(job.data);
 	const data = job.data;
 	const target =
 		typeof data === "object" && data !== null && "aid" in data ? String(data.aid) : null;
@@ -28,6 +33,7 @@ function activity(job: CrawlerQueueJobSnapshot): DiscoveryStatusDto["activeJobs"
 		id: job.id,
 		name: job.name,
 		state: job.state,
+		task: task.success ? task.data : null,
 		target: progress.success ? progress.data.target : target,
 		timestamp: job.timestamp,
 		processedOn: job.processedOn ?? null,

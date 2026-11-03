@@ -780,7 +780,10 @@ export const CrawlerStatsQuerySchema = z.object({
 	window: CrawlerStatsWindowSchema.default("1h"),
 	minutes: z.coerce.number().int().min(1).max(10080).optional(),
 	/** Comma-separated quantiles in (0, 1]; defaults to 0.5,0.9,0.95,0.99. */
-	quantiles: z.string().optional(),
+	quantiles: z
+		.union([z.string(), z.array(z.string())])
+		.transform((value) => (typeof value === "string" ? value : value.join(",")))
+		.optional(),
 });
 
 export const CrawlerQueueSnapshotSchema = z.object({
@@ -790,6 +793,21 @@ export const CrawlerQueueSnapshotSchema = z.object({
 	failed: z.number().int().nonnegative(),
 	oldestWaitSec: z.number().nonnegative(),
 });
+
+export const DiscoveryTaskDescriptionSchema = z.object({
+	type: z.enum(["search-sweep", "fetch-video-details", "active-discovery", "hot-sample"]),
+	mode: z.enum(["incremental", "deep"]).optional(),
+	config: z
+		.object({
+			keywords: z.array(z.string()).optional(),
+			mode: z.enum(["incremental", "deep"]).optional(),
+			from: z.union([z.number(), z.string()]).optional(),
+			to: z.union([z.number(), z.string()]).optional(),
+			timeWindowDays: z.number().optional(),
+		})
+		.optional(),
+});
+export type DiscoveryTaskDescription = z.infer<typeof DiscoveryTaskDescriptionSchema>;
 
 export const DiscoveryJobProgressSchema = z.object({
 	stage: z.enum([
@@ -815,6 +833,7 @@ export const DiscoveryActivitySchema = z.object({
 	id: z.string(),
 	name: z.string(),
 	state: z.string(),
+	task: DiscoveryTaskDescriptionSchema.nullable().optional(),
 	target: z.string().nullable(),
 	timestamp: z.number(),
 	processedOn: z.number().nullable(),

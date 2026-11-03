@@ -48,6 +48,7 @@
 		"postcss-preset-env": "^11.3.2",
 		"unocss": "^66.7.5",
 		"vite": "^8.1.4",
+		"vite-plugin-solid": "^2.11.15",
 		"vitest": "^5.0.1"
 	}
 }

@@ -336,7 +336,6 @@ export default function OperationalStatus(props: { stats: CrawlerOverviewStats }
 				<section class="flex flex-col gap-3">
 					<h3 class="ts-label text-primary">{t("metrics.strategies")}</h3>
 					<DataTable columns={strategyColumns} items={props.stats.current.strategies} />
-					<p class="ts-caption text-secondary">{t("metrics.strategiesHelp")}</p>
 				</section>
 			</div>
 		</details>

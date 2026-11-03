@@ -64,7 +64,6 @@ export default function NetworkStrategySupport() {
 			<Show when={strategies().length > 0}>
 				<h3 class="ts-label text-primary">{t("metrics.strategies")}</h3>
 				<DataTable columns={columns} items={strategies()} />
-				<p class="ts-caption text-secondary">{t("metrics.strategiesHelp")}</p>
 			</Show>
 		</section>
 	);

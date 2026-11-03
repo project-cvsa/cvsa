@@ -5,6 +5,7 @@ import Select from "@components/ui/Select";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { formatMetric, formatPercent } from "./format";
 import { LatencyTable, MetricCard, RatioTable } from "./statsView";
+import { DiscoveryStatsTable } from "./DiscoveryStats";
 
 function p95(summary: CrawlerOverviewStats["database"]["durationMs"][string] | undefined): string {
 	const value = summary?.quantiles["0.95"];
@@ -45,7 +46,6 @@ export default function StatsDetails(props: {
 				...value,
 			};
 		});
-	const discovery = () => Object.entries(props.stats.discovery.byChannel);
 	const database = () => Object.entries(props.stats.database.byOperation);
 	const redis = () => Object.entries(props.stats.redis.byCommand);
 	return (
@@ -62,13 +62,11 @@ export default function StatsDetails(props: {
 						)}
 					</For>
 				</div>
-				<p class="ts-caption text-secondary">{t("metrics.flowHelp")}</p>
 			</section>
 
 			<section class="flex flex-col gap-3">
 				<h3 class="ts-label text-primary">{t("metrics.ratios")}</h3>
 				<RatioTable ratios={props.stats.ratios} inputs={props.stats.ratioInputs} />
-				<p class="ts-caption text-secondary">{t("metrics.ratiosHelp")}</p>
 			</section>
 
 			<section class="flex flex-col gap-3">
@@ -98,7 +96,6 @@ export default function StatsDetails(props: {
 						)}
 					</For>
 				</Table>
-				<p class="ts-caption text-secondary">{t("metrics.jobsHelp")}</p>
 			</section>
 
 			<section class="flex flex-col gap-3">
@@ -138,41 +135,9 @@ export default function StatsDetails(props: {
 						)}
 					</For>
 				</Table>
-				<p class="ts-caption text-secondary">{t("metrics.networkHelp")}</p>
 			</section>
 
-			<section class="flex flex-col gap-3">
-				<h3 class="ts-label text-primary">{t("metrics.discovery")}</h3>
-				<Table
-					head={
-						<tr>
-							<th>{t("metrics.channel")}</th>
-							<th>{t("metrics.appeared")}</th>
-							<th>{t("metrics.newTracking")}</th>
-							<th>{t("metrics.existing")}</th>
-							<th>{t("metrics.rejected")}</th>
-							<th>{t("metrics.skipped")}</th>
-							<th>{t("metrics.deferred")}</th>
-							<th>{t("metrics.failed")}</th>
-						</tr>
-					}
-				>
-					<For each={discovery()}>
-						{([channel, counts]) => (
-							<tr>
-								<td>{t(`metrics.channel.${channel}`)}</td>
-								<td>{counts.appeared}</td>
-								<td>{counts.newTracking}</td>
-								<td>{counts.existing}</td>
-								<td>{counts.rejected}</td>
-								<td>{counts.skipped}</td>
-								<td>{counts.deferred}</td>
-								<td>{counts.failure}</td>
-							</tr>
-						)}
-					</For>
-				</Table>
-			</section>
+			<DiscoveryStatsTable byChannel={props.stats.discovery.byChannel} />
 
 			<section class="flex flex-col gap-3">
 				<div class="flex flex-wrap items-center justify-between gap-2">
@@ -325,7 +290,6 @@ export default function StatsDetails(props: {
 							value={formatMetric(props.stats.legacy.counters.jobsCompleted)}
 						/>
 					</div>
-					<p class="ts-caption text-secondary mt-3">{t("metrics.legacyHelp")}</p>
 				</details>
 			) : null}
 		</>

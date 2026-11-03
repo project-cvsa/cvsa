@@ -1,66 +1,17 @@
 import { createEffect, createSignal, For, Show } from "solid-js";
 import type { DiscoveryActivity, DiscoverySampleItem, DiscoveryStatusDto } from "@cvsa/contracts";
 import Badge from "@components/ui/Badge";
+import StateBadge from "../StateBadge";
 import Button from "@components/ui/Button";
 import DataTable, { type TableColumn } from "@components/ui/DataTable";
 import { toast } from "@components/ui/Toast";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import { api } from "@lib/api";
 import { formatDateTime, formatWaitSeconds } from "../format";
+import { discoveryJobTarget, discoveryJobTypeMessageKey } from "../labels";
 import ExternalLink from "lucide-solid/icons/external-link";
 import Compass from "lucide-solid/icons/compass";
 import Trash2 from "lucide-solid/icons/trash-2";
-
-function describeDiscoveryJob(job: DiscoveryActivity, t: ReturnType<typeof getComponentT>): string {
-	if (job.target?.includes("~")) {
-		return t("discoveryActivity.typeRange");
-	}
-	if (job.name.includes("deep") || job.target?.includes("切片")) {
-		return t("discoveryActivity.typeDeep");
-	}
-	if (job.name.includes("hot-sample")) {
-		return t("discoveryActivity.typeHotSample");
-	}
-	if (job.name.includes("sweep")) {
-		return t("discoveryActivity.typeIncremental");
-	}
-	return job.name;
-}
-
-function jobStateBadge(state: string, t: ReturnType<typeof getComponentT>) {
-	switch (state) {
-		case "active":
-			return (
-				<Badge variant="info" size="sm">
-					{t("audit.active")}
-				</Badge>
-			);
-		case "completed":
-			return (
-				<Badge variant="success" size="sm">
-					{t("audit.completed")}
-				</Badge>
-			);
-		case "failed":
-			return (
-				<Badge variant="danger" size="sm">
-					{t("audit.failed")}
-				</Badge>
-			);
-		case "delayed":
-			return (
-				<Badge variant="warning" size="sm">
-					{t("audit.delayed")}
-				</Badge>
-			);
-		default:
-			return (
-				<Badge variant="neutral" size="sm">
-					{state}
-				</Badge>
-			);
-	}
-}
 
 function computeJobDuration(job: DiscoveryActivity): string {
 	if (job.processedOn && job.finishedOn && job.finishedOn >= job.processedOn) {
@@ -73,6 +24,8 @@ function computeJobDuration(job: DiscoveryActivity): string {
 }
 
 function isSubtask(job: DiscoveryActivity): boolean {
+	if (job.task?.type === "fetch-video-details" || job.task?.type === "active-discovery")
+		return true;
 	if (job.name.startsWith("detail-") || job.name.startsWith("active-")) return true;
 	if (job.name === "fetch-video-details" || job.name === "active-discovery") return true;
 	return false;
@@ -134,7 +87,7 @@ export default function DiscoveryActivityView(props: {
 			header: t("discoveryActivity.type"),
 			class: "font-medium text-primary whitespace-nowrap",
 			cell: (job) => (
-				<span class="text-primary font-medium">{describeDiscoveryJob(job, t)}</span>
+				<span class="text-primary font-medium">{t(discoveryJobTypeMessageKey(job))}</span>
 			),
 		},
 		{
@@ -142,14 +95,25 @@ export default function DiscoveryActivityView(props: {
 			header: t("discoveryActivity.target"),
 			class: "text-secondary",
 			cell: (job) => (
-				<span class="truncate max-w-xs block ts-caption">{job.target ?? "—"}</span>
+				<span class="truncate max-w-xs block ts-caption">{discoveryJobTarget(job, t)}</span>
 			),
 		},
 		{
 			id: "state",
 			header: t("discoveryActivity.state"),
 			class: "whitespace-nowrap",
-			cell: (job) => jobStateBadge(job.state, t),
+			cell: (job) => (
+				<div class="flex flex-col gap-1">
+					<StateBadge state={job.state} kind="job" />
+					<Show when={job.failedReason}>
+						{(reason) => (
+							<span class="ts-caption text-error whitespace-normal break-words max-w-xs">
+								{reason()}
+							</span>
+						)}
+					</Show>
+				</div>
+			),
 		},
 		{
 			id: "duration",
@@ -184,7 +148,13 @@ export default function DiscoveryActivityView(props: {
 
 	return (
 		<section class="flex flex-col gap-6" aria-label={t("audit.activity")}>
-			{/* Top Status Card */}
+			<Show when={props.error}>
+				{(error) => (
+					<p role="alert" class="ts-body text-error">
+						{error()}
+					</p>
+				)}
+			</Show>
 			<div class="border border-border bg-surface p-4 flex flex-col gap-3">
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div class="flex items-center gap-3">
@@ -222,8 +192,8 @@ export default function DiscoveryActivityView(props: {
 						<div class="bg-surface-container-low p-3 flex flex-col gap-2 ts-caption border-l-2 border-primary">
 							<div class="flex items-center justify-between font-medium text-primary">
 								<span>
-									{t("audit.running")}: {describeDiscoveryJob(job(), t)},{" "}
-									{t("audit.target")}: {job().target ?? job().name}
+									{t("audit.running")}: {t(discoveryJobTypeMessageKey(job()))},{" "}
+									{t("audit.target")}: {discoveryJobTarget(job(), t)}
 								</span>
 								<Show when={job().progress?.page}>
 									<span class="text-secondary">
@@ -250,13 +220,9 @@ export default function DiscoveryActivityView(props: {
 				</Show>
 			</div>
 
-			{/* Exploration Task History Stream */}
 			<div class="flex flex-col gap-3">
 				<div class="flex items-center justify-between">
 					<h3 class="ts-heading-3 text-primary">{t("discoveryActivity.historyTitle")}</h3>
-					<span class="ts-caption text-tertiary">
-						{t("discoveryActivity.historySubtitle")}
-					</span>
 				</div>
 
 				<DataTable
@@ -270,13 +236,9 @@ export default function DiscoveryActivityView(props: {
 				/>
 			</div>
 
-			{/* Recent Discovered Songs Feed */}
 			<div class="flex flex-col gap-3">
 				<div class="flex items-center justify-between">
 					<h3 class="ts-heading-3 text-primary">{t("discoveryActivity.resultsTitle")}</h3>
-					<span class="ts-caption text-tertiary">
-						{t("discoveryActivity.resultsSubtitle")}
-					</span>
 				</div>
 
 				<Show
@@ -299,7 +261,7 @@ export default function DiscoveryActivityView(props: {
 												when={item.pic}
 												fallback={
 													<span class="ts-caption text-tertiary">
-														No cover
+														{t("discoveryUi.noCover")}
 													</span>
 												}
 											>

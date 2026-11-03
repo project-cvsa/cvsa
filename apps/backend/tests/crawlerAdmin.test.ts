@@ -116,7 +116,7 @@ describe("Crawler Admin API Access Control", () => {
 		expect([200, 502]).toContain(status);
 
 		const stats = await api.v2.admin.crawler.stats.get({
-			query: { window: "1h" },
+			query: { window: "1h", quantiles: "0.5,0.9,0.95,0.99" },
 			headers: { authorization: `Bearer ${session.token}` },
 		});
 		const samples = await api.v2.admin.crawler.discovery.samples.get({

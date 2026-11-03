@@ -162,7 +162,6 @@ export default function VideoMilestones(props: { aid: string }) {
 				</summary>
 				<DataTable columns={columns} items={items()} empty={t("milestones.empty")} />
 			</details>
-			<p class="ts-caption text-secondary">{t("milestones.description")}</p>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<NumberField
 					label={t("milestones.threshold")}
@@ -239,7 +238,6 @@ export default function VideoMilestones(props: { aid: string }) {
 					</div>
 				)}
 			</Show>
-			<p class="ts-caption text-secondary">{t("milestones.recoveryHelp")}</p>
 			<div class="flex gap-3">
 				<Button disabled={busy()} onClick={() => void recover()}>
 					{t("milestones.recover")}
@@ -253,8 +251,9 @@ export default function VideoMilestones(props: { aid: string }) {
 			<Show when={recovery()}>
 				{(value) => (
 					<p class="ts-caption text-secondary">
-						{value().state} · {t("milestones.videos")}: {value().data.processed} ·{" "}
-						{t("milestones.records")}: {value().data.inserted}
+						{t(`audit.${value().state}`)} · {t("milestones.videos")}:{" "}
+						{value().data.processed} · {t("milestones.records")}:{" "}
+						{value().data.inserted}
 					</p>
 				)}
 			</Show>

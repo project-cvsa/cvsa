@@ -39,10 +39,7 @@ function ClassifierStatus(props: { health: ClassifierHealthDto | null }) {
 export default function ComponentStatus(props: ComponentStatusProps) {
 	const t = getComponentT("crawler");
 	const adapters = () => props.status?.adapters ?? [];
-	const healthy = () =>
-		adapters().filter(
-			(adapter) => adapter.enabled && adapter.healthState?.toLowerCase() === "healthy"
-		).length;
+	const enabled = () => adapters().filter((adapter) => adapter.enabled).length;
 	const jobs = (state: "active" | "waiting") =>
 		Object.values(props.stats.current.queues).reduce((sum, queue) => sum + queue[state], 0);
 	const p95 = (operation: string): number | null =>
@@ -64,9 +61,9 @@ export default function ComponentStatus(props: ComponentStatusProps) {
 			label: t("overview.adapters"),
 			status: (
 				<Show when={props.status} fallback={t("common.unknown")}>
-					<Badge size="sm" variant={healthy() > 0 ? "success" : "danger"}>
-						{t("overview.healthyCount")
-							.replace("{healthy}", String(healthy()))
+					<Badge size="sm" variant={enabled() > 0 ? "success" : "danger"}>
+						{t("overview.enabledCount")
+							.replace("{enabled}", String(enabled()))
 							.replace("{total}", String(adapters().length))}
 					</Badge>
 				</Show>

@@ -138,6 +138,21 @@ describe("crawler control plane", () => {
 		expect(crawlerEnv.SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot_test");
 	});
 
+	test.serial("accepts the overview percentile presets sent by the admin page", async () => {
+		for (const quantiles of [
+			"0.5,0.9,0.95,0.99",
+			"0.5,0.95,0.99",
+			"0.5,0.9,0.99",
+			"0.5,0.99",
+		]) {
+			const response = await api.v2.stats.overview.get({
+				...authorized,
+				query: { window: "1h", quantiles },
+			});
+			expect(response.status).toBe(200);
+		}
+	});
+
 	test.serial(
 		"imports and lists a known milestone minute without requiring engagement metrics",
 		async () => {

@@ -8,6 +8,10 @@ const JOB_STATES: Readonly<Record<string, StatePresentation>> = {
 	delayed: { key: "audit.delayed", variant: "warning" },
 	failed: { key: "audit.failed", variant: "danger" },
 	completed: { key: "audit.completed", variant: "success" },
+	prioritized: { key: "audit.waiting", variant: "neutral" },
+	"waiting-children": { key: "audit.waitingChildren", variant: "neutral" },
+	paused: { key: "audit.paused", variant: "warning" },
+	unknown: { key: "common.unknown", variant: "neutral" },
 };
 const TRACKING_STATES: Readonly<Record<string, StatePresentation>> = {
 	new: { key: "videos.state.new", variant: "info" },

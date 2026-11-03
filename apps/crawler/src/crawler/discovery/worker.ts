@@ -95,25 +95,7 @@ export class DiscoveryPipelineProcessor {
 				data.config?.keywords ??
 				this.filterService.getConfig().searchKeywords ??
 				DEFAULT_KEYWORDS;
-			const isDeep = (data.mode ?? data.config?.mode) === "deep";
-			let windowText = "";
-			if (data.config?.from || data.config?.to) {
-				const fromStr = data.config.from
-					? new Date(Number(data.config.from) * 1000).toISOString().slice(0, 10)
-					: "最早";
-				const toStr = data.config.to
-					? new Date(Number(data.config.to) * 1000).toISOString().slice(0, 10)
-					: "至今";
-				windowText = ` · ${fromStr} ~ ${toStr}`;
-			} else if (data.config?.timeWindowDays) {
-				windowText = ` · 近 ${data.config.timeWindowDays} 天`;
-			}
-			target =
-				isDeep && !data.config?.from
-					? `${keywords.length} 个关键词 · 多维度切片`
-					: keywords.length > 1
-						? `${keywords.length} 个关键词 (${keywords[0]} 等)${windowText}`
-						: `${keywords[0] ?? "全量配置词"}${windowText}`;
+			target = keywords.join(", ");
 		}
 		await report?.({
 			stage:
@@ -460,12 +442,7 @@ export function createDiscoveryWorker(
 						job.data.config?.keywords ??
 						processor.filterService.getConfig().searchKeywords ??
 						DEFAULT_KEYWORDS;
-					const isDeep = (job.data.mode ?? job.data.config?.mode) === "deep";
-					completedTarget = isDeep
-						? `${sweepKeywords.length} 个词 · 深度时间切片`
-						: sweepKeywords.length > 1
-							? `${sweepKeywords.length} 个关键词 (${sweepKeywords[0]} 等)`
-							: (sweepKeywords[0] ?? "全量配置词");
+					completedTarget = sweepKeywords.join(", ");
 				}
 
 				await report({

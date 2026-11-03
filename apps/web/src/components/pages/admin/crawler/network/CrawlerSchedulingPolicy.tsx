@@ -40,7 +40,6 @@ export default function CrawlerSchedulingPolicy(props: {
 	return (
 		<section class="flex flex-col gap-4">
 			<h3 class="ts-heading-3 text-primary">{t("scheduling.title")}</h3>
-			<p class="ts-caption text-secondary">{t("scheduling.description")}</p>
 			<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 				<For each={TRACKING_FIELDS}>
 					{(field) => (

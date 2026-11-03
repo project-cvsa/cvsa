@@ -61,7 +61,7 @@ function RangeControls(props: RangeControlsProps) {
 		{ value: "custom", label: t("audit.custom") },
 	];
 	return (
-		<div class="flex flex-nowrap items-center gap-2.5 whitespace-nowrap">
+		<div class="flex flex-wrap items-center gap-2.5">
 			<span class="ts-overline text-tertiary">{t("overview.timeRange")}</span>
 			<div class="w-36 shrink-0">
 				<Select
@@ -205,7 +205,6 @@ export default function OverviewSection(props: OverviewSectionProps) {
 	return (
 		<div class="flex flex-col gap-6">
 			<SectionHeader
-				nowrap
 				title={<h2 class="ts-heading-2 whitespace-nowrap">{t("tabs.overview")}</h2>}
 				actions={
 					<RangeControls
@@ -269,7 +268,6 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								<MetricCard
 									label={t("overview.newVideos")}
 									value={formatMetric(current().counters.trackingCreated)}
-									hint={t("overview.discoveredHint")}
 									variant="success"
 								/>
 								<MetricCard
@@ -298,7 +296,6 @@ export default function OverviewSection(props: OverviewSectionProps) {
 												)}${t("metrics.perMinute")}`
 											: "—"
 									}
-									hint={t("metrics.attemptsHint")}
 								/>
 								<MetricCard
 									label={t("overview.inferencesPerSec")}
@@ -312,7 +309,6 @@ export default function OverviewSection(props: OverviewSectionProps) {
 												)}${t("metrics.perMinute")}`
 											: "—"
 									}
-									hint={t("metrics.inferenceHint")}
 								/>
 								<MetricCard
 									label={t("overview.successRate")}
@@ -331,24 +327,13 @@ export default function OverviewSection(props: OverviewSectionProps) {
 								/>
 							</div>
 
-							<p class="ts-caption text-secondary">
-								{t("metrics.coverage")
-									.replace(
-										"{from}",
-										new Date(current().range.from).toLocaleString()
-									)
-									.replace("{to}", new Date(current().range.to).toLocaleString())
-									.replace(
-										"{minutes}",
-										formatMetric(current().range.seconds / 60)
-									)}
-							</p>
-							<p class="ts-caption text-secondary">
-								{t(`metrics.coverage.${current().coverage.status}`)} (
-								{current().coverage.coveredMinutes}/{current().coverage.minutes}{" "}
-								{t("metrics.minutesCovered")})
-							</p>
-							<p class="ts-caption text-secondary">{t("metrics.method")}</p>
+							<Show when={current().coverage.status !== "complete"}>
+								<p class="ts-caption text-secondary">
+									{t(`metrics.coverage.${current().coverage.status}`)} ·{" "}
+									{current().coverage.coveredMinutes}/{current().coverage.minutes}{" "}
+									{t("metrics.minutesCovered")}
+								</p>
+							</Show>
 							<ThroughputChart series={current().series} />
 							<StatsDetails stats={current()} quantiles={quantiles()} />
 						</section>
@@ -387,10 +372,9 @@ export default function OverviewSection(props: OverviewSectionProps) {
 													1 - (current().ratios.httpTransportSuccess ?? 0)
 												)
 									}
-									hint={t("overview.errorRateHint")}
 								/>
 								<MetricCard
-									label={t("metrics.businessErrors")}
+									label={t("metrics.businessErrorCount")}
 									value={formatMetric(
 										Object.values(current().network).reduce(
 											(sum, totals) => sum + totals.businessError,

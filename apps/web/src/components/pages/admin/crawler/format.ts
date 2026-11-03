@@ -17,6 +17,7 @@ export function formatPercent(fraction: number, digits = 1): string {
 /** Render a wait/lag duration in seconds as a compact human string. */
 export function formatWaitSeconds(seconds: number): string {
 	if (!Number.isFinite(seconds) || seconds < 0) return "—";
+	if (seconds > 0 && seconds < 1) return "<1s";
 	if (seconds < 60) return `${Math.round(seconds)}s`;
 	if (seconds < 3_600) {
 		const minutes = Math.floor(seconds / 60);
@@ -31,7 +32,8 @@ export function formatDateTime(value: string | null | undefined, dateOnly = fals
 	if (!value) return "—";
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return value;
-	return dateOnly ? date.toLocaleDateString() : date.toLocaleString();
+	const locale = typeof document === "undefined" ? undefined : document.documentElement.lang;
+	return dateOnly ? date.toLocaleDateString(locale) : date.toLocaleString(locale);
 }
 
 /** Normalize a metadata `tags` column (JSON array, JSON string, or plain string). */

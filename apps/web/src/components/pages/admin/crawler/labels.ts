@@ -1,4 +1,47 @@
-/** Message keys for crawler values the console renders as prose. */
+import type { DiscoveryActivity } from "@cvsa/contracts";
+import { formatDateTime } from "./format";
+
+export function discoveryJobTypeMessageKey(job: DiscoveryActivity): string {
+	switch (job.task?.type) {
+		case "search-sweep":
+			if (job.task.config?.from !== undefined || job.task.config?.to !== undefined)
+				return "discoveryActivity.typeRange";
+			return (job.task.mode ?? job.task.config?.mode) === "deep"
+				? "discoveryActivity.typeDeep"
+				: "discoveryActivity.typeIncremental";
+		case "hot-sample":
+			return "discoveryActivity.typeHotSample";
+		case "fetch-video-details":
+			return "discoveryActivity.typeDetails";
+		case "active-discovery":
+			return "discoveryActivity.typeRelated";
+		default:
+			return "discoveryActivity.typeTask";
+	}
+}
+
+export function discoveryJobTarget(job: DiscoveryActivity, t: (key: string) => string): string {
+	if (job.task?.type !== "search-sweep") return job.target ?? "—";
+	const config = job.task.config;
+	const keywords = config?.keywords;
+	const label = keywords?.length
+		? keywords.length === 1
+			? keywords[0]
+			: t("discoveryActivity.keywordCount").replace("{count}", String(keywords.length))
+		: t("discoveryActivity.configuredKeywords");
+	const date = (value: string | number | undefined, fallback: string) =>
+		value === undefined
+			? t(fallback)
+			: formatDateTime(
+					new Date(typeof value === "number" ? value * 1000 : value).toISOString(),
+					true
+				);
+	if (config?.from !== undefined || config?.to !== undefined)
+		return `${label} · ${date(config.from, "discoveryActivity.earliest")} – ${date(config.to, "discoveryActivity.present")}`;
+	if (config?.timeWindowDays !== undefined)
+		return `${label} · ${t("discoveryActivity.lookbackDays").replace("{days}", String(config.timeWindowDays))}`;
+	return label;
+}
 
 /**
  * Locale keys for the metadata fields the crawler records in history. Covers
