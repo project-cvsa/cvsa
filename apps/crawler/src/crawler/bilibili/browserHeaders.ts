@@ -19,6 +19,23 @@ const generator = new HeaderGenerator({
 	strict: true,
 });
 
+const CLIENT_HINT_HEADERS = ["sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"] as const;
+const CLIENT_HINT_ATTEMPTS = 8;
+
+function generateHeaders(family: BilibiliCredentialBundle["identity"]["family"]) {
+	let headers = generator.getHeaders({ browsers: [family] });
+	if (family === "safari") return headers;
+	for (
+		let attempt = 1;
+		attempt < CLIENT_HINT_ATTEMPTS &&
+		!CLIENT_HINT_HEADERS.every((name) => headers[name] !== undefined);
+		attempt++
+	) {
+		headers = generator.getHeaders({ browsers: [family] });
+	}
+	return headers;
+}
+
 export function chooseBrowserHeaders(
 	config: BrowserIdentityConfig,
 	random: () => number = Math.random
@@ -29,7 +46,7 @@ export function chooseBrowserHeaders(
 			? (families[Math.min(families.length - 1, Math.floor(random() * families.length))] ??
 				"chrome")
 			: config.family;
-	const headers = generator.getHeaders({ browsers: [family] });
+	const headers = generateHeaders(family);
 	const userAgent = headers["user-agent"] ?? headers["User-Agent"] ?? "";
 	const versionPattern =
 		family === "safari"
