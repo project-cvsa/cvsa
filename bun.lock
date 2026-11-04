@@ -7,6 +7,7 @@
       "devDependencies": {
         "@astrojs/compiler-rs": "^0.4.1",
         "@biomejs/biome": "^2.4.10",
+        "@fanee/tools": "^0.9.0",
         "@types/bun": "^1.4.2",
         "turbo": "^2.11.2",
         "typescript": "^7.0.2",
@@ -27,8 +28,8 @@
         "@elysiajs/eden": "^1.4.9",
         "@elysiajs/openapi": "^1.4.16",
         "@elysiajs/opentelemetry": "^1.4.11",
-        "@fanee/core": "^0.8.1",
-        "@fanee/node": "^0.8.1",
+        "@fanee/core": "^0.9.0",
+        "@fanee/node": "^0.9.0",
         "@opentelemetry/api": "^1.9.1",
         "@opentelemetry/exporter-trace-otlp-proto": "^0.222.0",
         "@opentelemetry/sdk-trace-node": "^2.6.1",
@@ -156,9 +157,8 @@
         "@cvsa/db": "workspace:*",
         "@cvsa/logger": "workspace:*",
         "@elysiajs/eden": "^1.4.9",
-        "@fanee/core": "^0.8.1",
-        "@fanee/node": "^0.8.1",
-        "@fanee/solid": "^0.8.1",
+        "@fanee/core": "^0.9.0",
+        "@fanee/solid": "^0.9.0",
         "@internationalized/date": "3.12.4",
         "accept-language-parser": "^1.5.0",
         "astro": "7.3.3",
@@ -173,7 +173,7 @@
         "wikiparser-node": "^1.45.0",
       },
       "devDependencies": {
-        "@fanee/vite": "^0.8.3",
+        "@fanee/vite": "^0.9.0",
         "@types/accept-language-parser": "^1.5.8",
         "@types/fs-extra": "^11.0.4",
         "@unocss/astro": "^66.7.5",
@@ -331,6 +331,7 @@
     },
   },
   "overrides": {
+    "@fanee/core": "^0.9.0",
     "mdast-util-to-markdown": "2.1.2",
     "yuku-parser": "0.6.3",
   },
@@ -687,13 +688,15 @@
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.28.2", "", { "os": "win32", "cpu": "x64" }, "sha512-5ebpxr3nWMzrL/rnUI755Jkuee0bHL/Gq0WTF9lvcpv73wAp5eu8MfBUgWK9bhWvZjj7yX8etf/8tI8Ney695g=="],
 
-    "@fanee/core": ["@fanee/core@0.8.1", "", { "dependencies": { "messageformat": "^4.0.0" } }, "sha512-YUsa/LySBr5EfzedYW8e3YI+lhtzgDDrpUs5YTd966X/xNGuYgmaFKFxf7TpHAAT4teA94vQdytZNomhPggMHA=="],
+    "@fanee/core": ["@fanee/core@0.9.0", "", { "dependencies": { "messageformat": "^4.0.0" } }, "sha512-KYq0+jA7pWpdGZx3ApMiTAk8xR6h845siOhk1m3G6kQEeukb20fdIdj/zdOaA5Z7s9Z5kiWYCTt2DKA/GLSrrg=="],
 
-    "@fanee/node": ["@fanee/node@0.8.1", "", { "dependencies": { "@fanee/core": "^0.8.1" } }, "sha512-8vhkRHYsCxVkZUwgZBh2pwz81+o0kCiyoj7NKs1bv/lpb55pAoxukgjk5YUy051kKwMcflIzVv0pw5sf63a5xQ=="],
+    "@fanee/node": ["@fanee/node@0.9.0", "", { "dependencies": { "@fanee/core": "^0.9.0" } }, "sha512-M2whf7kwz1rUGR6yG3TG5Y6SGB76BzJ7RWYXS/QxLW6050RC+kp+ed1EtBNxeDNji+CoiHyHizB1CvZhtFxMdQ=="],
 
-    "@fanee/solid": ["@fanee/solid@0.8.1", "", { "dependencies": { "@fanee/core": "^0.8.1" }, "peerDependencies": { "solid-js": ">=1.0" } }, "sha512-KRHm9Q4B4t9NJjYHYsIAi/o4lWi/75oFfQHz8oEN+hPpbkvdLQWnUy4DEyE0hvU7ks4cVYGR+215ZRRZWdI7dw=="],
+    "@fanee/solid": ["@fanee/solid@0.9.0", "", { "dependencies": { "@fanee/core": "^0.9.0" }, "peerDependencies": { "solid-js": ">=1.0" } }, "sha512-uCrypXNLgLErVuCzbtTa7GKoJcTGbjVid+vtVXIcxwGLRdyF1cgX//45WaXrOAVcYBHghJSiwVKzvDO6PasMWw=="],
 
-    "@fanee/vite": ["@fanee/vite@0.8.3", "", { "dependencies": { "@fanee/core": "^0.8.3", "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "vite": ">=5" } }, "sha512-erLnz5U9DuxKmz+BGfVAN425iEzyom/nNJ5x8pRGWBP9QFpvWfVaHiJHa2Lo1pOKDjm3lYWuiZam/erRWzbzWQ=="],
+    "@fanee/tools": ["@fanee/tools@0.9.0", "", { "dependencies": { "@fanee/core": "workspace:*", "messageformat": "^4.0.0", "tinyglobby": "^0.2.17", "typescript": "^6.0.3", "zod": "^4.3.6" }, "bin": { "fanee": "dist/cli.js" } }, "sha512-K4XOP1VdyLVpWmAXAQC4wSZ/GKJzDUEuwlp5J6GmyFHPXOj6sMwrE9iI2/impuRLBNSCh+esSSqaV6qtmYYonQ=="],
+
+    "@fanee/vite": ["@fanee/vite@0.9.0", "", { "dependencies": { "@fanee/core": "^0.9.0", "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "vite": ">=5" } }, "sha512-8QTiCCB8pac/cr/dbfnwxy0rZIdWHjzB5EDPAP821xkQHoLY3nva/sFnDGGtoR868K9M87jHh9s6WuenVk7XgQ=="],
 
     "@floating-ui/core": ["@floating-ui/core@1.8.0", "", { "dependencies": { "@floating-ui/utils": "^0.2.12" } }, "sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ=="],
 
@@ -3071,7 +3074,7 @@
 
     "@elysiajs/opentelemetry/@opentelemetry/sdk-node": ["@opentelemetry/sdk-node@0.200.0", "", { "dependencies": { "@opentelemetry/api-logs": "0.200.0", "@opentelemetry/core": "2.0.0", "@opentelemetry/exporter-logs-otlp-grpc": "0.200.0", "@opentelemetry/exporter-logs-otlp-http": "0.200.0", "@opentelemetry/exporter-logs-otlp-proto": "0.200.0", "@opentelemetry/exporter-metrics-otlp-grpc": "0.200.0", "@opentelemetry/exporter-metrics-otlp-http": "0.200.0", "@opentelemetry/exporter-metrics-otlp-proto": "0.200.0", "@opentelemetry/exporter-prometheus": "0.200.0", "@opentelemetry/exporter-trace-otlp-grpc": "0.200.0", "@opentelemetry/exporter-trace-otlp-http": "0.200.0", "@opentelemetry/exporter-trace-otlp-proto": "0.200.0", "@opentelemetry/exporter-zipkin": "2.0.0", "@opentelemetry/instrumentation": "0.200.0", "@opentelemetry/propagator-b3": "2.0.0", "@opentelemetry/propagator-jaeger": "2.0.0", "@opentelemetry/resources": "2.0.0", "@opentelemetry/sdk-logs": "0.200.0", "@opentelemetry/sdk-metrics": "2.0.0", "@opentelemetry/sdk-trace-base": "2.0.0", "@opentelemetry/sdk-trace-node": "2.0.0", "@opentelemetry/semantic-conventions": "^1.29.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.3.0 <1.10.0" } }, "sha512-S/YSy9GIswnhYoDor1RusNkmRughipvTCOQrlF1dzI70yQaf68qgf5WMnzUxdlCl3/et/pvaO75xfPfuEmCK5A=="],
 
-    "@fanee/vite/@fanee/core": ["@fanee/core@0.8.3", "", { "dependencies": { "messageformat": "^4.0.0" } }, "sha512-yt+sCsFalc5+AgPk2JYMgRfizPxk188BFDBaKlHtz9TIjpdoyQGw/IUujZ1UcE3t6DiWLXYHKSS2Kpgk8fZ5ag=="],
+    "@fanee/tools/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "@img/sharp-freebsd-wasm32/@img/sharp-wasm32": ["@img/sharp-wasm32@0.35.4", "", { "dependencies": { "@emnapi/runtime": "^1.11.3" } }, "sha512-zQnl4Kwp7Q6NHsENtU2T/00Zi+w3AQNwz3+UaTyVBy2FpXrzXzGjndpK61onhZjRtRpQXxCTeqw19bVyXOh7jA=="],
 
