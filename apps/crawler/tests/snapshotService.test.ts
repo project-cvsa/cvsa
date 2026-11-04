@@ -22,6 +22,16 @@ class FakeSnapshotRepository implements ISnapshotRepository {
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {
 		return (this.historicalSnapshots.get(aid) ?? []).slice(0, limit);
 	}
+	async getFirstSnapshot(aid: bigint): Promise<VideoSnapshot | null> {
+		return (
+			[...(this.historicalSnapshots.get(aid) ?? [])].sort(
+				(a, b) => a.capturedAt.epochMilliseconds - b.capturedAt.epochMilliseconds
+			)[0] ?? null
+		);
+	}
+	async getSchedulingHistory(aid: bigint): Promise<VideoSnapshot[]> {
+		return this.getRecentSnapshots(aid);
+	}
 
 	async listSnapshots(
 		aid: bigint,
@@ -74,18 +84,61 @@ describe("snapshot failure handling", () => {
 });
 
 describe("SnapshotService", () => {
-	test("defers due videos and releases their leases", async () => {
+	test("a repeatedly missing video stops retrying when details confirm it was deleted", async () => {
+		const repo = new InMemoryTrackingRepository();
+		await seedDue(repo, 42n, 99990);
+		await repo.updateSchedule(42n, {
+			state: "milestone",
+			priority: 1,
+			consecutiveFails: 1,
+			lastError: "video_missing_from_stats_response",
+		});
+		const client = new BilibiliClient({
+			request: async (url, options) => {
+				const body = url.includes("finger/spi")
+					? { code: 0, data: { b_3: "device3", b_4: "device4" } }
+					: url.includes("GenWebTicket")
+						? {
+								code: 0,
+								data: {
+									ticket: "ticket",
+									nav: { img: "a".repeat(32), sub: "b".repeat(32) },
+								},
+							}
+						: url.includes("view/detail")
+							? { code: -404, message: "Video deleted" }
+							: { code: 0, data: [] };
+				return {
+					status: 200,
+					headers: {},
+					body: options?.method === "HEAD" ? "" : JSON.stringify(body),
+				};
+			},
+		});
+		const result = await new SnapshotService(
+			client,
+			new FakeSnapshotRepository(),
+			repo
+		).processBatch([42n]);
+		expect(result.status).toBe("success");
+		if (result.status !== "success") throw new Error("Expected a settled missing video");
+		expect(result.retryAids).toEqual([]);
+		expect((await repo.getTracking(42n))?.state).toBe("archive");
+		expect((await repo.getTracking(42n))?.leaseUntil).toBeNull();
+	});
+	test("retains a milestone job ownership and original due time while retrying", async () => {
 		const repo = new InMemoryTrackingRepository();
 		await seedDue(repo, 12n, 0);
 		const service = new SnapshotService(statsClient({}), new FakeSnapshotRepository(), repo);
-		const before = Date.now();
-		await service.deferLeases([12n], 60_000, "rate_limit");
-		const tracking = repo.trackings.get(12n);
-		expect(tracking?.leaseUntil).toBeNull();
-		expect(tracking?.consecutiveFails).toBe(0);
-		expect(tracking?.lastError).toBe("network:rate_limited");
-		expect(tracking?.scheduleReason).toBe("regular");
-		expect(tracking?.nextSnapshotAt.epochMilliseconds).toBeGreaterThanOrEqual(before + 60_000);
+		const original = await repo.getTracking(12n);
+		await repo.updateSchedule(12n, { state: "milestone", priority: 1 });
+		const retry = await service.retryBatch([12n], undefined, "network:rate_limited");
+		const tracking = await repo.getTracking(12n);
+		expect(retry.delayMs).toBe(1000);
+		expect(tracking?.leaseUntil?.epochMilliseconds).toBe(Date.parse(retry.leaseUntil));
+		expect(tracking?.consecutiveFails).toBe(1);
+		expect(tracking?.priority).toBe(1);
+		expect(tracking?.nextSnapshotAt.toString()).toBe(original?.nextSnapshotAt.toString());
 	});
 	test("successfully processes a batch, writes snapshots, and settles the lease", async () => {
 		const snapshotRepo = new FakeSnapshotRepository();
@@ -164,7 +217,7 @@ describe("SnapshotService", () => {
 		).toBeLessThan(5_000);
 	});
 
-	test("handles Bilibili API failure by incrementing consecutive fails and backing off", async () => {
+	test("keeps API failures owned by the same job for a state-specific retry", async () => {
 		const snapshotRepo = new FakeSnapshotRepository();
 		const trackingRepo = new InMemoryTrackingRepository();
 
@@ -187,11 +240,11 @@ describe("SnapshotService", () => {
 		}
 
 		expect(snapshotRepo.createdSnapshots).toHaveLength(0);
+		await service.retryBatch([aid], undefined, "bilibili_api_error:-412");
 		const tracking = trackingRepo.trackings.get(aid);
 		expect(tracking?.consecutiveFails).toBe(2);
 		expect(tracking?.lastError).toBe("bilibili_api_error:-412");
-		expect(tracking?.scheduleReason).toBe("retry");
-		expect(tracking?.leaseUntil).toBeNull();
+		expect(tracking?.leaseUntil).not.toBeNull();
 	});
 
 	test("handles videos missing from API response gracefully", async () => {
@@ -216,11 +269,18 @@ describe("SnapshotService", () => {
 		if (result.status === "success") {
 			expect(result.inserted).toBe(1);
 			expect(result.missingCount).toBe(1);
+			expect(result.retryAids).toEqual([String(requestedAid2)]);
+			await service.retryBatch(
+				result.retryAids ?? [],
+				undefined,
+				"video_missing_from_stats_response"
+			);
 		}
 
 		const missing = trackingRepo.trackings.get(requestedAid2);
 		expect(missing?.consecutiveFails).toBe(1);
 		expect(missing?.lastError).toBe("video_missing_from_stats_response");
-		expect(missing?.scheduleReason).toBe("retry");
+		expect(missing?.leaseUntil).not.toBeNull();
+		expect((await trackingRepo.getTracking(requestedAid1))?.leaseUntil).toBeNull();
 	});
 });

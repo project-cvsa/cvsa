@@ -4,9 +4,9 @@ import {
 	createRedisRateLimiter,
 	NetworkRuntimeConfigSchema,
 	NetworkScheduler,
+	RedisRateLimiter,
 	type NetworkAdapter,
 	type NetworkResponse,
-	type RedisRateLimiter,
 } from "../src";
 
 /**
@@ -37,6 +37,35 @@ afterAll(async () => {
 });
 
 describe("RedisRateLimiter against Redis", () => {
+	test("refusing one window does not spend tokens from another window", async () => {
+		const controlled = new RedisRateLimiter(inspectionClient, () => 1000000);
+		const target = scope();
+		const budgets = [
+			{ durationSeconds: 1, maxRequests: 2 },
+			{ durationSeconds: 60, maxRequests: 1 },
+		];
+		expect(await controlled.acquireBudgets(target, budgets)).toEqual({
+			allowed: true,
+			retryAfterMs: 0,
+		});
+		expect(await controlled.acquireBudgets(target, budgets)).toEqual({
+			allowed: false,
+			retryAfterMs: 60000,
+		});
+		expect(await controlled.consume(target, 1, 2)).toBe(true);
+	});
+	test("a fractional request rate permits one request and reports its full refill delay", async () => {
+		const controlled = new RedisRateLimiter(inspectionClient, () => 1000000);
+		const target = scope();
+		expect(await controlled.acquire(target, 1, 0.1)).toEqual({
+			allowed: true,
+			retryAfterMs: 0,
+		});
+		expect(await controlled.acquire(target, 1, 0.1)).toEqual({
+			allowed: false,
+			retryAfterMs: 10000,
+		});
+	});
 	test("hands out exactly the configured capacity inside the window", async () => {
 		const target = scope();
 		const results: boolean[] = [];

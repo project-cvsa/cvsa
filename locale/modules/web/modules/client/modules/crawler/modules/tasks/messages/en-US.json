@@ -1,0 +1,13 @@
+{
+	"tasks.title": "Tasks",
+	"tasks.jobs.title": "Jobs",
+	"tasks.jobs.id": "ID",
+	"tasks.jobs.queue": "Queue",
+	"tasks.jobs.type": "Task",
+	"tasks.jobs.state": "State",
+	"tasks.jobs.attempts": "Attempts",
+	"tasks.jobs.reason": "Error",
+	"tasks.jobs.time": "Enqueued",
+	"tasks.jobs.empty": "No active or pending jobs in queue",
+	"tasks.error.database": "Database query failed"
+}

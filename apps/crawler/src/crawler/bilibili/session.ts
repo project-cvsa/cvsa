@@ -12,10 +12,12 @@ import {
 } from "@cvsa/contracts";
 import { MemoryBilibiliCache } from "./cache";
 import { signWbiQuery } from "./signing";
-import { browserRequestHeaders, chooseBrowserIdentity } from "./browserHeaders";
+import { browserRequestHeaders, chooseBrowserHeaders } from "./browserHeaders";
 import { boundedOperation } from "../shared/boundedOperation";
 import { outsideCrawlerTask } from "../shared/taskContext";
 import { RetryLaterError } from "../shared/retryLater";
+import { createNoopStatsRecorder, type StatsOutcome, type StatsRecorder } from "../stats/types";
+import { outcomeOfError } from "../stats/outcome";
 import type {
 	BilibiliHttpResponse,
 	BilibiliRequest,
@@ -25,8 +27,9 @@ import type {
 
 const API_ORIGIN = "https://api.bilibili.com";
 const BILI_HOME = "https://www.bilibili.com/";
-const BUNDLE_KEY = "cvsa:bilibili:credential-bundle:v2";
+const BUNDLE_KEY = "cvsa:bilibili:credential-bundle:v3";
 const LEGACY_KEYS = [
+	"cvsa:bilibili:credential-bundle:v2",
 	"cvsa:bilibili:device-cookies",
 	"cvsa:bilibili:ticket",
 	"cvsa:bilibili:wbi-keys",
@@ -58,19 +61,14 @@ export class BilibiliSession {
 		private readonly clock: () => number = Date.now,
 		private readonly random: () => number = Math.random,
 		private readonly requestTimeoutMs: () => number = () => 8000,
-		private readonly operationTimeoutMs: () => number = () => 3000
+		private readonly operationTimeoutMs: () => number = () => 3000,
+		private readonly stats: StatsRecorder = createNoopStatsRecorder()
 	) {
 		this.cache = cache ?? new MemoryBilibiliCache();
 		this.config = BilibiliSessionConfigSchema.parse(config ?? {});
-		this.initialIdentity = chooseBrowserIdentity(this.config.browser, this.random);
+		this.initialIdentity = chooseBrowserHeaders(this.config.browser, this.random).identity;
 	}
 	private identity(): BilibiliCredentialBundle["identity"] {
-		return this.bundle?.identity ?? this.initialIdentity;
-	}
-	private getRequestIdentity(): BilibiliCredentialBundle["identity"] {
-		if (this.config.browser.family === "auto") {
-			return chooseBrowserIdentity(this.config.browser, this.random);
-		}
 		return this.bundle?.identity ?? this.initialIdentity;
 	}
 	private cookieHeader(bundle = this.bundle): string {
@@ -84,34 +82,17 @@ export class BilibiliSession {
 			Math.floor((refreshedAt + 28800000) / 86400000 + 1) * 86400000 - 28800000
 		);
 	}
-	private matchesIdentity(bundle: BilibiliCredentialBundle): boolean {
-		const identity = bundle.identity;
-		return (
-			(this.config.browser.family === "auto" ||
-				identity.family === this.config.browser.family) &&
-			identity.language === this.config.browser.language &&
-			identity.version ===
-				(identity.family === "chrome"
-					? this.config.browser.chromeVersion
-					: identity.family === "edge"
-						? this.config.browser.edgeVersion
-						: this.config.browser.safariVersion)
-		);
-	}
 	configure(config: BilibiliSessionConfig): void {
 		this.config = BilibiliSessionConfigSchema.parse(config);
 		if (!this.bundle)
-			this.initialIdentity = chooseBrowserIdentity(this.config.browser, this.random);
+			this.initialIdentity = chooseBrowserHeaders(this.config.browser, this.random).identity;
 		this.nextAttemptAt = undefined;
 		this.schedule();
 	}
 	getStatus(): BilibiliSessionStatus {
 		return {
 			generation: this.generation,
-			ready:
-				!!this.bundle &&
-				this.bundle.expiresAt > this.clock() &&
-				this.matchesIdentity(this.bundle),
+			ready: !!this.bundle && this.bundle.expiresAt > this.clock(),
 			refreshing: !!this.credentialsInFlight,
 			browser: `${this.identity().family} ${this.identity().version}`,
 			lastRefreshAt: this.bundle?.refreshedAt ?? null,
@@ -150,9 +131,7 @@ export class BilibiliSession {
 		if (!this.started) return;
 		const at =
 			this.nextAttemptAt ??
-			(this.bundle && this.matchesIdentity(this.bundle)
-				? this.dueAt(this.bundle.refreshedAt)
-				: this.clock());
+			(this.bundle ? this.dueAt(this.bundle.refreshedAt) : this.clock());
 		this.timer = setTimeout(
 			() => {
 				void this.refreshCredentials()
@@ -179,8 +158,10 @@ export class BilibiliSession {
 	}
 	async refreshCredentials(): Promise<BilibiliCredentialBundle> {
 		if (!this.credentialsInFlight) {
+			const startedAt = performance.now();
 			this.credentialsInFlight = outsideCrawlerTask(() => this.obtainCredentials())
 				.then(async (bundle) => {
+					this.stats.recordCredentialsRefresh("success", performance.now() - startedAt);
 					await boundedOperation(
 						() =>
 							this.cache.set(
@@ -200,6 +181,10 @@ export class BilibiliSession {
 					return bundle;
 				})
 				.catch((error) => {
+					this.stats.recordCredentialsRefresh(
+						outcomeOfError(error),
+						performance.now() - startedAt
+					);
 					this.noteFailure(error);
 					throw error;
 				})
@@ -230,7 +215,6 @@ export class BilibiliSession {
 		}
 		if (
 			!this.bundle ||
-			!this.matchesIdentity(this.bundle) ||
 			this.dueAt(this.bundle.refreshedAt) <= this.clock() ||
 			this.bundle.expiresAt <= this.clock()
 		) {
@@ -250,7 +234,7 @@ export class BilibiliSession {
 				/\b(wbi|w_rid|bili_ticket|buvid)\b/i.test(message ?? ""))
 		);
 	}
-	private async recover<T>(work: () => Promise<T>): Promise<T> {
+	private async recover<T>(work: () => Promise<T>): Promise<{ value: T; attempts: number }> {
 		let attempts = 0;
 		while (true) {
 			const generation = this.generation;
@@ -262,7 +246,7 @@ export class BilibiliSession {
 					!this.eligible(envelope.data.code, envelope.data.message) ||
 					attempts >= this.config.recoveryAttempts
 				)
-					return value;
+					return { value, attempts };
 			} catch (error) {
 				if (
 					!(error instanceof RetryLaterError) ||
@@ -272,30 +256,67 @@ export class BilibiliSession {
 					throw error;
 			}
 			attempts++;
-			if (generation === this.generation) await this.refreshCredentials();
+			const retryStartedAt = performance.now();
+			try {
+				if (generation === this.generation) await this.refreshCredentials();
+				this.stats.recordSessionRecovery(performance.now() - retryStartedAt, "success");
+			} catch (error) {
+				this.stats.recordSessionRecovery(
+					performance.now() - retryStartedAt,
+					outcomeOfError(error)
+				);
+				throw error;
+			}
 		}
 	}
 	async request<T>(
 		url: string,
 		options: NonNullable<Parameters<BilibiliRequest>[1]> = {}
 	): Promise<T> {
-		return this.recover(() => this.requestOnce<T>(url, options));
+		return this.logicalRequest(() => this.recover(() => this.requestOnce<T>(url, options)));
 	}
 	async signedRequest<T>(
 		path: string,
 		params: Record<string, string | number | boolean>,
 		options: NonNullable<Parameters<BilibiliRequest>[1]> = {}
 	): Promise<T> {
-		await this.getWbiKeys();
-		return this.recover(async () => {
-			const keys = await this.getWbiKeys();
-			const bundle = this.bundle;
-			return this.requestOnce<T>(
-				`${API_ORIGIN}${path}?${signWbiQuery(params, keys.imgKey, keys.subKey)}`,
-				options,
-				bundle
-			);
+		return this.logicalRequest(async () => {
+			await this.getWbiKeys();
+			return this.recover(async () => {
+				const keys = await this.getWbiKeys();
+				const bundle = this.bundle;
+				return this.requestOnce<T>(
+					`${API_ORIGIN}${path}?${signWbiQuery(params, keys.imgKey, keys.subKey, Math.floor(this.clock() / 1000))}`,
+					options,
+					bundle
+				);
+			});
 		});
+	}
+	private async logicalRequest<T>(
+		work: () => Promise<{ value: T; attempts: number }>
+	): Promise<T> {
+		const startedAt = performance.now();
+		this.stats.record("logicalRequestsStarted");
+		try {
+			const result = await work();
+			const envelope = BilibiliEnvelopeSchema.safeParse(result.value);
+			const outcome: StatsOutcome =
+				envelope.success && envelope.data.code !== 0 ? "failure" : "success";
+			this.stats.recordLogicalRequest(
+				performance.now() - startedAt,
+				outcome,
+				result.attempts + 1
+			);
+			return result.value;
+		} catch (error) {
+			this.stats.recordLogicalRequest(
+				performance.now() - startedAt,
+				outcomeOfError(error),
+				1
+			);
+			throw error;
+		}
 	}
 	async diagnostic(adapterId: string): Promise<BilibiliHttpResponse> {
 		const cookie = this.cookieHeader();
@@ -303,7 +324,7 @@ export class BilibiliSession {
 			adapterId,
 			purpose: "diagnostic",
 			headers: browserRequestHeaders(
-				this.identity(),
+				chooseBrowserHeaders(this.config.browser, this.random),
 				`${API_ORIGIN}/x/web-interface/nav`,
 				"GET",
 				cookie ? { Cookie: cookie } : {}
@@ -311,18 +332,23 @@ export class BilibiliSession {
 		});
 	}
 	private async obtainCredentials(): Promise<BilibiliCredentialBundle> {
-		const identity = chooseBrowserIdentity(this.config.browser, this.random);
+		let identity = this.initialIdentity;
 		const controller = new AbortController();
 		this.refreshController = controller;
-		const request = (url: string, options: NonNullable<Parameters<BilibiliRequest>[1]> = {}) =>
-			boundedOperation(
+		const request = (
+			url: string,
+			options: NonNullable<Parameters<BilibiliRequest>[1]> = {}
+		) => {
+			const profile = chooseBrowserHeaders(this.config.browser, this.random);
+			identity = profile.identity;
+			return boundedOperation(
 				() =>
 					this.requestImpl(url, {
 						...options,
 						signal: controller.signal,
 						purpose: "credentials",
 						headers: browserRequestHeaders(
-							identity,
+							profile,
 							url,
 							options.method,
 							options.headers
@@ -331,6 +357,7 @@ export class BilibiliSession {
 				options.timeoutMs ?? this.requestTimeoutMs(),
 				controller.signal
 			);
+		};
 		const fingerResponse = await request(`${API_ORIGIN}/x/frontend/finger/spi`);
 		const finger = BilibiliDeviceResponseSchema.parse(JSON.parse(fingerResponse.body));
 		const home = await request(BILI_HOME, {
@@ -381,10 +408,10 @@ export class BilibiliSession {
 		const cookie = this.cookieHeader(bundle);
 		let response: BilibiliHttpResponse;
 		try {
-			const identity = this.getRequestIdentity();
+			const profile = chooseBrowserHeaders(this.config.browser, this.random);
 			response = await this.requestImpl(url, {
 				...options,
-				headers: browserRequestHeaders(identity, url, options.method, {
+				headers: browserRequestHeaders(profile, url, options.method, {
 					...(cookie ? { Cookie: cookie } : {}),
 					...options.headers,
 				}),

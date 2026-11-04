@@ -1,5 +1,7 @@
 import { RetryLaterError } from "../shared/retryLater";
-import { AppError, type DiscoveryJobProgress } from "@cvsa/contracts";
+import { outcomeOfError } from "../stats/outcome";
+import { AppError, type DiscoveryJobProgress, type RetryPolicy } from "@cvsa/contracts";
+import { UnrecoverableError } from "bullmq";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -17,7 +19,7 @@ import type { IDiscoveryRepository } from "./repository.interface";
 import { DEFAULT_KEYWORDS, SearchRover } from "./searchRover";
 import type { CandidateSource, DiscoveryOrigin, SearchRoverConfig } from "./types";
 
-export type DiscoveryJobData =
+export type DiscoveryJobData = (
 	| {
 			type: "search-sweep";
 			mode?: "incremental" | "deep";
@@ -34,14 +36,14 @@ export type DiscoveryJobData =
 			origin?: DiscoveryOrigin;
 	  }
 	| { type: "active-discovery"; aid: string }
-	| { type: "hot-sample"; limit?: number; timeWindowDays?: number };
+	| { type: "hot-sample"; limit?: number; timeWindowDays?: number }
+) & { failureAttempts?: number; asOf?: number; completedQueries?: string[] };
 
 export const DISCOVERY_QUEUE_NAME = "crawler-discovery";
 
 /** Ordinary failures use bounded retries; throttling is delayed without consuming attempts. */
 export const DISCOVERY_QUEUE_JOB_OPTIONS: JobsOptions = {
-	attempts: 5,
-	backoff: { type: "exponential", delay: 60_000 },
+	attempts: 1,
 };
 
 /** Builds the discovery queue with the retry policy above applied as its default. */
@@ -83,7 +85,7 @@ export class DiscoveryPipelineProcessor {
 	async processJob(
 		data: DiscoveryJobData,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>,
-		checkpoint?: (offset: number) => Promise<void>
+		checkpoint?: (offset: number, key?: string) => Promise<void>
 	): Promise<void> {
 		let target: string | null = null;
 		if ("aid" in data) {
@@ -93,25 +95,7 @@ export class DiscoveryPipelineProcessor {
 				data.config?.keywords ??
 				this.filterService.getConfig().searchKeywords ??
 				DEFAULT_KEYWORDS;
-			const isDeep = (data.mode ?? data.config?.mode) === "deep";
-			let windowText = "";
-			if (data.config?.from || data.config?.to) {
-				const fromStr = data.config.from
-					? new Date(Number(data.config.from) * 1000).toISOString().slice(0, 10)
-					: "最早";
-				const toStr = data.config.to
-					? new Date(Number(data.config.to) * 1000).toISOString().slice(0, 10)
-					: "至今";
-				windowText = ` · ${fromStr} ~ ${toStr}`;
-			} else if (data.config?.timeWindowDays) {
-				windowText = ` · 近 ${data.config.timeWindowDays} 天`;
-			}
-			target =
-				isDeep && !data.config?.from
-					? `${keywords.length} 个关键词 · 多维度切片`
-					: keywords.length > 1
-						? `${keywords.length} 个关键词 (${keywords[0]} 等)${windowText}`
-						: `${keywords[0] ?? "全量配置词"}${windowText}`;
+			target = keywords.join(", ");
 		}
 		await report?.({
 			stage:
@@ -134,7 +118,8 @@ export class DiscoveryPipelineProcessor {
 					data.mode,
 					report,
 					data.offset ?? 0,
-					checkpoint
+					checkpoint,
+					data.completedQueries
 				);
 				break;
 			case "fetch-video-details":
@@ -161,7 +146,8 @@ export class DiscoveryPipelineProcessor {
 		mode?: "incremental" | "deep",
 		report?: (progress: DiscoveryJobProgress) => Promise<void>,
 		offset = 0,
-		checkpoint?: (offset: number) => Promise<void>
+		checkpoint?: (offset: number, key?: string) => Promise<void>,
+		completedQueries: string[] = []
 	): Promise<void> {
 		const keywords =
 			config?.keywords ?? this.filterService.getConfig().searchKeywords ?? DEFAULT_KEYWORDS;
@@ -170,7 +156,8 @@ export class DiscoveryPipelineProcessor {
 			report,
 			{
 				offset,
-				onPage: async (candidates, nextOffset) => {
+				completedQueries,
+				onPage: async (candidates, nextOffset, key) => {
 					const existing = await this.trackingRepo.getTrackings(
 						candidates.map((candidate) => candidate.aid)
 					);
@@ -192,7 +179,7 @@ export class DiscoveryPipelineProcessor {
 						queued,
 						updatedAt: new Date().toISOString(),
 					});
-					await checkpoint?.(nextOffset);
+					await checkpoint?.(nextOffset, key);
 				},
 			}
 		);
@@ -398,12 +385,30 @@ export function createDiscoveryWorker(
 	mq: CrawlerMq,
 	processor: DiscoveryPipelineProcessor,
 	concurrency = 12,
-	stats: StatsRecorder = createNoopStatsRecorder()
+	stats: StatsRecorder = createNoopStatsRecorder(),
+	retryPolicy: () => RetryPolicy = () => ({
+		maxAttempts: 5,
+		baseDelayMs: 1000,
+		maxDelayMs: 60000,
+	})
 ): CrawlerWorker {
 	return mq.createWorker<DiscoveryJobData>(
 		DISCOVERY_QUEUE_NAME,
 		async (job) => {
+			if (job.data.type === "search-sweep" && job.data.asOf === undefined) {
+				job.data = {
+					...job.data,
+					asOf: Date.now(),
+					config: { ...job.data.config, asOf: Date.now() },
+				};
+				await job.updateData?.(job.data);
+			}
 			const startedAt = performance.now();
+			if (job.enqueuedAt !== undefined)
+				stats.recordQueueWait(
+					Math.max(0, (job.startedAt ?? Date.now()) - job.enqueuedAt - (job.delayMs ?? 0))
+				);
+			stats.recordJobStarted("discovery");
 			let latest: DiscoveryJobProgress = {
 				stage: "starting",
 				target: null,
@@ -416,9 +421,20 @@ export function createDiscoveryWorker(
 				await job.updateProgress?.(progress);
 			};
 			try {
-				await processor.processJob(job.data, report, async (offset) => {
-					if (job.data.type === "search-sweep")
-						await job.updateData?.({ ...job.data, offset });
+				let checkpoints = Promise.resolve();
+				await processor.processJob(job.data, report, (offset, key) => {
+					checkpoints = checkpoints.then(async () => {
+						if (job.data.type !== "search-sweep") return;
+						job.data = {
+							...job.data,
+							offset: Math.max(job.data.offset ?? 0, offset),
+							completedQueries: key
+								? [...new Set([...(job.data.completedQueries ?? []), key])]
+								: job.data.completedQueries,
+						};
+						await job.updateData?.(job.data);
+					});
+					return checkpoints;
 				});
 				let completedTarget = latest.target;
 				if (job.data.type === "search-sweep") {
@@ -426,12 +442,7 @@ export function createDiscoveryWorker(
 						job.data.config?.keywords ??
 						processor.filterService.getConfig().searchKeywords ??
 						DEFAULT_KEYWORDS;
-					const isDeep = (job.data.mode ?? job.data.config?.mode) === "deep";
-					completedTarget = isDeep
-						? `${sweepKeywords.length} 个词 · 深度时间切片`
-						: sweepKeywords.length > 1
-							? `${sweepKeywords.length} 个关键词 (${sweepKeywords[0]} 等)`
-							: (sweepKeywords[0] ?? "全量配置词");
+					completedTarget = sweepKeywords.join(", ");
 				}
 
 				await report({
@@ -440,20 +451,42 @@ export function createDiscoveryWorker(
 					target: completedTarget,
 					updatedAt: new Date().toISOString(),
 				});
-				stats.recordJobOutcome("discovery", "completed");
+				stats.recordJobOutcome("discovery", "success", performance.now() - startedAt);
 			} catch (error) {
-				stats.recordJobOutcome(
-					"discovery",
-					error instanceof RetryLaterError ? "deferred" : "failed"
-				);
+				const outcome = outcomeOfError(error);
+				if (error instanceof RetryLaterError)
+					stats.recordDeferral({
+						reason:
+							error.reason === "local_capacity"
+								? "local_budget"
+								: error.reason === "network_recovery"
+									? "egress_unavailable"
+									: error.reason === "task_retry"
+										? "task_retry"
+										: "upstream_throttle",
+						requestedMs: error.delayMs,
+					});
+				stats.recordJobOutcome("discovery", outcome, performance.now() - startedAt);
 				await report({
 					...latest,
 					stage: error instanceof RetryLaterError ? "deferred" : "failed",
 					updatedAt: new Date().toISOString(),
 				});
-				throw error;
-			} finally {
-				stats.recordTask(performance.now() - startedAt);
+				if (error instanceof RetryLaterError) throw error;
+				const policy = retryPolicy();
+				const failures = (job.data.failureAttempts ?? 0) + 1;
+				await job.updateData?.({ ...job.data, failureAttempts: failures });
+				if (failures >= policy.maxAttempts)
+					throw new UnrecoverableError(
+						error instanceof Error ? error.message : String(error)
+					);
+				const delayMs = Math.min(
+					policy.maxDelayMs,
+					policy.baseDelayMs * 2 ** (failures - 1)
+				);
+				stats.recordDeferral({ reason: "task_retry", requestedMs: delayMs });
+				await report({ ...latest, stage: "deferred", updatedAt: new Date().toISOString() });
+				throw new RetryLaterError(delayMs, "task_retry");
 			}
 		},
 		{ concurrency }

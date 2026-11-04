@@ -2,6 +2,7 @@
 import Layout from "@layouts/Layout.astro";
 import Header from "@layouts/Header.astro";
 import VideoDetailPage from "@components/pages/admin/crawler/videoDetail/VideoDetailPage";
+import { crawlerVideoNamespaces } from "@lib/i18n/namespaces";
 
 const user = Astro.locals.user;
 if (!user) {
@@ -17,7 +18,7 @@ if (!id) {
 }
 ---
 
-<Layout title={`Video ${id} - Crawler - CVSA`} i18nNamespace="crawler">
+<Layout title={`Video ${id} - Crawler - CVSA`} i18nNamespaces={crawlerVideoNamespaces}>
 	<Header />
 	<main class="mx-auto w-full max-w-7xl px-4 py-8 md:px-8">
 		<VideoDetailPage aid={id} client:only="@cvsa/solid-i18n" />

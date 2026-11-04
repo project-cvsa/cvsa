@@ -5,7 +5,7 @@ import { For, Show, splitProps } from "solid-js";
 import Badge from "./Badge";
 
 const tabVariants = cva(
-	"group inline-flex items-center gap-2 whitespace-nowrap border-b-2 uppercase font-semibold transition-all select-none shrink-0 cursor-pointer",
+	"group inline-flex items-center gap-2 whitespace-nowrap border-b-2 uppercase font-semibold transition-all select-none shrink-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
 	{
 		variants: {
 			size: {

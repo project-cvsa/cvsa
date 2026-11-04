@@ -1,3 +1,18 @@
+import {
+	MilestoneAidParamsSchema,
+	MilestoneListResponseSchema,
+	MilestoneImportRequestSchema,
+	MilestoneImportResponseSchema,
+	MilestoneRecoveryRequestSchema,
+	MilestoneQueuedResponseSchema,
+	MilestoneBacktestRequestSchema,
+	MilestoneBacktestResultSchema,
+	CacheWindowAnalysisRequestSchema,
+	CacheWindowAnalysisResultSchema,
+	MilestoneRecoveryParamsSchema,
+	MilestoneRecoveryStatusSchema,
+} from "@cvsa/contracts";
+import type { z } from "zod";
 import { Elysia } from "elysia";
 import {
 	ActionQueuedResponseSchema,
@@ -72,6 +87,65 @@ import { callCrawlerApi } from "./client";
 
 export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	.use(adminAuthMiddleware)
+	.get(
+		"/milestones/videos/:aid",
+		({ params }) =>
+			callCrawlerApi<z.infer<typeof MilestoneListResponseSchema>>(
+				`/milestones/videos/${params.aid}`
+			),
+		{ params: MilestoneAidParamsSchema, response: { 200: MilestoneListResponseSchema } }
+	)
+	.get(
+		"/milestones/recoveries/:id",
+		({ params }) =>
+			callCrawlerApi<z.infer<typeof MilestoneRecoveryStatusSchema>>(
+				`/milestones/recoveries/${encodeURIComponent(params.id)}`
+			),
+		{ params: MilestoneRecoveryParamsSchema, response: { 200: MilestoneRecoveryStatusSchema } }
+	)
+	.post(
+		"/milestones/records",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof MilestoneImportResponseSchema>>(
+				"/milestones/records",
+				"POST",
+				body
+			),
+		{ body: MilestoneImportRequestSchema, response: { 200: MilestoneImportResponseSchema } }
+	)
+	.post(
+		"/milestones/recoveries",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof MilestoneQueuedResponseSchema>>(
+				"/milestones/recoveries",
+				"POST",
+				body
+			),
+		{ body: MilestoneRecoveryRequestSchema, response: { 200: MilestoneQueuedResponseSchema } }
+	)
+	.post(
+		"/milestones/backtests",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof MilestoneBacktestResultSchema>>(
+				"/milestones/backtests",
+				"POST",
+				body
+			),
+		{ body: MilestoneBacktestRequestSchema, response: { 200: MilestoneBacktestResultSchema } }
+	)
+	.post(
+		"/milestones/cache-window-analyses",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof CacheWindowAnalysisResultSchema>>(
+				"/milestones/cache-window-analyses",
+				"POST",
+				body
+			),
+		{
+			body: CacheWindowAnalysisRequestSchema,
+			response: { 200: CacheWindowAnalysisResultSchema },
+		}
+	)
 	.get(
 		"/status",
 		async (): Promise<CrawlerStatusDto> => {

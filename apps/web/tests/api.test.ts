@@ -46,6 +46,17 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+describe("crawler stats requests", () => {
+	test("omits custom minutes when a preset range and percentiles are selected", async () => {
+		fetchMock.mockResolvedValue(jsonResponse(200, {}));
+		await api.crawler.getStats("1h", undefined, [0.5, 0.9, 0.95, 0.99]);
+		const query = new URL(lastRequest().url).searchParams;
+		expect(query.get("window")).toBe("1h");
+		expect(query.has("minutes")).toBe(false);
+		expect(query.get("quantiles")).toBe("0.5,0.9,0.95,0.99");
+	});
+});
+
 describe("api.auth.login", () => {
 	test("posts credentials with cookies and locale, and returns the payload", async () => {
 		fetchMock.mockResolvedValue(

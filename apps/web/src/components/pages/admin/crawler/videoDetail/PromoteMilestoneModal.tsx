@@ -15,7 +15,7 @@ interface PromoteMilestoneModalProps {
 }
 
 export default function PromoteMilestoneModal(props: PromoteMilestoneModalProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const [targetValue, setTargetValue] = createSignal("");
 	const [submitting, setSubmitting] = createSignal(false);
 

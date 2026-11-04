@@ -3,7 +3,7 @@
 	"type": "module",
 	"version": "0.1.0",
 	"scripts": {
-		"build": "bun build src/index.ts --target bun --outfile dist/index.js --external onnxruntime-node --external sharp && bun build src/ml/akariWorker.ts --target bun --outfile dist/akariWorker.js --external onnxruntime-node --external sharp && bun build ../../packages/snapshot-db/scripts/migrate.ts --target bun --outfile dist/migrate.js && bun build ../../packages/snapshot-db/scripts/ensure-timescale.ts --target bun --outfile dist/ensure-timescale.js && rm -rf dist/drizzle && cp -r ../../packages/snapshot-db/drizzle dist/drizzle",
+		"build": "bun build src/index.ts --target bun --outfile dist/index.js --external onnxruntime-node --external sharp --external header-generator && bun build src/ml/akariWorker.ts --target bun --outfile dist/akariWorker.js --external onnxruntime-node --external sharp && bun build ../../packages/snapshot-db/scripts/migrate.ts --target bun --outfile dist/migrate.js && bun build ../../packages/snapshot-db/scripts/ensure-timescale.ts --target bun --outfile dist/ensure-timescale.js && rm -rf dist/drizzle && cp -r ../../packages/snapshot-db/drizzle dist/drizzle",
 		"dev": "NODE_ENV=development bun --watch src/index.ts",
 		"start": "bun src/index.ts",
 		"seed:tracking": "bun scripts/seed-tracking.ts",
@@ -29,11 +29,13 @@
 		"@cvsa/network-scheduler": "workspace:*",
 		"@cvsa/observability": "workspace:*",
 		"@cvsa/snapshot-db": "workspace:*",
+		"@datadog/sketches-js": "^2.1.1",
 		"@huggingface/transformers": "^4.0.1",
 		"@opentelemetry/api": "^1.9.0",
 		"bullmq": "5.80.2",
 		"drizzle-orm": "1.0.0-rc.5",
 		"elysia": "^1.4.26",
+		"header-generator": "2.1.89",
 		"ioredis": "5.10.1",
 		"onnxruntime-node": "1.30.0",
 		"zod": "^4.3.6"

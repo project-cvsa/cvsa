@@ -1,3 +1,9 @@
+import type {
+	MilestoneImportRequest,
+	MilestoneRecoveryRequest,
+	MilestoneBacktestRequest,
+	CacheWindowAnalysisRequest,
+} from "@cvsa/contracts";
 /**
  * Crawler Control Plane endpoints (`/admin/crawler/*`).
  */
@@ -56,10 +62,19 @@ async function getStatus(): Promise<ApiResult<CrawlerStatusDto | null>> {
 
 async function getStats(
 	window: CrawlerStatsWindow = "1h",
-	minutes?: number
+	minutes?: number,
+	quantiles?: readonly number[]
 ): Promise<ApiResult<CrawlerOverviewStats | null>> {
 	const eden = getEdenClient();
-	return settle(await eden.v2.admin.crawler.stats.get({ query: { window, minutes } }));
+	return settle(
+		await eden.v2.admin.crawler.stats.get({
+			query: {
+				window,
+				minutes,
+				...(quantiles && quantiles.length > 0 ? { quantiles: quantiles.join(",") } : {}),
+			},
+		})
+	);
 }
 
 async function getQueueJobs(
@@ -300,7 +315,34 @@ async function testNetworkAdapter(
 	return settle(await eden.v2.admin.crawler.network.adapters({ id }).test.post());
 }
 
+async function getMilestones(aid: string) {
+	return settle(await getEdenClient().v2.admin.crawler.milestones.videos({ aid }).get());
+}
+async function importMilestones(body: MilestoneImportRequest) {
+	return settle(await getEdenClient().v2.admin.crawler.milestones.records.post(body));
+}
+async function recoverMilestones(body: MilestoneRecoveryRequest) {
+	return settle(await getEdenClient().v2.admin.crawler.milestones.recoveries.post(body));
+}
+async function getMilestoneRecovery(id: string) {
+	return settle(await getEdenClient().v2.admin.crawler.milestones.recoveries({ id }).get());
+}
+async function backtestMilestone(body: MilestoneBacktestRequest) {
+	return settle(await getEdenClient().v2.admin.crawler.milestones.backtests.post(body));
+}
+async function analyzeCacheWindows(body: CacheWindowAnalysisRequest) {
+	return settle(
+		await getEdenClient().v2.admin.crawler.milestones["cache-window-analyses"].post(body)
+	);
+}
+
 export const crawlerApi = {
+	getMilestones,
+	importMilestones,
+	recoverMilestones,
+	getMilestoneRecovery,
+	backtestMilestone,
+	analyzeCacheWindows,
 	getStatus,
 	getStats,
 	getQueueJobs,

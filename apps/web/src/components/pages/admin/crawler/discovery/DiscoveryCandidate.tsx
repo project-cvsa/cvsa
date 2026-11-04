@@ -20,7 +20,7 @@ type DiscoveryCandidateProps = {
 };
 
 export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 
 	const decision = () => {
 		switch (props.item.decision) {
@@ -64,10 +64,7 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 				type="button"
 				data-review-focus="true"
 				onClick={props.onFocus}
-				aria-label={t("discoveryUi.focusCandidate").replace(
-					"{number}",
-					String(props.index + 1)
-				)}
+				aria-label={t("discoveryUi.focusCandidate", { number: props.index + 1 })}
 				aria-pressed={props.focused}
 				class={cn(
 					"w-10 shrink-0 flex items-center justify-center text-caption tracking-caption font-semibold border transition-colors select-none",

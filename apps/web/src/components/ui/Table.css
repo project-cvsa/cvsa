@@ -4,6 +4,7 @@
 	background-color: var(--surface);
 	text-align: left;
 	font-size: 0.875rem;
+	white-space: nowrap;
 }
 
 .cvsa-table > thead {
@@ -22,8 +23,4 @@
 .cvsa-table > thead > tr > th {
 	font-weight: 600;
 	white-space: nowrap;
-}
-
-.cvsa-table > tbody > tr:hover {
-	background-color: var(--hover);
 }

@@ -27,16 +27,16 @@ type NetworkSectionProps = {
 };
 
 function RevisionBadge(props: { revision: number }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	return (
 		<Badge variant="neutral" size="sm">
-			{t("network.adapters.revision").replace("{revision}", String(props.revision))}
+			{t("network.adapters.revision", { revision: props.revision })}
 		</Badge>
 	);
 }
 
 export default function NetworkSection(props: NetworkSectionProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 
 	const [networkDoc, setNetworkDoc] = createSignal<NetworkRuntimeConfigDocument | null>(null);
 	const [savedSnapshot, setSavedSnapshot] = createSignal<string>("");
@@ -310,8 +310,8 @@ export default function NetworkSection(props: NetworkSectionProps) {
 							/>
 
 							<NetworkSessionPolicy
+								disabled={saving()}
 								config={doc().config.session}
-								status={props.statusData()?.session}
 								onChange={(session) =>
 									setNetworkDoc({
 										...doc(),

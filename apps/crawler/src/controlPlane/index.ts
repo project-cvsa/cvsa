@@ -5,6 +5,7 @@ import { networkRuntimeRoutes } from "./networkRuntime";
 import { trackingRoutes } from "./tracking";
 import { discoveryRoutes } from "./discovery";
 import { statsRoutes } from "./stats";
+import { milestoneRoutes } from "./milestone";
 
 function errorResponse(error: AppError): {
 	code: ErrorCode;
@@ -43,4 +44,5 @@ export const crawlerControlPlane = new Elysia({ name: "crawlerControlPlane", pre
 	.group("/network-runtime", (app) => app.use(networkRuntimeRoutes))
 	.group("/tracking", (app) => app.use(trackingRoutes))
 	.group("/discovery", (app) => app.use(discoveryRoutes))
-	.group("/stats", (app) => app.use(statsRoutes));
+	.group("/stats", (app) => app.use(statsRoutes))
+	.group("/milestones", (app) => app.use(milestoneRoutes));

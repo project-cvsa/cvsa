@@ -8,6 +8,7 @@ import { toast } from "@components/ui/Toast";
 import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { DiscoveryFilterConfigDto } from "@cvsa/contracts";
+import ExecutionSettings from "../settings/ExecutionSettings";
 import KeywordListEditor from "./KeywordListEditor";
 import { applySaveResult, createConfigRequestCoordinator } from "../saveDraft";
 import { toDiscoveryConfigUpdatePayload } from "../discoveryConfig";
@@ -19,7 +20,7 @@ function ModelParameters(props: {
 	config: DiscoveryFilterConfigDto;
 	onChange: (updates: Partial<DiscoveryFilterConfigDto>) => void;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:settings");
 	return (
 		<section class="flex flex-col gap-4">
 			<h3 class="ts-heading-3 text-primary">{t("settings.parameters.title")}</h3>
@@ -70,7 +71,8 @@ function ModelParameters(props: {
 }
 
 export default function SettingsSection() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:settings");
+	const networkT = getComponentT("crawler:network");
 
 	const [config, setConfig] = createSignal<DiscoveryFilterConfigDto | null>(null);
 	const [savedSnapshot, setSavedSnapshot] = createSignal<string>("");
@@ -148,12 +150,12 @@ export default function SettingsSection() {
 	return (
 		<div class="flex flex-col gap-6">
 			<SectionHeader
-				title={<h2 class="ts-heading-2">{t("settings.title")}</h2>}
+				title={<h2 class="ts-heading-2">{t("tabs.settings")}</h2>}
 				actions={
 					<>
 						<Show when={isDirty()}>
 							<span class="ts-caption text-secondary">
-								{t("network.adapters.draftNotice")}
+								{networkT("network.adapters.draftNotice")}
 							</span>
 						</Show>
 						<Button
@@ -165,7 +167,7 @@ export default function SettingsSection() {
 							class="gap-1.5"
 						>
 							<Save class="w-3.5 h-3.5" />
-							<span>{t("common.save")}</span>
+							<span>{t("settings.saveDiscovery")}</span>
 						</Button>
 					</>
 				}
@@ -213,6 +215,7 @@ export default function SettingsSection() {
 					</fieldset>
 				)}
 			</Show>
+			<ExecutionSettings />
 		</div>
 	);
 }

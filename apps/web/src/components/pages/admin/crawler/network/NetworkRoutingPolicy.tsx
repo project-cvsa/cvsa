@@ -14,7 +14,7 @@ type NetworkRoutingPolicyProps = {
 };
 
 export default function NetworkRoutingPolicy(props: NetworkRoutingPolicyProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const bindings = () => props.config.bindings ?? [];
 
 	const changeRequestTypes = (names: string[]) => {

@@ -14,6 +14,7 @@ import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 import type { TrackingVideoListResponse, TrackingVideoSortField } from "@cvsa/contracts";
 import { formatDateTime, formatMetric } from "../format";
+import VideoStats from "../VideoStats";
 import { getPageOffset } from "../pagination";
 import { createRequestSequence } from "../videoActions";
 import Search from "lucide-solid/icons/search";
@@ -31,12 +32,15 @@ type TrackingVideo = TrackingVideoListResponse["items"][number];
 type StatusFilter = "all" | "failing" | "highPriority" | "normal";
 
 function VideoIdentity(props: { item: TrackingVideo }) {
+	const t = getComponentT("crawler:discovery");
 	return (
-		<div class="flex items-center gap-3">
+		<div class="flex items-center gap-3 min-w-0">
 			<div class="w-16 h-10 shrink-0 bg-surface-container-high overflow-hidden flex items-center justify-center border border-border">
 				<Show
 					when={props.item.pic}
-					fallback={<span class="ts-caption text-tertiary">无封面</span>}
+					fallback={
+						<span class="ts-caption text-tertiary">{t("discoveryUi.noCover")}</span>
+					}
 				>
 					{(pic) => (
 						<img
@@ -52,34 +56,30 @@ function VideoIdentity(props: { item: TrackingVideo }) {
 					)}
 				</Show>
 			</div>
-			<div class="flex flex-col items-start gap-0.5 min-w-0">
+			<div class="min-w-0 flex flex-col gap-1">
 				<a
 					href={`/admin/crawler/video/${props.item.aid}`}
-					class="w-full text-left font-medium text-primary hover:underline cursor-pointer truncate"
+					class="block truncate font-medium text-primary hover:underline"
 					title={props.item.title || `AID ${props.item.aid}`}
 				>
 					{props.item.title || `AID ${props.item.aid}`}
 				</a>
-				<div class="flex flex-wrap items-center gap-x-2 text-tertiary ts-caption">
-					<span>av{props.item.aid}</span>
-					<Show when={props.item.bvid}>
-						{(bvid) => (
-							<a
-								href={`https://www.bilibili.com/video/${bvid()}`}
-								target="_blank"
-								rel="noopener noreferrer"
-								class="inline-flex items-center gap-1 text-secondary hover:underline"
-							>
-								{bvid()}
-								<ExternalLink class="w-3 h-3" />
-							</a>
-						)}
-					</Show>
+				<div class="flex min-w-0 items-center gap-3 ts-caption text-tertiary">
+					<a
+						href={`https://www.bilibili.com/video/av${props.item.aid}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="inline-flex shrink-0 items-center gap-1 font-code text-secondary hover:underline"
+						title={props.item.bvid ?? `av${props.item.aid}`}
+					>
+						av{props.item.aid}
+						<ExternalLink class="w-3 h-3" />
+					</a>
 					<Show when={props.item.ownerName}>
-						<span class="truncate max-w-36">{props.item.ownerName}</span>
+						<span class="truncate">{props.item.ownerName}</span>
 					</Show>
 					<Show when={props.item.publishedAt}>
-						<span>· {formatDateTime(props.item.publishedAt)}</span>
+						<span class="shrink-0">{formatDateTime(props.item.publishedAt)}</span>
 					</Show>
 				</div>
 			</div>
@@ -88,7 +88,7 @@ function VideoIdentity(props: { item: TrackingVideo }) {
 }
 
 export default function VideosSection() {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 
 	const [stateFilter, setStateFilter] = createSignal<StateFilter>("all");
 	const [statusFilter, setStatusFilter] = createSignal<StatusFilter>("all");
@@ -253,25 +253,6 @@ export default function VideosSection() {
 			cell: (item) => <VideoIdentity item={item} />,
 		},
 		{
-			id: "discovery",
-			header: t("audit.source"),
-			class: "whitespace-nowrap",
-			cell: (item) => (
-				<div class="flex flex-col gap-0.5 ts-caption">
-					<span class="text-primary font-medium">
-						{item.discoverySource ? t(`audit.sources.${item.discoverySource}`) : "—"}
-					</span>
-					<Show when={item.filterDecision}>
-						<span class="text-tertiary">
-							{item.filterDecision === "accepted"
-								? t("discoveryUi.whitelist")
-								: item.filterDecision}
-						</span>
-					</Show>
-				</div>
-			),
-		},
-		{
 			id: "state",
 			header: t("videos.col.state"),
 			class: "whitespace-nowrap",
@@ -309,7 +290,7 @@ export default function VideosSection() {
 							<Badge variant="danger" size="sm">
 								{item.videoStatus && item.videoStatus !== "normal"
 									? item.videoStatus
-									: `${item.consecutiveFails} fails`}
+									: t("videos.fails", { count: item.consecutiveFails })}
 							</Badge>
 						</span>
 					</Show>
@@ -375,6 +356,9 @@ export default function VideosSection() {
 					/>
 				}
 			/>
+
+			<VideoStats />
+
 			<div class="flex flex-wrap items-center gap-2 w-full">
 				<div class="w-44 shrink-0">
 					<Select

@@ -12,9 +12,9 @@ type ComponentStatusProps = {
 };
 
 function ClassifierStatus(props: { health: ClassifierHealthDto | null }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const presentation = (): { variant: BadgeVariant; label: string } => {
-		if (!props.health) return { variant: "neutral", label: t("common.loading") };
+		if (!props.health) return { variant: "neutral", label: t("common.unknown") };
 		if (!props.health.reachable)
 			return { variant: "danger", label: t("overview.classifier.status.unavailable") };
 		if (!props.health.modelsLoaded)
@@ -37,46 +37,49 @@ function ClassifierStatus(props: { health: ClassifierHealthDto | null }) {
 }
 
 export default function ComponentStatus(props: ComponentStatusProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:metrics");
 	const adapters = () => props.status?.adapters ?? [];
-	const healthy = () =>
-		adapters().filter(
-			(adapter) =>
-				adapter.enabled && (adapter.healthState?.toLowerCase() ?? "healthy") === "healthy"
-		).length;
+	const enabled = () => adapters().filter((adapter) => adapter.enabled).length;
 	const jobs = (state: "active" | "waiting") =>
-		Object.values(props.stats.queues).reduce((sum, queue) => sum + queue[state], 0);
+		Object.values(props.stats.current.queues).reduce((sum, queue) => sum + queue[state], 0);
+	const p95 = (operation: string): number | null =>
+		props.stats.latency[`${operation}:success`]?.quantiles["0.95"] ?? null;
 	type ComponentRow = { id: string; label: string; status: JSX.Element; latency: number | null };
 	const rows = (): ComponentRow[] => [
 		{
 			id: "classifier",
 			label: t("overview.classifier.title"),
-			status: <ClassifierStatus health={props.classifier} />,
-			latency: props.classifier?.modelsLoaded ? props.stats.latencyMs.inferenceP95 : null,
+			status: (
+				<ClassifierStatus
+					health={props.classifier ?? toHealth(props.stats.current.model)}
+				/>
+			),
+			latency: p95("modelProcess"),
 		},
 		{
 			id: "adapters",
 			label: t("overview.adapters"),
 			status: (
 				<Show when={props.status} fallback={t("common.unknown")}>
-					<Badge size="sm" variant={healthy() > 0 ? "success" : "danger"}>
-						{t("overview.healthyCount")
-							.replace("{healthy}", String(healthy()))
-							.replace("{total}", String(adapters().length))}
+					<Badge size="sm" variant={enabled() > 0 ? "success" : "danger"}>
+						{t("overview.enabledCount", {
+							enabled: enabled(),
+							total: adapters().length,
+						})}
 					</Badge>
 				</Show>
 			),
-			latency: props.stats.latencyMs.apiP95,
+			latency: p95("httpAttempt"),
 		},
 		{
 			id: "tasks",
 			label: t("audit.taskProcessor"),
 			status: (
 				<span>
-					{t("audit.active")} {jobs("active")} · {t("audit.waiting")} {jobs("waiting")}
+					{t("audit.active")} {jobs("active")}, {t("audit.waiting")} {jobs("waiting")}
 				</span>
 			),
-			latency: props.stats.latencyMs.taskP95,
+			latency: p95("trackingExecution"),
 		},
 	];
 	const columns: TableColumn<ComponentRow>[] = [
@@ -95,4 +98,14 @@ export default function ComponentStatus(props: ComponentStatusProps) {
 			<DataTable columns={columns} items={rows()} />
 		</section>
 	);
+}
+
+function toHealth(model: CrawlerOverviewStats["current"]["model"]): ClassifierHealthDto | null {
+	if (model.reachable === null) return null;
+	return {
+		reachable: model.reachable,
+		modelsLoaded: model.modelsLoaded,
+		modelVersion: model.modelVersion,
+		error: null,
+	};
 }

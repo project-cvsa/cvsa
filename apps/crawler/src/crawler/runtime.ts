@@ -21,10 +21,13 @@ export function createCrawlerRuntime(deps: CrawlerRuntimeDependencies): CrawlerR
 				if (deps.worker) await deps.worker.close();
 				if (deps.networkRuntime?.close) await deps.networkRuntime.close();
 				else deps.networkRuntime?.stopPolling();
+				// Closing the MQ drains work whose deadline already rejected, so the
+				// final statistics write includes everything those jobs recorded.
+				await deps.mq.close();
 				try {
-					await deps.statsCollector?.flush?.();
+					if (deps.statsCollector?.close) await deps.statsCollector.close();
+					else await deps.statsCollector?.flush?.();
 				} finally {
-					await deps.mq.close();
 					await deps.snapshotDb.disconnect();
 					deps.metrics?.runtimeShutdowns.add(1);
 				}

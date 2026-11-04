@@ -1,3 +1,4 @@
+import { signWbiQuery } from "../src/crawler/bilibili/signing";
 import { afterEach, describe, expect, jest, test } from "bun:test";
 import { BilibiliSessionConfigSchema, type BilibiliSessionConfig } from "@cvsa/contracts";
 import {
@@ -32,7 +33,10 @@ function protocol() {
 				code: 0,
 				data: {
 					ticket: `ticket-${generation}`,
-					nav: { img: key(generation), sub: key(generation + 1) },
+					nav: {
+						img: `https://i0.hdslb.com/bfs/wbi/${key(generation)}.png`,
+						sub: `https://i0.hdslb.com/bfs/wbi/${key(generation + 1)}.png`,
+					},
 				},
 			};
 		} else if (url.pathname.includes("search/type")) {
@@ -151,6 +155,20 @@ describe("credential lifecycle", () => {
 		expect(server.generation).toBe(2);
 		const searches = server.calls.filter((call) => call.url.pathname.includes("search/type"));
 		expect(searches).toHaveLength(2);
+		const original = searches[0];
+		if (!original) throw new Error("Search was not sent");
+		const params = Object.fromEntries(
+			[...original.url.searchParams].filter(([key]) => key !== "w_rid" && key !== "wts")
+		);
+		const expected = new URLSearchParams(
+			signWbiQuery(
+				params,
+				server.key(1),
+				server.key(2),
+				Number(original.url.searchParams.get("wts"))
+			)
+		);
+		expect(original.url.searchParams.get("w_rid")).toBe(expected.get("w_rid"));
 		expect(searches[0].options.headers?.Cookie).toContain("ticket-1");
 		expect(searches[1].options.headers?.Cookie).toContain("ticket-2");
 		// Same request parameters and timestamp; only the credential keys changed.

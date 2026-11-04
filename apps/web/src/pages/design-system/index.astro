@@ -26,7 +26,7 @@ const { language } = getLocale(Astro.request);
 const t = i18nServer.getT({ locale: language, namespace: "server" });
 ---
 
-<Layout title={t("designSystem.title")} i18nNamespace="design-system">
+<Layout title={t("designSystem.title")} i18nNamespaces={["design-system"]}>
 	<main class="max-w-4xl mx-2 md:mx-12 lg:mx-auto my-20">
 		<Surface class:list={["max-md:p-5"]}>
 			<Heading1>{t("designSystem.title")}</Heading1>

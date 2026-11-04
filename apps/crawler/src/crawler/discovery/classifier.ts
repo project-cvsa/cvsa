@@ -43,6 +43,9 @@ export interface ClassifierClientOptions {
 	readonly localClassifier?: LocalClassifier;
 	readonly timeoutMs?: () => number;
 	readonly stats?: StatsRecorder;
+	readonly onLifecycle?: (
+		event: import("../../ml/isolatedAkari").ClassifierLifecycleEvent
+	) => void;
 }
 
 /** Used when a prediction arrives without its own model version. */
@@ -66,7 +69,12 @@ export class VideoClassifierClient {
 
 	constructor(options: ClassifierClientOptions = {}) {
 		this.stats = options.stats ?? createNoopStatsRecorder();
-		this.classifier = options.localClassifier ?? new IsolatedAkariClassifier(options.timeoutMs);
+		this.classifier =
+			options.localClassifier ??
+			new IsolatedAkariClassifier(options.timeoutMs, undefined, {
+				onLifecycle: options.onLifecycle,
+				onWait: (waitMs) => this.stats.recordModelWait(waitMs, "success"),
+			});
 	}
 
 	close(): void {
@@ -76,6 +84,16 @@ export class VideoClassifierClient {
 	/** The local classifier backing this client. */
 	get local(): LocalClassifier {
 		return this.classifier;
+	}
+
+	processState(): { pid: number | undefined; active: number; waiting: number } {
+		if (this.classifier instanceof IsolatedAkariClassifier)
+			return {
+				pid: this.classifier.pid,
+				active: this.classifier.activeCount,
+				waiting: this.classifier.waitingCount,
+			};
+		return { pid: undefined, active: 0, waiting: 0 };
 	}
 
 	/**
@@ -109,7 +127,7 @@ export class VideoClassifierClient {
 				});
 				return null;
 			} finally {
-				this.stats.recordInference(performance.now() - startedAt, succeeded);
+				this.stats.recordModelInference(performance.now() - startedAt, succeeded);
 			}
 		});
 	}
@@ -119,9 +137,16 @@ export class VideoClassifierClient {
 	 * artifact set. Used by callers that need more than reachability.
 	 */
 	async checkHealth(): Promise<AkariHealth> {
+		const startedAt = performance.now();
 		try {
-			return await this.classifier.checkHealth();
+			const health = await this.classifier.checkHealth();
+			this.stats.recordModelHealth(
+				performance.now() - startedAt,
+				health.status !== "unreachable"
+			);
+			return health;
 		} catch (error) {
+			this.stats.recordModelHealth(performance.now() - startedAt, false);
 			return {
 				status: "unreachable",
 				modelLoaded: false,

@@ -73,6 +73,20 @@ export interface NetworkRuntimeConfigManagerOptions {
 	clock?: () => number;
 }
 
+export function retryAfterMs(
+	headers: Record<string, string>,
+	now = Date.now()
+): number | undefined {
+	const value = Object.entries(headers).find(
+		([name]) => name.toLowerCase() === "retry-after"
+	)?.[1];
+	if (value === undefined) return undefined;
+	const seconds = Number(value);
+	if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
+	const at = Date.parse(value);
+	return Number.isNaN(at) ? undefined : Math.max(0, at - now);
+}
+
 export function createDefaultDirectRuntimeConfig(): NetworkRuntimeConfig {
 	return {
 		adapters: [
@@ -81,6 +95,7 @@ export function createDefaultDirectRuntimeConfig(): NetworkRuntimeConfig {
 				type: "direct",
 				enabled: true,
 				baseWeight: 1,
+				requestsPerSecond: 5,
 				rateLimits: [
 					{
 						durationSeconds: 1,
@@ -212,22 +227,21 @@ export class NetworkRuntimeConfigManager implements NetworkDelegate {
 				const envelope = BilibiliEnvelopeSchema.safeParse(value);
 				const code = envelope.success ? envelope.data.code : undefined;
 				const message = envelope.success ? envelope.data.message : undefined;
-				appLogger.warn("Network request deferred due to rate limit or throttle", {
+				const delay =
+					response.retryAfterMs ??
+					retryAfterMs(response.headers, this.clock?.() ?? Date.now()) ??
+					1000;
+				appLogger.debug("Network request deferred due to rate limit or throttle", {
 					component: "network-config",
 					url: request.url,
 					requestType: request.requestType,
 					errorCode: response.errorCode,
 					biliCode: code,
 					biliMessage: message,
-					retryAfterMs: response.retryAfterMs ?? 1000,
+					retryAfterMs: delay,
 					...request.context,
 				});
-				throw new RetryLaterError(
-					response.retryAfterMs ?? 1000,
-					response.retryReason ?? "upstream",
-					code,
-					message
-				);
+				throw new RetryLaterError(delay, response.retryReason ?? "upstream", code, message);
 			}
 			return response;
 		} catch (error) {

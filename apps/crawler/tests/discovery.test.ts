@@ -6,9 +6,6 @@ import {
 	changeTypeForDiff,
 	diffMetadata,
 	DiscoveryFilterService,
-	createDiscoveryQueue,
-	DISCOVERY_QUEUE_NAME,
-	DISCOVERY_QUEUE_JOB_OPTIONS,
 	DiscoveryPipelineProcessor,
 	DiscoveryScheduler,
 	DiscoveryService,
@@ -1081,43 +1078,5 @@ describe("DiscoveryScheduler", () => {
 			"repeatable-search-sweep",
 			"repeatable-deep-sweep",
 		]);
-	});
-});
-
-describe("discovery queue retry policy", () => {
-	test("defers a job long enough for an exhausted adapter pool to recover", async () => {
-		const mq = createFakeMq();
-		const queue = createDiscoveryQueue(mq);
-
-		expect(mq.state.queueOptions[DISCOVERY_QUEUE_NAME]).toEqual(DISCOVERY_QUEUE_JOB_OPTIONS);
-		expect(DISCOVERY_QUEUE_JOB_OPTIONS).toMatchObject({
-			attempts: 5,
-			backoff: { type: "exponential", delay: 60_000 },
-		});
-
-		await queue.add("detail-1", {
-			type: "fetch-video-details",
-			aid: "1",
-			source: "manual",
-		});
-		expect(mq.state.queuedJobs[0]?.opts).toMatchObject({
-			attempts: 5,
-			backoff: { type: "exponential", delay: 60_000 },
-		});
-	});
-
-	test("keeps per-add options on top of the queue retry defaults", async () => {
-		const mq = createFakeMq();
-		const queue = createDiscoveryQueue(mq);
-		await queue.add(
-			"detail-2",
-			{ type: "fetch-video-details", aid: "2", source: "search" },
-			{ deduplication: { id: "detail-2" }, removeOnComplete: { age: 3600, count: 100 } }
-		);
-		expect(mq.state.queuedJobs[0]?.opts).toMatchObject({
-			attempts: 5,
-			backoff: { type: "exponential", delay: 60_000 },
-			deduplication: { id: "detail-2" },
-		});
 	});
 });

@@ -24,12 +24,10 @@ test("legacy routing gains real purpose bindings while preserving custom reserva
 			0
 		)
 	).toBeLessThanOrEqual(1 + 1e-9);
-	expect(config.requestTypePolicies?.["bilibili:tracking"]?.reservedShare).toBeGreaterThan(
-		config.requestTypePolicies?.["bilibili:search"]?.reservedShare ?? 0
-	);
+	expect(config.requestTypePolicies?.["bilibili:tracking"]).toBeUndefined();
 });
 
-test("saved purpose reservations control admission policies even after removing the legacy alias", () => {
+test("preserves saved reservation configuration without inventing new allocations", () => {
 	const config = normalizeBilibiliRuntimeConfig(
 		NetworkRuntimeConfigSchema.parse({
 			adapters: [{ id: "exit", type: "direct" }],

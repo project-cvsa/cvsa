@@ -2,6 +2,9 @@ import { withBilibiliPurpose } from "../crawler/bilibili/requestContext";
 import { RetryLaterError } from "../crawler/shared/retryLater";
 import { appLogger } from "@cvsa/logger";
 import { toInstant, type Temporal, type VideoTracking } from "@cvsa/snapshot-db";
+import { createNoopStatsRecorder } from "../crawler/stats/types";
+import type { StatsRecorder } from "../crawler/stats/types";
+import { outcomeOfError } from "../crawler/stats/outcome";
 import {
 	computeNextMetadataAt,
 	fromDetailTags,
@@ -17,8 +20,9 @@ export interface MetadataRefreshSchedulerDeps {
 	/** Tracking rows whose `nextMetadataAt` has elapsed. */
 	listDueMetadata(now: Temporal.Instant, limit: number): Promise<VideoTracking[]>;
 	trackingRepository: Pick<ITrackingRepository, "updateSchedule">;
-	discoveryRepository: Pick<IDiscoveryRepository, "upsertMetadata">;
+	discoveryRepository: Pick<IDiscoveryRepository, "upsertMetadataWithResult">;
 	bilibiliClient: Pick<BilibiliClient, "getVideoDetails">;
+	stats?: StatsRecorder;
 }
 
 export interface MetadataRefreshSchedulerOptions {
@@ -178,14 +182,21 @@ export class MetadataRefreshScheduler {
 		const nextMetadataAt = toInstant(
 			computeNextMetadataAt(state, new Date(now.epochMilliseconds))
 		);
+		const stats = this.deps.stats ?? createNoopStatsRecorder();
+		const startedAt = performance.now();
 
 		try {
 			const details = await withBilibiliPurpose("tracking", () =>
 				this.deps.bilibiliClient.getVideoDetails(tracking.aid)
 			);
-			await this.deps.discoveryRepository.upsertMetadata(
+			const written = await this.deps.discoveryRepository.upsertMetadataWithResult(
 				toMetadataInput(tracking.aid, details)
 			);
+			stats.recordMetadataRefresh("success", performance.now() - startedAt, {
+				inserted: written.change === "inserted" ? 1 : 0,
+				changed: written.change === "changed" ? 1 : 0,
+				unchanged: written.change === "unchanged" ? 1 : 0,
+			});
 			await this.deps.trackingRepository.updateSchedule(tracking.aid, {
 				nextMetadataAt,
 				lastError: null,
@@ -197,6 +208,11 @@ export class MetadataRefreshScheduler {
 			return true;
 		} catch (error) {
 			if (error instanceof RetryLaterError) {
+				stats.recordMetadataRefresh("deferred", performance.now() - startedAt, {
+					inserted: 0,
+					changed: 0,
+					unchanged: 0,
+				});
 				this.scheduleRetry(error.delayMs);
 				await this.deps.trackingRepository.updateSchedule(tracking.aid, {
 					nextMetadataAt: toInstant(
@@ -207,6 +223,11 @@ export class MetadataRefreshScheduler {
 				return false;
 			}
 			const message = error instanceof Error ? error.message : String(error);
+			stats.recordMetadataRefresh(outcomeOfError(error), performance.now() - startedAt, {
+				inserted: 0,
+				changed: 0,
+				unchanged: 0,
+			});
 			await this.deps.trackingRepository.updateSchedule(tracking.aid, {
 				nextMetadataAt,
 				lastError: message,

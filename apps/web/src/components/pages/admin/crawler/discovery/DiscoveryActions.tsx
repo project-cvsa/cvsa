@@ -7,7 +7,7 @@ import { api } from "@lib/api";
 import { getComponentT } from "@lib/i18n/isomorphic";
 
 export default function DiscoveryActions(props: { onQueued: () => void }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:discovery");
 	const [pendingAction, setPendingAction] = createSignal<"incremental" | "range" | null>(null);
 
 	const [lookbackDays, setLookbackDays] = createSignal(7);

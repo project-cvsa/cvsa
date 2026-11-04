@@ -1,13 +1,11 @@
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger } from "@cvsa/logger";
-import { crawlerObservability } from "./observability";
 
 async function main(): Promise<void> {
 	if (!crawlerEnv.CONTROL_API_TOKEN) {
 		throw new Error("CONTROL_API_TOKEN must be configured before starting crawler");
 	}
 
-	await crawlerObservability.init();
 	const { crawlerControlPlane } = await import("./controlPlane");
 	const { crawlerRuntime } = await import("./container");
 

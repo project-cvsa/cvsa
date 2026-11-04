@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, gt, inArray, isNull, like, lte, or } from "drizzle-orm";
-import { activeTaskResource } from "../shared/taskContext";
+import { activeDatabase } from "../shared/databaseContext";
 import type { DatabaseClient, Temporal, VideoTracking } from "@cvsa/snapshot-db";
 import { bilibiliVideoMetadata, toInstant, videoTracking } from "@cvsa/snapshot-db";
 import { createDatabaseTracer } from "../stats/databaseMetrics";
@@ -17,22 +17,25 @@ const AID = videoTracking.aid;
 
 export class TrackingRepository implements ITrackingRepository {
 	private readonly trace;
+	private readonly stats: StatsRecorder | undefined;
 	constructor(
 		private readonly db: DatabaseClient,
 		stats?: StatsRecorder
 	) {
-		this.trace = createDatabaseTracer(stats);
+		this.trace = createDatabaseTracer(stats, "tracking");
+		this.stats = stats;
 	}
 
 	async findDueVideos(limit: number, beforeTime?: Temporal.Instant): Promise<VideoTracking[]> {
 		return this.trace("tracking.findDueVideos", async () => {
 			const at = beforeTime ?? toInstant(new Date());
-			return activeTaskResource(this.db)
+			return activeDatabase(this.db)
 				.select()
 				.from(videoTracking)
 				.where(
 					and(
 						lte(videoTracking.nextSnapshotAt, at),
+						or(isNull(videoTracking.eligibleAt), lte(videoTracking.eligibleAt, at)),
 						or(isNull(videoTracking.leaseUntil), lte(videoTracking.leaseUntil, at))
 					)
 				)
@@ -51,13 +54,14 @@ export class TrackingRepository implements ITrackingRepository {
 			const at = now ?? toInstant(new Date());
 			// `returning()` doubles as the compare-and-set acknowledgement: only rows
 			// whose lease was free (or expired) come back and get dispatched.
-			return activeTaskResource(this.db)
+			return activeDatabase(this.db)
 				.update(videoTracking)
 				.set({ leaseUntil })
 				.where(
 					and(
 						inArray(AID, aids),
 						lte(videoTracking.nextSnapshotAt, at),
+						or(isNull(videoTracking.eligibleAt), lte(videoTracking.eligibleAt, at)),
 						or(isNull(videoTracking.leaseUntil), lte(videoTracking.leaseUntil, at))
 					)
 				)
@@ -84,7 +88,7 @@ export class TrackingRepository implements ITrackingRepository {
 
 	async getTracking(aid: bigint): Promise<VideoTracking | null> {
 		return this.trace("tracking.getTracking", async () => {
-			const [row] = await activeTaskResource(this.db)
+			const [row] = await activeDatabase(this.db)
 				.select()
 				.from(videoTracking)
 				.where(eq(AID, aid))
@@ -96,7 +100,7 @@ export class TrackingRepository implements ITrackingRepository {
 	async getTrackings(aids: bigint[]): Promise<VideoTracking[]> {
 		if (aids.length === 0) return [];
 		return this.trace("tracking.getTrackings", () =>
-			activeTaskResource(this.db).select().from(videoTracking).where(inArray(AID, aids))
+			activeDatabase(this.db).select().from(videoTracking).where(inArray(AID, aids))
 		);
 	}
 
@@ -104,10 +108,11 @@ export class TrackingRepository implements ITrackingRepository {
 		return this.trace("tracking.upsertTracking", async () => {
 			const existing = await this.getTracking(input.aid);
 			if (existing) {
-				const [updated] = await activeTaskResource(this.db)
+				const [updated] = await activeDatabase(this.db)
 					.update(videoTracking)
 					.set({
 						state: input.state ?? existing.state,
+						...(input.eligibleAt !== undefined ? { eligibleAt: input.eligibleAt } : {}),
 						nextSnapshotAt: input.nextSnapshotAt,
 						scheduleReason:
 							input.scheduleReason !== undefined
@@ -138,10 +143,11 @@ export class TrackingRepository implements ITrackingRepository {
 				if (updated) return updated;
 			}
 
-			const [created] = await activeTaskResource(this.db)
+			const [created] = await activeDatabase(this.db)
 				.insert(videoTracking)
 				.values({
 					aid: input.aid,
+					eligibleAt: input.eligibleAt ?? null,
 					state: input.state ?? "regular",
 					nextSnapshotAt: input.nextSnapshotAt,
 					scheduleReason: input.scheduleReason ?? "initial",
@@ -159,6 +165,7 @@ export class TrackingRepository implements ITrackingRepository {
 				})
 				.returning();
 			if (!created) throw new Error(`Failed to insert tracking row for aid=${input.aid}`);
+			this.stats?.record("trackingCreated");
 			return created;
 		});
 	}
@@ -169,10 +176,11 @@ export class TrackingRepository implements ITrackingRepository {
 		expectedLeaseUntil?: Temporal.Instant
 	): Promise<void> {
 		await this.trace("tracking.updateSchedule", async () => {
-			await activeTaskResource(this.db)
+			await activeDatabase(this.db)
 				.update(videoTracking)
 				.set({
 					...(update.state ? { state: update.state } : {}),
+					...(update.eligibleAt !== undefined ? { eligibleAt: update.eligibleAt } : {}),
 					...(update.nextSnapshotAt !== undefined
 						? { nextSnapshotAt: update.nextSnapshotAt }
 						: {}),
@@ -209,7 +217,7 @@ export class TrackingRepository implements ITrackingRepository {
 	async releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void> {
 		if (aids.length === 0) return;
 		await this.trace("tracking.releaseLeases", async () => {
-			await activeTaskResource(this.db)
+			await activeDatabase(this.db)
 				.update(videoTracking)
 				.set({ leaseUntil: null })
 				.where(
@@ -223,7 +231,7 @@ export class TrackingRepository implements ITrackingRepository {
 	async postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void> {
 		if (aids.length === 0) return;
 		await this.trace("tracking.postponeSchedule", async () => {
-			await activeTaskResource(this.db)
+			await activeDatabase(this.db)
 				.update(videoTracking)
 				.set({ nextSnapshotAt })
 				.where(inArray(AID, aids));
@@ -237,7 +245,7 @@ export class TrackingRepository implements ITrackingRepository {
 				lte(videoTracking.nextSnapshotAt, at),
 				or(isNull(videoTracking.leaseUntil), lte(videoTracking.leaseUntil, at))
 			);
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const [totals] = await db
 				.select({ overdueCount: count() })
 				.from(videoTracking)
@@ -274,7 +282,7 @@ export class TrackingRepository implements ITrackingRepository {
 				if (/^(?:av)?\d+$/i.test(search)) {
 					exactAid = BigInt(search.replace(/^av/i, ""));
 				} else {
-					const matches = await activeTaskResource(this.db)
+					const matches = await activeDatabase(this.db)
 						.select({ aid: bilibiliVideoMetadata.aid })
 						.from(bilibiliVideoMetadata)
 						.where(
@@ -304,7 +312,7 @@ export class TrackingRepository implements ITrackingRepository {
 			}
 
 			const where = conditions.length > 0 ? and(...conditions) : undefined;
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 
 			const [totals] = await db.select({ total: count() }).from(videoTracking).where(where);
 
@@ -337,7 +345,7 @@ export class TrackingRepository implements ITrackingRepository {
 
 	async deleteTracking(aid: bigint): Promise<boolean> {
 		return this.trace("tracking.deleteTracking", async () => {
-			const deleted = await activeTaskResource(this.db)
+			const deleted = await activeDatabase(this.db)
 				.delete(videoTracking)
 				.where(eq(AID, aid))
 				.returning({ aid: AID });

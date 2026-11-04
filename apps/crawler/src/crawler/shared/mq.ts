@@ -1,5 +1,10 @@
 import { boundedOperation } from "./boundedOperation";
-import { assertTaskActive, runTaskWithDeadline } from "./taskContext";
+import {
+	assertTaskActive,
+	drainActiveTasks,
+	runTaskWithDeadline,
+	TaskDeadlineError,
+} from "./taskContext";
 import {
 	Queue,
 	Worker,
@@ -13,6 +18,7 @@ import IORedis from "ioredis";
 import { context, propagation } from "@opentelemetry/api";
 import { crawlerEnv } from "@cvsa/env";
 import { appLogger, withLogContext } from "@cvsa/logger";
+import type { StatsRecorder } from "../stats/types";
 import type {
 	CrawlerJob,
 	CrawlerJobCounts,
@@ -30,7 +36,22 @@ const DEFAULT_JOB_OPTIONS: JobsOptions = {
 	removeOnFail: { age: 24 * 60 * 60, count: 1_000 },
 };
 
-export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"): CrawlerMq {
+function queueReadyAt(data: unknown): number | undefined {
+	if (
+		typeof data === "object" &&
+		data !== null &&
+		"_queueReadyAt" in data &&
+		typeof data._queueReadyAt === "number"
+	)
+		return data._queueReadyAt;
+	return undefined;
+}
+
+export function createCrawlerMq(
+	redisUrl = crawlerEnv.REDIS_URL,
+	prefix = "bull",
+	stats?: StatsRecorder
+): CrawlerMq {
 	let operationTimeoutMs = 3000;
 	const connection = new IORedis(redisUrl, {
 		// BullMQ requires maxRetriesPerRequest: null.
@@ -42,7 +63,19 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 		connectTimeout: 3000,
 		enableOfflineQueue: false,
 	});
-	const bounded = <T>(work: () => Promise<T>) => boundedOperation(work, operationTimeoutMs);
+	const bounded = async <T>(work: () => Promise<T>, command = "command"): Promise<T> => {
+		const startedAt = performance.now();
+		try {
+			const result = await boundedOperation(work, operationTimeoutMs);
+			stats?.recordRedis("mq", command, performance.now() - startedAt, "success");
+			return result;
+		} catch (error) {
+			const outcome =
+				error instanceof Error && error.name === "AbortError" ? "cancelled" : "failure";
+			stats?.recordRedis("mq", command, performance.now() - startedAt, outcome);
+			throw error;
+		}
+	};
 	const queues: Array<Pick<Queue<unknown>, "close" | "waitUntilReady">> = [];
 	const workers: Array<Pick<Worker<unknown>, "close">> = [];
 	const workerControllers: AbortController[] = [];
@@ -96,7 +129,14 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 							payload = { ...data, _traceCarrier: carrier };
 						}
 					}
-					await bounded(() => queue.add(jobName, payload, jobOptions));
+					stats?.record("enqueueCalls");
+					try {
+						await bounded(() => queue.add(jobName, payload, jobOptions), "add");
+						stats?.record("enqueueSucceeded");
+					} catch (error) {
+						stats?.record("enqueueFailed");
+						throw error;
+					}
 				},
 				getJobCounts: async (): Promise<CrawlerJobCounts> => {
 					const counts = await bounded(() =>
@@ -111,6 +151,7 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 					);
 					return {
 						waiting: (counts.waiting ?? 0) + (counts.prioritized ?? 0),
+						prioritized: counts.prioritized ?? 0,
 						active: counts.active ?? 0,
 						delayed: counts.delayed ?? 0,
 						failed: counts.failed ?? 0,
@@ -132,7 +173,7 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 					);
 					return Promise.all(
 						bullJobs.map(async (job) => {
-							const state = await bounded(() => job.getState());
+							const state = await bounded(() => job.getState(), "getJobState");
 							return {
 								id: job.id ?? "unknown",
 								name: job.name,
@@ -141,6 +182,7 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 								attempts: job.attemptsMade,
 								failedReason: job.failedReason ?? null,
 								timestamp: job.timestamp,
+								readyAt: queueReadyAt(job.data),
 								progress: job.progress,
 								processedOn: job.processedOn ?? null,
 								finishedOn: job.finishedOn ?? null,
@@ -149,9 +191,9 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 					);
 				},
 				getJobDetail: async (id: string) => {
-					const job = await bounded(() => queue.getJob(id));
+					const job = await bounded(() => queue.getJob(id), "getJob");
 					if (!job) return null;
-					const state = await bounded(() => job.getState());
+					const state = await bounded(() => job.getState(), "getJobState");
 					return {
 						id: job.id ?? id,
 						name: job.name,
@@ -169,26 +211,38 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 					};
 				},
 				retryJob: async (id: string): Promise<boolean> => {
-					const job = await bounded(() => queue.getJob(id));
+					const job = await bounded(() => queue.getJob(id), "getJob");
 					if (!job) return false;
-					await bounded(() => job.retry());
+					await bounded(() => job.retry(), "retry");
 					return true;
 				},
 				removeJob: async (id: string): Promise<boolean> => {
-					const job = await bounded(() => queue.getJob(id));
+					const job = await bounded(() => queue.getJob(id), "getJob");
 					if (!job) return false;
-					await bounded(() => job.remove());
+					try {
+						await bounded(() => job.remove(), "remove");
+					} catch (error) {
+						if (
+							error instanceof Error &&
+							error.message.includes("locked by another worker")
+						)
+							return false;
+						throw error;
+					}
 					return true;
 				},
-				close: () => bounded(() => queue.close()),
+				close: () => bounded(() => queue.close(), "close"),
 			};
 		},
 
 		createWorker<T>(
 			name: string,
 			processor: CrawlerProcessor<T>,
-			options: Omit<WorkerOptions, "connection"> = {}
+			options: Omit<WorkerOptions, "connection"> & {
+				onDeadline?: (job: CrawlerJob<T>) => Promise<void>;
+			} = {}
 		): CrawlerWorker {
+			const { onDeadline, ...workerOptions } = options;
 			let taskTimeoutMs = 120_000;
 			const controller = new AbortController();
 			workerControllers.push(controller);
@@ -198,13 +252,18 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 					const crawlerJob: CrawlerJob<T> = {
 						id: job.id ?? undefined,
 						data: job.data,
-						updateData: (data) => {
+						enqueuedAt: queueReadyAt(job.data) ?? job.timestamp,
+						startedAt: job.processedOn ?? Date.now(),
+						delayMs: queueReadyAt(job.data) === undefined ? (job.opts.delay ?? 0) : 0,
+						attemptsMade: job.attemptsMade,
+						updateData: async (data) => {
 							assertTaskActive();
-							return bounded(() => job.updateData(data));
+							await bounded(() => job.updateData(data), "updateData");
+							crawlerJob.data = data;
 						},
 						updateProgress: (progress) => {
 							assertTaskActive();
-							return bounded(() => job.updateProgress(progress));
+							return bounded(() => job.updateProgress(progress), "updateProgress");
 						},
 					};
 					const rawData = job.data as Record<string, unknown> | null;
@@ -225,35 +284,60 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 							rawData._timeoutMs > 0
 								? rawData._timeoutMs
 								: taskTimeoutMs;
-						await withLogContext(
-							{
-								queue: name,
-								jobId: job.id,
-								jobName: job.name,
-							},
-							() =>
-								runTaskWithDeadline(
-									effectiveTimeout,
-									async () => {
-										try {
-											await processor(crawlerJob);
-										} catch (error) {
-											if (!(error instanceof RetryLaterError)) throw error;
-											await bounded(() =>
-												job.moveToDelayed(
-													Date.now() + Math.max(1, error.delayMs),
-													token
+						try {
+							await withLogContext(
+								{
+									queue: name,
+									jobId: job.id,
+									jobName: job.name,
+								},
+								() =>
+									runTaskWithDeadline(
+										effectiveTimeout,
+										async () => {
+											try {
+												await processor(crawlerJob);
+											} catch (error) {
+												if (!(error instanceof RetryLaterError))
+													throw error;
+												const readyAt =
+													Date.now() + Math.max(1, error.delayMs);
+												if (
+													typeof job.data === "object" &&
+													job.data !== null
 												)
-											);
-											throw new DelayedError();
-										}
-									},
-									controller.signal
-								)
-						);
+													await bounded(
+														() =>
+															job.updateData({
+																...job.data,
+																_queueReadyAt: readyAt,
+															}),
+														"updateData"
+													);
+												await bounded(() =>
+													job.moveToDelayed(readyAt, token)
+												);
+												throw new DelayedError();
+											}
+										},
+										controller.signal
+									)
+							);
+						} catch (error) {
+							if (!(error instanceof TaskDeadlineError) || !onDeadline) throw error;
+							await onDeadline(crawlerJob);
+							const readyAt = Date.now() + 1000;
+							if (typeof job.data === "object" && job.data !== null)
+								await bounded(
+									() => job.updateData({ ...job.data, _queueReadyAt: readyAt }),
+									"updateData"
+								);
+							await bounded(() => job.moveToDelayed(readyAt, token));
+							throw new DelayedError();
+						}
 					});
 				},
-				{ drainDelay: 0.1, ...options, connection, prefix }
+				{ drainDelay: 0.1, ...workerOptions, connection, prefix }
 			);
 			worker.on("error", logError);
 			workers.push(worker);
@@ -273,7 +357,7 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 				},
 				close: (force = true) => {
 					controller.abort(new Error("Crawler worker stopped"));
-					return bounded(() => worker.close(force));
+					return bounded(() => worker.close(force), "closeWorker");
 				},
 			};
 		},
@@ -282,9 +366,14 @@ export function createCrawlerMq(redisUrl = crawlerEnv.REDIS_URL, prefix = "bull"
 			for (const controller of workerControllers)
 				controller.abort(new Error("Crawler MQ stopped"));
 			connection.disconnect();
-			await Promise.allSettled(queues.map((queue) => bounded(() => queue.waitUntilReady())));
-			await Promise.allSettled(workers.map((worker) => bounded(() => worker.close(true))));
-			await Promise.allSettled(queues.map((queue) => bounded(() => queue.close())));
+			await Promise.allSettled(
+				queues.map((queue) => bounded(() => queue.waitUntilReady(), "waitUntilReady"))
+			);
+			await Promise.allSettled(
+				workers.map((worker) => bounded(() => worker.close(true), "closeWorker"))
+			);
+			await drainActiveTasks(operationTimeoutMs);
+			await Promise.allSettled(queues.map((queue) => bounded(() => queue.close(), "close")));
 			try {
 				await Promise.race([
 					connection.quit(),

@@ -1,7 +1,17 @@
 import { createStatsMetrics } from "./crawler/stats/telemetry";
 import { assertTaskActive } from "./crawler/shared/taskContext";
+import { databaseTransaction } from "./crawler/shared/databaseContext";
+import { MilestoneRepository } from "./crawler/milestone/repository";
+import { MilestoneService } from "./crawler/milestone/service";
+import { createMilestoneMaintenance } from "./crawler/milestone/worker";
 import { AdapterProbeService } from "./crawler/network/adapterProbeService";
 import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
+import { CrawlerStatsStateRepository } from "./crawler/stats/stateRepository";
+import { createRedisHeartbeatStore } from "./crawler/stats/heartbeat";
+import { crawlerExportObservation } from "./crawler/stats/exportState";
+import { ResourceSampler } from "./crawler/stats/resources";
+import { readQueues } from "./crawler/stats/queueState";
+import type { StatsOverviewDeps } from "./crawler/stats/types";
 import { DiscoveryAdminService } from "./crawler/discovery/adminService";
 import { ManualSnapshotService } from "./crawler/tracking/manualSnapshot";
 import {
@@ -34,36 +44,43 @@ import {
 	TrackingRepository,
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
-import { crawlerObservability } from "./observability";
+import { createCrawlerObservability } from "./observability";
 import { and, asc, isNotNull, lte } from "drizzle-orm";
 import { createSnapshotDb, type VideoTracking, videoTracking } from "@cvsa/snapshot-db";
+import type { NetworkRateLimiter } from "@cvsa/network-scheduler";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
 
 export const crawlerSnapshotDb = createSnapshotDb(undefined, { beforeQuery: assertTaskActive });
-export const crawlerMq = createCrawlerMq(
-	crawlerEnv.REDIS_URL,
-	crawlerEnv.NODE_ENV === "test" ? `cvsa-test-${process.pid}` : "bull"
+
+const statsOverviewDeps: StatsOverviewDeps = {};
+export const statsHeartbeatStore = createRedisHeartbeatStore(
+	crawlerEnv.REDIS_CACHE_URL ?? crawlerEnv.REDIS_URL
 );
+export const statsStateRepository = new CrawlerStatsStateRepository(crawlerSnapshotDb.client);
 
 export const statsCollector = new CrawlerStatsCollector({
 	metrics: createStatsMetrics(),
-	overview: {
-		async queueCounts() {
-			const [snapshot, discovery] = await Promise.all([
-				snapshotQueue.getJobCounts(),
-				discoveryQueue.getJobCounts(),
-			]);
-			return { tracking: snapshot, discovery };
-		},
-		countOverdue(now) {
-			return trackingRepository.countOverdueVideos(now);
-		},
-	},
-	rollup: new CrawlerStatsRepository(crawlerSnapshotDb.client),
+	overview: statsOverviewDeps,
+	store: new CrawlerStatsRepository(crawlerSnapshotDb.client),
+	heartbeat: statsHeartbeatStore,
 });
+
+const crawlerObservability = createCrawlerObservability(statsCollector.instanceId);
+
+export const crawlerMq = createCrawlerMq(
+	crawlerEnv.REDIS_URL,
+	crawlerEnv.NODE_ENV === "test" ? `cvsa-test-${process.pid}` : "bull",
+	statsCollector
+);
 
 export const trackingRepository = new TrackingRepository(crawlerSnapshotDb.client, statsCollector);
 export const snapshotRepository = new SnapshotRepository(crawlerSnapshotDb.client, statsCollector);
+export const milestoneRepository = new MilestoneRepository(crawlerSnapshotDb.client);
+export const milestoneService = new MilestoneService(
+	milestoneRepository,
+	() => networkRuntime.getExecutionConfig().tracking
+);
+export const milestoneMaintenance = createMilestoneMaintenance(crawlerMq, milestoneService);
 export const discoveryRepository = new DiscoveryRepository(
 	crawlerSnapshotDb.client,
 	statsCollector
@@ -84,17 +101,110 @@ export const networkRuntimeConfigService = new NetworkRuntimeConfigService(
 	networkRuntimeConfigRepository
 );
 export const crawlerAdapterRegistry = createCrawlerAdapterRegistry();
+const baseRateLimiter = createRedisRateLimiter(crawlerEnv.REDIS_CACHE_URL ?? crawlerEnv.REDIS_URL);
+const observedRateLimiter: NetworkRateLimiter = {
+	async acquireBudgets(scope, budgets) {
+		const startedAt = performance.now();
+		try {
+			const result = await baseRateLimiter.acquireBudgets(scope, budgets);
+			statsCollector.recordRedis(
+				"budget",
+				"consume",
+				performance.now() - startedAt,
+				"success"
+			);
+			return result;
+		} catch (error) {
+			statsCollector.recordRedis(
+				"budget",
+				"consume",
+				performance.now() - startedAt,
+				"failure"
+			);
+			throw error;
+		}
+	},
+	async acquire(scope, durationSeconds, maxRequests) {
+		const startedAt = performance.now();
+		try {
+			const result = await baseRateLimiter.acquire(scope, durationSeconds, maxRequests);
+			statsCollector.recordRedis(
+				"budget",
+				"consume",
+				performance.now() - startedAt,
+				"success"
+			);
+			return result;
+		} catch (error) {
+			statsCollector.recordRedis(
+				"budget",
+				"consume",
+				performance.now() - startedAt,
+				"failure"
+			);
+			throw error;
+		}
+	},
+	async consume(scope, durationSeconds, maxRequests) {
+		const startedAt = performance.now();
+		try {
+			const allowed = await baseRateLimiter.consume(scope, durationSeconds, maxRequests);
+			statsCollector.recordRedis(
+				"budget",
+				"consume",
+				performance.now() - startedAt,
+				allowed ? "success" : "failure"
+			);
+			return allowed;
+		} catch (error) {
+			statsCollector.recordRedis(
+				"budget",
+				"consume",
+				performance.now() - startedAt,
+				"failure"
+			);
+			throw error;
+		}
+	},
+	async remainingDelay(scope) {
+		const startedAt = performance.now();
+		try {
+			const delay = await baseRateLimiter.remainingDelay?.(scope);
+			statsCollector.recordRedis(
+				"cooldown",
+				"remainingDelay",
+				performance.now() - startedAt,
+				"success"
+			);
+			return delay;
+		} catch (error) {
+			statsCollector.recordRedis(
+				"cooldown",
+				"remainingDelay",
+				performance.now() - startedAt,
+				"failure"
+			);
+			throw error;
+		}
+	},
+	async defer(scope, delayMs) {
+		await baseRateLimiter.defer?.(scope, delayMs);
+	},
+	close: () => baseRateLimiter.close?.() ?? Promise.resolve(),
+};
 export const networkRuntime = new NetworkRuntimeConfigManager(
 	networkRuntimeConfigRepository,
 	// Bilibili application-error semantics are injected here, not in the scheduler.
 	crawlerAdapterRegistry,
-	createRedisRateLimiter(crawlerEnv.REDIS_CACHE_URL ?? crawlerEnv.REDIS_URL),
+	observedRateLimiter,
 	{
 		// Every HTTP attempt lands in both OTel and the sliding-window counters.
 		metrics: createNetworkMetrics({
+			onRequestStarted(attributes) {
+				statsCollector.recordHttpAttemptStarted(attributes);
+			},
 			onRequestFinishedWithAttributes(latencyMs, outcome, attributes) {
-				statsCollector.recordNetworkRequest(latencyMs, outcome, attributes);
-				if (attributes.retry === 1) statsCollector.recordRetry();
+				statsCollector.recordHttpAttempt(latencyMs, outcome, attributes);
 			},
 		}),
 	}
@@ -104,6 +214,7 @@ export const bilibiliClient = new BilibiliClient({
 	networkDelegate: networkRuntime,
 	requestTimeoutMs: () => networkRuntime.getExecutionConfig().requestTimeoutMs,
 	operationTimeoutMs: () => networkRuntime.getExecutionConfig().mqOperationTimeoutMs,
+	stats: statsCollector,
 });
 
 networkRuntime.onSessionChange((config) => bilibiliClient.configureSession(config));
@@ -135,6 +246,7 @@ export const metadataRefreshScheduler = new MetadataRefreshScheduler({
 	trackingRepository,
 	discoveryRepository,
 	bilibiliClient,
+	stats: statsCollector,
 });
 
 export const discoveryFilterService = new DiscoveryFilterService(
@@ -150,7 +262,103 @@ export const discoveryFilterService = new DiscoveryFilterService(
 export const videoClassifierClient = new VideoClassifierClient({
 	stats: statsCollector,
 	timeoutMs: () => networkRuntime.getExecutionConfig().inferenceTimeoutMs,
+	onLifecycle: (event) => {
+		if (event === "start") statsCollector.recordModelLifecycle("start");
+		else if (event === "exit") statsCollector.recordModelLifecycle("exit");
+		else if (event === "timeoutTermination")
+			statsCollector.recordModelLifecycle("timeoutTermination");
+		else statsCollector.recordModelLifecycle("cancelTermination");
+	},
 });
+
+const resourceSampler = new ResourceSampler(
+	statsCollector.instanceId,
+	() => videoClassifierClient.processState().pid
+);
+
+statsOverviewDeps.queueCounts = () =>
+	readQueues({
+		tracking: snapshotQueue,
+		discovery: discoveryQueue,
+		milestones: milestoneMaintenance.queue,
+	});
+statsOverviewDeps.trackingState = (now) => statsStateRepository.trackingState(now);
+statsOverviewDeps.labeling = (from, to) => statsStateRepository.labelingState(from, to);
+statsOverviewDeps.videoCoverage = (from, to) => statsStateRepository.videoCoverage(from, to);
+statsOverviewDeps.modelState = async () => {
+	const [health, processState] = await Promise.all([
+		videoClassifierClient.health(),
+		Promise.resolve(videoClassifierClient.processState()),
+	]);
+	return {
+		reachable: health.reachable,
+		modelsLoaded: health.modelsLoaded,
+		modelVersion: health.modelVersion ?? null,
+		activeRequests: processState.active,
+		waitingRequests: processState.waiting,
+		loadFailures: statsCollector.lifetimeCounter("modelLoadFailures"),
+		starts: statsCollector.lifetimeCounter("modelStarts"),
+		exits: statsCollector.lifetimeCounter("modelExits"),
+		timeoutTerminations: statsCollector.lifetimeCounter("modelTimeoutTerminations"),
+		cancelTerminations: statsCollector.lifetimeCounter("modelCancelTerminations"),
+	};
+};
+statsOverviewDeps.resourceState = () => resourceSampler.sample();
+statsOverviewDeps.exportState = () => Promise.resolve(crawlerExportObservation.snapshot());
+statsOverviewDeps.heartbeat = (instanceId) => statsHeartbeatStore.read(instanceId);
+statsOverviewDeps.strategies = async () => {
+	const document = await networkRuntimeConfigService.get();
+	const config = document?.config;
+	const hasHealth = config?.health !== undefined;
+	const hasAdaptive = config?.adaptive !== undefined;
+	const hasPolicies = Object.keys(config?.requestTypePolicies ?? {}).length > 0;
+	const hasRateLimits = (config?.adapters ?? []).some(
+		(adapter) =>
+			adapter.requestsPerSecond !== undefined || (adapter.rateLimits?.length ?? 0) > 0
+	);
+	return [
+		{
+			key: "health",
+			support: hasHealth ? "configured_not_wired" : "not_wired",
+			configured: hasHealth,
+			healthFactor: null,
+			adaptiveFactor: null,
+			reservedShare: null,
+		},
+		{
+			key: "adaptive",
+			support: hasAdaptive ? "configured_not_wired" : "not_wired",
+			configured: hasAdaptive,
+			healthFactor: null,
+			adaptiveFactor: null,
+			reservedShare: null,
+		},
+		{
+			key: "requestTypePolicies",
+			support: hasPolicies ? "configured_not_wired" : "not_wired",
+			configured: hasPolicies,
+			healthFactor: null,
+			adaptiveFactor: null,
+			reservedShare: null,
+		},
+		{
+			key: "rateLimits",
+			support: "active",
+			configured: hasRateLimits,
+			healthFactor: null,
+			adaptiveFactor: null,
+			reservedShare: null,
+		},
+		{
+			key: "cooldown",
+			support: "not_wired",
+			configured: false,
+			healthFactor: null,
+			adaptiveFactor: null,
+			reservedShare: null,
+		},
+	];
+};
 
 export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 	bilibiliClient,
@@ -165,11 +373,14 @@ export const discoveryWorker = createDiscoveryWorker(
 	crawlerMq,
 	discoveryPipelineProcessor,
 	12,
-	statsCollector
+	statsCollector,
+	() => networkRuntime.getExecutionConfig().discoveryRetry
 );
 export const crawlerAdminStatsService = new CrawlerAdminStatsService(
 	{ tracking: snapshotQueue, discovery: discoveryQueue },
-	statsCollector
+	statsCollector,
+	statsOverviewDeps,
+	statsStateRepository
 );
 export const discoveryAdminService = new DiscoveryAdminService(
 	discoveryQueue,
@@ -190,7 +401,9 @@ export const snapshotService = new SnapshotService(
 	bilibiliClient,
 	snapshotRepository,
 	trackingRepository,
-	statsCollector
+	statsCollector,
+	milestoneService,
+	(work) => databaseTransaction(crawlerSnapshotDb.client, work)
 );
 export const snapshotBatchWorker = createSnapshotBatchWorker(
 	crawlerMq,
@@ -199,8 +412,8 @@ export const snapshotBatchWorker = createSnapshotBatchWorker(
 );
 export const trackingDispatcher = new TrackingDispatcher(trackingRepository, crawlerMq, {
 	queueCap: 200,
-	remainingDelay: () => networkRuntime.remainingDelay(),
 	leaseDurationMs: 5 * 60 * 1_000,
+	stats: statsCollector,
 });
 
 networkRuntime.onExecutionChange((config) => {
@@ -209,7 +422,8 @@ networkRuntime.onExecutionChange((config) => {
 	discoveryWorker.setTaskTimeout?.(config.taskTimeoutMs);
 	snapshotBatchWorker.setConcurrency?.(config.snapshotConcurrency);
 	discoveryWorker.setConcurrency?.(config.discoveryConcurrency);
-	trackingDispatcher.configure(config.queueCap);
+	trackingDispatcher.configure(config.queueCap, config.tracking);
+	snapshotService.configure(config.tracking);
 });
 
 const baseCrawlerRuntime = createCrawlerRuntime({
@@ -222,6 +436,7 @@ const baseCrawlerRuntime = createCrawlerRuntime({
 		stopPolling: () => networkRuntime.stopPolling(),
 		async close() {
 			try {
+				await milestoneMaintenance.worker.close();
 				await metadataRefreshScheduler.close();
 			} finally {
 				await bilibiliClient.stop();

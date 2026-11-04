@@ -191,6 +191,7 @@ describe("console formatting", () => {
 
 	test("formats wait durations", () => {
 		expect(formatWaitSeconds(9)).toBe("9s");
+		expect(formatWaitSeconds(0.1)).toBe("<1s");
 		expect(formatWaitSeconds(75)).toBe("1m 15s");
 		expect(formatWaitSeconds(3_900)).toBe("1h 5m");
 	});

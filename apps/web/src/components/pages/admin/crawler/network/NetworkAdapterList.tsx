@@ -29,18 +29,7 @@ function healthPresentation(item: CrawlerStatusDto["adapters"][number]): {
 	label: string;
 } {
 	if (!item.enabled) return { variant: "neutral", label: "network.adapters.health.disabled" };
-	switch (item.healthState) {
-		case "healthy":
-			return { variant: "success", label: "network.adapters.health.healthy" };
-		case "degraded":
-			return { variant: "warning", label: "network.adapters.health.degraded" };
-		case "half-open":
-			return { variant: "warning", label: "network.adapters.health.probing" };
-		case "open":
-			return { variant: "danger", label: "network.adapters.health.open" };
-		default:
-			return { variant: "neutral", label: "common.unknown" };
-	}
+	return { variant: "neutral", label: "common.enabled" };
 }
 
 type AdapterCardProps = {
@@ -56,7 +45,7 @@ type AdapterCardProps = {
 };
 
 function AdapterCard(props: AdapterCardProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const resultLabel = (result: TestNetworkAdapterResponse) =>
 		result.ok ? `${result.latencyMs} ms` : result.error || t("common.error");
 	const metrics = () => [
@@ -72,10 +61,9 @@ function AdapterCard(props: AdapterCardProps) {
 					{props.runtime?.requests ?? 0}
 					<Show when={props.runtime?.failures}>
 						<span class="text-error ml-1">
-							{t("network.adapters.errorCount").replace(
-								"{count}",
-								String(props.runtime?.failures ?? 0)
-							)}
+							{t("network.adapters.errorCount", {
+								count: props.runtime?.failures ?? 0,
+							})}
 						</span>
 					</Show>
 				</span>
@@ -166,7 +154,7 @@ function AdapterCard(props: AdapterCardProps) {
 }
 
 export default function NetworkAdapterList(props: NetworkAdapterListProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	const [testing, setTesting] = createSignal<Record<string, boolean>>({});
 	const [results, setResults] = createSignal<Record<string, TestNetworkAdapterResponse>>({});
 	const staleRuntime = () => props.status?.revision !== props.configRevision;

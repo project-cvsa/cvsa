@@ -33,7 +33,7 @@ function RateLimitRow(props: {
 	onChange: (update: Partial<NetworkRateLimit>) => void;
 	onRemove: () => void;
 }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 	return (
 		<div class="flex items-end gap-3 p-3 bg-surface-container-low border border-border">
 			<NumberField
@@ -70,7 +70,7 @@ function RateLimitRow(props: {
 }
 
 export default function NetworkAdapterForm(props: NetworkAdapterFormProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:network");
 
 	const [id, setId] = createSignal(props.adapter?.id ?? "");
 	const [type, setType] = createSignal<"direct" | "http-proxy">(

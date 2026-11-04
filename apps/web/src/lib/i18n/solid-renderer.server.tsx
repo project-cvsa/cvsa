@@ -1,12 +1,13 @@
 import solidRenderer from "@astrojs/solid-js/server.js";
 import type { AstroComponentMetadata, NamedSSRLoadedRendererValue } from "astro";
+import { FaneeRuntime } from "@fanee/core";
 import {
-	type ComponentTranslationFactory,
 	type I18nSolidComponent,
 	type I18nSolidProps,
 	wrapComponentWithI18n,
 } from "./component-context";
 import { getLocale, i18nServer } from "./server";
+import { defaultLanguage } from "./const";
 
 type RendererContext = {
 	result: {
@@ -14,14 +15,15 @@ type RendererContext = {
 	};
 };
 
-const createRequestTranslationFactory = (locale: string): ComponentTranslationFactory => {
-	const getT: ComponentTranslationFactory = (namespace) => {
-		return i18nServer.getT({
-			locale,
-			namespace: `client:${namespace}`,
-		});
-	};
-	return getT;
+const createRequestRuntime = async (locale: string) => {
+	const runtime = new FaneeRuntime().config({
+		currentLocale: locale,
+		defaultLocale: defaultLanguage,
+		baseNamespace: "web:client",
+		resources: i18nServer.getAllTranslations(),
+	});
+	await runtime.ready();
+	return { runtime };
 };
 
 const renderer: NamedSSRLoadedRendererValue = {
@@ -34,9 +36,10 @@ const renderer: NamedSSRLoadedRendererValue = {
 		metadata?: AstroComponentMetadata
 	) {
 		const { language } = getLocale(this.result.request);
+		const { runtime } = await createRequestRuntime(language);
 		return solidRenderer.check.call(
 			this,
-			wrapComponentWithI18n(Component, createRequestTranslationFactory(language)),
+			wrapComponentWithI18n(Component, runtime),
 			props,
 			children,
 			metadata
@@ -50,9 +53,10 @@ const renderer: NamedSSRLoadedRendererValue = {
 		metadata?: AstroComponentMetadata
 	) {
 		const { language } = getLocale(this.result.request);
+		const { runtime } = await createRequestRuntime(language);
 		return solidRenderer.renderToStaticMarkup.call(
 			this,
-			wrapComponentWithI18n(Component, createRequestTranslationFactory(language)),
+			wrapComponentWithI18n(Component, runtime),
 			props,
 			children,
 			metadata

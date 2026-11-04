@@ -15,13 +15,18 @@ export function createSessionCookie(token: string) {
 
 export function parseTokenFromCookie(cookieHeader: string | null | undefined): string | null {
 	if (!cookieHeader) return null;
-	const match = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME.replace(".", "\\.")}=([^;]+)`).exec(
-		cookieHeader
-	);
-	if (!match) return null;
-	const raw = decodeURIComponent(match[1].trim());
-	const dotIndex = raw.indexOf(".");
-	return dotIndex > 0 ? raw.slice(0, dotIndex) : raw;
+	const regex = /(?:^|;\s*)cvsa\.session_token=([^;]*)/g;
+	let lastValid: string | null = null;
+	for (const match of cookieHeader.matchAll(regex)) {
+		let raw = decodeURIComponent(match[1].trim());
+		if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
+			raw = raw.slice(1, -1).trim();
+		}
+		if (raw.length > 0) {
+			lastValid = raw;
+		}
+	}
+	return lastValid;
 }
 
 function hasGetHeader(headers: Headers | Record<string, string | undefined>): headers is Headers {

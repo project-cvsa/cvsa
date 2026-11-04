@@ -1,4 +1,4 @@
-import type { DiscoveryJobProgress } from "@cvsa/contracts";
+import { AppError, type DiscoveryJobProgress } from "@cvsa/contracts";
 import { appLogger } from "@cvsa/logger";
 import { traceTask } from "@cvsa/observability";
 import { toInstant } from "@cvsa/snapshot-db";
@@ -181,7 +181,12 @@ export class SearchRover {
 		onProgress?: (progress: DiscoveryJobProgress) => Promise<void>,
 		continuation?: {
 			offset: number;
-			onPage: (candidates: DiscoveredCandidate[], offset: number) => Promise<void>;
+			completedQueries?: string[];
+			onPage: (
+				candidates: DiscoveredCandidate[],
+				offset: number,
+				key?: string
+			) => Promise<void>;
 		}
 	): Promise<DiscoveredCandidate[]> {
 		return traceTask("discovery.searchRover.sweep", async () => {
@@ -208,7 +213,7 @@ export class SearchRover {
 				const orders = config.orders ?? DEFAULT_DEEP_ORDERS;
 				const timeSlices = DEFAULT_DEEP_TIME_SLICES_DAYS;
 				const maxPages = config.pagesPerQuery ?? 10;
-				const nowSec = Math.floor(Date.now() / 1000);
+				const nowSec = Math.floor((config.asOf ?? Date.now()) / 1000);
 				let stepIndex = 0;
 
 				interface DeepTask {
@@ -230,7 +235,6 @@ export class SearchRover {
 					const fromSec = nowSec - task.days * 86400;
 					for (let page = 1; page <= maxPages; page++) {
 						const currentStep = ++stepIndex;
-						if (currentStep <= (continuation?.offset ?? 0)) continue;
 
 						try {
 							await onProgress?.({
@@ -243,6 +247,14 @@ export class SearchRover {
 								updatedAt: new Date().toISOString(),
 							});
 
+							const queryKey = JSON.stringify([
+								task.keyword,
+								task.order,
+								fromSec,
+								nowSec,
+								page,
+							]);
+							if (continuation?.completedQueries?.includes(queryKey)) continue;
 							const queryRes = await this.runSearchQueryDetailed(task.keyword, {
 								order: task.order,
 								page,
@@ -251,9 +263,11 @@ export class SearchRover {
 								categoryId: config.categoryId,
 							});
 
+							if (queryRes.failed && continuation)
+								throw new AppError("Bilibili search failed", "UPSTREAM_ERROR", 502);
 							if (queryRes.candidates.length === 0) break;
 
-							await continuation?.onPage(queryRes.candidates, currentStep);
+							await continuation?.onPage(queryRes.candidates, currentStep, queryKey);
 							addCandidates(queryRes.candidates);
 
 							if (page >= queryRes.numPages) break;
@@ -280,7 +294,6 @@ export class SearchRover {
 					for (const order of orders) {
 						for (let page = 1; page <= maxPages; page++) {
 							const currentStep = ++stepIndex;
-							if (currentStep <= (continuation?.offset ?? 0)) continue;
 
 							try {
 								await onProgress?.({
@@ -293,6 +306,14 @@ export class SearchRover {
 									updatedAt: new Date().toISOString(),
 								});
 
+								const queryKey = JSON.stringify([
+									keyword,
+									order,
+									config.from,
+									config.to,
+									page,
+								]);
+								if (continuation?.completedQueries?.includes(queryKey)) continue;
 								const queryRes = await this.runSearchQueryDetailed(keyword, {
 									order,
 									page,
@@ -301,7 +322,17 @@ export class SearchRover {
 									categoryId: config.categoryId,
 								});
 
-								await continuation?.onPage(queryRes.candidates, currentStep);
+								if (queryRes.failed && continuation)
+									throw new AppError(
+										"Bilibili search failed",
+										"UPSTREAM_ERROR",
+										502
+									);
+								await continuation?.onPage(
+									queryRes.candidates,
+									currentStep,
+									queryKey
+								);
 								addCandidates(queryRes.candidates);
 
 								if (queryRes.candidates.length === 0 || page >= queryRes.numPages) {
@@ -324,7 +355,7 @@ export class SearchRover {
 				// Incremental Mode: pubdate + sliding 'to' window + 10-minute exploration ledger
 				const maxPages = config.pagesPerQuery ?? 50;
 				const lookbackDays = config.timeWindowDays ?? 7;
-				const nowSec = Math.floor(Date.now() / 1000);
+				const nowSec = Math.floor((config.asOf ?? Date.now()) / 1000);
 				const defaultFromSec =
 					config.from !== undefined
 						? toUnixTimestamp(config.from)
@@ -376,7 +407,6 @@ export class SearchRover {
 
 						for (let page = 1; page <= maxPages; page++) {
 							const currentStep = ++stepIndex;
-							if (currentStep <= (continuation?.offset ?? 0)) continue;
 
 							try {
 								await onProgress?.({
@@ -398,6 +428,12 @@ export class SearchRover {
 								});
 
 								if (queryRes.failed) {
+									if (continuation)
+										throw new AppError(
+											"Bilibili search failed",
+											"UPSTREAM_ERROR",
+											502
+										);
 									queryFailed = true;
 									break;
 								}

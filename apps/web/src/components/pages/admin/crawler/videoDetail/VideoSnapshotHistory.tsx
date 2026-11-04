@@ -17,12 +17,12 @@ type VideoSnapshotHistoryProps = {
 };
 
 export default function VideoSnapshotHistory(props: VideoSnapshotHistoryProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 
 	const columns: TableColumn<VideoSnapshotItem>[] = [
 		{
 			id: "capturedAt",
-			header: t("videoDetail.captured"),
+			header: t("videoDetail.snapshotTime"),
 			class: "text-secondary whitespace-nowrap",
 			cell: (item) => formatDateTime(item.capturedAt),
 		},
@@ -75,10 +75,7 @@ export default function VideoSnapshotHistory(props: VideoSnapshotHistoryProps) {
 			<div class="flex flex-wrap items-center justify-between gap-2">
 				<h3 class="ts-label text-primary">{t("videoDetail.snapshots")}</h3>
 				<span class="ts-caption text-tertiary">
-					{t("videoDetail.snapshotsCount").replace(
-						"{count}",
-						String(props.snapshotsTotal())
-					)}
+					{t("videoDetail.snapshotsCount", { count: props.snapshotsTotal() })}
 				</span>
 			</div>
 			<Show when={props.snapshotsError() && (props.snapshots()?.items.length ?? 0) > 0}>

@@ -23,7 +23,7 @@ interface VideoMetadataTabProps {
 }
 
 export default function VideoMetadataTab(props: VideoMetadataTabProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	const [expandedDesc, setExpandedDesc] = createSignal(false);
 
 	const tags = () => parseTags(props.data.tags);
@@ -186,7 +186,11 @@ export default function VideoMetadataTab(props: VideoMetadataTabProps) {
 								onClick={() => setExpandedDesc((prev) => !prev)}
 								class="ts-caption gap-1 text-secondary"
 							>
-								<span>{expandedDesc() ? "收起" : "展开"}</span>
+								<span>
+									{expandedDesc()
+										? t("videoDetail.collapse")
+										: t("videoDetail.expand")}
+								</span>
 								{expandedDesc() ? (
 									<ChevronUp class="w-3.5 h-3.5" />
 								) : (

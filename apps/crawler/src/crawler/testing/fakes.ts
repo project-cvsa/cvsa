@@ -1,4 +1,14 @@
-import type { SaveStatsRollupInput, StatsRollupRow, StatsRollupStore } from "../stats/rollup";
+import type {
+	SaveStatsMinuteInput,
+	StatsHourPendingRow,
+	StatsHourRow,
+	StatsInstanceRow,
+	StatsLegacyMinuteRow,
+	StatsMinuteRow,
+	StatsStateRow,
+} from "../stats/rollup";
+import type { StatsStore } from "../stats/collector";
+import type { CrawlerStatsMinuteV2 } from "@cvsa/contracts";
 import type {
 	BilibiliVideoMetadata,
 	BilibiliVideoMetadataHistory,
@@ -250,6 +260,7 @@ export function createFakeSnapshotDb(): FakeSnapshotDbState & {
 }
 
 export interface CreateTrackingOverrides {
+	eligibleAt?: Temporal.Instant | null;
 	state?: TrackingState;
 	nextSnapshotAt?: Temporal.Instant;
 	leaseUntil?: Temporal.Instant | null;
@@ -275,6 +286,7 @@ export function createTrackingRow(
 		aid,
 		state: overrides.state ?? "regular",
 		nextSnapshotAt: now,
+		eligibleAt: overrides.eligibleAt ?? null,
 		leaseUntil: overrides.leaseUntil ?? null,
 		scheduleReason: overrides.scheduleReason ?? "regular",
 		nextMetadataAt: overrides.nextMetadataAt ?? null,
@@ -296,7 +308,10 @@ function isLeaseFree(row: VideoTracking, now: Temporal.Instant): boolean {
 }
 
 function isDue(row: VideoTracking, at: Temporal.Instant): boolean {
-	return row.nextSnapshotAt.epochMilliseconds <= at.epochMilliseconds;
+	return (
+		row.nextSnapshotAt.epochMilliseconds <= at.epochMilliseconds &&
+		(row.eligibleAt === null || row.eligibleAt.epochMilliseconds <= at.epochMilliseconds)
+	);
 }
 
 function byPriorityThenDue(a: VideoTracking, b: VideoTracking): number {
@@ -387,6 +402,8 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 					? input.targetMilestone
 					: (existing?.targetMilestone ?? null),
 			etaHours: input.etaHours !== undefined ? input.etaHours : (existing?.etaHours ?? null),
+			eligibleAt:
+				input.eligibleAt !== undefined ? input.eligibleAt : (existing?.eligibleAt ?? null),
 			publishedAt: input.publishedAt ?? existing?.publishedAt ?? null,
 			priority: input.priority ?? existing?.priority ?? 2,
 			consecutiveFails: input.consecutiveFails ?? existing?.consecutiveFails ?? 0,
@@ -411,6 +428,7 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		this.trackings.set(aid, {
 			...existing,
 			...(update.state ? { state: update.state } : {}),
+			...(update.eligibleAt !== undefined ? { eligibleAt: update.eligibleAt } : {}),
 			nextSnapshotAt: update.nextSnapshotAt ?? existing.nextSnapshotAt,
 			...(update.scheduleReason !== undefined
 				? { scheduleReason: update.scheduleReason }
@@ -506,6 +524,15 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 	readonly runtimeConfigs = new Map<string, { revision: number; config: unknown }>();
 	/** Aids returned by {@link listHotSampleCandidates}. */
 	hotSampleAids: bigint[] = [];
+
+	async upsertMetadataWithResult(data: UpsertMetadataInput): Promise<{
+		row: BilibiliVideoMetadata;
+		change: "inserted" | "changed" | "unchanged";
+	}> {
+		const existed = this.metadatas.has(data.aid);
+		const row = await this.upsertMetadata(data);
+		return { row, change: existed ? "changed" : "inserted" };
+	}
 
 	async upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata> {
 		const now = data.capturedAt ?? toInstant(new Date());
@@ -780,23 +807,168 @@ export class InMemoryFilterConfigStore implements DiscoveryFilterConfigStore {
 	}
 }
 
-export class InMemoryStatsStore implements StatsRollupStore {
-	readonly rows = new Map<string, StatsRollupRow>();
+export class InMemoryStatsStore implements StatsStore {
+	readonly rows = new Map<string, StatsMinuteRow>();
+	readonly legacyRows: StatsLegacyMinuteRow[] = [];
+	readonly instances = new Map<string, StatsInstanceRow>();
+	readonly hours = new Map<string, StatsHourRow>();
+	readonly pending = new Map<string, StatsHourPendingRow>();
+	readonly states: StatsStateRow[] = [];
+	readonly availability = new Map<string, Temporal.Instant>();
 	saveError?: Error;
-	async saveRollup(input: SaveStatsRollupInput): Promise<void> {
+
+	async saveMinute(input: SaveStatsMinuteInput): Promise<void> {
 		if (this.saveError) throw this.saveError;
 		this.rows.set(`${input.sourceId}:${input.bucketTime.epochMilliseconds}`, {
-			...input,
+			sourceId: input.sourceId,
+			bucketTime: input.bucketTime,
 			metrics: structuredClone(input.metrics),
 		});
+		if (input.instance) this.instances.set(input.instance.instanceId, input.instance);
+		const hour = Math.floor(input.bucketTime.epochMilliseconds / 3_600_000) * 3_600_000;
+		const key = `${input.sourceId}:${hour}`;
+		const current = this.pending.get(key);
+		this.pending.set(key, {
+			hourTime: toInstant(new Date(hour)),
+			sourceId: input.sourceId,
+			generation: (current?.generation ?? 0) + 1,
+		});
 	}
-	async listRollup(metricGroup: string, since: Temporal.Instant): Promise<StatsRollupRow[]> {
+
+	async listMinutes(from: Temporal.Instant, to: Temporal.Instant): Promise<StatsMinuteRow[]> {
 		return [...this.rows.values()]
 			.filter(
 				(row) =>
-					row.metricGroup === metricGroup &&
-					row.bucketTime.epochMilliseconds >= since.epochMilliseconds
+					row.bucketTime.epochMilliseconds >= from.epochMilliseconds &&
+					row.bucketTime.epochMilliseconds < to.epochMilliseconds
 			)
 			.sort((a, b) => a.bucketTime.epochMilliseconds - b.bucketTime.epochMilliseconds);
+	}
+
+	async listLegacyMinutes(
+		from: Temporal.Instant,
+		to: Temporal.Instant
+	): Promise<StatsLegacyMinuteRow[]> {
+		return this.legacyRows.filter(
+			(row) =>
+				row.bucketTime.epochMilliseconds >= from.epochMilliseconds &&
+				row.bucketTime.epochMilliseconds < to.epochMilliseconds
+		);
+	}
+
+	async upsertInstance(row: StatsInstanceRow): Promise<void> {
+		this.instances.set(row.instanceId, row);
+	}
+
+	async listInstances(from: Temporal.Instant, to: Temporal.Instant): Promise<StatsInstanceRow[]> {
+		return [...this.instances.values()].filter(
+			(row) =>
+				row.startedAt.epochMilliseconds < to.epochMilliseconds &&
+				row.coveredTo.epochMilliseconds >= from.epochMilliseconds
+		);
+	}
+
+	async listRecentInstances(limit = 50): Promise<StatsInstanceRow[]> {
+		return [...this.instances.values()].slice(-limit);
+	}
+
+	async listPendingHours(limit = 24): Promise<StatsHourPendingRow[]> {
+		return [...this.pending.values()].slice(0, limit);
+	}
+
+	async listMinutesForHour(hour: Temporal.Instant, sourceId: string): Promise<StatsMinuteRow[]> {
+		return [...this.rows.values()].filter(
+			(row) =>
+				row.sourceId === sourceId &&
+				row.bucketTime.epochMilliseconds >= hour.epochMilliseconds &&
+				row.bucketTime.epochMilliseconds < hour.epochMilliseconds + 3_600_000
+		);
+	}
+
+	async saveHour(
+		hour: Temporal.Instant,
+		sourceId: string,
+		generation: number,
+		metrics: CrawlerStatsMinuteV2
+	): Promise<void> {
+		this.hours.set(`${sourceId}:${hour.epochMilliseconds}`, {
+			hourTime: hour,
+			sourceId,
+			metrics,
+		});
+		const key = `${sourceId}:${hour.epochMilliseconds}`;
+		if (this.pending.get(key)?.generation === generation) this.pending.delete(key);
+	}
+
+	async listHours(from: Temporal.Instant, to: Temporal.Instant): Promise<StatsHourRow[]> {
+		return [...this.hours.values()].filter(
+			(row) =>
+				row.hourTime.epochMilliseconds >= from.epochMilliseconds &&
+				row.hourTime.epochMilliseconds < to.epochMilliseconds
+		);
+	}
+
+	async saveStates(
+		rows: Array<{
+			sampledAt: Temporal.Instant;
+			scope: string;
+			item: string;
+			status: string;
+			data: unknown;
+		}>
+	): Promise<void> {
+		this.states.push(...rows);
+	}
+
+	async listStates(from: Temporal.Instant, to: Temporal.Instant): Promise<StatsStateRow[]> {
+		return this.states.filter(
+			(state) =>
+				state.sampledAt.epochMilliseconds >= from.epochMilliseconds &&
+				state.sampledAt.epochMilliseconds < to.epochMilliseconds
+		);
+	}
+
+	async listAvailability(): Promise<Array<{ metric: string; enabledAt: Temporal.Instant }>> {
+		return [...this.availability.entries()].map(([metric, enabledAt]) => ({
+			metric,
+			enabledAt,
+		}));
+	}
+
+	async markMetricsEnabled(
+		metrics: readonly string[],
+		enabledAt: Temporal.Instant
+	): Promise<void> {
+		for (const metric of metrics)
+			if (!this.availability.has(metric)) this.availability.set(metric, enabledAt);
+	}
+
+	async readRange(
+		from: Temporal.Instant,
+		to: Temporal.Instant,
+		includeHours: boolean
+	): Promise<import("../stats/rollup").StatsRangeData> {
+		return {
+			minutes: await this.listMinutes(from, to),
+			legacy: await this.listLegacyMinutes(from, to),
+			instances: await this.listInstances(from, to),
+			states: await this.listStates(from, to),
+			hours: includeHours ? await this.listHours(from, to) : [],
+			pendingHours: await this.listPendingHours(1000),
+			availability: await this.listAvailability(),
+		};
+	}
+
+	async withHourlyRollupLock<T>(work: () => Promise<T>): Promise<T | null> {
+		return work();
+	}
+
+	async withStateSamplingLock<T>(work: () => Promise<T>): Promise<T | null> {
+		return work();
+	}
+
+	async latestStateSampleAt(): Promise<number | null> {
+		if (this.states.length === 0) return null;
+		return Math.max(...this.states.map((state) => state.sampledAt.epochMilliseconds));
 	}
 }

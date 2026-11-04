@@ -1,101 +1,125 @@
 import {
-	BrowserIdentityConfigSchema,
+	BilibiliCredentialBundleSchema,
 	type BrowserIdentityConfig,
 	type BilibiliCredentialBundle,
 } from "@cvsa/contracts";
+import { HeaderGenerator } from "header-generator";
 
-type Identity = BilibiliCredentialBundle["identity"];
+type BrowserHeaderProfile = {
+	identity: BilibiliCredentialBundle["identity"];
+	headers: Record<string, string>;
+};
 
-export function chooseBrowserIdentity(
+const generator = new HeaderGenerator({
+	browsers: ["chrome", "edge", "safari"],
+	devices: ["desktop"],
+	operatingSystems: ["windows", "macos", "linux"],
+	httpVersion: "2",
+	locales: ["zh-CN", "zh", "en"],
+	strict: true,
+});
+
+const CLIENT_HINT_HEADERS = ["sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"] as const;
+const CLIENT_HINT_ATTEMPTS = 8;
+
+function generateHeaders(family: BilibiliCredentialBundle["identity"]["family"]) {
+	let headers = generator.getHeaders({ browsers: [family] });
+	if (family === "safari") return headers;
+	for (
+		let attempt = 1;
+		attempt < CLIENT_HINT_ATTEMPTS &&
+		!CLIENT_HINT_HEADERS.every((name) => headers[name] !== undefined);
+		attempt++
+	) {
+		headers = generator.getHeaders({ browsers: [family] });
+	}
+	return headers;
+}
+
+export function chooseBrowserHeaders(
 	config: BrowserIdentityConfig,
 	random: () => number = Math.random
-): Identity {
-	const validated = BrowserIdentityConfigSchema.parse(config);
-	const families: Identity["family"][] = ["chrome", "edge", "safari"];
+): BrowserHeaderProfile {
+	const families: BilibiliCredentialBundle["identity"]["family"][] = ["chrome", "edge", "safari"];
 	const family =
-		validated.family === "auto"
+		config.family === "auto"
 			? (families[Math.min(families.length - 1, Math.floor(random() * families.length))] ??
 				"chrome")
-			: validated.family;
-	const version =
-		family === "chrome"
-			? validated.chromeVersion
+			: config.family;
+	const headers = generateHeaders(family);
+	const userAgent = headers["user-agent"] ?? headers["User-Agent"] ?? "";
+	const versionPattern =
+		family === "safari"
+			? /Version\/([\d.]+)/
 			: family === "edge"
-				? validated.edgeVersion
-				: validated.safariVersion;
-	return { family, version, language: validated.language };
+				? /Edg\/([\d.]+)/
+				: /Chrome\/([\d.]+)/;
+	const identity = BilibiliCredentialBundleSchema.shape.identity.parse({
+		family,
+		version: userAgent.match(versionPattern)?.[1] ?? "1.0",
+		language: config.language,
+	});
+	headers["accept-language"] = config.language;
+	return { identity, headers };
 }
 
 export function browserRequestHeaders(
-	identity: Identity,
+	profile: BrowserHeaderProfile,
 	url: string,
 	method = "GET",
 	extra: Record<string, string> = {}
 ): Record<string, string> {
 	const target = new URL(url);
-	const managed = new Set([
-		"user-agent",
-		"accept-language",
-		"sec-ch-ua",
-		"sec-ch-ua-mobile",
-		"sec-ch-ua-platform",
+	const supplied = Object.fromEntries(
+		Object.entries(extra).map(([name, value]) => [name.toLowerCase(), value])
+	);
+	const initiator = new URL(supplied.origin ?? supplied.referer ?? "https://www.bilibili.com/");
+	const biliSite = (hostname: string) =>
+		hostname === "bilibili.com" || hostname.endsWith(".bilibili.com");
+	const navigation =
+		target.origin === "https://www.bilibili.com" && target.pathname === "/" && method === "GET";
+	const headers: Record<string, string> = { ...supplied, ...profile.headers };
+	for (const name of [
 		"sec-fetch-site",
 		"sec-fetch-mode",
 		"sec-fetch-dest",
-		"priority",
-	]);
-	const supplied = Object.fromEntries(
-		Object.entries(extra).filter(
-			([key]) =>
-				!managed.has(key.toLowerCase()) &&
-				!key.toLowerCase().startsWith("sec-ch-ua") &&
-				!key.toLowerCase().startsWith("sec-fetch-")
+		"sec-fetch-user",
+		"upgrade-insecure-requests",
+		"te",
+	])
+		delete headers[name];
+	headers.priority = navigation ? "u=0, i" : "u=1, i";
+	if (navigation) {
+		headers["sec-fetch-site"] = "none";
+		headers["sec-fetch-mode"] = "navigate";
+		headers["sec-fetch-dest"] = "document";
+		headers["sec-fetch-user"] = "?1";
+		headers["upgrade-insecure-requests"] = "1";
+	} else {
+		headers.accept = supplied.accept ?? "application/json, text/plain, */*";
+		headers.referer = initiator.href;
+		headers["sec-fetch-site"] =
+			target.origin === initiator.origin
+				? "same-origin"
+				: biliSite(target.hostname) && biliSite(initiator.hostname)
+					? "same-site"
+					: "cross-site";
+		headers["sec-fetch-mode"] = "cors";
+		headers["sec-fetch-dest"] = "empty";
+		if (target.origin !== initiator.origin || (method !== "GET" && method !== "HEAD"))
+			headers.origin = initiator.origin;
+	}
+	return generator.orderHeaders(
+		Object.fromEntries(
+			Object.entries(headers).map(([name, value]) => [
+				name.startsWith("sec-ch-")
+					? name
+					: name
+							.split("-")
+							.map((part) => part[0].toUpperCase() + part.slice(1))
+							.join("-"),
+				value,
+			])
 		)
 	);
-	const initiator = new URL(
-		extra.Origin ??
-			extra.origin ??
-			extra.Referer ??
-			extra.referer ??
-			"https://www.bilibili.com/"
-	);
-	const sameSite =
-		target.hostname.endsWith(".bilibili.com") && initiator.hostname.endsWith(".bilibili.com");
-	const navigation =
-		target.origin === "https://www.bilibili.com" && target.pathname === "/" && method === "GET";
-	const major = identity.version.split(".")[0];
-	const headers: Record<string, string> = {
-		Accept: navigation
-			? "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-			: target.pathname === "/"
-				? "*/*"
-				: "application/json, text/plain, */*",
-		"Accept-Language": identity.language,
-		Referer: initiator.href,
-		"Sec-Fetch-Site": navigation
-			? "none"
-			: target.origin === initiator.origin
-				? "same-origin"
-				: sameSite
-					? "same-site"
-					: "cross-site",
-		"Sec-Fetch-Mode": navigation ? "navigate" : "cors",
-		"Sec-Fetch-Dest": navigation ? "document" : "empty",
-		Priority: navigation ? "u=0, i" : "u=1, i",
-		...supplied,
-	};
-	if (!navigation && target.origin !== initiator.origin) headers.Origin = initiator.origin;
-	if (navigation) headers["Sec-Fetch-User"] = "?1";
-	if (identity.family === "safari") {
-		headers["User-Agent"] =
-			`Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/${identity.version} Safari/605.1.15`;
-	} else {
-		headers["User-Agent"] =
-			`Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36${identity.family === "edge" ? ` Edg/${major}.0.0.0` : ""}`;
-		headers["sec-ch-ua"] =
-			`"Not/A)Brand";v="8", "Chromium";v="${major}", "${identity.family === "edge" ? "Microsoft Edge" : "Google Chrome"}";v="${major}"`;
-		headers["sec-ch-ua-mobile"] = "?0";
-		headers["sec-ch-ua-platform"] = '"Windows"';
-	}
-	return headers;
 }

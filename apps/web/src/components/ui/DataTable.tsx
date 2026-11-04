@@ -9,6 +9,7 @@ export type TableColumn<T> = {
 };
 
 type DataTableProps<T> = {
+	tableClass?: string;
 	columns: readonly TableColumn<T>[];
 	items: readonly T[];
 	busy?: boolean;
@@ -30,12 +31,16 @@ export default function DataTable<T>(props: DataTableProps<T>) {
 		</tr>
 	);
 	return (
-		<Table head={head()} busy={props.busy}>
+		<Table class={props.tableClass} head={head()} busy={props.busy}>
 			<For each={props.items} fallback={empty()}>
 				{(item) => (
 					<tr
+						class="border-b border-border last:border-b-0"
 						onClick={props.onRowClick ? () => props.onRowClick?.(item) : undefined}
-						classList={{ "cursor-pointer": Boolean(props.onRowClick) }}
+						classList={{
+							"cursor-pointer": Boolean(props.onRowClick),
+							"hover:bg-hover": Boolean(props.onRowClick),
+						}}
 					>
 						<For each={props.columns}>
 							{(column) => <td class={column.class}>{column.cell(item)}</td>}

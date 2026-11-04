@@ -8,7 +8,7 @@ interface VideoSchedulerCardProps {
 }
 
 export default function VideoSchedulerCard(props: VideoSchedulerCardProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 
 	return (
 		<div class="flex flex-col gap-3">

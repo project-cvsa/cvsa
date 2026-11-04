@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 const tasks = new AsyncLocalStorage<AbortSignal | undefined>();
+const activeTasks = new Set<Promise<unknown>>();
 
 export class TaskDeadlineError extends Error {
 	constructor() {
@@ -35,8 +36,14 @@ export async function runTaskWithDeadline<T>(
 		signal.addEventListener("abort", abort, { once: true });
 	});
 	const timer = setTimeout(() => controller.abort(new TaskDeadlineError()), timeoutMs);
+	const workPromise = tasks.run(signal, work);
+	activeTasks.add(workPromise);
+	void workPromise.then(
+		() => activeTasks.delete(workPromise),
+		() => activeTasks.delete(workPromise)
+	);
 	try {
-		return await Promise.race([tasks.run(signal, work), deadline]);
+		return await Promise.race([workPromise, deadline]);
 	} finally {
 		clearTimeout(timer);
 		signal.removeEventListener("abort", abort);
@@ -46,4 +53,19 @@ export async function runTaskWithDeadline<T>(
 
 export function outsideCrawlerTask<T>(work: () => Promise<T>): Promise<T> {
 	return tasks.run(undefined, work);
+}
+
+/**
+ * Waits for work whose outer deadline has already rejected. Shutdown uses this
+ * so a job is not reported finished while its database write is still running.
+ */
+export async function drainActiveTasks(timeoutMs: number): Promise<void> {
+	if (activeTasks.size === 0) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, timeoutMs);
+		timer.unref?.();
+	});
+	await Promise.race([Promise.allSettled([...activeTasks]).then(() => undefined), deadline]);
+	if (timer) clearTimeout(timer);
 }

@@ -75,6 +75,13 @@ export type CandidateEvaluation =
  * exactly the same gate as the queued worker instead of inserting candidates
  * straight into `video_tracking`.
  */
+function channelOf(source: CandidateSource): "search" | "related" | "manual" | "hot_sample" {
+	if (source === "search") return "search";
+	if (source === "manual") return "manual";
+	if (source === "hot_sample") return "hot_sample";
+	return "related";
+}
+
 export class DiscoveryCandidateEvaluator {
 	private readonly stats: StatsRecorder;
 
@@ -92,31 +99,33 @@ export class DiscoveryCandidateEvaluator {
 	async evaluate(input: CandidateEvaluationInput): Promise<CandidateEvaluation> {
 		return traceTask("discovery.evaluateCandidate", async () => {
 			const { aid, source } = input;
-			this.stats.recordCount("candidatesSeen");
+			const channel = channelOf(source);
+			this.stats.record("candidatesStarted");
+			this.stats.recordDiscovery(channel, "appeared");
 			const origin = input.origin ?? fallbackOrigin(source);
 
 			const labeled = await this.discoveryRepo.getSample(aid);
 			if (labeled?.humanLabel === 0) {
-				this.stats.recordCount("candidatesSkipped");
+				this.finishCandidate(channel, "skipped");
 				return { status: "skipped", reason: "human_rejected" };
 			}
 
-			if (!input.force) {
-				const existing = await this.trackingRepo.getTracking(aid);
-				if (existing) {
-					this.stats.recordCount("candidatesSkipped");
-					return { status: "skipped", reason: "already_tracked" };
-				}
+			const existingTracking = await this.trackingRepo.getTracking(aid);
+			if (existingTracking && !input.force) {
+				this.finishCandidate(channel, "skipped");
+				return { status: "skipped", reason: "already_tracked" };
 			}
 
 			let details: VideoDetailsData;
 			try {
 				details = await this.bilibiliClient.getVideoDetails(aid);
 			} catch (error) {
-				if (!(error instanceof RetryLaterError)) this.stats.recordCount("candidatesFailed");
+				this.finishCandidate(
+					channel,
+					error instanceof RetryLaterError ? "deferred" : "failure"
+				);
 				return this.handleFetchFailure(aid, error);
 			}
-			this.stats.recordCandidatesScanned();
 
 			const view = details.View;
 			const card = details.Card;
@@ -134,6 +143,8 @@ export class DiscoveryCandidateEvaluator {
 				this.classifier
 			);
 
+			if (decision.reason === "model_unavailable")
+				this.stats.recordDeferral({ reason: "model_unavailable" });
 			const now = toInstant(new Date());
 			const pubdate = view.pubdate ? toInstant(new Date(view.pubdate * 1_000)) : null;
 			const ctime = view.ctime ? toInstant(new Date(view.ctime * 1_000)) : null;
@@ -205,7 +216,7 @@ export class DiscoveryCandidateEvaluator {
 				// flight; never let that evaluation add it back.
 				const latest = await this.discoveryRepo.getSample(aid);
 				if (latest?.humanLabel === 0) {
-					this.stats.recordCount("candidatesSkipped");
+					this.finishCandidate(channel, "skipped");
 					return { status: "skipped", reason: "human_rejected" };
 				}
 				await this.trackingRepo.upsertTracking({
@@ -218,7 +229,8 @@ export class DiscoveryCandidateEvaluator {
 					lastError: null,
 				});
 
-				this.stats.recordVideosDiscovered(1);
+				this.stats.recordDiscoveryDecision(decision.reason, true);
+				this.finishCandidate(channel, existingTracking ? "existing" : "newTracking");
 
 				appLogger.info("Discovery candidate accepted and added to tracking", {
 					component: "discovery-evaluator",
@@ -266,9 +278,26 @@ export class DiscoveryCandidateEvaluator {
 				});
 			}
 
-			this.stats.recordCount("candidatesRejected");
+			this.stats.recordDiscoveryDecision(decision.reason, false);
+			this.finishCandidate(channel, "rejected");
 			return { status: "rejected", decision, details };
 		});
+	}
+
+	private finishCandidate(
+		channel: "search" | "related" | "manual" | "hot_sample",
+		result:
+			| "newTracking"
+			| "existing"
+			| "rejected"
+			| "skipped"
+			| "deferred"
+			| "cancelled"
+			| "timeout"
+			| "failure"
+	): void {
+		this.stats.recordDiscovery(channel, result);
+		this.stats.record("candidatesFinished");
 	}
 
 	/**

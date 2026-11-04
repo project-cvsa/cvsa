@@ -17,7 +17,7 @@ interface ManualIngestModalProps {
 }
 
 function IngestResult(props: { result: IngestVideoResponse }) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 	return (
 		<div class="p-4 border border-border bg-surface-container-high flex flex-col gap-3">
 			<div class="flex items-center gap-2 text-primary ts-label">
@@ -46,12 +46,10 @@ function IngestResult(props: { result: IngestVideoResponse }) {
 					</a>
 					<div class="flex items-center gap-2 ts-caption text-secondary">
 						<span>{props.result.bvid}</span>
-						<span>·</span>
 						<span>
 							{t("videoDetail.uploader")}:{" "}
 							{props.result.ownerName ?? t("ingest.unknown")}
 						</span>
-						<span>·</span>
 						<span>
 							{t("videoDetail.videoStatus")}: {props.result.state}
 						</span>
@@ -63,7 +61,7 @@ function IngestResult(props: { result: IngestVideoResponse }) {
 }
 
 export default function ManualIngestModal(props: ManualIngestModalProps) {
-	const t = getComponentT("crawler");
+	const t = getComponentT("crawler:video");
 
 	const [identifier, setIdentifier] = createSignal("");
 	const [mode, setMode] = createSignal<"new" | "regular" | "milestone" | "archive">("regular");

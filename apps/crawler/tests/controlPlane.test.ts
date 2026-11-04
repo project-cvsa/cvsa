@@ -1,4 +1,5 @@
 import {
+	type MilestoneImportRequest,
 	AdaptiveRateConfigSchema,
 	BilibiliSessionConfigSchema,
 	CrawlerExecutionConfigSchema,
@@ -15,6 +16,7 @@ import {
 	networkRuntimeConfig,
 	toInstant,
 	videoTracking,
+	videoMilestone,
 } from "@cvsa/snapshot-db";
 import { crawlerEnv } from "@cvsa/env";
 import { treaty } from "@elysiajs/eden";
@@ -43,6 +45,7 @@ const PROXY_URL = `http://${PROXY_CREDENTIAL}`;
 const TRACKING_AID = 9_100_000_000_000_001n;
 const SAMPLE_AID = 9_100_000_000_000_002n;
 const METADATA_AID = 9_100_000_000_000_003n;
+const MILESTONE_AID = 9_100_000_000_000_099n;
 const TOUCHED_AIDS = [TRACKING_AID, SAMPLE_AID, METADATA_AID];
 
 async function cleanupSeededRows(): Promise<void> {
@@ -111,12 +114,18 @@ async function storedRow() {
 describe("crawler control plane", () => {
 	beforeAll(async () => {
 		await crawlerSnapshotDb.client
+			.delete(videoMilestone)
+			.where(eq(videoMilestone.aid, MILESTONE_AID));
+		await crawlerSnapshotDb.client
 			.delete(networkRuntimeConfig)
 			.where(eq(networkRuntimeConfig.id, "default"));
 		await cleanupSeededRows();
 	});
 
 	afterAll(async () => {
+		await crawlerSnapshotDb.client
+			.delete(videoMilestone)
+			.where(eq(videoMilestone.aid, MILESTONE_AID));
 		await cleanupSeededRows();
 		await networkRuntime.close();
 		await crawlerMq.close();
@@ -128,6 +137,70 @@ describe("crawler control plane", () => {
 		// local development data by accident would be destructive.
 		expect(crawlerEnv.SNAPSHOT_DATABASE_URL).toContain("cvsa_snapshot_test");
 	});
+
+	test.serial("accepts the overview percentile presets sent by the admin page", async () => {
+		for (const quantiles of [
+			"0.5,0.9,0.95,0.99",
+			"0.5,0.95,0.99",
+			"0.5,0.9,0.99",
+			"0.5,0.99",
+		]) {
+			const response = await api.v2.stats.overview.get({
+				...authorized,
+				query: { window: "1h", quantiles },
+			});
+			expect(response.status).toBe(200);
+		}
+	});
+
+	test.serial(
+		"imports and lists a known milestone minute without requiring engagement metrics",
+		async () => {
+			const body: MilestoneImportRequest = {
+				items: [
+					{
+						aid: String(MILESTONE_AID),
+						threshold: 100000,
+						timeKind: "minute",
+						at: "2026-11-01T12:30:00+08:00",
+					},
+				],
+			};
+			const first = await api.v2.milestones.records.post(body, authorized);
+			expect(first.status).toBe(200);
+			expect(first.data?.inserted).toBe(1);
+			const duplicate = await api.v2.milestones.records.post(body, authorized);
+			expect(duplicate.data?.inserted).toBe(0);
+			const listed = await api.v2.milestones
+				.videos({ aid: String(MILESTONE_AID) })
+				.get(authorized);
+			expect(listed.status).toBe(200);
+			expect(listed.data?.items[0]).toMatchObject({
+				threshold: 100000,
+				source: "manual",
+				views: null,
+				timeKind: "minute",
+			});
+			expect(new Date(listed.data?.achievements[0]?.reachedMinute ?? 0).toISOString()).toBe(
+				"2026-11-01T04:30:00.000Z"
+			);
+			const invalid = await api.v2.milestones.records.post(
+				{
+					items: [
+						{
+							aid: String(MILESTONE_AID),
+							threshold: 100000,
+							timeKind: "by",
+							at: "2026-11-01T12:30:00+08:00",
+							views: 99000,
+						},
+					],
+				},
+				authorized
+			);
+			expect(invalid.status).toBe(422);
+		}
+	);
 
 	test.serial("rejects a request without an authorization header", async () => {
 		const { error, status } = await runtimeApi.status.get();
@@ -296,12 +369,8 @@ describe("crawler control plane", () => {
 
 		expect(status).toBe(200);
 		expect(data?.window).toBe("5m");
-		expect(data?.queues).toBeDefined();
-		expect(data?.latencyMs).toMatchObject({
-			taskP95: expect.any(Number),
-			apiP95: expect.any(Number),
-			inferenceP95: expect.any(Number),
-		});
+		expect(data?.current.queues).toBeDefined();
+		expect(data?.latency).toBeDefined();
 		expect(Array.isArray(data?.series)).toBe(true);
 	});
 
@@ -405,7 +474,7 @@ describe("crawler control plane", () => {
 					...original,
 					session: BilibiliSessionConfigSchema.parse({
 						refreshIntervalMs: 7200000,
-						browser: { family: "safari", safariVersion: "27.2" },
+						browser: { family: "safari" },
 						recoveryAttempts: 2,
 					}),
 					adaptive: AdaptiveRateConfigSchema.parse({
@@ -428,7 +497,7 @@ describe("crawler control plane", () => {
 				expect(loaded.data?.config.execution).toEqual(config.execution);
 				const status = await runtimeApi.status.get(authorized);
 				expect(status.data?.revision).toBe(saved.data?.revision);
-				expect(status.data?.session?.browser).toBe("safari 27.2");
+				expect(status.data?.session?.browser).toMatch(/^safari \d+/);
 			} finally {
 				const latest = await runtimeApi.config.get(authorized);
 				if (latest.data)

@@ -15,6 +15,8 @@ export interface CreateSnapshotInput {
 export interface ISnapshotRepository {
 	createSnapshots(snapshots: CreateSnapshotInput[]): Promise<number>;
 	getRecentSnapshots(aid: bigint, limit?: number): Promise<VideoSnapshot[]>;
+	getFirstSnapshot(aid: bigint): Promise<VideoSnapshot | null>;
+	getSchedulingHistory(aid: bigint, at: Temporal.Instant): Promise<VideoSnapshot[]>;
 	listSnapshots(
 		aid: bigint,
 		options: { limit: number; offset: number }

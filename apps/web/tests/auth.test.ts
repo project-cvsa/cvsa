@@ -9,11 +9,21 @@ vi.mock("@cvsa/authentication", () => ({
 	getRoleNameById: vi.fn(),
 }));
 
+vi.mock("@cvsa/logger", () => ({
+	appLogger: {
+		warn: vi.fn(),
+		info: vi.fn(),
+		error: vi.fn(),
+		debug: vi.fn(),
+	},
+}));
+
 import {
 	resolveAuthFromHeaders,
 	type sessionToDto,
 	userToCurrentUserInfoDto,
 } from "@cvsa/authentication";
+import { appLogger } from "@cvsa/logger";
 import type { CurrentUserInfoDto } from "@cvsa/authentication";
 import { resolveCurrentAuth, resolveCurrentUser } from "@lib/auth/server";
 import {
@@ -119,14 +129,15 @@ describe("resolveCurrentAuth()", () => {
 
 	test("degrades to anonymous when the session lookup fails", async () => {
 		resolveAuthMock.mockRejectedValue(new Error("database unreachable"));
-		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const request = createRequest({ cookie: "cvsa.session_token=session-token" });
 
 		const result = await resolveCurrentAuth(request);
 
 		expect(result).toEqual({ user: null, session: null });
-		expect(warnSpy).toHaveBeenCalledTimes(1);
-		warnSpy.mockRestore();
+		expect(appLogger.warn).toHaveBeenCalledWith(
+			"Failed to resolve session, treating visitor as anonymous",
+			expect.objectContaining({ component: "web-auth" })
+		);
 	});
 });
 

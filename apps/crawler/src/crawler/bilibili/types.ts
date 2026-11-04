@@ -1,5 +1,6 @@
 import type { BilibiliRequestPurpose, BilibiliSessionConfig } from "@cvsa/contracts";
 import type { NetworkDelegate } from "@cvsa/network-scheduler";
+import type { StatsRecorder } from "../stats/types";
 
 export interface BilibiliHttpResponse {
 	body: string;
@@ -36,6 +37,7 @@ export interface BilibiliClientOptions {
 	random?: () => number;
 	requestTimeoutMs?: () => number;
 	operationTimeoutMs?: () => number;
+	stats?: StatsRecorder;
 }
 
 export interface SearchVideosOptions {

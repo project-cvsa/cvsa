@@ -1,43 +1,52 @@
-import { derivedMetrics } from "./aggregation";
+import { z } from "zod";
 import {
 	AppError,
+	CrawlerStatsExportStateSchema,
+	CrawlerStatsModelStateSchema,
+	CrawlerStatsQueueStateSchema,
+	CrawlerStatsResourceStateSchema,
+	CrawlerStatsTrackingStateSchema,
+	CrawlerStrategyStatusSchema,
+	CRAWLER_STATS_FORMAT_VERSION,
 	type CrawlerOverviewStats,
 	type CrawlerQueueJobDetail,
 	type CrawlerQueueJobItem,
-	type CrawlerQueueJobsResponse,
 	type CrawlerQueueJobsQuery,
-	type CrawlerQueueSnapshot,
+	type CrawlerQueueJobsResponse,
 	type CrawlerQueueName,
 	type CrawlerStatsQuery,
+	type CrawlerStatsQueueState,
+	type CrawlerStrategyStatus,
+	type CrawlerStatsModelState,
+	type CrawlerStatsResourceState,
+	type CrawlerStatsExportState,
+	type CrawlerStatsTrackingState,
 } from "@cvsa/contracts";
 import type { JobType } from "bullmq";
-import type { CrawlerQueue, CrawlerJobCounts, CrawlerQueueJobSnapshot } from "../shared/types";
+import type { CrawlerQueue, CrawlerJobCounts } from "../shared/types";
 import type { CrawlerStatsCollector } from "./collector";
-async function readQueue(queue: CrawlerQueue<unknown>): Promise<CrawlerQueueSnapshot> {
-	const counts = await queue.getJobCounts();
-	const oldest =
-		counts.waiting > 0 ? await queue.getJobs(["waiting"], 1, counts.waiting - 1) : [];
-	return {
-		waiting: counts.waiting,
-		active: counts.active,
-		delayed: counts.delayed,
-		failed: counts.failed,
-		oldestWaitSec: oldest[0] ? Math.max(0, (Date.now() - oldest[0].timestamp) / 1000) : 0,
-	};
-}
+import {
+	computeRatios,
+	distributionSummariesForPrefix,
+	ratioInputs as ratioInputsOf,
+	summarizeLatency,
+} from "./aggregation";
+import type {
+	StatsExportState,
+	StatsModelState,
+	StatsOverviewDeps,
+	StatsQueueSnapshot,
+	StatsResourceState,
+	StatsStrategyState,
+	StatsTrackingState,
+} from "./types";
+import type { CrawlerStatsStateRepository } from "./stateRepository";
+import { readQueues } from "./queueState";
 
-async function readQueues(
-	snapshotQueue: CrawlerQueue<unknown>,
-	discoveryQueue: CrawlerQueue<unknown>
-): Promise<Record<string, CrawlerQueueSnapshot>> {
-	const [tracking, discovery] = await Promise.all([
-		readQueue(snapshotQueue),
-		readQueue(discoveryQueue),
-	]);
-	return { tracking, discovery };
-}
-
-function jobItem(job: CrawlerQueueJobSnapshot, queue: CrawlerQueueName): CrawlerQueueJobItem {
+function jobItem(
+	job: import("../shared/types").CrawlerQueueJobSnapshot,
+	queue: CrawlerQueueName
+): CrawlerQueueJobItem {
 	const data = job.data;
 	let target: string | null = null;
 	if (typeof data === "object" && data !== null) {
@@ -65,48 +74,260 @@ function jobItem(job: CrawlerQueueJobSnapshot, queue: CrawlerQueueName): Crawler
 	};
 }
 
+function readState<T>(
+	row: { status: string; data: unknown } | undefined,
+	schema: { safeParse(value: unknown): { success: true; data: T } | { success: false } }
+): T | null {
+	if (row?.status !== "success") return null;
+	const parsed = schema.safeParse(row.data);
+	return parsed.success ? parsed.data : null;
+}
+
+function queueState(counts: StatsQueueSnapshot): CrawlerStatsQueueState {
+	return {
+		waiting: counts.waiting,
+		prioritized: counts.prioritized,
+		active: counts.active,
+		delayed: counts.delayed,
+		failed: counts.failed,
+		completed: counts.completed,
+		oldestWaitSec: counts.oldestWaitSec,
+		activeAgeSec: counts.activeAgeSec,
+	};
+}
+
+function modelState(state: StatsModelState): CrawlerStatsModelState {
+	return {
+		reachable: state.reachable,
+		modelsLoaded: state.modelsLoaded,
+		modelVersion: state.modelVersion,
+		activeRequests: state.activeRequests,
+		waitingRequests: state.waitingRequests,
+		loadFailures: state.loadFailures,
+		starts: state.starts,
+		exits: state.exits,
+		timeoutTerminations: state.timeoutTerminations,
+		cancelTerminations: state.cancelTerminations,
+	};
+}
+
+function resourceState(state: StatsResourceState | null): CrawlerStatsResourceState | null {
+	if (!state) return null;
+	return {
+		sampledAt: state.sampledAt,
+		processes: state.processes.map((process) => ({
+			id: process.id,
+			role: process.role,
+			cpuPercent: process.cpuPercent,
+			rssBytes: process.rssBytes,
+		})),
+		eventLoopDelayMs: state.eventLoopDelayMs,
+	};
+}
+
+function exportState(state: StatsExportState | null): CrawlerStatsExportState {
+	return (
+		state ?? {
+			enabled: false,
+			successes: 0,
+			failures: 0,
+			lastSuccessAt: null,
+			durationMs: null,
+			lastResult: "not_exported",
+			lastError: null,
+		}
+	);
+}
+
+function strategyState(state: StatsStrategyState): CrawlerStrategyStatus {
+	return state;
+}
+
+function trackingState(state: StatsTrackingState | null): CrawlerStatsTrackingState {
+	return (
+		state ?? {
+			total: 0,
+			byState: {},
+			byPriority: {},
+			neverCaptured: 0,
+			freshness: { count: 0, meanSec: null, quantilesSec: {}, maxSec: null },
+			freshnessByState: {},
+			freshnessByPriority: {},
+			dueNow: 0,
+			metadataDue: 0,
+			maxOverdueLagSec: 0,
+		}
+	);
+}
+
 export class CrawlerAdminStatsService {
 	constructor(
 		private readonly queues: Record<CrawlerQueueName, CrawlerQueue<unknown>>,
-		private readonly collector: CrawlerStatsCollector
+		private readonly collector: CrawlerStatsCollector,
+		private readonly deps: StatsOverviewDeps = {},
+		private readonly stateRepository?: CrawlerStatsStateRepository
 	) {}
 
 	async overview(query: CrawlerStatsQuery): Promise<CrawlerOverviewStats> {
 		const { window, minutes } = query;
-
-		const [overview, queues] = await Promise.all([
-			this.collector.getReport(window, minutes),
-			readQueues(this.queues.tracking, this.queues.discovery),
-		]);
-
-		const counters = overview.metrics.counters;
-		const errors = overview.metrics.errors;
-		const derived = derivedMetrics(overview.metrics);
-
-		return {
+		const quantiles = query.quantiles
+			?.split(",")
+			.map(Number)
+			.filter((value) => Number.isFinite(value) && value > 0 && value <= 1);
+		const report = await this.collector.getReport(
 			window,
 			minutes,
-			generatedAt: overview.generatedAt,
-			coverageFrom: new Date(overview.metrics.from).toISOString(),
-			coverageSeconds: (overview.metrics.to - overview.metrics.from) / 1000,
-			counters,
-			jobs: overview.metrics.jobs,
-			network: overview.metrics.network,
-			...derived,
-			snapshotsSaved: counters.snapshotsSaved,
-			videosDiscovered: counters.videosDiscovered,
-			totalAttempts: counters.networkRequests,
-			totalFailures: Object.values(errors).reduce((sum, n) => sum + n, 0),
-			breakdown: errors,
-			overdueTrackingCount: overview.tracking.overdueCount,
-			maxOverdueLagSec: overview.tracking.maxOverdueLagSec,
-			queues,
-			latencyMs: {
-				taskP95: overview.metrics.latencyP95Ms.task,
-				apiP95: overview.metrics.latencyP95Ms.api,
-				inferenceP95: overview.metrics.latencyP95Ms.inference,
+			quantiles && quantiles.length > 0 ? quantiles : undefined
+		);
+		const latest = report.latestStates;
+		const [liveQueues, labeling, videoCoverage, modelVersions] = await Promise.all([
+			this.deps.queueCounts?.() ??
+				(async () => {
+					const sampled = readState(
+						latest.get("queues"),
+						z.record(z.string(), CrawlerStatsQueueStateSchema)
+					);
+					return sampled ?? readQueues(this.queues);
+				})(),
+			this.deps.labeling?.(report.from, report.to) ??
+				this.stateRepository?.labelingState(report.from, report.to) ??
+				Promise.resolve({
+					samples: 0,
+					truePositive: 0,
+					falsePositive: 0,
+					trueNegative: 0,
+					falseNegative: 0,
+					accuracy: null,
+					precision: null,
+					recall: null,
+				}),
+			this.deps.videoCoverage?.(report.from, report.to) ??
+				this.stateRepository?.videoCoverage(report.from, report.to).catch(() => null) ??
+				Promise.resolve(null),
+			this.stateRepository
+				?.discoveryModelVersions(report.from, report.to)
+				.catch(() => ({})) ?? Promise.resolve({}),
+		]);
+		const [currentTracking, currentModel, currentResources, currentExport, currentStrategies] =
+			await Promise.all([
+				this.deps.trackingState?.(report.to) ??
+					Promise.resolve(
+						readState(latest.get("tracking"), CrawlerStatsTrackingStateSchema)
+					),
+				this.deps.modelState?.() ??
+					Promise.resolve(readState(latest.get("model"), CrawlerStatsModelStateSchema)),
+				this.deps.resourceState?.() ??
+					Promise.resolve(
+						readState(latest.get("resources"), CrawlerStatsResourceStateSchema)
+					),
+				this.deps.exportState?.() ??
+					Promise.resolve(readState(latest.get("export"), CrawlerStatsExportStateSchema)),
+				this.deps.strategies?.() ??
+					Promise.resolve(
+						readState(latest.get("strategies"), z.array(CrawlerStrategyStatusSchema)) ??
+							[]
+					),
+			]);
+		const sampledAt = [...latest.values()]
+			.map((row) => row.sampledAt.epochMilliseconds)
+			.sort((a, b) => b - a)[0];
+		const ratios = computeRatios(report.minutes);
+		const latency = summarizeLatency(report.minutes);
+		return {
+			version: CRAWLER_STATS_FORMAT_VERSION,
+			window,
+			minutes,
+			generatedAt: new Date().toISOString(),
+			range: {
+				from: new Date(report.from).toISOString(),
+				to: new Date(report.to).toISOString(),
+				seconds: (report.to - report.from) / 1000,
 			},
-			series: overview.series,
+			coverage: {
+				...report.coverage,
+				unavailableMetrics: report.availability
+					.filter((row) => row.enabledAt.epochMilliseconds > report.from)
+					.map((row) => row.metric),
+			},
+			counters: report.minutes.counters,
+			jobs: report.minutes.jobs,
+			network: report.minutes.network,
+			ratios,
+			ratioInputs: ratioInputsOf(report.minutes),
+			latency,
+			persistence: report.persistence,
+			instances: report.instances.map((instance) => ({
+				instanceId: instance.instanceId,
+				startedAt: new Date(instance.startedAt).toISOString(),
+				exitedAt:
+					instance.exitedAt === null ? null : new Date(instance.exitedAt).toISOString(),
+				lastPersistedAt: new Date(instance.lastPersistedAt).toISOString(),
+				coveredTo: new Date(instance.coveredTo).toISOString(),
+				heartbeatAt:
+					instance.heartbeatAt === null
+						? null
+						: new Date(instance.heartbeatAt).toISOString(),
+				active:
+					instance.exitedAt === null &&
+					(instance.heartbeatAt === null || Date.now() - instance.heartbeatAt < 30_000),
+			})),
+			current: {
+				sampledAt: sampledAt === undefined ? null : new Date(sampledAt).toISOString(),
+				stale: sampledAt === undefined || Date.now() - sampledAt > 60_000,
+				queues: Object.fromEntries(
+					Object.entries(liveQueues).map(([name, counts]) => [name, queueState(counts)])
+				),
+				tracking: trackingState(currentTracking),
+				model: modelState(
+					currentModel ?? {
+						reachable: null,
+						modelsLoaded: null,
+						modelVersion: null,
+						activeRequests: 0,
+						waitingRequests: 0,
+						loadFailures: 0,
+						starts: 0,
+						exits: 0,
+						timeoutTerminations: 0,
+						cancelTerminations: 0,
+					}
+				),
+				resources: resourceState(currentResources),
+				export: exportState(currentExport),
+				strategies: currentStrategies.map(strategyState),
+			},
+			discovery: {
+				byChannel: report.minutes.discovery,
+				byReason: report.minutes.discoveryReasons,
+				byModelVersion: modelVersions,
+			},
+			labeling,
+			videoCoverage,
+			database: {
+				byOperation: report.minutes.database,
+				durationMs: distributionSummariesForPrefix(
+					report.minutes.distributions,
+					"databaseOperation"
+				),
+			},
+			redis: {
+				byCommand: report.minutes.redis,
+				durationMs: distributionSummariesForPrefix(
+					report.minutes.distributions,
+					"redisOperation"
+				),
+			},
+			series: report.series,
+			legacy: report.legacy
+				? {
+						window,
+						from: new Date(report.legacy.from).toISOString(),
+						to: new Date(report.legacy.to).toISOString(),
+						counters: report.legacy.counters,
+						errors: report.legacy.errors,
+						latencyP95Ms: report.legacy.latencyP95Ms,
+					}
+				: null,
 		};
 	}
 
@@ -133,27 +354,28 @@ export class CrawlerAdminStatsService {
 				sum + states.reduce((n, state) => n + (counts.get(name)?.[state] ?? 0), 0),
 			0
 		);
-		const items: CrawlerQueueJobItem[] = [];
-		let offset = query.offset ?? 0;
-		for (const state of states) {
-			for (const name of names) {
-				const count = counts.get(name)?.[state] ?? 0;
-				if (offset >= count) {
-					offset -= count;
-					continue;
-				}
-				const types: JobType[] = [state];
-				const rows = await this.queues[name].getJobs(
-					types,
-					Math.min(query.limit - items.length, count - offset),
-					offset
-				);
-				items.push(...rows.map((row) => jobItem(row, name)));
-				offset = 0;
-				if (items.length >= query.limit) return { items, total };
+		const windowSize = (query.offset ?? 0) + query.limit;
+		const rows: Array<{
+			queue: CrawlerQueueName;
+			job: import("../shared/types").CrawlerQueueJobSnapshot;
+		}> = [];
+		for (const name of names) {
+			for (const state of states) {
+				const types: JobType[] = state === "waiting" ? ["waiting", "prioritized"] : [state];
+				const jobs = await this.queues[name].getJobs(types, windowSize, 0);
+				for (const job of jobs) rows.push({ queue: name, job });
 			}
 		}
-		return { items, total };
+		const sorted = rows
+			.sort(
+				(a, b) =>
+					a.job.timestamp - b.job.timestamp ||
+					a.queue.localeCompare(b.queue) ||
+					a.job.id.localeCompare(b.job.id)
+			)
+			.slice(query.offset ?? 0, (query.offset ?? 0) + query.limit)
+			.map((row) => jobItem(row.job, row.queue));
+		return { items: sorted, total };
 	}
 
 	async detail(queue: CrawlerQueueName, id: string): Promise<CrawlerQueueJobDetail> {

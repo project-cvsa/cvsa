@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import type { DatabaseClient, JsonValue } from "@cvsa/snapshot-db";
 import { networkRuntimeConfig } from "@cvsa/snapshot-db";
-import { traceTask } from "@cvsa/observability";
+import { createDatabaseTracer } from "../stats/databaseMetrics";
+import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { NetworkRuntimeConfig } from "@cvsa/network-scheduler";
 import type {
 	INetworkRuntimeConfigRepository,
@@ -23,10 +24,17 @@ function toRecord(record: {
 }
 
 export class NetworkRuntimeConfigRepository implements INetworkRuntimeConfigRepository {
-	constructor(private readonly db: DatabaseClient) {}
+	private readonly trace;
+
+	constructor(
+		private readonly db: DatabaseClient,
+		stats: StatsRecorder = createNoopStatsRecorder()
+	) {
+		this.trace = createDatabaseTracer(stats, "networkConfig");
+	}
 
 	async get(): Promise<NetworkRuntimeConfigRecordDto | null> {
-		const [record] = await traceTask("snapshotDb.networkRuntimeConfig.get", () =>
+		const [record] = await this.trace("networkRuntimeConfig.get", () =>
 			this.db
 				.select()
 				.from(networkRuntimeConfig)
@@ -37,7 +45,7 @@ export class NetworkRuntimeConfigRepository implements INetworkRuntimeConfigRepo
 	}
 
 	async create(config: NetworkRuntimeConfig): Promise<NetworkRuntimeConfigRecordDto | null> {
-		const [record] = await traceTask("snapshotDb.networkRuntimeConfig.create", () =>
+		const [record] = await this.trace("networkRuntimeConfig.create", () =>
 			this.db
 				.insert(networkRuntimeConfig)
 				.values({
@@ -54,7 +62,7 @@ export class NetworkRuntimeConfigRepository implements INetworkRuntimeConfigRepo
 		expectedRevision: number,
 		config: NetworkRuntimeConfig
 	): Promise<NetworkRuntimeConfigRecordDto | null> {
-		const [record] = await traceTask("snapshotDb.networkRuntimeConfig.replace", () =>
+		const [record] = await this.trace("networkRuntimeConfig.replace", () =>
 			this.db
 				.update(networkRuntimeConfig)
 				.set({

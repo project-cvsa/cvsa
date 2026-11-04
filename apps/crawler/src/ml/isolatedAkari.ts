@@ -18,6 +18,17 @@ function defaultWorkerUrl(): URL {
 	return new URL("./akariWorker.ts", import.meta.url);
 }
 
+export type ClassifierLifecycleEvent =
+	| "start"
+	| "exit"
+	| "timeoutTermination"
+	| "cancelTermination";
+
+export interface ClassifierProcessHooks {
+	onLifecycle?: (event: ClassifierLifecycleEvent) => void;
+	onWait?: (waitMs: number) => void;
+}
+
 /** One native inference process, replaced on cancellation or timeout. */
 export class IsolatedAkariClassifier {
 	private child: ChildProcess | undefined;
@@ -25,20 +36,33 @@ export class IsolatedAkariClassifier {
 	private tail: Promise<unknown> = Promise.resolve();
 	private active: { id: number; reject: (error: Error) => void } | undefined;
 	private closed = false;
+	private waiting = 0;
 	constructor(
 		private readonly timeoutMs: () => number = () => 30000,
-		private readonly workerUrl = defaultWorkerUrl()
+		private readonly workerUrl = defaultWorkerUrl(),
+		private readonly hooks: ClassifierProcessHooks = {}
 	) {}
-	private terminate(): void {
+	private terminate(kind: ClassifierLifecycleEvent = "exit"): void {
 		const child = this.child;
+		if (!child) return;
 		this.child = undefined;
-		child?.kill("SIGKILL");
+		child.kill("SIGKILL");
 		this.active?.reject(new Error("Inference process stopped"));
 		this.active = undefined;
+		this.hooks.onLifecycle?.(kind);
+	}
+	get pid(): number | undefined {
+		return this.child?.pid;
+	}
+	get activeCount(): number {
+		return this.active ? 1 : 0;
+	}
+	get waitingCount(): number {
+		return this.waiting;
 	}
 	close(): void {
 		this.closed = true;
-		this.terminate();
+		this.terminate("exit");
 	}
 	private process(): ChildProcess {
 		if (this.closed) throw new Error("Classifier is closed");
@@ -48,11 +72,12 @@ export class IsolatedAkariClassifier {
 			stdio: ["ignore", "ignore", "ignore", "ipc"],
 		});
 		this.child = child;
+		this.hooks.onLifecycle?.("start");
 		child.on("error", () => {
-			if (this.child === child) this.terminate();
+			if (this.child === child) this.terminate("exit");
 		});
 		child.on("exit", () => {
-			if (this.child === child) this.terminate();
+			if (this.child === child) this.terminate("exit");
 		});
 		child.unref();
 		return child;
@@ -60,9 +85,13 @@ export class IsolatedAkariClassifier {
 	private async run(request: AkariWorkerRequest): Promise<AkariWorkerReply> {
 		const signal = getTaskSignal();
 		let cancelled = false;
+		this.waiting++;
+		const queuedAt = performance.now();
 		const pending = this.tail
 			.catch(() => {})
 			.then(async () => {
+				this.waiting = Math.max(0, this.waiting - 1);
+				this.hooks.onWait?.(performance.now() - queuedAt);
 				if (cancelled) throw new Error("Inference cancelled while queued");
 				signal?.throwIfAborted();
 				const child = this.process();
@@ -96,7 +125,14 @@ export class IsolatedAkariClassifier {
 			return await boundedOperation(() => pending, this.timeoutMs(), signal);
 		} catch (error) {
 			cancelled = true;
-			if (this.active?.id === request.id) this.terminate();
+			if (this.active?.id === request.id) {
+				const timedOut =
+					error instanceof Error &&
+					/timed out|Inference process stopped/i.test(error.message);
+				this.terminate(
+					signal?.aborted ? "cancelTermination" : timedOut ? "timeoutTermination" : "exit"
+				);
+			}
 			throw error;
 		}
 	}

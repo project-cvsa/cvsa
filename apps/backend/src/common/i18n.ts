@@ -18,7 +18,7 @@ const getBundleLocation = () => {
 	return path.resolve(import.meta.dir, "../../../../locale");
 };
 
-i18n.use(
+i18n.config({ baseNamespace: "backend" }).use(
 	initFaneeNode({
 		bundlePath: getBundleLocation(),
 	})

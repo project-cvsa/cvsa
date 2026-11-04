@@ -26,7 +26,6 @@ import {
 import { CrawlerStatsCollector } from "../src/crawler/stats/collector";
 import { createStatsMetrics, STATS_METRIC_NAMES } from "../src/crawler/stats/telemetry";
 import { createNetworkMetrics, NETWORK_METRIC_NAMES } from "../src/crawler/network/telemetry";
-import { STATS_COUNTERS, STATS_ERROR_KINDS } from "../src/crawler/stats/types";
 
 afterEach(() => {
 	metrics.disable();
@@ -61,63 +60,101 @@ function setupMetrics() {
 }
 
 describe.serial("crawler OpenTelemetry observations", () => {
-	test("exports every business counter, error, task result, retry, latency and queue gauge from the same events as minute statistics", async () => {
+	test("exports counters, job results, latency and gauges from the same events", async () => {
 		const collector = new CrawlerStatsCollector({
 			metrics: createStatsMetrics(),
-			rollup: new InMemoryStatsStore(),
+			store: new InMemoryStatsStore(),
 			overview: {
 				async queueCounts() {
 					return {
-						tracking: { waiting: 3, active: 2, delayed: 1, failed: 0, completed: 4 },
-						discovery: { waiting: 5, active: 1, delayed: 0, failed: 1, completed: 2 },
+						tracking: {
+							waiting: 3,
+							prioritized: 1,
+							active: 2,
+							delayed: 1,
+							failed: 0,
+							completed: 4,
+							oldestWaitSec: 5,
+							activeAgeSec: 2,
+						},
+						discovery: {
+							waiting: 5,
+							prioritized: 0,
+							active: 1,
+							delayed: 0,
+							failed: 1,
+							completed: 2,
+							oldestWaitSec: 1,
+							activeAgeSec: 1,
+						},
 					};
 				},
-				async countOverdue() {
-					return { overdueCount: 6, maxOverdueLagSec: 42 };
+				async trackingState() {
+					return {
+						total: 6,
+						byState: { regular: 6 },
+						byPriority: { "2": 6 },
+						neverCaptured: 1,
+						freshness: { count: 5, meanSec: 10, quantilesSec: {}, maxSec: 20 },
+						freshnessByState: {},
+						freshnessByPriority: {},
+						dueNow: 6,
+						metadataDue: 2,
+						maxOverdueLagSec: 42,
+					};
 				},
 			},
 		});
 		const { provider, exporter } = setupMetrics();
 		try {
-			for (const counter of STATS_COUNTERS) collector.recordCount(counter, 2);
-			for (const kind of STATS_ERROR_KINDS) collector.recordError(kind);
-			collector.recordJobOutcome("tracking", "completed");
-			collector.recordJobOutcome("discovery", "failed");
-			collector.recordJobOutcome("discovery", "deferred");
-			collector.recordInference(125, false);
-			collector.recordTask(800);
-			collector.recordNetworkRequest(20);
-			collector.recordRetry(2);
-			await collector.flush();
-			const report = await collector.getReport("5m");
+			collector.record("videosRecorded", 2);
+			collector.recordJobOutcome("tracking", "success", 800);
+			collector.recordJobOutcome("discovery", "failure", 50);
+			collector.recordJobOutcome("discovery", "deferred", 5);
+			collector.recordModelInference(125, false);
+			collector.recordHttpAttempt(20, "success");
+			await collector.sampleState();
 			await provider.forceFlush();
 			const events = numberPoints(exporter, STATS_METRIC_NAMES.events);
-			for (const counter of STATS_COUNTERS)
-				expect(events.find((point) => point.attributes.kind === counter)?.value).toBe(
-					report.metrics.counters[counter]
-				);
-			const errors = numberPoints(exporter, STATS_METRIC_NAMES.errors);
-			for (const kind of STATS_ERROR_KINDS)
-				expect(errors.find((point) => point.attributes.kind === kind)?.value).toBe(
-					report.metrics.errors[kind]
-				);
-			expect(metricData(exporter, STATS_METRIC_NAMES.retries)[0]?.dataPoints[0]?.value).toBe(
+			expect(events.find((point) => point.attributes.kind === "videosRecorded")?.value).toBe(
 				2
 			);
 			const jobs = numberPoints(exporter, STATS_METRIC_NAMES.jobResults);
 			expect(
 				jobs.map((point) => [point.attributes.queue, point.attributes.outcome, point.value])
 			).toEqual([
-				["tracking", "completed", 1],
-				["discovery", "failed", 1],
+				["tracking", "success", 1],
+				["discovery", "failure", 1],
 				["discovery", "deferred", 1],
 			]);
 			const durations = histogramPoints(exporter, STATS_METRIC_NAMES.durationMs);
-			expect(durations.map((point) => [point.attributes.kind, point.value])).toEqual([
-				["inference", expect.objectContaining({ count: 1, sum: 125 })],
-				["task", expect.objectContaining({ count: 1, sum: 800 })],
-				["api", expect.objectContaining({ count: 1, sum: 20 })],
-			]);
+			expect(
+				durations.map((point) => [
+					point.attributes.operation,
+					point.attributes.outcome,
+					point.value,
+				])
+			).toEqual(
+				expect.arrayContaining([
+					[
+						"trackingExecution",
+						"success",
+						expect.objectContaining({ count: 1, sum: 800 }),
+					],
+					[
+						"discoveryExecution",
+						"failure",
+						expect.objectContaining({ count: 1, sum: 50 }),
+					],
+					[
+						"discoveryExecution",
+						"deferred",
+						expect.objectContaining({ count: 1, sum: 5 }),
+					],
+					["modelProcess", "failure", expect.objectContaining({ count: 1, sum: 125 })],
+					["httpAttempt", "success", expect.objectContaining({ count: 1, sum: 20 })],
+				])
+			);
 			expect(
 				numberPoints(exporter, STATS_METRIC_NAMES.queueJobs).find(
 					(point) =>
@@ -137,11 +174,17 @@ describe.serial("crawler OpenTelemetry observations", () => {
 	});
 
 	test("counts completed HTTP attempts with result labels and keeps in-flight requests separate", async () => {
-		const collector = new CrawlerStatsCollector({ metrics: createStatsMetrics() });
+		let now = Date.UTC(2026, 0, 1);
+		const collector = new CrawlerStatsCollector({
+			metrics: createStatsMetrics(),
+			now: () => now,
+		});
 		const network = createNetworkMetrics({
+			onRequestStarted(attributes) {
+				collector.recordHttpAttemptStarted(attributes);
+			},
 			onRequestFinishedWithAttributes(ms, outcome, attributes) {
-				collector.recordNetworkRequest(ms, outcome, attributes);
-				if (attributes.retry === 1) collector.recordRetry();
+				collector.recordHttpAttempt(ms, outcome, attributes);
 			},
 		});
 		const { provider, exporter } = setupMetrics();
@@ -184,7 +227,8 @@ describe.serial("crawler OpenTelemetry observations", () => {
 			expect(
 				metricData(exporter, NETWORK_METRIC_NAMES.requestsInFlight)[0]?.dataPoints[0]?.value
 			).toBe(0);
-			expect((await collector.getReport("5m")).metrics.counters.networkRequests).toBe(1);
+			now += 60_000;
+			expect((await collector.getReport("5m")).minutes.counters.httpAttemptsFinished).toBe(1);
 		} finally {
 			await provider.shutdown();
 		}

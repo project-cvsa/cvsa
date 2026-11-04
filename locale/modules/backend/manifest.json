@@ -1,4 +1,6 @@
 {
 	"format": "otb",
-	"specVersion": "0.3.0"
+	"specVersion": "0.4.0",
+	"sourceLocale": "zh",
+	"targetLocales": ["zh", "en"]
 }

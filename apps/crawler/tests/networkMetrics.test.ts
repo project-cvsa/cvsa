@@ -162,11 +162,14 @@ describe("createNetworkRequestMetricRecorder", () => {
 
 describe("scheduler request metrics", () => {
 	test("records real retry attempts and request results by endpoint and egress", async () => {
-		const stats = new CrawlerStatsCollector();
+		let now = Date.UTC(2026, 0, 1);
+		const stats = new CrawlerStatsCollector({ now: () => now });
 		const metrics = createNetworkMetrics({
+			onRequestStarted(attributes) {
+				stats.recordHttpAttemptStarted(attributes);
+			},
 			onRequestFinishedWithAttributes(ms, outcome, attributes) {
-				stats.recordNetworkRequest(ms, outcome, attributes);
-				if (attributes.retry === 1) stats.recordRetry();
+				stats.recordHttpAttempt(ms, outcome, attributes);
 			},
 		});
 		const failing: NetworkAdapter = {
@@ -216,17 +219,18 @@ describe("scheduler request metrics", () => {
 			url: "https://api.bilibili.com/medialist/gateway/base/resource/infos",
 			requestType: "bilibili:tracking",
 		});
+		now += 60_000;
 		const report = await stats.getReport("5m");
-		expect(report.metrics.counters.networkRequests).toBe(2);
-		expect(report.metrics.retries).toBe(1);
-		expect(report.metrics.network["egress:direct-a"]).toMatchObject({
-			requests: 1,
-			transportFailures: 1,
+		expect(report.minutes.counters.httpAttemptsFinished).toBe(2);
+		expect(report.minutes.counters.egressSwitchResends).toBe(1);
+		expect(report.minutes.network["bilibili:tracking|video_stats|direct-a"]).toMatchObject({
+			attempts: 1,
+			transportFailure: 1,
 		});
-		expect(report.metrics.network["egress:direct-b"]).toMatchObject({
-			requests: 1,
-			success: 1,
+		expect(report.minutes.network["bilibili:tracking|video_stats|direct-b"]).toMatchObject({
+			attempts: 1,
+			transportSuccess: 1,
+			businessSuccess: 1,
 		});
-		expect(report.metrics.network["endpoint:video_stats"]?.requests).toBe(2);
 	});
 });

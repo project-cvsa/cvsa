@@ -2,6 +2,7 @@ import type { Temporal, VideoTracking } from "@cvsa/snapshot-db";
 import type { TrackingScheduleReason, TrackingState } from "./types";
 
 export interface UpsertTrackingInput {
+	eligibleAt?: Temporal.Instant | null;
 	aid: bigint;
 	state?: TrackingState;
 	nextSnapshotAt: Temporal.Instant;
@@ -23,6 +24,7 @@ export interface UpsertTrackingInput {
 }
 
 export interface UpdateScheduleInput {
+	eligibleAt?: Temporal.Instant | null;
 	state?: TrackingState;
 	nextSnapshotAt?: Temporal.Instant;
 	scheduleReason?: TrackingScheduleReason;

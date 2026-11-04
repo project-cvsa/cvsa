@@ -16,6 +16,7 @@ export const videoTracking = pgTable(
 		aid: bigint("aid", { mode: "bigint" }).primaryKey(),
 		state: text("state").notNull().default("regular"),
 		nextSnapshotAt: temporalInstant("next_snapshot_at").notNull(),
+		eligibleAt: temporalInstant("eligible_at"),
 		leaseUntil: temporalInstant("lease_until"),
 		scheduleReason: text("schedule_reason").notNull().default("regular"),
 		nextMetadataAt: temporalInstant("next_metadata_at"),

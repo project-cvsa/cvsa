@@ -4,6 +4,7 @@ import { getComponentT } from "@lib/i18n/isomorphic";
 import type { DiscoveryStatusDto } from "@cvsa/contracts";
 import SectionHeader from "../SectionHeader";
 import DiscoveryActivity from "../discovery/DiscoveryActivity";
+import DiscoveryStats from "../DiscoveryStats";
 import DiscoveryActions from "../discovery/DiscoveryActions";
 import { useCrawlerRefresh } from "../refresh";
 
@@ -31,6 +32,7 @@ export default function DiscoverySection() {
 	return (
 		<div class="flex flex-col gap-6">
 			<SectionHeader title={<h2 class="ts-heading-2">{t("tabs.discovery")}</h2>} />
+			<DiscoveryStats />
 			<DiscoveryActions onQueued={() => void loadStatus()} />
 			<DiscoveryActivity status={status()} error={error()} />
 		</div>

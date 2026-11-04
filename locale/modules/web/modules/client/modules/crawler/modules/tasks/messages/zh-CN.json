@@ -1,0 +1,13 @@
+{
+	"tasks.title": "任务",
+	"tasks.jobs.title": "任务列表",
+	"tasks.jobs.id": "ID",
+	"tasks.jobs.queue": "所属队列",
+	"tasks.jobs.type": "任务",
+	"tasks.jobs.state": "状态",
+	"tasks.jobs.attempts": "重试",
+	"tasks.jobs.reason": "错误",
+	"tasks.jobs.time": "入队时间",
+	"tasks.jobs.empty": "当前队列无活跃或待处理任务",
+	"tasks.error.database": "数据库查询失败"
+}
