@@ -1,4 +1,4 @@
-import type { Temporal, VideoSnapshot } from "@cvsa/snapshot-db";
+import type { LatestVideoSnapshot, Temporal, VideoSnapshot } from "@cvsa/snapshot-db";
 
 export interface CreateSnapshotInput {
 	aid: bigint;
@@ -14,8 +14,8 @@ export interface CreateSnapshotInput {
 
 export interface ISnapshotRepository {
 	createSnapshots(snapshots: CreateSnapshotInput[]): Promise<number>;
+	getLatestSnapshot(aid: bigint): Promise<LatestVideoSnapshot | null>;
 	getRecentSnapshots(aid: bigint, limit?: number): Promise<VideoSnapshot[]>;
-	getFirstSnapshot(aid: bigint): Promise<VideoSnapshot | null>;
 	getSchedulingHistory(aid: bigint, at: Temporal.Instant): Promise<VideoSnapshot[]>;
 	listSnapshots(
 		aid: bigint,

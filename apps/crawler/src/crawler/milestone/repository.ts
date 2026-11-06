@@ -1,5 +1,6 @@
 import { and, asc, eq, gt, gte, lte, sql } from "drizzle-orm";
 import {
+	latestVideoSnapshot,
 	videoMilestone,
 	videoSnapshot,
 	milestoneRecoveryCandidate,
@@ -52,9 +53,9 @@ export class MilestoneRepository implements IMilestoneRepository {
 		await activeDatabase(
 			this.db
 		).execute(sql`INSERT INTO ${milestoneRecoveryCandidate} (recovery_id, aid)
-			SELECT ${id}::uuid, ${videoSnapshot.aid} FROM ${videoSnapshot}
-			WHERE ${videoSnapshot.views} >= ${minimumViews} AND ${videoSnapshot.capturedAt} <= ${through}::timestamptz
-			GROUP BY ${videoSnapshot.aid} ON CONFLICT DO NOTHING`);
+			SELECT ${id}::uuid, ${latestVideoSnapshot.aid} FROM ${latestVideoSnapshot}
+			WHERE ${latestVideoSnapshot.views} >= ${minimumViews} AND ${latestVideoSnapshot.capturedAt} <= ${through}::timestamptz
+			ON CONFLICT DO NOTHING`);
 	}
 	async nextCandidate(id: string, afterAid: bigint): Promise<bigint | null> {
 		const [row] = await activeDatabase(this.db)

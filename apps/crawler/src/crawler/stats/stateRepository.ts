@@ -2,7 +2,7 @@ import { and, count, desc, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
 	discoverySample,
 	toInstant,
-	videoSnapshot,
+	latestVideoSnapshot,
 	videoTracking,
 	type DatabaseClient,
 } from "@cvsa/snapshot-db";
@@ -220,12 +220,12 @@ export class CrawlerStatsStateRepository {
 		)
 			return this.coverageCache.value;
 		const [row] = await this.db
-			.select({ videos: sql<number>`count(distinct ${videoSnapshot.aid})::int` })
-			.from(videoSnapshot)
+			.select({ videos: sql<number>`count(*)::int` })
+			.from(latestVideoSnapshot)
 			.where(
 				and(
-					gte(videoSnapshot.capturedAt, toInstant(new Date(from))),
-					lt(videoSnapshot.capturedAt, toInstant(new Date(to)))
+					gte(latestVideoSnapshot.capturedAt, toInstant(new Date(from))),
+					lt(latestVideoSnapshot.capturedAt, toInstant(new Date(to)))
 				)
 			);
 		const value = row?.videos ?? 0;

@@ -1,7 +1,7 @@
 import { AppError } from "@cvsa/contracts";
 import { snapshotFailureKind } from "../src/crawler/snapshot/worker";
 import { describe, expect, test } from "bun:test";
-import { toInstant, type VideoSnapshot } from "@cvsa/snapshot-db";
+import { toInstant, type LatestVideoSnapshot, type VideoSnapshot } from "@cvsa/snapshot-db";
 import { BilibiliClient } from "../src/crawler/bilibili";
 import type {
 	CreateSnapshotInput,
@@ -19,15 +19,25 @@ class FakeSnapshotRepository implements ISnapshotRepository {
 		return snapshots.length;
 	}
 
+	async getLatestSnapshot(aid: bigint): Promise<LatestVideoSnapshot | null> {
+		const list = this.historicalSnapshots.get(aid) ?? [];
+		if (list.length === 0) return null;
+		const row = list[0];
+		return {
+			aid: row.aid,
+			capturedAt: row.capturedAt,
+			views: row.views,
+			coins: row.coins,
+			likes: row.likes,
+			favorites: row.favorites,
+			shares: row.shares,
+			danmakus: row.danmakus,
+			replies: row.replies,
+		};
+	}
+
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {
 		return (this.historicalSnapshots.get(aid) ?? []).slice(0, limit);
-	}
-	async getFirstSnapshot(aid: bigint): Promise<VideoSnapshot | null> {
-		return (
-			[...(this.historicalSnapshots.get(aid) ?? [])].sort(
-				(a, b) => a.capturedAt.epochMilliseconds - b.capturedAt.epochMilliseconds
-			)[0] ?? null
-		);
 	}
 	async getSchedulingHistory(aid: bigint): Promise<VideoSnapshot[]> {
 		return this.getRecentSnapshots(aid);

@@ -16,7 +16,8 @@ import { SQL } from "bun";
  */
 const TIMESCALE_STATEMENTS = [
 	"CREATE EXTENSION IF NOT EXISTS timescaledb",
-	"SELECT create_hypertable('video_snapshot', 'captured_at', if_not_exists => TRUE)",
+	"SELECT create_hypertable('video_snapshot', 'captured_at', chunk_time_interval => INTERVAL '30 days', if_not_exists => TRUE)",
+	"SELECT set_chunk_time_interval('video_snapshot', INTERVAL '30 days')",
 	`ALTER TABLE "video_snapshot" SET (
 		timescaledb.compress,
 		timescaledb.compress_segmentby = 'aid',
@@ -24,6 +25,39 @@ const TIMESCALE_STATEMENTS = [
 	)`,
 	"SELECT add_compression_policy('video_snapshot', INTERVAL '7 days', if_not_exists => TRUE)",
 	"SELECT remove_retention_policy('video_snapshot', if_exists => TRUE)",
+	`CREATE OR REPLACE FUNCTION update_latest_video_snapshot() RETURNS TRIGGER AS $$
+	BEGIN
+		INSERT INTO latest_video_snapshot (
+			aid, captured_at, views, coins, likes, favorites, shares, danmakus, replies
+		) VALUES (
+			NEW.aid, NEW.captured_at, NEW.views, NEW.coins, NEW.likes, NEW.favorites, NEW.shares, NEW.danmakus, NEW.replies
+		)
+		ON CONFLICT (aid) DO UPDATE SET
+			captured_at = EXCLUDED.captured_at,
+			views = EXCLUDED.views,
+			coins = EXCLUDED.coins,
+			likes = EXCLUDED.likes,
+			favorites = EXCLUDED.favorites,
+			shares = EXCLUDED.shares,
+			danmakus = EXCLUDED.danmakus,
+			replies = EXCLUDED.replies
+		WHERE latest_video_snapshot.views < EXCLUDED.views
+		   OR latest_video_snapshot.captured_at <= EXCLUDED.captured_at;
+		RETURN NEW;
+	END;
+	$$ LANGUAGE plpgsql;`,
+	`DO $$
+	BEGIN
+		IF NOT EXISTS (
+			SELECT 1 FROM pg_trigger WHERE tgname = 'trg_update_latest_video_snapshot'
+		) THEN
+			CREATE TRIGGER trg_update_latest_video_snapshot
+			AFTER INSERT ON video_snapshot
+			FOR EACH ROW
+			EXECUTE FUNCTION update_latest_video_snapshot();
+		END IF;
+	END;
+	$$;`,
 ] as const;
 
 interface HypertableState {
