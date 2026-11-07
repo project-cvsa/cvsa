@@ -5,7 +5,6 @@ import type { SearchManager } from "./manager";
 import type { SearchResponse } from "meilisearch";
 import type { EmbeddingAppApi } from "@embedding-contract";
 import { unique, keys } from "remeda";
-import { appLogger } from "@cvsa/logger";
 
 export interface LocalizableEntity {
 	id: number;
@@ -56,8 +55,9 @@ export abstract class ISearchService<T extends LocalizableEntity, TIndex extends
 
 	public async sync(id: number): Promise<void> {
 		if (!this.searchManager) {
-			appLogger.warn("Search service not available");
-			return;
+			throw new Error(
+				`Search service not available; skipping sync for ${this.entityType} ${id}`
+			);
 		}
 		const entity = await this.repository.getDetails(id);
 
@@ -72,6 +72,19 @@ export abstract class ISearchService<T extends LocalizableEntity, TIndex extends
 		}
 
 		const languages = this.collectLanguages(entity);
+		const currentLanguageSet = new Set(languages);
+		const existingIndexes = await this.searchManager.getLocalizedIndexesOfEntity(
+			this.entityType
+		);
+		for (const indexName of existingIndexes) {
+			const lang = indexName.slice(this.entityType.length + 1);
+			if (!currentLanguageSet.has(lang)) {
+				const adminIndex = await this.searchManager.getAdminIndex(indexName);
+				const task = await adminIndex.deleteDocument(id);
+				await this.searchManager.waitForTask(task.taskUid);
+			}
+		}
+
 		for (const language of languages) {
 			const indexUid = `${this.entityType}_${language}`;
 			const index = await this.searchManager.getAdminIndex<TIndex>(indexUid);

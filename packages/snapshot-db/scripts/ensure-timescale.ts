@@ -16,6 +16,22 @@ import { SQL } from "bun";
  */
 const TIMESCALE_STATEMENTS = [
 	"CREATE EXTENSION IF NOT EXISTS timescaledb",
+	'CREATE SCHEMA IF NOT EXISTS "extensions"',
+	'GRANT USAGE ON SCHEMA "extensions" TO PUBLIC',
+	`DO $$
+	BEGIN
+		IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_stat_statements') THEN
+			ALTER EXTENSION "pg_stat_statements" SET SCHEMA "extensions";
+		ELSE
+			CREATE EXTENSION "pg_stat_statements" WITH SCHEMA "extensions";
+		END IF;
+		IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+			ALTER EXTENSION "pg_trgm" SET SCHEMA "extensions";
+		ELSE
+			CREATE EXTENSION "pg_trgm" WITH SCHEMA "extensions";
+		END IF;
+		EXECUTE format('ALTER DATABASE %I SET search_path TO "$user", public, extensions', current_database());
+	END $$`,
 	"SELECT create_hypertable('video_snapshot', 'captured_at', chunk_time_interval => INTERVAL '30 days', if_not_exists => TRUE)",
 	"SELECT set_chunk_time_interval('video_snapshot', INTERVAL '30 days')",
 	`ALTER TABLE "video_snapshot" SET (

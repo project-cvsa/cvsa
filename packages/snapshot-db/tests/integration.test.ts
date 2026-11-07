@@ -66,4 +66,18 @@ describe("SnapshotDB", () => {
 			await sql.close();
 		}
 	});
+
+	test("pg_stat_statements is available and returns query statistics", async () => {
+		const sql = new SQL({ max: 1, url: crawlerEnv.SNAPSHOT_DATABASE_URL });
+		try {
+			const rows = await sql<{ calls: number }[]>`
+				SELECT calls
+				FROM pg_stat_statements
+				LIMIT 5
+			`;
+			expect(Array.isArray(rows)).toBe(true);
+		} finally {
+			await sql.close();
+		}
+	});
 });

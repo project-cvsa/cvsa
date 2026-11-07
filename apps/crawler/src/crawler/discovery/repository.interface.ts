@@ -3,6 +3,7 @@ import type {
 	BilibiliVideoMetadataHistory,
 	BilibiliVideoRelation,
 	DiscoverySample,
+	Temporal,
 } from "@cvsa/snapshot-db";
 import type {
 	HotSampleOptions,
@@ -11,6 +12,27 @@ import type {
 	UpsertDiscoverySampleInput,
 	UpsertMetadataInput,
 } from "./types";
+
+export interface VideoMetadataSummary {
+	aid: bigint;
+	bvid: string;
+	title: string;
+	pic: string | null;
+	ownerName: string | null;
+	duration: number;
+	videoStatus: string;
+	filterDecision: string;
+	discoverySource: string | null;
+	discoveryContext: unknown;
+}
+
+export interface MetadataHistoryListItem {
+	id: bigint;
+	aid: bigint;
+	capturedAt: Temporal.Instant;
+	changeType: string;
+	changedFields: unknown;
+}
 
 export interface IDiscoveryRepository {
 	upsertMetadata(data: UpsertMetadataInput): Promise<BilibiliVideoMetadata>;
@@ -26,7 +48,12 @@ export interface IDiscoveryRepository {
 	deleteMetadata(aid: bigint): Promise<void>;
 	getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null>;
 	getMetadatas(aids: bigint[]): Promise<BilibiliVideoMetadata[]>;
+	getMetadataSummaries(aids: bigint[]): Promise<VideoMetadataSummary[]>;
 	getMetadataHistory(aid: bigint, limit?: number): Promise<BilibiliVideoMetadataHistory[]>;
+	listMetadataHistory(
+		aid: bigint,
+		options: { limit: number; offset: number }
+	): Promise<{ items: MetadataHistoryListItem[]; total: number }>;
 	saveRelations(relations: RelationEdge[]): Promise<void>;
 	getRelationsBySource(sourceAid: bigint): Promise<BilibiliVideoRelation[]>;
 	getIncomingRelations(targetAid: bigint, limit?: number): Promise<BilibiliVideoRelation[]>;

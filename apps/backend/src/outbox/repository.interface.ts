@@ -6,6 +6,13 @@ export abstract class IOutboxRepository {
 	abstract findPending(query: PendingOutboxQueryDto): Promise<OutboxEntryDto[]>;
 	abstract markProcessing(id: number, tx?: TxClient): Promise<OutboxEntryDto>;
 	abstract markProcessed(id: number, tx?: TxClient): Promise<OutboxEntryDto>;
+	abstract recordFailure(
+		id: number,
+		lastError: string,
+		retryCount: number,
+		nextRetryAt?: Date,
+		tx?: TxClient
+	): Promise<OutboxEntryDto>;
 	abstract markFailed(
 		id: number,
 		lastError: string,

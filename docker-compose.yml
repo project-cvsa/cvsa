@@ -132,6 +132,10 @@ services:
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-cvsa-crawler}
     volumes:
       - ${MODEL_DIR:-./model}:/app/model
+    deploy:
+      resources:
+        limits:
+          memory: ${CRAWLER_MEMORY_LIMIT:-1536M}
     depends_on:
       snapshot-db:
         condition: service_healthy
@@ -188,7 +192,7 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=pg_stat_statements
+      - shared_preload_libraries=${DB_SHARED_PRELOAD_LIBRARIES:-pg_stat_statements}
       - -c
       - pg_stat_statements.track=all
       - -c
@@ -238,7 +242,7 @@ services:
     command:
       - postgres
       - -c
-      - shared_preload_libraries=timescaledb,pg_stat_statements
+      - shared_preload_libraries=${SNAPSHOT_DB_SHARED_PRELOAD_LIBRARIES:-timescaledb,pg_stat_statements}
       - -c
       - pg_stat_statements.track=all
       - -c

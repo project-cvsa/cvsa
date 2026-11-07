@@ -464,6 +464,28 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		});
 	}
 
+	async updateSchedules(
+		updates: Array<{
+			aid: bigint;
+			update: UpdateScheduleInput;
+			expectedLeaseUntil?: Temporal.Instant;
+		}>
+	): Promise<void> {
+		for (const { aid, update, expectedLeaseUntil } of updates) {
+			await this.updateSchedule(aid, update, expectedLeaseUntil);
+		}
+	}
+
+	async listDueMetadata(limit: number, now: Temporal.Instant): Promise<VideoTracking[]> {
+		return [...this.trackings.values()]
+			.filter(
+				(row) =>
+					row.nextMetadataAt &&
+					row.nextMetadataAt.epochMilliseconds <= now.epochMilliseconds
+			)
+			.slice(0, limit);
+	}
+
 	async releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void> {
 		for (const aid of aids) {
 			const existing = this.trackings.get(aid);
@@ -640,8 +662,42 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		return result;
 	}
 
+	async getMetadataSummaries(aids: bigint[]) {
+		const rows = await this.getMetadatas(aids);
+		return rows.map((row) => ({
+			aid: row.aid,
+			bvid: row.bvid,
+			title: row.title,
+			pic: row.pic,
+			ownerName: row.ownerName,
+			duration: row.duration,
+			videoStatus: row.videoStatus,
+			filterDecision: row.filterDecision,
+			discoverySource: row.discoverySource,
+			discoveryContext: row.discoveryContext,
+		}));
+	}
+
 	async getMetadataHistory(aid: bigint, limit = 100): Promise<BilibiliVideoMetadataHistory[]> {
 		return this.history.filter((row) => row.aid === aid).slice(0, limit);
+	}
+
+	async listMetadataHistory(aid: bigint, options: { limit: number; offset: number }) {
+		const matching = this.history
+			.filter((row) => row.aid === aid)
+			.sort((a, b) => b.capturedAt.epochMilliseconds - a.capturedAt.epochMilliseconds);
+		const offset = Math.max(0, options.offset);
+		const limit = Math.min(Math.max(options.limit, 1), 500);
+		return {
+			items: matching.slice(offset, offset + limit).map((row) => ({
+				id: row.id,
+				aid: row.aid,
+				capturedAt: row.capturedAt,
+				changeType: row.changeType,
+				changedFields: row.changedFields,
+			})),
+			total: matching.length,
+		};
 	}
 
 	async saveRelations(relations: RelationEdge[]): Promise<void> {
@@ -826,6 +882,12 @@ export class InMemoryStatsStore implements StatsStore {
 	readonly availability = new Map<string, Temporal.Instant>();
 	saveError?: Error;
 
+	async saveMinutes(inputs: SaveStatsMinuteInput[]): Promise<void> {
+		for (const input of inputs) {
+			await this.saveMinute(input);
+		}
+	}
+
 	async saveMinute(input: SaveStatsMinuteInput): Promise<void> {
 		if (this.saveError) throw this.saveError;
 		this.rows.set(`${input.sourceId}:${input.bucketTime.epochMilliseconds}`, {
@@ -955,17 +1017,62 @@ export class InMemoryStatsStore implements StatsStore {
 	async readRange(
 		from: Temporal.Instant,
 		to: Temporal.Instant,
-		includeHours: boolean
+		includeHours: boolean,
+		options?: import("../stats/rollup").StatsRangeOptions
 	): Promise<import("../stats/rollup").StatsRangeData> {
+		const allMinutes = await this.listMinutes(from, to);
+		const hours = includeHours ? await this.listHours(from, to) : [];
+		const pendingHours = await this.listPendingHours(1000);
+		let minutes = allMinutes;
+		if (includeHours && options?.preferHours && hours.length > 0) {
+			const pendingSet = new Set(
+				pendingHours.map((p) => `${p.sourceId}:${p.hourTime.epochMilliseconds}`)
+			);
+			const cleanHours = new Set<string>();
+			for (const h of hours) {
+				const hStart = h.hourTime.epochMilliseconds;
+				if (
+					hStart >= from.epochMilliseconds &&
+					hStart + 3_600_000 <= to.epochMilliseconds &&
+					!pendingSet.has(`${h.sourceId}:${hStart}`)
+				) {
+					cleanHours.add(`${h.sourceId}:${hStart}`);
+				}
+			}
+			minutes = allMinutes.filter((row) => {
+				const hStart = Math.floor(row.bucketTime.epochMilliseconds / 3_600_000) * 3_600_000;
+				return !cleanHours.has(`${row.sourceId}:${hStart}`);
+			});
+		}
+		const states = await this.listStates(from, to);
 		return {
-			minutes: await this.listMinutes(from, to),
+			minutes,
+			coveredBucketTimes: [
+				...new Set(allMinutes.map((row) => row.bucketTime.epochMilliseconds)),
+			],
 			legacy: await this.listLegacyMinutes(from, to),
 			instances: await this.listInstances(from, to),
-			states: await this.listStates(from, to),
-			hours: includeHours ? await this.listHours(from, to) : [],
-			pendingHours: await this.listPendingHours(1000),
+			states,
+			latestStates: states,
+			hours,
+			pendingHours,
 			availability: await this.listAvailability(),
 		};
+	}
+
+	async pruneBefore(cutoff: Temporal.Instant): Promise<void> {
+		const cutoffMs = cutoff.epochMilliseconds;
+		for (const [key, row] of this.rows) {
+			if (row.bucketTime.epochMilliseconds < cutoffMs) this.rows.delete(key);
+		}
+		for (const [key, row] of this.hours) {
+			if (row.hourTime.epochMilliseconds < cutoffMs) this.hours.delete(key);
+		}
+		for (let i = this.states.length - 1; i >= 0; i--) {
+			if ((this.states[i]?.sampledAt.epochMilliseconds ?? 0) < cutoffMs) {
+				this.states.splice(i, 1);
+			}
+		}
 	}
 
 	async withHourlyRollupLock<T>(work: () => Promise<T>): Promise<T | null> {

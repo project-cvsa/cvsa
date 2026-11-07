@@ -43,6 +43,12 @@ export const videoTracking = pgTable(
 			table.nextSnapshotAt
 		),
 		index("video_tracking_velocity_idx").on(table.velocity),
+		index("video_tracking_updated_at_aid_idx").on(table.updatedAt, table.aid),
+		index("video_tracking_state_updated_at_idx").on(table.state, table.updatedAt),
+		index("video_tracking_last_views_aid_idx").on(table.lastViews, table.aid),
+		index("video_tracking_published_at_aid_idx").on(table.publishedAt, table.aid),
+		index("video_tracking_consecutive_fails_idx").on(table.consecutiveFails),
+		index("video_tracking_last_captured_at_idx").on(table.lastCapturedAt),
 	]
 );
 

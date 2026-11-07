@@ -70,6 +70,14 @@ export const bilibiliVideoMetadata = pgTable(
 		index("bilibili_video_metadata_mid_idx_f4dbf00d").on(table.mid),
 		index("bilibili_video_metadata_pubdate_idx_0fd30c15").on(table.pubdate),
 		index("bilibili_video_metadata_video_status_idx_d4de8f7b").on(table.videoStatus),
+		index("bilibili_video_metadata_discovery_source_aid_idx").on(
+			table.discoverySource,
+			table.aid
+		),
+		index("bilibili_video_metadata_title_trgm_idx").using(
+			"gin",
+			table.title.op("gin_trgm_ops")
+		),
 	]
 );
 

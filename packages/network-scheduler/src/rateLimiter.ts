@@ -1,5 +1,5 @@
 import IORedis from "ioredis";
-import type { AdaptiveRateState, NetworkRateLimiter } from "./contracts";
+import type { NetworkRateLimiter } from "./contracts";
 
 const TOKEN_BUCKET_SCRIPT = `local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
@@ -143,22 +143,6 @@ return 1`,
 			`cvsa:crawler:network-cooldown:${scope}`
 		);
 		return typeof ttl === "number" ? Math.max(0, ttl) : 0;
-	}
-
-	async getAdaptiveState(_scope: string): Promise<AdaptiveRateState> {
-		return { factor: 1, successes: 0, lastThrottledAt: null };
-	}
-
-	async recordAdaptiveOutcome(
-		_scope: string,
-		_throttled: boolean,
-		_policy?: unknown
-	): Promise<AdaptiveRateState> {
-		return { factor: 1, successes: 0, lastThrottledAt: null };
-	}
-
-	async reserve(_scope: string, _budgets?: unknown): Promise<number> {
-		return 0;
 	}
 
 	async close(): Promise<void> {

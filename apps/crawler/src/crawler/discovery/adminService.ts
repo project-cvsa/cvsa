@@ -125,7 +125,7 @@ export class DiscoveryAdminService {
 			this.repository.listSamples(query),
 			this.repository.countSamples(query),
 		]);
-		const metadata = await this.repository.getMetadatas(rows.map((row) => row.aid));
+		const metadata = await this.repository.getMetadataSummaries(rows.map((row) => row.aid));
 		const pictures = new Map(metadata.map((row) => [row.aid, row.pic]));
 		return { items: rows.map((row) => toSampleItem(row, pictures.get(row.aid))), total };
 	}

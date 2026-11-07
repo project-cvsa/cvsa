@@ -5,6 +5,9 @@ import { relations } from "./relations";
 export interface DatabaseClientOptions {
 	connectionString?: string;
 	url?: string;
+	max?: number;
+	idleTimeout?: number;
+	maxLifetime?: number;
 }
 
 /**
@@ -15,8 +18,15 @@ export interface DatabaseClientOptions {
  * column (song ids, Bilibili aids) arrives as a string.
  */
 export function createDatabaseClient(options?: DatabaseClientOptions | string) {
-	const url = typeof options === "string" ? options : (options?.connectionString ?? options?.url);
-	const client = new SQL({ ...(url ? { url } : {}), bigint: true });
+	const opts = typeof options === "object" && options !== null ? options : undefined;
+	const url = typeof options === "string" ? options : (opts?.connectionString ?? opts?.url);
+	const client = new SQL({
+		...(url ? { url } : {}),
+		bigint: true,
+		max: opts?.max ?? 10,
+		idleTimeout: opts?.idleTimeout ?? 60,
+		maxLifetime: opts?.maxLifetime ?? 1800,
+	});
 
 	return drizzle({ client, relations });
 }

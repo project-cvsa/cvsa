@@ -32,6 +32,9 @@ export const discoverySample = pgTable(
 		index("discovery_sample_created_at_idx_225d8c0f").on(table.createdAt),
 		index("discovery_sample_decision_idx_cb87c9d6").on(table.decision),
 		index("discovery_sample_human_label_idx_a828fb63").on(table.humanLabel),
+		index("discovery_sample_labeled_at_idx").on(table.labeledAt),
+		index("discovery_sample_song_probability_aid_idx").on(table.songProbability, table.aid),
+		index("discovery_sample_title_trgm_idx").using("gin", table.title.op("gin_trgm_ops")),
 	]
 );
 

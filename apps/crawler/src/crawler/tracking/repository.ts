@@ -1,4 +1,19 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, like, lte, or } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	exists,
+	gt,
+	inArray,
+	isNotNull,
+	isNull,
+	like,
+	lte,
+	or,
+	sql,
+} from "drizzle-orm";
 import { activeDatabase } from "../shared/databaseContext";
 import type { DatabaseClient, Temporal, VideoTracking } from "@cvsa/snapshot-db";
 import { bilibiliVideoMetadata, toInstant, videoTracking } from "@cvsa/snapshot-db";
@@ -106,47 +121,29 @@ export class TrackingRepository implements ITrackingRepository {
 
 	async upsertTracking(input: UpsertTrackingInput): Promise<VideoTracking> {
 		return this.trace("tracking.upsertTracking", async () => {
-			const existing = await this.getTracking(input.aid);
-			if (existing) {
-				const [updated] = await activeDatabase(this.db)
-					.update(videoTracking)
-					.set({
-						state: input.state ?? existing.state,
-						...(input.eligibleAt !== undefined ? { eligibleAt: input.eligibleAt } : {}),
-						nextSnapshotAt: input.nextSnapshotAt,
-						scheduleReason:
-							input.scheduleReason !== undefined
-								? input.scheduleReason
-								: existing.scheduleReason,
-						...(input.nextMetadataAt !== undefined
-							? { nextMetadataAt: input.nextMetadataAt }
-							: {}),
-						...(input.leaseUntil !== undefined ? { leaseUntil: input.leaseUntil } : {}),
-						...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
-						lastViews: input.lastViews ?? existing.lastViews,
-						...(input.firstCapturedAt !== undefined
-							? { firstCapturedAt: input.firstCapturedAt }
-							: {}),
-						...(input.lastCapturedAt !== undefined
-							? { lastCapturedAt: input.lastCapturedAt }
-							: {}),
-						velocity: input.velocity ?? existing.velocity,
-						...(input.targetMilestone !== undefined
-							? { targetMilestone: input.targetMilestone }
-							: {}),
-						...(input.etaHours !== undefined ? { etaHours: input.etaHours } : {}),
-						...(input.publishedAt !== undefined
-							? { publishedAt: input.publishedAt }
-							: {}),
-						priority: input.priority ?? existing.priority,
-						consecutiveFails: input.consecutiveFails ?? existing.consecutiveFails,
-					})
-					.where(eq(AID, input.aid))
-					.returning();
-				if (updated) return updated;
-			}
+			const updateSet: Record<string, unknown> = {
+				nextSnapshotAt: input.nextSnapshotAt,
+			};
+			if (input.state !== undefined) updateSet.state = input.state;
+			if (input.eligibleAt !== undefined) updateSet.eligibleAt = input.eligibleAt;
+			if (input.scheduleReason !== undefined) updateSet.scheduleReason = input.scheduleReason;
+			if (input.nextMetadataAt !== undefined) updateSet.nextMetadataAt = input.nextMetadataAt;
+			if (input.leaseUntil !== undefined) updateSet.leaseUntil = input.leaseUntil;
+			if (input.lastError !== undefined) updateSet.lastError = input.lastError;
+			if (input.lastViews !== undefined) updateSet.lastViews = input.lastViews;
+			if (input.firstCapturedAt !== undefined)
+				updateSet.firstCapturedAt = input.firstCapturedAt;
+			if (input.lastCapturedAt !== undefined) updateSet.lastCapturedAt = input.lastCapturedAt;
+			if (input.velocity !== undefined) updateSet.velocity = input.velocity;
+			if (input.targetMilestone !== undefined)
+				updateSet.targetMilestone = input.targetMilestone;
+			if (input.etaHours !== undefined) updateSet.etaHours = input.etaHours;
+			if (input.publishedAt !== undefined) updateSet.publishedAt = input.publishedAt;
+			if (input.priority !== undefined) updateSet.priority = input.priority;
+			if (input.consecutiveFails !== undefined)
+				updateSet.consecutiveFails = input.consecutiveFails;
 
-			const [created] = await activeDatabase(this.db)
+			const [row] = await activeDatabase(this.db)
 				.insert(videoTracking)
 				.values({
 					aid: input.aid,
@@ -167,10 +164,16 @@ export class TrackingRepository implements ITrackingRepository {
 					priority: input.priority ?? 2,
 					consecutiveFails: input.consecutiveFails ?? 0,
 				})
+				.onConflictDoUpdate({
+					target: AID,
+					set: updateSet,
+				})
 				.returning();
-			if (!created) throw new Error(`Failed to insert tracking row for aid=${input.aid}`);
+
+			if (!row)
+				throw new Error(`Failed to insert or update tracking row for aid=${input.aid}`);
 			this.stats?.record("trackingCreated");
-			return created;
+			return row;
 		});
 	}
 
@@ -218,6 +221,37 @@ export class TrackingRepository implements ITrackingRepository {
 						? and(eq(AID, aid), eq(videoTracking.leaseUntil, expectedLeaseUntil))
 						: eq(AID, aid)
 				);
+		});
+	}
+
+	async updateSchedules(
+		updates: Array<{
+			aid: bigint;
+			update: UpdateScheduleInput;
+			expectedLeaseUntil?: Temporal.Instant;
+		}>
+	): Promise<void> {
+		if (updates.length === 0) return;
+		await this.trace("tracking.updateSchedules", async () => {
+			for (const item of updates) {
+				await this.updateSchedule(item.aid, item.update, item.expectedLeaseUntil);
+			}
+		});
+	}
+
+	async listDueMetadata(limit: number, now: Temporal.Instant): Promise<VideoTracking[]> {
+		return this.trace("tracking.listDueMetadata", async () => {
+			return activeDatabase(this.db)
+				.select()
+				.from(videoTracking)
+				.where(
+					and(
+						isNotNull(videoTracking.nextMetadataAt),
+						lte(videoTracking.nextMetadataAt, now)
+					)
+				)
+				.orderBy(asc(videoTracking.nextMetadataAt))
+				.limit(limit);
 		});
 	}
 
@@ -282,33 +316,34 @@ export class TrackingRepository implements ITrackingRepository {
 			const offset = Math.max(params.offset, 0);
 			const search = params.search?.trim();
 			const state = params.state;
-
-			let matchingAids: bigint[] | undefined;
-			let exactAid: bigint | undefined;
-			if (search) {
-				if (/^(?:av)?\d+$/i.test(search)) {
-					exactAid = BigInt(search.replace(/^av/i, ""));
-				} else {
-					const matches = await activeDatabase(this.db)
-						.select({ aid: bilibiliVideoMetadata.aid })
-						.from(bilibiliVideoMetadata)
-						.where(
-							/^BV[0-9a-z]{10}$/i.test(search)
-								? eq(bilibiliVideoMetadata.bvid, search)
-								: like(
-										bilibiliVideoMetadata.title,
-										`%${search.replace(/[\\%_]/g, "\\$&")}%`
-									)
-						);
-					matchingAids = matches.map((metadata) => metadata.aid);
-					if (matchingAids.length === 0) return { items: [], total: 0 };
-				}
-			}
+			const db = activeDatabase(this.db);
 
 			const conditions = [];
 			if (state !== undefined) conditions.push(eq(videoTracking.state, state));
-			if (exactAid !== undefined) conditions.push(eq(AID, exactAid));
-			else if (matchingAids !== undefined) conditions.push(inArray(AID, matchingAids));
+			if (search) {
+				if (/^(?:av)?\d+$/i.test(search)) {
+					conditions.push(eq(AID, BigInt(search.replace(/^av/i, ""))));
+				} else {
+					conditions.push(
+						exists(
+							db
+								.select({ one: sql`1` })
+								.from(bilibiliVideoMetadata)
+								.where(
+									and(
+										eq(bilibiliVideoMetadata.aid, AID),
+										/^BV[0-9a-z]{10}$/i.test(search)
+											? eq(bilibiliVideoMetadata.bvid, search)
+											: like(
+													bilibiliVideoMetadata.title,
+													`%${search.replace(/[\\%_]/g, "\\$&")}%`
+												)
+									)
+								)
+						)
+					);
+				}
+			}
 
 			if (params.statusFilter === "failing") {
 				conditions.push(gt(videoTracking.consecutiveFails, 0));
@@ -319,7 +354,6 @@ export class TrackingRepository implements ITrackingRepository {
 			}
 
 			const where = conditions.length > 0 ? and(...conditions) : undefined;
-			const db = activeDatabase(this.db);
 
 			const [totals] = await db.select({ total: count() }).from(videoTracking).where(where);
 

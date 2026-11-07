@@ -306,10 +306,13 @@ export const discoveryRoutes = new Elysia()
 			if (!/^\d+$/.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			const rows = await discoveryRepository.getMetadataHistory(BigInt(params.aid), 500);
+			const result = await discoveryRepository.listMetadataHistory(BigInt(params.aid), {
+				limit: query.limit,
+				offset: query.offset,
+			});
 			return {
-				items: rows.slice(query.offset, query.offset + query.limit).map(toHistoryItem),
-				total: rows.length,
+				items: result.items.map(toHistoryItem),
+				total: result.total,
 			};
 		},
 		{
@@ -372,7 +375,7 @@ export const discoveryRoutes = new Elysia()
 			// 1. Resolve seed video
 			if (/^\d+$/.test(params.identifier)) {
 				seedAid = BigInt(params.identifier);
-				const meta = await discoveryRepository.getMetadata(seedAid);
+				const [meta] = await discoveryRepository.getMetadataSummaries([seedAid]);
 				if (meta) {
 					seedBvid = meta.bvid;
 					seedTitle = meta.title;
@@ -445,7 +448,7 @@ export const discoveryRoutes = new Elysia()
 
 			// 3. Fetch metadata and tracking state for all target relations
 			const targetAids = relations.map((r) => r.targetAid);
-			const targetMetas = await discoveryRepository.getMetadatas(targetAids);
+			const targetMetas = await discoveryRepository.getMetadataSummaries(targetAids);
 			const metaMap = new Map(targetMetas.map((m) => [m.aid, m]));
 
 			const trackedRows = await trackingRepository.getTrackings(targetAids);

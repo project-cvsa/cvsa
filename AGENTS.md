@@ -61,6 +61,7 @@ We write tests to guard externally visible behavior and provide a safety net for
 3. Drive to completion: When explicitly instructed to implement, complete all planned steps and run verification (`bun run ci && bun run typecheck && bun run test`) before handing control back. Do not stop halfway through an agreed task just to report partial progress.
 4. Natural language and documentation boundaries: Unless explicitly requested by the user, do not edit documentation files, READMEs, or add verbose explanatory comments. If code changes make existing documentation or README sections obsolete, explicitly note this in your response (e.g., `[Notice] README section X is now obsolete due to Y`) instead of modifying it unilaterally.
 5. Concrete constraint reporting: If a genuine technical limitation exists, state it in one concrete factual sentence (e.g., `batch query is limited to 500 IDs due to parameter limits`), never as an abstract legal disclaimer.
+6. The user's local databases, containers, and related artifacts are for development and testing purposes only. Unless explicitly stated otherwise, always assume reports of failures, degradation, or other issues refer to the production environment. Never use local environments or data as evidence or authoritative data sources.
 
 ## 4. Core Architecture
 

@@ -171,9 +171,11 @@ export function createCrawlerMq(
 					const bullJobs = await bounded(() =>
 						queue.getJobs(types, start, start + limit - 1)
 					);
+					const singleState = types.length === 1 ? types[0] : undefined;
 					return Promise.all(
 						bullJobs.map(async (job) => {
-							const state = await bounded(() => job.getState(), "getJobState");
+							const state =
+								singleState ?? (await bounded(() => job.getState(), "getJobState"));
 							return {
 								id: job.id ?? "unknown",
 								name: job.name,
