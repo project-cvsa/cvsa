@@ -14,6 +14,7 @@ export interface UpsertTrackingInput {
 	/** `null` clears the previous failure. */
 	lastError?: string | null;
 	lastViews?: number;
+	firstCapturedAt?: Temporal.Instant | null;
 	lastCapturedAt?: Temporal.Instant | null;
 	velocity?: number;
 	targetMilestone?: number | null;
@@ -34,6 +35,7 @@ export interface UpdateScheduleInput {
 	/** `null` clears the previous failure. */
 	lastError?: string | null;
 	lastViews?: number;
+	firstCapturedAt?: Temporal.Instant | null;
 	lastCapturedAt?: Temporal.Instant | null;
 	velocity?: number;
 	targetMilestone?: number | null;

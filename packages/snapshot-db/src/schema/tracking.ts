@@ -21,6 +21,7 @@ export const videoTracking = pgTable(
 		scheduleReason: text("schedule_reason").notNull().default("regular"),
 		nextMetadataAt: temporalInstant("next_metadata_at"),
 		lastViews: integer("last_views").notNull().default(0),
+		firstCapturedAt: temporalInstant("first_captured_at"),
 		lastCapturedAt: temporalInstant("last_captured_at"),
 		velocity: doublePrecision("velocity").notNull().default(0),
 		targetMilestone: integer("target_milestone"),
@@ -37,10 +38,11 @@ export const videoTracking = pgTable(
 	(table) => [
 		index("video_tracking_lease_until_idx_f9b7ab83").on(table.leaseUntil),
 		index("video_tracking_next_metadata_at_idx_675f7bb3").on(table.nextMetadataAt),
-		index("video_tracking_next_snapshot_at_priority_idx_9b21cea1").on(
-			table.nextSnapshotAt,
-			table.priority
+		index("video_tracking_priority_next_snapshot_at_idx").on(
+			table.priority,
+			table.nextSnapshotAt
 		),
+		index("video_tracking_velocity_idx").on(table.velocity),
 	]
 );
 

@@ -124,6 +124,9 @@ export class TrackingRepository implements ITrackingRepository {
 						...(input.leaseUntil !== undefined ? { leaseUntil: input.leaseUntil } : {}),
 						...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
 						lastViews: input.lastViews ?? existing.lastViews,
+						...(input.firstCapturedAt !== undefined
+							? { firstCapturedAt: input.firstCapturedAt }
+							: {}),
 						...(input.lastCapturedAt !== undefined
 							? { lastCapturedAt: input.lastCapturedAt }
 							: {}),
@@ -155,6 +158,7 @@ export class TrackingRepository implements ITrackingRepository {
 					leaseUntil: input.leaseUntil ?? null,
 					lastError: input.lastError ?? null,
 					lastViews: input.lastViews ?? 0,
+					firstCapturedAt: input.firstCapturedAt ?? null,
 					lastCapturedAt: input.lastCapturedAt ?? null,
 					velocity: input.velocity ?? 0,
 					targetMilestone: input.targetMilestone ?? null,
@@ -193,6 +197,9 @@ export class TrackingRepository implements ITrackingRepository {
 					...(update.leaseUntil !== undefined ? { leaseUntil: update.leaseUntil } : {}),
 					...(update.lastError !== undefined ? { lastError: update.lastError } : {}),
 					...(update.lastViews !== undefined ? { lastViews: update.lastViews } : {}),
+					...(update.firstCapturedAt !== undefined
+						? { firstCapturedAt: update.firstCapturedAt }
+						: {}),
 					...(update.lastCapturedAt !== undefined
 						? { lastCapturedAt: update.lastCapturedAt }
 						: {}),

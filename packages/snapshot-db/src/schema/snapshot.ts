@@ -27,5 +27,26 @@ export const videoSnapshot = pgTable(
 	]
 );
 
+export const latestVideoSnapshot = pgTable(
+	"latest_video_snapshot",
+	{
+		aid: bigint("aid", { mode: "bigint" }).primaryKey(),
+		capturedAt: temporalInstant("captured_at").notNull().default(sql`now()`),
+		views: integer("views").notNull(),
+		coins: integer("coins").notNull().default(0),
+		likes: integer("likes").notNull().default(0),
+		favorites: integer("favorites").notNull().default(0),
+		shares: integer("shares").notNull().default(0),
+		danmakus: integer("danmakus").notNull().default(0),
+		replies: integer("replies").notNull().default(0),
+	},
+	(table) => [
+		index("latest_video_snapshot_views_idx").on(table.views),
+		index("latest_video_snapshot_captured_at_idx").on(table.capturedAt),
+	]
+);
+
 export type VideoSnapshot = typeof videoSnapshot.$inferSelect;
 export type VideoSnapshotInsert = typeof videoSnapshot.$inferInsert;
+export type LatestVideoSnapshot = typeof latestVideoSnapshot.$inferSelect;
+export type LatestVideoSnapshotInsert = typeof latestVideoSnapshot.$inferInsert;

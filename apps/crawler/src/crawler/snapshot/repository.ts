@@ -1,7 +1,12 @@
-import { and, asc, count, desc, eq, lte } from "drizzle-orm";
+import { and, count, desc, eq, gte, lte } from "drizzle-orm";
 import { activeDatabase } from "../shared/databaseContext";
-import type { DatabaseClient, VideoSnapshot, Temporal } from "@cvsa/snapshot-db";
-import { videoSnapshot, toInstant } from "@cvsa/snapshot-db";
+import type {
+	DatabaseClient,
+	LatestVideoSnapshot,
+	VideoSnapshot,
+	Temporal,
+} from "@cvsa/snapshot-db";
+import { latestVideoSnapshot, videoSnapshot, toInstant } from "@cvsa/snapshot-db";
 import { MILESTONE_HISTORY_WINDOWS_MS } from "../tracking/scheduler";
 import { createDatabaseTracer } from "../stats/databaseMetrics";
 import type { StatsRecorder } from "../stats/types";
@@ -43,6 +48,17 @@ export class SnapshotRepository implements ISnapshotRepository {
 		});
 	}
 
+	async getLatestSnapshot(aid: bigint): Promise<LatestVideoSnapshot | null> {
+		return this.trace("snapshot.getLatestSnapshot", async () => {
+			const [row] = await activeDatabase(this.db)
+				.select()
+				.from(latestVideoSnapshot)
+				.where(eq(latestVideoSnapshot.aid, aid))
+				.limit(1);
+			return row ?? null;
+		});
+	}
+
 	async getRecentSnapshots(aid: bigint, limit = 10): Promise<VideoSnapshot[]> {
 		return this.trace("snapshot.getRecentSnapshots", () =>
 			activeDatabase(this.db)
@@ -53,40 +69,35 @@ export class SnapshotRepository implements ISnapshotRepository {
 				.limit(limit)
 		);
 	}
-	async getFirstSnapshot(aid: bigint): Promise<VideoSnapshot | null> {
-		const [row] = await activeDatabase(this.db)
-			.select()
-			.from(videoSnapshot)
-			.where(eq(videoSnapshot.aid, aid))
-			.orderBy(asc(videoSnapshot.capturedAt))
-			.limit(1);
-		return row ?? null;
-	}
 	async getSchedulingHistory(aid: bigint, at: Temporal.Instant): Promise<VideoSnapshot[]> {
-		const db = activeDatabase(this.db);
-		const windows = await Promise.all(
-			MILESTONE_HISTORY_WINDOWS_MS.map(async (windowMs) => {
-				const [row] = await db
-					.select()
-					.from(videoSnapshot)
-					.where(
-						and(
-							eq(videoSnapshot.aid, aid),
-							lte(
-								videoSnapshot.capturedAt,
-								toInstant(new Date(at.epochMilliseconds - windowMs))
+		return this.trace("snapshot.getSchedulingHistory", async () => {
+			const db = activeDatabase(this.db);
+			// Bind lower bound to 7 days to enable TimescaleDB chunk pruning and avoid historical decompression
+			const sevenDaysAgo = toInstant(
+				new Date(at.epochMilliseconds - 7 * 24 * 60 * 60 * 1000)
+			);
+			const windows = await Promise.all(
+				MILESTONE_HISTORY_WINDOWS_MS.map(async (windowMs) => {
+					const [row] = await db
+						.select()
+						.from(videoSnapshot)
+						.where(
+							and(
+								eq(videoSnapshot.aid, aid),
+								gte(videoSnapshot.capturedAt, sevenDaysAgo),
+								lte(
+									videoSnapshot.capturedAt,
+									toInstant(new Date(at.epochMilliseconds - windowMs))
+								)
 							)
 						)
-					)
-					.orderBy(desc(videoSnapshot.capturedAt))
-					.limit(1);
-				return row;
-			})
-		);
-		const first = windows.some((row) => row !== undefined)
-			? null
-			: await this.getFirstSnapshot(aid);
-		return [...windows.filter((row) => row !== undefined), ...(first ? [first] : [])];
+						.orderBy(desc(videoSnapshot.capturedAt))
+						.limit(1);
+					return row;
+				})
+			);
+			return windows.filter((row): row is VideoSnapshot => row !== undefined);
+		});
 	}
 
 	async listSnapshots(

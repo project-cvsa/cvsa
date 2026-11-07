@@ -44,6 +44,9 @@ export const song = core.table(
 	},
 	(table) => [
 		index("song_original_song_id_idx_ef45027e").on(table.originalSongId),
+		index("song_bilibili_aid_idx").on(table.bilibiliAid),
+		index("song_published_at_idx").on(table.publishedAt),
+		index("song_type_idx").on(table.type),
 		check(
 			"song_type_check_f4a93cc7",
 			sql`"type" = ANY (ARRAY['ORIGINAL'::text, 'COVER'::text, 'RETUNE'::text, 'CONTRAFACTUM'::text, 'TRANSLYRICS'::text, 'REMIX'::text, 'REMASTER'::text, 'MASHUP'::text, 'INSTRUMENTAL'::text, 'OTHERS'::text])`

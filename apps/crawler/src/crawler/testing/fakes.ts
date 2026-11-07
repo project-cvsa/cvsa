@@ -267,6 +267,7 @@ export interface CreateTrackingOverrides {
 	scheduleReason?: string;
 	nextMetadataAt?: Temporal.Instant | null;
 	lastViews?: number;
+	firstCapturedAt?: Temporal.Instant | null;
 	lastCapturedAt?: Temporal.Instant | null;
 	velocity?: number;
 	targetMilestone?: number | null;
@@ -291,6 +292,7 @@ export function createTrackingRow(
 		scheduleReason: overrides.scheduleReason ?? "regular",
 		nextMetadataAt: overrides.nextMetadataAt ?? null,
 		lastViews: overrides.lastViews ?? 0,
+		firstCapturedAt: overrides.firstCapturedAt ?? null,
 		lastCapturedAt: overrides.lastCapturedAt ?? null,
 		velocity: overrides.velocity ?? 0,
 		targetMilestone: overrides.targetMilestone ?? null,
@@ -404,6 +406,10 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 			etaHours: input.etaHours !== undefined ? input.etaHours : (existing?.etaHours ?? null),
 			eligibleAt:
 				input.eligibleAt !== undefined ? input.eligibleAt : (existing?.eligibleAt ?? null),
+			firstCapturedAt:
+				input.firstCapturedAt !== undefined
+					? input.firstCapturedAt
+					: (existing?.firstCapturedAt ?? null),
 			publishedAt: input.publishedAt ?? existing?.publishedAt ?? null,
 			priority: input.priority ?? existing?.priority ?? 2,
 			consecutiveFails: input.consecutiveFails ?? existing?.consecutiveFails ?? 0,
@@ -439,6 +445,9 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 			...(update.leaseUntil !== undefined ? { leaseUntil: update.leaseUntil } : {}),
 			...(update.lastError !== undefined ? { lastError: update.lastError } : {}),
 			...(update.lastViews !== undefined ? { lastViews: update.lastViews } : {}),
+			...(update.firstCapturedAt !== undefined
+				? { firstCapturedAt: update.firstCapturedAt }
+				: {}),
 			...(update.lastCapturedAt !== undefined
 				? { lastCapturedAt: update.lastCapturedAt }
 				: {}),

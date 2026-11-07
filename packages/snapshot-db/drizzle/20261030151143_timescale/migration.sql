@@ -8,7 +8,7 @@
 -- promoted by the previous toolchain is a no-op.
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 --> statement-breakpoint
-SELECT create_hypertable('video_snapshot', 'captured_at', if_not_exists => TRUE);
+SELECT create_hypertable('video_snapshot', 'captured_at', chunk_time_interval => INTERVAL '30 days', if_not_exists => TRUE);
 --> statement-breakpoint
 ALTER TABLE "video_snapshot" SET (
 	timescaledb.compress,

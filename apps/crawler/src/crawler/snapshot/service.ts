@@ -207,17 +207,14 @@ export class SnapshotService {
 					}
 
 					// For new videos, anchor the 1.5/3/5/10m initial sampling cadence to
-					// the earliest snapshot (or publishedAt if within the initial window).
-					const earliestSnapshotMs =
-						tracking?.state === "new"
-							? (await this.snapshotRepo.getFirstSnapshot(aid))?.capturedAt
-									.epochMilliseconds
-							: undefined;
+					// the first captured snapshot time recorded on the tracking row.
 					const acceptedAt =
 						tracking?.state === "new"
-							? earliestSnapshotMs !== undefined
-								? new Date(earliestSnapshotMs)
-								: new Date(response.time)
+							? tracking.firstCapturedAt
+								? new Date(tracking.firstCapturedAt.epochMilliseconds)
+								: tracking.lastCapturedAt
+									? new Date(tracking.lastCapturedAt.epochMilliseconds)
+									: new Date(capturedAt.epochMilliseconds)
 							: undefined;
 
 					const next = evaluateNextSchedule({
@@ -245,6 +242,8 @@ export class SnapshotService {
 							state: next.nextState,
 							nextSnapshotAt: toInstant(next.nextSnapshotAt),
 							lastViews: stat.views,
+							firstCapturedAt:
+								tracking?.firstCapturedAt ?? tracking?.lastCapturedAt ?? capturedAt,
 							lastCapturedAt: capturedAt,
 							velocity: next.velocity,
 							targetMilestone: next.targetMilestone,

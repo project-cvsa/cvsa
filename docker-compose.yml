@@ -181,6 +181,30 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cvsa}
     volumes:
       - data:/var/lib/postgresql
+    deploy:
+      resources:
+        limits:
+          memory: ${DB_MEMORY_LIMIT:-2G}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - shared_buffers=${DB_SHARED_BUFFERS:-512MB}
+      - -c
+      - effective_cache_size=${DB_EFFECTIVE_CACHE_SIZE:-1536MB}
+      - -c
+      - work_mem=${DB_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${DB_MAINTENANCE_WORK_MEM:-128MB}
     healthcheck:
       test:
         [
@@ -207,6 +231,36 @@ services:
       POSTGRES_PASSWORD: ${SNAPSHOT_DB_PASSWORD:-password}
     volumes:
       - snapshot_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: ${SNAPSHOT_DB_MEMORY_LIMIT:-4G}
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=timescaledb,pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - autovacuum_vacuum_scale_factor=0.05
+      - -c
+      - shared_buffers=${SNAPSHOT_DB_SHARED_BUFFERS:-1GB}
+      - -c
+      - effective_cache_size=${SNAPSHOT_DB_EFFECTIVE_CACHE_SIZE:-3GB}
+      - -c
+      - work_mem=${SNAPSHOT_DB_WORK_MEM:-16MB}
+      - -c
+      - maintenance_work_mem=${SNAPSHOT_DB_MAINTENANCE_WORK_MEM:-256MB}
+      - -c
+      - max_worker_processes=${SNAPSHOT_DB_MAX_WORKERS:-16}
+      - -c
+      - max_parallel_workers=${SNAPSHOT_DB_PARALLEL_WORKERS:-8}
     healthcheck:
       test:
         [
