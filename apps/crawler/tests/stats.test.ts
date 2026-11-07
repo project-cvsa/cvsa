@@ -365,4 +365,188 @@ describe("crawler metrics persistence", () => {
 		const report = await stats.getReport("5m");
 		expect(report.minutes.database["snapshot.getRecentSnapshots"]?.failure).toBe(1);
 	});
+
+	test("serves 24h reports from rolled hours + partial minutes while evicting old RAM buckets and preserving lifetimeCounters", async () => {
+		const { collector, store, advance } = createCollector(
+			START,
+			new InMemoryStatsStore(),
+			"inst-rollup"
+		);
+		// Record 2 full hours (120 minutes) + 15 partial minutes
+		for (let m = 0; m < 135; m++) {
+			collector.record("videosRecorded", 2);
+			collector.recordHttpAttempt(20 + (m % 30), "success");
+			advance(60_000);
+			if (m % 30 === 29) {
+				await collector.flush();
+			}
+		}
+		await collector.flush();
+		const rolled = await collector.runHourlyRollup();
+		expect(rolled).toBeGreaterThanOrEqual(2);
+
+		// Lifetime counter must remain exact even after old clean buckets were evicted from RAM
+		expect(collector.lifetimeCounter("videosRecorded")).toBe(270);
+
+		// Coalesce concurrent 24h getReport calls and verify rolled hours + fallback minutes combine without double counting
+		const [r1, r2] = await Promise.all([
+			collector.getReport("24h"),
+			collector.getReport("24h"),
+		]);
+		expect(r1).toBe(r2);
+		expect(r1.minutes.counters.videosRecorded).toBe(270);
+		expect(r1.latency["httpAttempt:success"]?.count).toBe(135);
+		expect(store.hours.size).toBeGreaterThanOrEqual(2);
+	});
+
+	test("trackingState aggregates state and priority freshness in a single GROUPING SETS pass", async () => {
+		const { CrawlerStatsStateRepository } = await import(
+			"../src/crawler/stats/stateRepository"
+		);
+		const { videoTracking } = await import("@cvsa/snapshot-db");
+		const { inArray } = await import("drizzle-orm");
+		const db = createSnapshotDb();
+		await db.connect();
+		const aid1 = 920_000_000_000_101n;
+		const aid2 = 920_000_000_000_102n;
+		const aid3 = 920_000_000_000_103n;
+		const aids = [aid1, aid2, aid3];
+		try {
+			await db.client.delete(videoTracking).where(inArray(videoTracking.aid, aids));
+			const nowMs = Date.now();
+			await db.client.insert(videoTracking).values([
+				{
+					aid: aid1,
+					state: "new",
+					priority: 1,
+					nextSnapshotAt: toInstant(new Date(nowMs - 30_000)),
+					lastCapturedAt: toInstant(new Date(nowMs - 60_000)),
+					nextMetadataAt: toInstant(new Date(nowMs - 10_000)),
+				},
+				{
+					aid: aid2,
+					state: "regular",
+					priority: 2,
+					nextSnapshotAt: toInstant(new Date(nowMs + 300_000)),
+					lastCapturedAt: toInstant(new Date(nowMs - 120_000)),
+				},
+				{
+					aid: aid3,
+					state: "regular",
+					priority: 2,
+					nextSnapshotAt: toInstant(new Date(nowMs + 600_000)),
+					lastCapturedAt: null,
+				},
+			]);
+
+			const stateRepo = new CrawlerStatsStateRepository(db.client, () => nowMs);
+			const summary = await stateRepo.trackingState(nowMs);
+			expect(summary.total).toBeGreaterThanOrEqual(3);
+			expect(summary.byState.new).toBeGreaterThanOrEqual(1);
+			expect(summary.byState.regular).toBeGreaterThanOrEqual(2);
+			expect(summary.byPriority["1"]).toBeGreaterThanOrEqual(1);
+			expect(summary.byPriority["2"]).toBeGreaterThanOrEqual(2);
+			expect(summary.neverCaptured).toBeGreaterThanOrEqual(1);
+			expect(summary.dueNow).toBeGreaterThanOrEqual(1);
+			expect(summary.metadataDue).toBeGreaterThanOrEqual(1);
+			expect(summary.freshness.count).toBeGreaterThanOrEqual(2);
+			expect(summary.freshness.quantilesSec["0.5"]).not.toBeNull();
+		} finally {
+			await db.client.delete(videoTracking).where(inArray(videoTracking.aid, aids));
+			await db.disconnect();
+		}
+	});
+
+	test("CrawlerStatsRepository.readRange uses rolled hours on 24h/7d windows and prunes expired rows", async () => {
+		const { crawlerStatsHour, crawlerStatsState } = await import("@cvsa/snapshot-db");
+		const db = createSnapshotDb();
+		await db.connect();
+		const sourceId = `test-rollup-${Date.now()}`;
+		const hourStart = Date.UTC(2026, 5, 1, 10, 0, 0);
+		const nextHourStart = hourStart + 3_600_000;
+		try {
+			const repo = new CrawlerStatsRepository(db.client);
+			const m1 = emptyMinute(hourStart, hourStart + 60_000);
+			m1.counters.videosRecorded = 11;
+			const m2 = emptyMinute(nextHourStart, nextHourStart + 60_000);
+			m2.counters.videosRecorded = 7;
+
+			await repo.saveMinute({
+				sourceId,
+				bucketTime: toInstant(new Date(hourStart)),
+				metrics: m1,
+			});
+			await repo.saveMinute({
+				sourceId,
+				bucketTime: toInstant(new Date(nextHourStart)),
+				metrics: m2,
+			});
+			await repo.saveStates([
+				{
+					sampledAt: toInstant(new Date(hourStart + 10_000)),
+					scope: "global",
+					item: "queues",
+					status: "success",
+					data: {
+						tracking: { waiting: 3, active: 1, delayed: 0, failed: 0, completed: 0 },
+					},
+				},
+			]);
+
+			const pending = (await repo.listPendingHours(100)).find(
+				(p) => p.sourceId === sourceId && p.hourTime.epochMilliseconds === hourStart
+			);
+			expect(pending).toBeDefined();
+			if (!pending) throw new Error("Expected pending hour marker");
+			await repo.saveHour(toInstant(new Date(hourStart)), sourceId, pending.generation, m1);
+
+			const range = await repo.readRange(
+				toInstant(new Date(hourStart)),
+				toInstant(new Date(nextHourStart + 1_800_000)),
+				true,
+				{ preferHours: true, stepMs: 900_000 }
+			);
+			// Clean complete hour comes from `hours`, while unrolled partial hour comes from `minutes`
+			expect(
+				range.hours.some(
+					(h) => h.sourceId === sourceId && h.hourTime.epochMilliseconds === hourStart
+				)
+			).toBe(true);
+			expect(
+				range.minutes.some(
+					(m) => m.sourceId === sourceId && m.bucketTime.epochMilliseconds === hourStart
+				)
+			).toBe(false);
+			expect(
+				range.minutes.some(
+					(m) =>
+						m.sourceId === sourceId && m.bucketTime.epochMilliseconds === nextHourStart
+				)
+			).toBe(true);
+			expect(range.coveredBucketTimes).toContain(hourStart);
+			expect(range.latestStates?.some((s) => s.item === "queues")).toBe(true);
+
+			await repo.pruneBefore(toInstant(new Date(hourStart + 1)));
+			expect(
+				(
+					await repo.listMinutes(
+						toInstant(new Date(hourStart)),
+						toInstant(new Date(hourStart + 60_000))
+					)
+				).filter((r) => r.sourceId === sourceId)
+			).toHaveLength(0);
+		} finally {
+			await db.client
+				.delete(crawlerStatsMinute)
+				.where(eq(crawlerStatsMinute.sourceId, sourceId));
+			await db.client.delete(crawlerStatsHour).where(eq(crawlerStatsHour.sourceId, sourceId));
+			await db.client
+				.delete(crawlerStatsHourPending)
+				.where(eq(crawlerStatsHourPending.sourceId, sourceId));
+			await db.client
+				.delete(crawlerStatsState)
+				.where(eq(crawlerStatsState.sampledAt, toInstant(new Date(hourStart + 10_000))));
+			await db.disconnect();
+		}
+	});
 });

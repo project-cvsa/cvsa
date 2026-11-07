@@ -244,12 +244,19 @@ export class LocalAkariClassifier {
 				// The tokenizer is downloaded/cached by HuggingFace; no local
 				// tokenizer files are required.
 				this.tokenizer ??= await AutoTokenizer.from_pretrained(this.tokenizerModel);
-				this.embeddingSession ??= await ort.InferenceSession.create(this.embeddingPath, {
+				const sessionOptions: ort.InferenceSession.SessionOptions = {
 					executionProviders: ["cpu"],
-				});
-				this.classifierSession ??= await ort.InferenceSession.create(this.classifierPath, {
-					executionProviders: ["cpu"],
-				});
+					intraOpNumThreads: 2,
+					interOpNumThreads: 1,
+				};
+				this.embeddingSession ??= await ort.InferenceSession.create(
+					this.embeddingPath,
+					sessionOptions
+				);
+				this.classifierSession ??= await ort.InferenceSession.create(
+					this.classifierPath,
+					sessionOptions
+				);
 
 				this.lastError = null;
 				appLogger.info("In-process ONNX Akari classifier initialized", {

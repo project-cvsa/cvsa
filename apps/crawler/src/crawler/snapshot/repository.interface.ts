@@ -17,6 +17,10 @@ export interface ISnapshotRepository {
 	getLatestSnapshot(aid: bigint): Promise<LatestVideoSnapshot | null>;
 	getRecentSnapshots(aid: bigint, limit?: number): Promise<VideoSnapshot[]>;
 	getSchedulingHistory(aid: bigint, at: Temporal.Instant): Promise<VideoSnapshot[]>;
+	getSchedulingHistories?(
+		aids: bigint[],
+		at: Temporal.Instant
+	): Promise<Map<bigint, VideoSnapshot[]>>;
 	listSnapshots(
 		aid: bigint,
 		options: { limit: number; offset: number }

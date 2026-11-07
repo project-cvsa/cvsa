@@ -7,7 +7,10 @@ import { loadDatabaseUrl } from "../src/databaseUrl";
  * only creates `POSTGRES_DB`). Running this right before the push makes
  * `test:setup` / `test:reset` self-healing on a fresh docker volume and in CI.
  */
-const result = await ensureDatabase({ connection: loadDatabaseUrl() });
+const result = await ensureDatabase({
+	connection: loadDatabaseUrl(),
+	extensions: ["pg_stat_statements"],
+});
 
 if (!result.created) {
 	console.log(`Database "${result.database}" already exists.`);

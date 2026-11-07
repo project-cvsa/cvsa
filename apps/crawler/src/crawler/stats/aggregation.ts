@@ -43,7 +43,7 @@ const NETWORK_FIELDS = [
 
 export const DEFAULT_QUANTILES = [0.5, 0.9, 0.95, 0.99] as const;
 
-export function mergeMinute(target: StatsMinute, source: StatsMinute): void {
+function mergeMinuteScalars(target: StatsMinute, source: StatsMinute): void {
 	target.from = Math.min(target.from, source.from);
 	target.to = Math.max(target.to, source.to);
 	for (const key of STATS_COUNTERS) target.counters[key] += source.counters[key];
@@ -70,6 +70,10 @@ export function mergeMinute(target: StatsMinute, source: StatsMinute): void {
 	}
 	for (const [key, value] of Object.entries(source.deferrals))
 		target.deferrals[key] = (target.deferrals[key] ?? 0) + value;
+}
+
+export function mergeMinute(target: StatsMinute, source: StatsMinute): void {
+	mergeMinuteScalars(target, source);
 	mergeDistributions(target.distributions, source.distributions);
 }
 
@@ -84,20 +88,12 @@ function mergeOutcomeRecord(
 	}
 }
 
-function mergeDistributions(
-	target: Record<string, CrawlerDistribution>,
-	source: Record<string, CrawlerDistribution>
+function accumulateDistributions(
+	sketches: Map<string, ReturnType<typeof createSketch>>,
+	distributions: Record<string, CrawlerDistribution>
 ): void {
-	const sketches = new Map<string, ReturnType<typeof createSketch>>();
-	for (const key of Object.keys(target)) {
-		const distribution = target[key];
-		if (!distribution || distribution.count === 0) continue;
-		const sketch = createSketch();
-		mergeDistributionInto(sketch, distribution);
-		sketches.set(key, sketch);
-	}
-	for (const key of Object.keys(source)) {
-		const distribution = source[key];
+	for (const key of Object.keys(distributions)) {
+		const distribution = distributions[key];
 		if (!distribution || distribution.count === 0) continue;
 		let sketch = sketches.get(key);
 		if (!sketch) {
@@ -106,9 +102,17 @@ function mergeDistributions(
 		}
 		mergeDistributionInto(sketch, distribution);
 	}
-	for (const key of sketches.keys()) {
-		const sketch = sketches.get(key);
-		if (sketch) target[key] = serializeSketch(sketch);
+}
+
+function mergeDistributions(
+	target: Record<string, CrawlerDistribution>,
+	source: Record<string, CrawlerDistribution>
+): void {
+	const sketches = new Map<string, ReturnType<typeof createSketch>>();
+	accumulateDistributions(sketches, target);
+	accumulateDistributions(sketches, source);
+	for (const [key, sketch] of sketches) {
+		target[key] = serializeSketch(sketch);
 	}
 }
 
@@ -118,7 +122,15 @@ export function mergeMinutes(
 	to: number
 ): StatsMinute {
 	const total = emptyMinute(from, to);
-	for (const minute of minutes) mergeMinute(total, minute);
+	if (minutes.length === 0) return total;
+	const sketches = new Map<string, ReturnType<typeof createSketch>>();
+	for (const minute of minutes) {
+		mergeMinuteScalars(total, minute);
+		accumulateDistributions(sketches, minute.distributions);
+	}
+	for (const [key, sketch] of sketches) {
+		total.distributions[key] = serializeSketch(sketch);
+	}
 	return total;
 }
 
@@ -133,9 +145,7 @@ export function summarizeLatency(
 	const result: Record<string, ReturnType<typeof summarizeSketch>> = {};
 	for (const [key, distribution] of Object.entries(minute.distributions)) {
 		if (distribution.count === 0) continue;
-		const sketch = createSketch();
-		mergeDistributionInto(sketch, distribution);
-		result[key] = summarizeSketch(sketch, quantiles);
+		result[key] = summarizeDistribution(distribution, quantiles);
 	}
 	return result;
 }

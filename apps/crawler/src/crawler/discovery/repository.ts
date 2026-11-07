@@ -5,6 +5,7 @@ import {
 	count,
 	desc,
 	eq,
+	exists,
 	gt,
 	gte,
 	inArray,
@@ -14,6 +15,7 @@ import {
 	lte,
 	notInArray,
 	or,
+	sql,
 	type SQL,
 } from "drizzle-orm";
 import { activeTaskResource } from "../shared/taskContext";
@@ -38,7 +40,11 @@ import {
 import { DiscoveryContextSchema } from "@cvsa/contracts";
 import { createDatabaseTracer } from "../stats/databaseMetrics";
 import type { StatsRecorder } from "../stats/types";
-import type { IDiscoveryRepository } from "./repository.interface";
+import type {
+	IDiscoveryRepository,
+	MetadataHistoryListItem,
+	VideoMetadataSummary,
+} from "./repository.interface";
 import type {
 	DiscoveryContext,
 	HotSampleOptions,
@@ -412,6 +418,27 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		);
 	}
 
+	async getMetadataSummaries(aids: bigint[]): Promise<VideoMetadataSummary[]> {
+		if (aids.length === 0) return [];
+		return this.trace("discovery.getMetadataSummaries", () =>
+			activeTaskResource(this.db)
+				.select({
+					aid: bilibiliVideoMetadata.aid,
+					bvid: bilibiliVideoMetadata.bvid,
+					title: bilibiliVideoMetadata.title,
+					pic: bilibiliVideoMetadata.pic,
+					ownerName: bilibiliVideoMetadata.ownerName,
+					duration: bilibiliVideoMetadata.duration,
+					videoStatus: bilibiliVideoMetadata.videoStatus,
+					filterDecision: bilibiliVideoMetadata.filterDecision,
+					discoverySource: bilibiliVideoMetadata.discoverySource,
+					discoveryContext: bilibiliVideoMetadata.discoveryContext,
+				})
+				.from(bilibiliVideoMetadata)
+				.where(inArray(AID, aids))
+		);
+	}
+
 	async getMetadataHistory(aid: bigint, limit = 100): Promise<BilibiliVideoMetadataHistory[]> {
 		return this.trace("discovery.getMetadataHistory", () =>
 			activeTaskResource(this.db)
@@ -421,6 +448,40 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				.orderBy(desc(bilibiliVideoMetadataHistory.capturedAt))
 				.limit(Math.min(Math.max(limit, 1), 500))
 		);
+	}
+
+	async listMetadataHistory(
+		aid: bigint,
+		options: { limit: number; offset: number }
+	): Promise<{ items: MetadataHistoryListItem[]; total: number }> {
+		return this.trace("discovery.listMetadataHistory", async () => {
+			const db = activeTaskResource(this.db);
+			const limit = Math.min(Math.max(options.limit, 1), 500);
+			const offset = Math.max(options.offset, 0);
+			const [[totals], items] = await Promise.all([
+				db
+					.select({ total: count() })
+					.from(bilibiliVideoMetadataHistory)
+					.where(eq(bilibiliVideoMetadataHistory.aid, aid)),
+				db
+					.select({
+						id: bilibiliVideoMetadataHistory.id,
+						aid: bilibiliVideoMetadataHistory.aid,
+						capturedAt: bilibiliVideoMetadataHistory.capturedAt,
+						changeType: bilibiliVideoMetadataHistory.changeType,
+						changedFields: bilibiliVideoMetadataHistory.changedFields,
+					})
+					.from(bilibiliVideoMetadataHistory)
+					.where(eq(bilibiliVideoMetadataHistory.aid, aid))
+					.orderBy(
+						desc(bilibiliVideoMetadataHistory.capturedAt),
+						desc(bilibiliVideoMetadataHistory.id)
+					)
+					.limit(limit)
+					.offset(offset),
+			]);
+			return { items, total: totals?.total ?? 0 };
+		});
 	}
 
 	async saveRelations(relations: RelationEdge[]): Promise<void> {
@@ -562,16 +623,13 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	/** WHERE clause shared by {@link listSamples} and {@link countSamples}. */
-	private async sampleWhere(options: ListDiscoverySamplesOptions = {}): Promise<SQL | undefined> {
+	private sampleWhere(
+		db: DatabaseClient,
+		options: ListDiscoverySamplesOptions = {}
+	): SQL | undefined {
 		const search = options.search?.trim();
 		const exactAid =
 			search && /^(?:av)?\d+$/i.test(search) ? BigInt(search.replace(/^av/i, "")) : undefined;
-		const sourceRows = options.source
-			? await activeTaskResource(this.db)
-					.select({ aid: AID })
-					.from(bilibiliVideoMetadata)
-					.where(eq(bilibiliVideoMetadata.discoverySource, options.source))
-			: undefined;
 
 		const conditions: SQL[] = [gte(discoverySample.aid, 0n)];
 		if (options.decision) conditions.push(eq(discoverySample.decision, options.decision));
@@ -589,20 +647,29 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 			);
 			if (searchCondition) conditions.push(searchCondition);
 		}
-		if (sourceRows)
+		if (options.source) {
 			conditions.push(
-				inArray(
-					discoverySample.aid,
-					sourceRows.map((m) => m.aid)
+				exists(
+					db
+						.select({ one: sql`1` })
+						.from(bilibiliVideoMetadata)
+						.where(
+							and(
+								eq(bilibiliVideoMetadata.aid, discoverySample.aid),
+								eq(bilibiliVideoMetadata.discoverySource, options.source)
+							)
+						)
 				)
 			);
+		}
 
 		return and(...conditions);
 	}
 
 	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
 		return this.trace("discovery.listSamples", async () => {
-			const where = await this.sampleWhere(options);
+			const db = activeTaskResource(this.db);
+			const where = this.sampleWhere(db, options);
 			const ascending = options.sortOrder === "asc";
 			const direction = ascending ? asc : desc;
 			const order =
@@ -612,7 +679,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 						? [direction(discoverySample.aid)]
 						: [direction(discoverySample.createdAt), desc(discoverySample.aid)];
 
-			return activeTaskResource(this.db)
+			return db
 				.select()
 				.from(discoverySample)
 				.where(where)
@@ -623,12 +690,12 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	}
 
 	async countSamples(options: ListDiscoverySamplesOptions = {}): Promise<number> {
-		const where = await this.sampleWhere(options);
-		const [totals] = await activeTaskResource(this.db)
-			.select({ total: count() })
-			.from(discoverySample)
-			.where(where);
-		return totals?.total ?? 0;
+		return this.trace("discovery.countSamples", async () => {
+			const db = activeTaskResource(this.db);
+			const where = this.sampleWhere(db, options);
+			const [totals] = await db.select({ total: count() }).from(discoverySample).where(where);
+			return totals?.total ?? 0;
+		});
 	}
 
 	async getSample(aid: bigint): Promise<DiscoverySample | null> {

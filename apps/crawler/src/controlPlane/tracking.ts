@@ -89,7 +89,19 @@ function toTrackingDto(t: VideoTracking): VideoTrackingDto {
 
 function toTrackingListItemDto(
 	t: VideoTracking,
-	metadata: BilibiliVideoMetadata | undefined
+	metadata:
+		| Pick<
+				BilibiliVideoMetadata,
+				| "title"
+				| "bvid"
+				| "pic"
+				| "ownerName"
+				| "videoStatus"
+				| "filterDecision"
+				| "discoverySource"
+				| "discoveryContext"
+		  >
+		| undefined
 ): TrackingVideoListItem {
 	const context = metadata
 		? DiscoveryContextSchema.safeParse(metadata.discoveryContext)
@@ -252,7 +264,7 @@ export const trackingRoutes = new Elysia()
 				sortBy: query.sortBy,
 				sortOrder: query.sortOrder,
 			});
-			const metadatas = await discoveryRepository.getMetadatas(
+			const metadatas = await discoveryRepository.getMetadataSummaries(
 				result.items.map((item) => item.aid)
 			);
 			const metadataByAid = new Map(metadatas.map((item) => [item.aid, item]));

@@ -1,8 +1,7 @@
-import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lt, or, sql, type SQL } from "drizzle-orm";
 import {
 	CRAWLER_STATS_FORMAT_VERSION,
 	CrawlerStatsMinuteSchema,
-	CrawlerStatsMinuteV2Schema,
 	type CrawlerStatsMinute,
 	type CrawlerStatsMinuteV2,
 } from "@cvsa/contracts";
@@ -67,24 +66,66 @@ export interface StatsHourPendingRow {
 	generation: number;
 }
 
+export interface StatsRangeOptions {
+	stepMs?: number;
+	preferHours?: boolean;
+}
+
 export interface StatsRangeData {
 	minutes: StatsMinuteRow[];
+	coveredBucketTimes?: number[];
 	legacy: StatsLegacyMinuteRow[];
 	instances: StatsInstanceRow[];
 	states: StatsStateRow[];
+	latestStates?: StatsStateRow[];
 	hours: StatsHourRow[];
 	pendingHours: StatsHourPendingRow[];
 	availability: Array<{ metric: string; enabledAt: Temporal.Instant }>;
 }
 
 const HOUR_MS = 3_600_000;
+const MINUTE_MS = 60_000;
 
 function isV2(value: unknown): value is CrawlerStatsMinuteV2 {
+	if (typeof value !== "object" || value === null) return false;
+	const candidate = value as Partial<CrawlerStatsMinuteV2>;
 	return (
-		typeof value === "object" &&
-		value !== null &&
-		(value as { version?: unknown }).version === CRAWLER_STATS_FORMAT_VERSION
+		candidate.version === CRAWLER_STATS_FORMAT_VERSION &&
+		typeof candidate.counters === "object" &&
+		candidate.counters !== null &&
+		typeof candidate.distributions === "object" &&
+		candidate.distributions !== null
 	);
+}
+
+function toEpochMs(raw: unknown): number {
+	if (raw instanceof Date) return raw.getTime();
+	if (typeof raw === "number") return raw;
+	if (typeof raw === "string") return Date.parse(raw);
+	if (
+		typeof raw === "object" &&
+		raw !== null &&
+		"epochMilliseconds" in raw &&
+		typeof (raw as { epochMilliseconds: unknown }).epochMilliseconds === "number"
+	) {
+		return (raw as { epochMilliseconds: number }).epochMilliseconds;
+	}
+	return Number.NaN;
+}
+
+function mergeContiguousRanges(ranges: Array<[number, number]>): Array<[number, number]> {
+	if (ranges.length <= 1) return ranges;
+	const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+	const merged: Array<[number, number]> = [];
+	for (const [start, end] of sorted) {
+		const last = merged[merged.length - 1];
+		if (last && start <= last[1]) {
+			last[1] = Math.max(last[1], end);
+		} else {
+			merged.push([start, end]);
+		}
+	}
+	return merged;
 }
 
 export class CrawlerStatsRepository {
@@ -150,7 +191,7 @@ export class CrawlerStatsRepository {
 				{
 					sourceId: row.sourceId,
 					bucketTime: row.bucketTime,
-					metrics: CrawlerStatsMinuteV2Schema.parse(row.metrics),
+					metrics: row.metrics,
 				},
 			];
 		});
@@ -251,7 +292,7 @@ export class CrawlerStatsRepository {
 				{
 					sourceId: row.sourceId,
 					bucketTime: row.bucketTime,
-					metrics: CrawlerStatsMinuteV2Schema.parse(row.metrics),
+					metrics: row.metrics,
 				},
 			];
 		});
@@ -294,11 +335,11 @@ export class CrawlerStatsRepository {
 			.from(crawlerStatsHour)
 			.where(and(gte(crawlerStatsHour.hourTime, from), lt(crawlerStatsHour.hourTime, to)))
 			.orderBy(asc(crawlerStatsHour.hourTime));
-		return rows.map((row) => ({
-			hourTime: row.hourTime,
-			sourceId: row.sourceId,
-			metrics: CrawlerStatsMinuteV2Schema.parse(row.metrics),
-		}));
+		return rows.flatMap((row) =>
+			isV2(row.metrics)
+				? [{ hourTime: row.hourTime, sourceId: row.sourceId, metrics: row.metrics }]
+				: []
+		);
 	}
 
 	async saveStates(
@@ -368,22 +409,24 @@ export class CrawlerStatsRepository {
 			.onConflictDoNothing();
 	}
 
+	async pruneBefore(cutoff: Temporal.Instant): Promise<void> {
+		await this.db.delete(crawlerStatsMinute).where(lt(crawlerStatsMinute.bucketTime, cutoff));
+		await this.db.delete(crawlerStatsState).where(lt(crawlerStatsState.sampledAt, cutoff));
+		await this.db.delete(crawlerStatsHour).where(lt(crawlerStatsHour.hourTime, cutoff));
+	}
+
 	async readRange(
 		from: Temporal.Instant,
 		to: Temporal.Instant,
-		includeHours: boolean
+		includeHours: boolean,
+		options?: StatsRangeOptions
 	): Promise<StatsRangeData> {
+		const fromMs = from.epochMilliseconds;
+		const toMs = to.epochMilliseconds;
+		const stepSec = Math.max(60, Math.floor((options?.stepMs ?? MINUTE_MS) / 1000));
+		const preferHours = Boolean(options?.preferHours && includeHours);
+
 		return this.db.transaction(async (tx) => {
-			const minuteRows = await tx
-				.select()
-				.from(crawlerStatsMinute)
-				.where(
-					and(
-						gte(crawlerStatsMinute.bucketTime, from),
-						lt(crawlerStatsMinute.bucketTime, to)
-					)
-				)
-				.orderBy(asc(crawlerStatsMinute.bucketTime));
 			const instanceRows = await tx
 				.select()
 				.from(crawlerStatsInstance)
@@ -394,13 +437,6 @@ export class CrawlerStatsRepository {
 					)
 				)
 				.orderBy(asc(crawlerStatsInstance.startedAt));
-			const stateRows = await tx
-				.select()
-				.from(crawlerStatsState)
-				.where(
-					and(gte(crawlerStatsState.sampledAt, from), lt(crawlerStatsState.sampledAt, to))
-				)
-				.orderBy(asc(crawlerStatsState.sampledAt));
 			const availability = await tx
 				.select({
 					metric: crawlerStatsMetricAvailability.metric,
@@ -415,18 +451,144 @@ export class CrawlerStatsRepository {
 				})
 				.from(crawlerStatsHourPending)
 				.orderBy(asc(crawlerStatsHourPending.hourTime));
+
+			const hourFrom = toInstant(new Date(Math.floor(fromMs / HOUR_MS) * HOUR_MS));
 			const hourRows = includeHours
 				? await tx
 						.select()
 						.from(crawlerStatsHour)
 						.where(
 							and(
-								gte(crawlerStatsHour.hourTime, from),
+								gte(crawlerStatsHour.hourTime, hourFrom),
 								lt(crawlerStatsHour.hourTime, to)
 							)
 						)
 						.orderBy(asc(crawlerStatsHour.hourTime))
 				: [];
+
+			let coveredBucketTimes: number[] | undefined;
+			let minuteRows: Array<typeof crawlerStatsMinute.$inferSelect>;
+
+			if (preferHours) {
+				const pendingSet = new Set(
+					pendingHours.map((row) => row.hourTime.epochMilliseconds)
+				);
+				const rolledHours = new Set(hourRows.map((row) => row.hourTime.epochMilliseconds));
+
+				const coveredRows = await tx
+					.select({ bucketTime: crawlerStatsMinute.bucketTime })
+					.from(crawlerStatsMinute)
+					.where(
+						and(
+							gte(crawlerStatsMinute.bucketTime, from),
+							lt(crawlerStatsMinute.bucketTime, to)
+						)
+					);
+				coveredBucketTimes = coveredRows.map(
+					(row) => Math.floor(row.bucketTime.epochMilliseconds / MINUTE_MS) * MINUTE_MS
+				);
+
+				const fallbackRanges: Array<[number, number]> = [];
+				for (
+					let hour = Math.floor(fromMs / HOUR_MS) * HOUR_MS;
+					hour < toMs;
+					hour += HOUR_MS
+				) {
+					const subA = Math.max(fromMs, hour);
+					const subB = Math.min(toMs, hour + HOUR_MS);
+					const isCleanCompleteHour =
+						subA === hour &&
+						subB === hour + HOUR_MS &&
+						!pendingSet.has(hour) &&
+						rolledHours.has(hour);
+					if (!isCleanCompleteHour) {
+						fallbackRanges.push([subA, subB]);
+					}
+				}
+
+				const mergedRanges = mergeContiguousRanges(fallbackRanges);
+				const enabledAt = availability.length
+					? Math.min(...availability.map((row) => row.enabledAt.epochMilliseconds))
+					: null;
+				const mayContainLegacy = enabledAt === null || fromMs < enabledAt;
+
+				const clauses: SQL[] = mergedRanges.flatMap(([startMs, endMs]) => {
+					const clause = and(
+						gte(crawlerStatsMinute.bucketTime, toInstant(new Date(startMs))),
+						lt(crawlerStatsMinute.bucketTime, toInstant(new Date(endMs)))
+					);
+					return clause ? [clause] : [];
+				});
+				if (mayContainLegacy) {
+					const legacyClause = and(
+						gte(crawlerStatsMinute.bucketTime, from),
+						lt(crawlerStatsMinute.bucketTime, to),
+						sql`(${crawlerStatsMinute.metrics}->>'version')::int IS DISTINCT FROM ${CRAWLER_STATS_FORMAT_VERSION}`
+					);
+					if (legacyClause) clauses.push(legacyClause);
+				}
+
+				minuteRows =
+					clauses.length > 0
+						? await tx
+								.select()
+								.from(crawlerStatsMinute)
+								.where(clauses.length === 1 ? clauses[0] : or(...clauses))
+								.orderBy(asc(crawlerStatsMinute.bucketTime))
+						: [];
+			} else {
+				minuteRows = await tx
+					.select()
+					.from(crawlerStatsMinute)
+					.where(
+						and(
+							gte(crawlerStatsMinute.bucketTime, from),
+							lt(crawlerStatsMinute.bucketTime, to)
+						)
+					)
+					.orderBy(asc(crawlerStatsMinute.bucketTime));
+			}
+
+			// Fetch only the latest state per item for overview + one latest gauge row per series bucket
+			// instead of loading up to 120,960 30-second state rows on 24h/7d windows.
+			const latestStateRaw = await tx.execute<{
+				sampled_at: string | Date;
+				scope: string;
+				item: string;
+				status: string;
+				data: unknown;
+			}>(sql`
+				SELECT DISTINCT ON (item)
+					sampled_at, scope, item, status, data
+				FROM crawler_stats_state
+				WHERE sampled_at >= ${from.toString()}::timestamptz
+				  AND sampled_at < ${to.toString()}::timestamptz
+				ORDER BY item, sampled_at DESC
+			`);
+			const seriesStateRaw = await tx.execute<{
+				sampled_at: string | Date;
+				scope: string;
+				item: string;
+				status: string;
+				data: unknown;
+			}>(sql`
+				SELECT sampled_at, scope, item, status, data FROM (
+					SELECT DISTINCT ON (bucket_id, item)
+						bucket_id, sampled_at, scope, item, status, data
+					FROM (
+						SELECT
+							floor(extract(epoch from sampled_at) / ${stepSec}::numeric)::bigint AS bucket_id,
+							sampled_at, scope, item, status, data
+						FROM crawler_stats_state
+						WHERE sampled_at >= ${from.toString()}::timestamptz
+						  AND sampled_at < ${to.toString()}::timestamptz
+						  AND item IN ('queues', 'tracking')
+					) bucketed
+					ORDER BY bucket_id, item, sampled_at DESC
+				) sampled
+				ORDER BY sampled_at ASC
+			`);
+
 			const minutes: StatsMinuteRow[] = [];
 			const legacy: StatsLegacyMinuteRow[] = [];
 			for (const row of minuteRows) {
@@ -434,7 +596,7 @@ export class CrawlerStatsRepository {
 					minutes.push({
 						sourceId: row.sourceId,
 						bucketTime: row.bucketTime,
-						metrics: CrawlerStatsMinuteV2Schema.parse(row.metrics),
+						metrics: row.metrics,
 					});
 					continue;
 				}
@@ -446,22 +608,48 @@ export class CrawlerStatsRepository {
 						metrics: parsed.data,
 					});
 			}
+
+			const mapStateRow = (row: {
+				sampled_at: string | Date;
+				scope: string;
+				item: string;
+				status: string;
+				data: unknown;
+			}): StatsStateRow => ({
+				sampledAt: toInstant(new Date(toEpochMs(row.sampled_at))),
+				scope: row.scope,
+				item: row.item,
+				status: row.status,
+				data:
+					typeof row.data === "string"
+						? (() => {
+								try {
+									return JSON.parse(row.data);
+								} catch {
+									return row.data;
+								}
+							})()
+						: row.data,
+			});
+
 			return {
 				minutes,
+				coveredBucketTimes,
 				legacy,
 				instances: instanceRows,
-				states: stateRows.map((row) => ({
-					sampledAt: row.sampledAt,
-					scope: row.scope,
-					item: row.item,
-					status: row.status,
-					data: row.data,
-				})),
-				hours: hourRows.map((row) => ({
-					hourTime: row.hourTime,
-					sourceId: row.sourceId,
-					metrics: CrawlerStatsMinuteV2Schema.parse(row.metrics),
-				})),
+				states: seriesStateRaw.map(mapStateRow),
+				latestStates: latestStateRaw.map(mapStateRow),
+				hours: hourRows.flatMap((row) =>
+					isV2(row.metrics)
+						? [
+								{
+									hourTime: row.hourTime,
+									sourceId: row.sourceId,
+									metrics: row.metrics,
+								},
+							]
+						: []
+				),
 				pendingHours,
 				availability,
 			};

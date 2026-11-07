@@ -59,6 +59,8 @@ const HOUR_MS = 3_600_000;
 const STATE_SLOT_MS = 30_000;
 const GLOBAL_STATE_ITEMS = ["queues", "tracking", "model", "export", "strategies"];
 const RETENTION_MS = 10_080 * MINUTE_MS;
+const PERSISTED_MEMORY_RETENTION_MS = 15 * MINUTE_MS;
+const DB_RETENTION_MS = 8 * 24 * HOUR_MS;
 
 export interface StatsStore {
 	saveMinute(input: SaveStatsMinuteInput): Promise<void>;
@@ -108,8 +110,10 @@ export interface StatsStore {
 	readRange(
 		from: ReturnType<typeof toInstant>,
 		to: ReturnType<typeof toInstant>,
-		includeHours: boolean
+		includeHours: boolean,
+		options?: import("./rollup").StatsRangeOptions
 	): Promise<import("./rollup").StatsRangeData>;
+	pruneBefore?(cutoff: ReturnType<typeof toInstant>): Promise<void>;
 	markMetricsEnabled(
 		metrics: readonly string[],
 		enabledAt: ReturnType<typeof toInstant>
@@ -178,8 +182,12 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	private readonly metrics: StatsMetricSink | undefined;
 	private readonly heartbeatStore: StatsHeartbeatStore | undefined;
 	private readonly buckets = new Map<number, StatsMinute>();
+	private readonly liveSketches = new Map<number, Map<string, ReturnType<typeof createSketch>>>();
+	private readonly dirtySketchKeys = new Map<number, Set<string>>();
+	private readonly lifetimeCounters = emptyMinute(0, 0).counters;
 	private readonly generations = new Map<number, number>();
 	private readonly dirty = new Set<number>();
+	private readonly inFlightReports = new Map<string, Promise<StatsReport>>();
 	private readonly writeLatency = createSketch();
 	private readonly counters: PersistenceCounters = {
 		successes: 0,
@@ -193,6 +201,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	private lastStateSlot = 0;
 	private lastResourceAt = 0;
 	private lastRollupAt = 0;
+	private lastPruneAt = 0;
 	private rollupFailures = 0;
 	private flushTimer: ReturnType<typeof setInterval> | undefined;
 	private stateTimer: ReturnType<typeof setInterval> | undefined;
@@ -222,6 +231,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	}
 
 	record(counter: keyof StatsMinute["counters"], count = 1): void {
+		this.lifetimeCounters[counter] += count;
 		this.bucket().counters[counter] += count;
 		this.metrics?.recordCounter(counter, count);
 	}
@@ -463,12 +473,64 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	}
 
 	private recordSample(key: string, ms: number): void {
-		const bucket = this.bucket();
-		const sketch = bucket.distributions[key]
-			? mergeSketch(bucket.distributions[key])
-			: createSketch();
+		const at = this.now();
+		const start = Math.floor(at / MINUTE_MS) * MINUTE_MS;
+		const bucket = this.bucket(at);
+		let sketches = this.liveSketches.get(start);
+		if (!sketches) {
+			sketches = new Map();
+			this.liveSketches.set(start, sketches);
+		}
+		let sketch = sketches.get(key);
+		if (!sketch) {
+			sketch = bucket.distributions[key]
+				? mergeSketch(bucket.distributions[key])
+				: createSketch();
+			sketches.set(key, sketch);
+		}
 		sketch.accept(Math.max(0, ms));
-		bucket.distributions[key] = serializeSketch(sketch);
+		let dirtyKeys = this.dirtySketchKeys.get(start);
+		if (!dirtyKeys) {
+			dirtyKeys = new Set();
+			this.dirtySketchKeys.set(start, dirtyKeys);
+		}
+		dirtyKeys.add(key);
+	}
+
+	private materializeBucket(start: number): StatsMinute | undefined {
+		const bucket = this.buckets.get(start);
+		if (!bucket) return undefined;
+		const dirtyKeys = this.dirtySketchKeys.get(start);
+		const sketches = this.liveSketches.get(start);
+		if (dirtyKeys && sketches && dirtyKeys.size > 0) {
+			for (const key of dirtyKeys) {
+				const sketch = sketches.get(key);
+				if (sketch) bucket.distributions[key] = serializeSketch(sketch);
+			}
+			dirtyKeys.clear();
+		}
+		return bucket;
+	}
+
+	private evictBuckets(currentMinute: number): void {
+		const hardEarliest = currentMinute - RETENTION_MS;
+		const persistedEarliest = currentMinute - PERSISTED_MEMORY_RETENTION_MS;
+		for (const start of this.buckets.keys()) {
+			const expiredHard = start < hardEarliest;
+			const expiredClean =
+				Boolean(this.store) && start < persistedEarliest && !this.dirty.has(start);
+			if (expiredHard || expiredClean) {
+				this.buckets.delete(start);
+				this.liveSketches.delete(start);
+				this.dirtySketchKeys.delete(start);
+				this.dirty.delete(start);
+				this.generations.delete(start);
+			} else if (start < currentMinute && !this.dirty.has(start)) {
+				// Completed and persisted minute: release live DDSketch objects while retaining summary if recent.
+				this.liveSketches.delete(start);
+				this.dirtySketchKeys.delete(start);
+			}
+		}
 	}
 
 	private bucket(at = this.now()): StatsMinute {
@@ -498,13 +560,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			}
 		}
 		this.heartbeatAt = Math.max(this.heartbeatAt, currentMinute);
-		const earliest = currentMinute - RETENTION_MS;
-		for (const start of this.buckets.keys())
-			if (start < earliest) {
-				this.buckets.delete(start);
-				this.dirty.delete(start);
-				this.generations.delete(start);
-			}
+		this.evictBuckets(currentMinute);
 	}
 
 	flush(at = this.now()): Promise<number> {
@@ -524,6 +580,9 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			this.dirty.clear();
 			return 0;
 		}
+		for (const time of this.dirty) {
+			this.materializeBucket(time);
+		}
 		if (!this.availabilityMarked) {
 			this.availabilityMarked = true;
 			await this.store
@@ -540,9 +599,9 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		}));
 		let written = 0;
 		let firstError: unknown;
+		const currentMinuteStart = Math.floor(at / MINUTE_MS) * MINUTE_MS;
 		for (const entry of captured) {
 			const startedAt = performance.now();
-			const currentMinuteStart = Math.floor(at / MINUTE_MS) * MINUTE_MS;
 			const coveredTo = Math.max(
 				this.coveredTo,
 				Math.min(entry.time + MINUTE_MS, currentMinuteStart)
@@ -575,6 +634,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 				firstError ??= error;
 			}
 		}
+		this.evictBuckets(currentMinuteStart);
 		if (written > 0) this.counters.lastPersistedAt = at;
 		if (this.store && written === 0 && this.counters.successes === 0) {
 			await this.store
@@ -757,6 +817,14 @@ export class CrawlerStatsCollector implements StatsRecorder {
 					);
 					count++;
 				}
+				if (this.store?.pruneBefore && at - this.lastPruneAt >= HOUR_MS) {
+					this.lastPruneAt = at;
+					await this.store
+						.pruneBefore(toInstant(new Date(at - DB_RETENTION_MS)))
+						.catch((error) =>
+							appLogger.warn("Crawler stats retention cleanup failed", { error })
+						);
+				}
 				return count;
 			});
 			return rolled ?? 0;
@@ -775,18 +843,52 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		const to = Math.floor(at / MINUTE_MS) * MINUTE_MS;
 		const count = minutes ?? windowMinutes(window);
 		const from = to - count * MINUTE_MS;
+		const flightKey = `${window}:${from}:${to}:${quantiles ? quantiles.join(",") : ""}`;
+		const existingFlight = this.inFlightReports.get(flightKey);
+		if (existingFlight) return existingFlight;
+
+		const work = this.computeReport(window, at, from, to, count, quantiles).finally(() => {
+			if (this.inFlightReports.get(flightKey) === work) {
+				this.inFlightReports.delete(flightKey);
+			}
+		});
+		this.inFlightReports.set(flightKey, work);
+		return work;
+	}
+
+	private async computeReport(
+		window: CrawlerStatsWindow,
+		at: number,
+		from: number,
+		to: number,
+		count: number,
+		quantiles?: readonly number[]
+	): Promise<StatsReport> {
+		const { stepMinutes, fromHours } = pickGranularity(count);
+		const stepMs = stepMinutes * MINUTE_MS;
 		const fromInstant = toInstant(new Date(from));
 		const toInstantBound = toInstant(new Date(to));
 		const rangeData = this.store
-			? await this.store.readRange(fromInstant, toInstantBound, true)
+			? await this.store.readRange(fromInstant, toInstantBound, true, {
+					stepMs,
+					preferHours: fromHours,
+				})
 			: {
-					minutes: [...this.buckets.entries()]
-						.filter(([time]) => time >= from && time < to)
-						.map(([time, metrics]) => ({
-							sourceId: this.instanceId,
-							bucketTime: toInstant(new Date(time)),
-							metrics,
-						})),
+					minutes: [...this.buckets.keys()]
+						.filter((time) => time >= from && time < to)
+						.sort((a, b) => a - b)
+						.flatMap((time) => {
+							const metrics = this.materializeBucket(time);
+							return metrics
+								? [
+										{
+											sourceId: this.instanceId,
+											bucketTime: toInstant(new Date(time)),
+											metrics,
+										},
+									]
+								: [];
+						}),
 					legacy: [],
 					instances: [],
 					states: [],
@@ -795,11 +897,41 @@ export class CrawlerStatsCollector implements StatsRecorder {
 					availability: [],
 				};
 		const v2Rows = rangeData.minutes;
-		const merged = mergeMinutes(
-			v2Rows.map((row) => row.metrics),
-			from,
-			to
+		const pendingHours = new Set(
+			rangeData.pendingHours.map((row) => row.hourTime.epochMilliseconds)
 		);
+		const hoursByTime = new Map<number, StatsMinute[]>();
+		for (const row of rangeData.hours) {
+			const hour = row.hourTime.epochMilliseconds;
+			let list = hoursByTime.get(hour);
+			if (!list) {
+				list = [];
+				hoursByTime.set(hour, list);
+			}
+			list.push(row.metrics);
+		}
+
+		const mergedInputs: StatsMinute[] = [];
+		if (fromHours && hoursByTime.size > 0) {
+			const cleanHours = new Set<number>();
+			for (let hour = Math.floor(from / HOUR_MS) * HOUR_MS; hour < to; hour += HOUR_MS) {
+				if (hour >= from && hour + HOUR_MS <= to && !pendingHours.has(hour)) {
+					const hourRows = hoursByTime.get(hour);
+					if (hourRows && hourRows.length > 0) {
+						cleanHours.add(hour);
+						for (const metrics of hourRows) mergedInputs.push(metrics);
+					}
+				}
+			}
+			for (const row of v2Rows) {
+				const hour = Math.floor(row.bucketTime.epochMilliseconds / HOUR_MS) * HOUR_MS;
+				if (!cleanHours.has(hour)) mergedInputs.push(row.metrics);
+			}
+		} else {
+			for (const row of v2Rows) mergedInputs.push(row.metrics);
+		}
+		const merged = mergeMinutes(mergedInputs, from, to);
+
 		const legacyRows = rangeData.legacy;
 		const instances = rangeData.instances;
 		const persistedInstances = instances.filter(
@@ -820,18 +952,25 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		const enabledAt = availability.length
 			? Math.min(...availability.map((row) => row.enabledAt.epochMilliseconds))
 			: (persistedInstances[0]?.startedAt.epochMilliseconds ?? null);
-		const coverage = this.coverage(from, to, count, v2Rows, instanceStates, enabledAt);
+		const coveredStarts = new Set(
+			rangeData.coveredBucketTimes ??
+				v2Rows.map(
+					(row) => Math.floor(row.bucketTime.epochMilliseconds / MINUTE_MS) * MINUTE_MS
+				)
+		);
+		const coverage = this.coverage(from, to, count, coveredStarts, instanceStates, enabledAt);
 		const states = rangeData.states;
 		const latestStates = new Map<string, StatsStateRow>();
-		for (const state of states) latestStates.set(state.item, state);
+		for (const state of rangeData.latestStates ?? states) latestStates.set(state.item, state);
 		const series = await this.series(
 			from,
 			to,
 			count,
 			v2Rows,
+			coveredStarts,
 			instanceStates,
-			rangeData.hours,
-			new Set(rangeData.pendingHours.map((row) => row.hourTime.epochMilliseconds)),
+			hoursByTime,
+			pendingHours,
 			states
 		);
 		return {
@@ -865,13 +1004,10 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		from: number,
 		to: number,
 		count: number,
-		rows: StatsMinuteRow[],
+		coveredStarts: Set<number>,
 		instances: StatsInstanceState[],
 		enabledAt: number | null
 	): CrawlerStatsCoverage {
-		const coveredStarts = new Set(
-			rows.map((row) => Math.floor(row.bucketTime.epochMilliseconds / MINUTE_MS) * MINUTE_MS)
-		);
 		const participated = new Set<number>();
 		for (const instance of instances) {
 			const end =
@@ -948,8 +1084,9 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		to: number,
 		count: number,
 		rows: StatsMinuteRow[],
+		coveredStarts: Set<number>,
 		instances: StatsInstanceState[],
-		hours: StatsHourRow[],
+		hoursByTime: Map<number, StatsMinute[]>,
 		pendingHours: Set<number>,
 		states: StatsStateRow[]
 	): Promise<StatsSeriesPoint[]> {
@@ -958,18 +1095,55 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		const earliest = Math.floor(from / step) * step;
 		const points: StatsSeriesPoint[] = [];
 		const participated = new Set<number>();
-		const coveredStarts = new Set(
-			rows.map((row) => Math.floor(row.bucketTime.epochMilliseconds / MINUTE_MS) * MINUTE_MS)
-		);
 		for (const instance of instances) {
 			const end =
 				instance.exitedAt ??
 				(instance.heartbeatAt !== null
 					? instance.heartbeatAt + 30_000
 					: instance.lastPersistedAt);
-			for (let slot = from; slot < Math.min(to, end); slot += MINUTE_MS)
+			const start = Math.max(from, Math.floor(instance.startedAt / MINUTE_MS) * MINUTE_MS);
+			for (let slot = start; slot < Math.min(to, end); slot += MINUTE_MS)
 				participated.add(slot);
 		}
+
+		// Pre-bucket minute rows and states in O(N) instead of filtering the entire array per chart point.
+		const rowsByHour = new Map<number, StatsMinuteRow[]>();
+		const rowsByStep = new Map<number, StatsMinute[]>();
+		for (const row of rows) {
+			const time = row.bucketTime.epochMilliseconds;
+			if (time < from || time >= to) continue;
+			if (fromHours) {
+				const hour = Math.floor(time / HOUR_MS) * HOUR_MS;
+				let list = rowsByHour.get(hour);
+				if (!list) {
+					list = [];
+					rowsByHour.set(hour, list);
+				}
+				list.push(row);
+			} else {
+				const stepStart = Math.floor(time / step) * step;
+				let list = rowsByStep.get(stepStart);
+				if (!list) {
+					list = [];
+					rowsByStep.set(stepStart, list);
+				}
+				list.push(row.metrics);
+			}
+		}
+
+		const statesByStep = new Map<number, Map<string, StatsStateRow>>();
+		for (const state of states) {
+			const time = state.sampledAt.epochMilliseconds;
+			if (time < from || time >= to) continue;
+			const stepStart = Math.floor(time / step) * step;
+			let map = statesByStep.get(stepStart);
+			if (!map) {
+				map = new Map();
+				statesByStep.set(stepStart, map);
+			}
+			map.set(state.item, state);
+		}
+
 		for (let start = earliest; start < to; start += step) {
 			const a = Math.max(from, start);
 			const b = Math.min(to, start + step);
@@ -981,40 +1155,29 @@ export class CrawlerStatsCollector implements StatsRecorder {
 					const subA = Math.max(a, hour);
 					const subB = Math.min(b, hourEnd);
 					if (subA === hour && subB === hourEnd && !pendingHours.has(hour)) {
-						const hourRows = hours.filter(
-							(row) => row.hourTime.epochMilliseconds === hour
-						);
-						if (hourRows.length > 0) {
-							for (const row of hourRows) minutesForPoint.push(row.metrics);
+						const hourRows = hoursByTime.get(hour);
+						if (hourRows && hourRows.length > 0) {
+							for (const metrics of hourRows) minutesForPoint.push(metrics);
 							continue;
 						}
 					}
-					const overrides = rows.filter((row) => {
-						const time = row.bucketTime.epochMilliseconds;
-						return time >= subA && time < subB;
-					});
-					if (overrides.length > 0)
-						minutesForPoint.push(
-							mergeMinutes(
-								overrides.map((row) => row.metrics),
-								subA,
-								subB
-							)
-						);
+					const candidates = rowsByHour.get(hour);
+					if (candidates && candidates.length > 0) {
+						const overrides: StatsMinute[] = [];
+						for (const row of candidates) {
+							const time = row.bucketTime.epochMilliseconds;
+							if (time >= subA && time < subB) overrides.push(row.metrics);
+						}
+						if (overrides.length > 0) {
+							minutesForPoint.push(mergeMinutes(overrides, subA, subB));
+						}
+					}
 				}
 			} else {
-				const pointRows = rows.filter((row) => {
-					const time = row.bucketTime.epochMilliseconds;
-					return time >= a && time < b;
-				});
-				if (pointRows.length > 0)
-					minutesForPoint.push(
-						mergeMinutes(
-							pointRows.map((row) => row.metrics),
-							a,
-							b
-						)
-					);
+				const pointRows = rowsByStep.get(start);
+				if (pointRows && pointRows.length > 0) {
+					minutesForPoint.push(mergeMinutes(pointRows, a, b));
+				}
 			}
 			const merged = mergeMinutes(minutesForPoint, a, b);
 			let missing = 0;
@@ -1035,10 +1198,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 								CRAWLER_RATE_METRICS.map((metric) => [metric.key, null])
 							),
 						};
-			const pointStates = new Map<string, StatsStateRow>();
-			for (const state of states)
-				if (state.sampledAt.epochMilliseconds >= a && state.sampledAt.epochMilliseconds < b)
-					pointStates.set(state.item, state);
+			const pointStates = statesByStep.get(start) ?? new Map<string, StatsStateRow>();
 			const gauges = this.gauges(pointStates);
 			points.push({
 				bucketTime: new Date(start).toISOString(),
@@ -1239,12 +1399,17 @@ export class CrawlerStatsCollector implements StatsRecorder {
 	}
 
 	lifetimeCounter(counter: keyof StatsMinute["counters"]): number {
-		let total = 0;
-		for (const bucket of this.buckets.values()) total += bucket.counters[counter];
-		return total;
+		return this.lifetimeCounters[counter];
 	}
 
-	ratios(minute: StatsMinute = this.buckets.values().next().value ?? emptyMinute(0, 0)) {
+	ratios(
+		minute: StatsMinute = (() => {
+			const firstKey = this.buckets.keys().next().value;
+			return firstKey !== undefined
+				? (this.materializeBucket(firstKey) ?? emptyMinute(0, 0))
+				: emptyMinute(0, 0);
+		})()
+	) {
 		return computeRatios(minute);
 	}
 }

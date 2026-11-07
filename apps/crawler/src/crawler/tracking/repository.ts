@@ -1,4 +1,18 @@
-import { and, asc, count, desc, eq, gt, inArray, isNull, like, lte, or } from "drizzle-orm";
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	exists,
+	gt,
+	inArray,
+	isNull,
+	like,
+	lte,
+	or,
+	sql,
+} from "drizzle-orm";
 import { activeDatabase } from "../shared/databaseContext";
 import type { DatabaseClient, Temporal, VideoTracking } from "@cvsa/snapshot-db";
 import { bilibiliVideoMetadata, toInstant, videoTracking } from "@cvsa/snapshot-db";
@@ -282,33 +296,34 @@ export class TrackingRepository implements ITrackingRepository {
 			const offset = Math.max(params.offset, 0);
 			const search = params.search?.trim();
 			const state = params.state;
-
-			let matchingAids: bigint[] | undefined;
-			let exactAid: bigint | undefined;
-			if (search) {
-				if (/^(?:av)?\d+$/i.test(search)) {
-					exactAid = BigInt(search.replace(/^av/i, ""));
-				} else {
-					const matches = await activeDatabase(this.db)
-						.select({ aid: bilibiliVideoMetadata.aid })
-						.from(bilibiliVideoMetadata)
-						.where(
-							/^BV[0-9a-z]{10}$/i.test(search)
-								? eq(bilibiliVideoMetadata.bvid, search)
-								: like(
-										bilibiliVideoMetadata.title,
-										`%${search.replace(/[\\%_]/g, "\\$&")}%`
-									)
-						);
-					matchingAids = matches.map((metadata) => metadata.aid);
-					if (matchingAids.length === 0) return { items: [], total: 0 };
-				}
-			}
+			const db = activeDatabase(this.db);
 
 			const conditions = [];
 			if (state !== undefined) conditions.push(eq(videoTracking.state, state));
-			if (exactAid !== undefined) conditions.push(eq(AID, exactAid));
-			else if (matchingAids !== undefined) conditions.push(inArray(AID, matchingAids));
+			if (search) {
+				if (/^(?:av)?\d+$/i.test(search)) {
+					conditions.push(eq(AID, BigInt(search.replace(/^av/i, ""))));
+				} else {
+					conditions.push(
+						exists(
+							db
+								.select({ one: sql`1` })
+								.from(bilibiliVideoMetadata)
+								.where(
+									and(
+										eq(bilibiliVideoMetadata.aid, AID),
+										/^BV[0-9a-z]{10}$/i.test(search)
+											? eq(bilibiliVideoMetadata.bvid, search)
+											: like(
+													bilibiliVideoMetadata.title,
+													`%${search.replace(/[\\%_]/g, "\\$&")}%`
+												)
+									)
+								)
+						)
+					);
+				}
+			}
 
 			if (params.statusFilter === "failing") {
 				conditions.push(gt(videoTracking.consecutiveFails, 0));
@@ -319,7 +334,6 @@ export class TrackingRepository implements ITrackingRepository {
 			}
 
 			const where = conditions.length > 0 ? and(...conditions) : undefined;
-			const db = activeDatabase(this.db);
 
 			const [totals] = await db.select({ total: count() }).from(videoTracking).where(where);
 

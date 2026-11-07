@@ -475,3 +475,97 @@ test("stale snapshot leases cannot change or release a newer claim", async () =>
 	await tracking.updateSchedule(target, { leaseUntil: null }, newLease);
 	expect((await tracking.getTracking(target))?.leaseUntil).toBeNull();
 });
+
+test("getMetadataSummaries and listMetadataHistory return slim paginated projections", async () => {
+	const target = aid(950);
+	await discovery.upsertMetadata({
+		aid: target,
+		bvid: `BV${target}`,
+		title: "初始标题",
+		duration: 180,
+		pic: "https://example.com/a.jpg",
+		ownerName: "洛天依",
+		discoverySource: "search",
+	});
+	await discovery.upsertMetadata({
+		aid: target,
+		bvid: `BV${target}`,
+		title: "修改标题一",
+		duration: 180,
+	});
+	await discovery.upsertMetadata({
+		aid: target,
+		bvid: `BV${target}`,
+		title: "修改标题二",
+		duration: 180,
+	});
+
+	const summaries = await discovery.getMetadataSummaries([target]);
+	expect(summaries).toHaveLength(1);
+	expect(summaries[0]?.title).toBe("修改标题二");
+	expect(summaries[0]?.pic).toBe("https://example.com/a.jpg");
+	expect(summaries[0]?.discoverySource).toBe("search");
+
+	const page1 = await discovery.listMetadataHistory(target, { limit: 2, offset: 0 });
+	expect(page1.total).toBe(3);
+	expect(page1.items).toHaveLength(2);
+	const page2 = await discovery.listMetadataHistory(target, { limit: 2, offset: 2 });
+	expect(page2.total).toBe(3);
+	expect(page2.items).toHaveLength(1);
+	expect(page2.items[0]?.changeType).toBe("created");
+});
+
+test("SnapshotRepository.getSchedulingHistories fetches multi-window history for a batch in one query", async () => {
+	const { SnapshotRepository } = await import("../src/crawler/snapshot/repository");
+	const { latestVideoSnapshot, videoSnapshot } = await import("@cvsa/snapshot-db");
+	const snapshots = new SnapshotRepository(snapshotDb.client);
+	const a1 = aid(960);
+	const a2 = aid(961);
+	const baseMs = Date.UTC(2026, 10, 7, 12, 0, 0);
+	try {
+		await snapshots.createSnapshots([
+			{
+				aid: a1,
+				capturedAt: toInstant(new Date(baseMs - 4 * 3_600_000)),
+				views: 1000,
+				coins: 10,
+				likes: 20,
+				favorites: 30,
+				shares: 5,
+				danmakus: 2,
+				replies: 1,
+			},
+			{
+				aid: a1,
+				capturedAt: toInstant(new Date(baseMs - 10 * 60_000)),
+				views: 1500,
+				coins: 12,
+				likes: 25,
+				favorites: 35,
+				shares: 6,
+				danmakus: 3,
+				replies: 2,
+			},
+			{
+				aid: a2,
+				capturedAt: toInstant(new Date(baseMs - 30 * 60_000)),
+				views: 500,
+				coins: 1,
+				likes: 2,
+				favorites: 3,
+				shares: 0,
+				danmakus: 0,
+				replies: 0,
+			},
+		]);
+
+		const map = await snapshots.getSchedulingHistories([a1, a2], toInstant(new Date(baseMs)));
+		expect(map.get(a1)?.map((s) => s.views)).toEqual([1500, 1000]);
+		expect(map.get(a2)?.map((s) => s.views)).toEqual([500]);
+	} finally {
+		await snapshotDb.client
+			.delete(latestVideoSnapshot)
+			.where(inArray(latestVideoSnapshot.aid, [a1, a2]));
+		await snapshotDb.client.delete(videoSnapshot).where(inArray(videoSnapshot.aid, [a1, a2]));
+	}
+});

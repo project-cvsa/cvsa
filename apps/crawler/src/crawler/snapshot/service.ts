@@ -162,6 +162,14 @@ export class SnapshotService {
 				const trackings = await this.trackingRepo.getTrackings(uniqueBigIntAids);
 				const trackingMap = new Map(trackings.map((t) => [t.aid, t]));
 
+				const activeAids = receivedStats
+					.map((s) => BigInt(s.aid))
+					.filter((aid) => trackingMap.get(aid)?.state !== "archive");
+				const historiesByAid =
+					activeAids.length > 0 && this.snapshotRepo.getSchedulingHistories
+						? await this.snapshotRepo.getSchedulingHistories(activeAids, capturedAt)
+						: undefined;
+
 				// Process received stats and update tracking
 				for (const stat of receivedStats) {
 					const aid = BigInt(stat.aid);
@@ -196,10 +204,9 @@ export class SnapshotService {
 					// can evaluate 100k, 1M, 10M+ targets across all non-archived states.
 					let recentSnapshots: Array<{ capturedAt: Date; views: number }> | undefined;
 					if (tracking?.state !== "archive") {
-						const history = await this.snapshotRepo.getSchedulingHistory(
-							aid,
-							capturedAt
-						);
+						const history = historiesByAid
+							? (historiesByAid.get(aid) ?? [])
+							: await this.snapshotRepo.getSchedulingHistory(aid, capturedAt);
 						recentSnapshots = history.map((h) => ({
 							capturedAt: new Date(h.capturedAt.epochMilliseconds),
 							views: h.views,

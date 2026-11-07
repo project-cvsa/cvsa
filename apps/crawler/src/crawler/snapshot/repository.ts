@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lte } from "drizzle-orm";
+import { count, desc, eq, sql } from "drizzle-orm";
 import { activeDatabase } from "../shared/databaseContext";
 import type {
 	DatabaseClient,
@@ -11,6 +11,34 @@ import { MILESTONE_HISTORY_WINDOWS_MS } from "../tracking/scheduler";
 import { createDatabaseTracer } from "../stats/databaseMetrics";
 import type { StatsRecorder } from "../stats/types";
 import type { CreateSnapshotInput, ISnapshotRepository } from "./repository.interface";
+
+interface RawSnapshotRow {
+	aid: string | number | bigint;
+	captured_at: Date | string;
+	views: number;
+	coins: number;
+	likes: number;
+	favorites: number;
+	shares: number;
+	danmakus: number;
+	replies: number;
+}
+
+function toVideoSnapshot(row: RawSnapshotRow): VideoSnapshot {
+	return {
+		aid: BigInt(row.aid),
+		capturedAt: toInstant(
+			row.captured_at instanceof Date ? row.captured_at : new Date(row.captured_at)
+		),
+		views: Number(row.views),
+		coins: Number(row.coins),
+		likes: Number(row.likes),
+		favorites: Number(row.favorites),
+		shares: Number(row.shares),
+		danmakus: Number(row.danmakus),
+		replies: Number(row.replies),
+	};
+}
 
 export class SnapshotRepository implements ISnapshotRepository {
 	private readonly trace;
@@ -69,35 +97,73 @@ export class SnapshotRepository implements ISnapshotRepository {
 				.limit(limit)
 		);
 	}
-	async getSchedulingHistory(aid: bigint, at: Temporal.Instant): Promise<VideoSnapshot[]> {
-		return this.trace("snapshot.getSchedulingHistory", async () => {
+
+	async getSchedulingHistories(
+		aids: bigint[],
+		at: Temporal.Instant
+	): Promise<Map<bigint, VideoSnapshot[]>> {
+		if (aids.length === 0) return new Map();
+		return this.trace("snapshot.getSchedulingHistories", async () => {
 			const db = activeDatabase(this.db);
-			// Bind lower bound to 7 days to enable TimescaleDB chunk pruning and avoid historical decompression
-			const sevenDaysAgo = toInstant(
-				new Date(at.epochMilliseconds - 7 * 24 * 60 * 60 * 1000)
-			);
-			const windows = await Promise.all(
-				MILESTONE_HISTORY_WINDOWS_MS.map(async (windowMs) => {
-					const [row] = await db
-						.select()
-						.from(videoSnapshot)
-						.where(
-							and(
-								eq(videoSnapshot.aid, aid),
-								gte(videoSnapshot.capturedAt, sevenDaysAgo),
-								lte(
-									videoSnapshot.capturedAt,
-									toInstant(new Date(at.epochMilliseconds - windowMs))
-								)
-							)
-						)
-						.orderBy(desc(videoSnapshot.capturedAt))
-						.limit(1);
-					return row;
-				})
-			);
-			return windows.filter((row): row is VideoSnapshot => row !== undefined);
+			const sevenDaysAgoIso = new Date(
+				at.epochMilliseconds - 7 * 24 * 60 * 60 * 1000
+			).toISOString();
+			const aidsCsv = [...new Set(aids)].map(String).join(",");
+			const cutoffsCsv = MILESTONE_HISTORY_WINDOWS_MS.map((windowMs) =>
+				new Date(at.epochMilliseconds - windowMs).toISOString()
+			).join(",");
+
+			const rows = (await db.execute(sql`
+				SELECT DISTINCT ON (s.aid, s.captured_at)
+					s.aid,
+					s.captured_at,
+					s.views,
+					s.coins,
+					s.likes,
+					s.favorites,
+					s.shares,
+					s.danmakus,
+					s.replies
+				FROM unnest(string_to_array(${aidsCsv}, ',')::bigint[]) AS a(aid)
+				CROSS JOIN unnest(string_to_array(${cutoffsCsv}, ',')::timestamptz[]) AS w(cutoff)
+				CROSS JOIN LATERAL (
+					SELECT
+						vs.aid,
+						vs.captured_at,
+						vs.views,
+						vs.coins,
+						vs.likes,
+						vs.favorites,
+						vs.shares,
+						vs.danmakus,
+						vs.replies
+					FROM public.video_snapshot vs
+					WHERE vs.aid = a.aid
+						AND vs.captured_at >= ${sevenDaysAgoIso}::timestamptz
+						AND vs.captured_at <= w.cutoff
+					ORDER BY vs.captured_at DESC
+					LIMIT 1
+				) s
+				ORDER BY s.aid, s.captured_at DESC
+			`)) as unknown as RawSnapshotRow[];
+
+			const byAid = new Map<bigint, VideoSnapshot[]>();
+			for (const row of rows) {
+				const snap = toVideoSnapshot(row);
+				let list = byAid.get(snap.aid);
+				if (!list) {
+					list = [];
+					byAid.set(snap.aid, list);
+				}
+				list.push(snap);
+			}
+			return byAid;
 		});
+	}
+
+	async getSchedulingHistory(aid: bigint, at: Temporal.Instant): Promise<VideoSnapshot[]> {
+		const histories = await this.getSchedulingHistories([aid], at);
+		return histories.get(aid) ?? [];
 	}
 
 	async listSnapshots(

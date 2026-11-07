@@ -5,6 +5,9 @@ import * as schema from "./schema";
 export interface DatabaseClientOptions {
 	connectionString?: string;
 	url?: string;
+	max?: number;
+	idleTimeout?: number;
+	maxLifetime?: number;
 	beforeQuery?: () => void;
 }
 
@@ -19,13 +22,22 @@ export interface DatabaseClientOptions {
  * every read is an explicit `select().from(...)`.
  */
 export function createDatabaseClient(options?: DatabaseClientOptions | string) {
-	const url = typeof options === "string" ? options : (options?.connectionString ?? options?.url);
+	const opts = typeof options === "object" && options !== null ? options : undefined;
+	const url = typeof options === "string" ? options : (opts?.connectionString ?? opts?.url);
 	// Bun returns `int8` as a string unless `bigint` is set at construction time.
 	// Drizzle flips `client.options.bigint` after the fact, which Bun ignores, so
 	// every AID would arrive as "900000000000001" instead of a bigint.
-	const client = new SQL({ ...(url ? { url } : {}), bigint: true });
+	// Bounding `idleTimeout` and `maxLifetime` ensures long-lived TimescaleDB
+	// backends periodically release per-session chunk metadata and plan caches.
+	const client = new SQL({
+		...(url ? { url } : {}),
+		bigint: true,
+		max: opts?.max ?? 12,
+		idleTimeout: opts?.idleTimeout ?? 60,
+		maxLifetime: opts?.maxLifetime ?? 1800,
+	});
 
-	const beforeQuery = typeof options === "object" ? options.beforeQuery : undefined;
+	const beforeQuery = opts?.beforeQuery;
 	return Object.assign(
 		drizzle({ client, ...(beforeQuery ? { logger: { logQuery: () => beforeQuery() } } : {}) }),
 		{ schema }

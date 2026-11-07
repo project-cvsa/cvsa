@@ -9,33 +9,59 @@ import {
 import type { StatsLabelingState, StatsTrackingState } from "./types";
 
 const COVERAGE_CACHE_MS = 60_000;
+const RANGE_AGG_CACHE_MS = 30_000;
 
-type FreshnessRow = {
-	freshCount: number;
-	meanSec: number | null;
-	maxSec: number | null;
-	p50: number | null;
-	p90: number | null;
-	p95: number | null;
-	p99: number | null;
+type GroupingSetRow = {
+	grp: number;
+	state: string | null;
+	priority: number | null;
+	total: number;
+	never_captured: number;
+	fresh_count: number;
+	mean_sec: number | string | null;
+	max_sec: number | string | null;
+	quantiles: Array<number | string | null> | string | null;
 };
 
-function freshnessOf(row: FreshnessRow | undefined): StatsTrackingState["freshness"] {
+function parsePgFloatArray(value: Array<number | string | null> | string | null): number[] {
+	if (Array.isArray(value)) {
+		return value.map((item) => (item == null ? Number.NaN : Number(item)));
+	}
+	if (typeof value === "string" && value.startsWith("{") && value.endsWith("}")) {
+		const inner = value.slice(1, -1).trim();
+		if (inner.length === 0) return [];
+		return inner.split(",").map((part) => (part === "NULL" ? Number.NaN : Number(part)));
+	}
+	return [];
+}
+
+function freshnessOf(row: GroupingSetRow | undefined): StatsTrackingState["freshness"] {
+	const quantiles = row ? parsePgFloatArray(row.quantiles) : [];
+	const q = (idx: number): number | null => {
+		const val = quantiles[idx];
+		return val !== undefined && Number.isFinite(val) ? val : null;
+	};
 	return {
-		count: row?.freshCount ?? 0,
-		meanSec: row?.meanSec == null ? null : Number(row.meanSec),
+		count: Number(row?.fresh_count ?? 0),
+		meanSec: row?.mean_sec == null ? null : Number(row.mean_sec),
 		quantilesSec: {
-			"0.5": row?.p50 == null ? null : Number(row.p50),
-			"0.9": row?.p90 == null ? null : Number(row.p90),
-			"0.95": row?.p95 == null ? null : Number(row.p95),
-			"0.99": row?.p99 == null ? null : Number(row.p99),
+			"0.5": q(0),
+			"0.9": q(1),
+			"0.95": q(2),
+			"0.99": q(3),
 		},
-		maxSec: row?.maxSec == null ? null : Number(row.maxSec),
+		maxSec: row?.max_sec == null ? null : Number(row.max_sec),
 	};
 }
 
 export class CrawlerStatsStateRepository {
 	private coverageCache: { key: string; expiresAt: number; value: number } | undefined;
+	private labelingCache:
+		| { key: string; expiresAt: number; value: StatsLabelingState }
+		| undefined;
+	private modelVersionsCache:
+		| { key: string; expiresAt: number; value: Record<string, number> }
+		| undefined;
 
 	constructor(
 		private readonly db: DatabaseClient,
@@ -44,98 +70,23 @@ export class CrawlerStatsStateRepository {
 
 	async trackingState(now = this.now()): Promise<StatsTrackingState> {
 		const at = toInstant(new Date(now));
-		const [
-			stateRows,
-			priorityRows,
-			summaryRows,
-			stateFreshnessRows,
-			priorityFreshnessRows,
-			dueRows,
-			metadataRows,
-		] = await Promise.all([
-			this.db
-				.select({ state: videoTracking.state, total: count() })
-				.from(videoTracking)
-				.groupBy(videoTracking.state),
-			this.db
-				.select({ priority: videoTracking.priority, total: count() })
-				.from(videoTracking)
-				.groupBy(videoTracking.priority),
-			this.db
-				.select({
-					total: sql<number>`count(*)::int`,
-					neverCaptured: sql<number>`count(*) filter (where ${videoTracking.lastCapturedAt} is null)::int`,
-					freshCount: sql<number>`count(${videoTracking.lastCapturedAt})::int`,
-					meanSec: sql<
-						number | null
-					>`avg(extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					maxSec: sql<
-						number | null
-					>`max(extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p50: sql<
-						number | null
-					>`percentile_cont(0.5) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p90: sql<
-						number | null
-					>`percentile_cont(0.9) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p95: sql<
-						number | null
-					>`percentile_cont(0.95) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p99: sql<
-						number | null
-					>`percentile_cont(0.99) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-				})
-				.from(videoTracking),
-			this.db
-				.select({
-					group: videoTracking.state,
-					freshCount: sql<number>`count(${videoTracking.lastCapturedAt})::int`,
-					meanSec: sql<
-						number | null
-					>`avg(extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					maxSec: sql<
-						number | null
-					>`max(extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p50: sql<
-						number | null
-					>`percentile_cont(0.5) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p90: sql<
-						number | null
-					>`percentile_cont(0.9) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p95: sql<
-						number | null
-					>`percentile_cont(0.95) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p99: sql<
-						number | null
-					>`percentile_cont(0.99) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-				})
-				.from(videoTracking)
-				.groupBy(videoTracking.state),
-			this.db
-				.select({
-					group: videoTracking.priority,
-					freshCount: sql<number>`count(${videoTracking.lastCapturedAt})::int`,
-					meanSec: sql<
-						number | null
-					>`avg(extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					maxSec: sql<
-						number | null
-					>`max(extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p50: sql<
-						number | null
-					>`percentile_cont(0.5) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p90: sql<
-						number | null
-					>`percentile_cont(0.9) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p95: sql<
-						number | null
-					>`percentile_cont(0.95) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-					p99: sql<
-						number | null
-					>`percentile_cont(0.99) within group (order by extract(epoch from now() - ${videoTracking.lastCapturedAt}))`,
-				})
-				.from(videoTracking)
-				.groupBy(videoTracking.priority),
+		const [groupingRows, dueRows, metadataRows] = await Promise.all([
+			this.db.execute<GroupingSetRow>(sql`
+				SELECT
+					grouping(state, priority)::int AS grp,
+					state,
+					priority,
+					count(*)::int AS total,
+					count(*) FILTER (WHERE last_captured_at IS NULL)::int AS never_captured,
+					count(last_captured_at)::int AS fresh_count,
+					avg(extract(epoch FROM now() - last_captured_at))::float8 AS mean_sec,
+					max(extract(epoch FROM now() - last_captured_at))::float8 AS max_sec,
+					percentile_cont(ARRAY[0.5, 0.9, 0.95, 0.99]) WITHIN GROUP (
+						ORDER BY extract(epoch FROM now() - last_captured_at)
+					) AS quantiles
+				FROM video_tracking
+				GROUP BY GROUPING SETS ((), (state), (priority))
+			`),
 			this.db
 				.select({
 					dueNow: sql<number>`count(*)::int`,
@@ -155,21 +106,37 @@ export class CrawlerStatsStateRepository {
 				.from(videoTracking)
 				.where(lte(videoTracking.nextMetadataAt, at)),
 		]);
-		const summary = summaryRows[0];
+
+		// grouping(state, priority) bitmask:
+		// 3 (11b) = (), 1 (01b) = (state), 2 (10b) = (priority)
+		let summary: GroupingSetRow | undefined;
+		const byState: Record<string, number> = {};
+		const byPriority: Record<string, number> = {};
+		const freshnessByState: Record<string, StatsTrackingState["freshness"]> = {};
+		const freshnessByPriority: Record<string, StatsTrackingState["freshness"]> = {};
+
+		for (const row of groupingRows) {
+			const grp = Number(row.grp);
+			if (grp === 3) {
+				summary = row;
+			} else if (grp === 1 && row.state !== null) {
+				byState[row.state] = Number(row.total);
+				freshnessByState[row.state] = freshnessOf(row);
+			} else if (grp === 2 && row.priority !== null) {
+				const key = String(row.priority);
+				byPriority[key] = Number(row.total);
+				freshnessByPriority[key] = freshnessOf(row);
+			}
+		}
+
 		return {
-			total: summary?.total ?? 0,
-			byState: Object.fromEntries(stateRows.map((row) => [row.state, row.total])),
-			byPriority: Object.fromEntries(
-				priorityRows.map((row) => [String(row.priority), row.total])
-			),
-			neverCaptured: summary?.neverCaptured ?? 0,
+			total: Number(summary?.total ?? 0),
+			byState,
+			byPriority,
+			neverCaptured: Number(summary?.never_captured ?? 0),
 			freshness: freshnessOf(summary),
-			freshnessByState: Object.fromEntries(
-				stateFreshnessRows.map((row) => [row.group, freshnessOf(row)])
-			),
-			freshnessByPriority: Object.fromEntries(
-				priorityFreshnessRows.map((row) => [String(row.group), freshnessOf(row)])
-			),
+			freshnessByState,
+			freshnessByPriority,
 			dueNow: dueRows[0]?.dueNow ?? 0,
 			metadataDue: metadataRows[0]?.metadataDue ?? 0,
 			maxOverdueLagSec:
@@ -178,6 +145,15 @@ export class CrawlerStatsStateRepository {
 	}
 
 	async labelingState(from: number, to: number): Promise<StatsLabelingState> {
+		const key = `${from}:${to}`;
+		const now = this.now();
+		if (
+			this.labelingCache &&
+			this.labelingCache.key === key &&
+			this.labelingCache.expiresAt > now
+		) {
+			return this.labelingCache.value;
+		}
 		const [row] = await this.db
 			.select({
 				samples: sql<number>`count(*)::int`,
@@ -198,7 +174,7 @@ export class CrawlerStatsStateRepository {
 		const fp = row?.falsePositive ?? 0;
 		const tn = row?.trueNegative ?? 0;
 		const fn = row?.falseNegative ?? 0;
-		return {
+		const value: StatsLabelingState = {
 			samples,
 			truePositive: tp,
 			falsePositive: fp,
@@ -208,6 +184,8 @@ export class CrawlerStatsStateRepository {
 			precision: tp + fp > 0 ? tp / (tp + fp) : null,
 			recall: tp + fn > 0 ? tp / (tp + fn) : null,
 		};
+		this.labelingCache = { key, expiresAt: now + RANGE_AGG_CACHE_MS, value };
+		return value;
 	}
 
 	async videoCoverage(from: number, to: number): Promise<number> {
@@ -234,6 +212,15 @@ export class CrawlerStatsStateRepository {
 	}
 
 	async discoveryModelVersions(from: number, to: number): Promise<Record<string, number>> {
+		const key = `${from}:${to}`;
+		const now = this.now();
+		if (
+			this.modelVersionsCache &&
+			this.modelVersionsCache.key === key &&
+			this.modelVersionsCache.expiresAt > now
+		) {
+			return this.modelVersionsCache.value;
+		}
 		const rows = await this.db
 			.select({ version: discoverySample.modelVersion, total: count() })
 			.from(discoverySample)
@@ -244,7 +231,9 @@ export class CrawlerStatsStateRepository {
 				)
 			)
 			.groupBy(discoverySample.modelVersion);
-		return Object.fromEntries(rows.map((row) => [row.version, row.total]));
+		const value = Object.fromEntries(rows.map((row) => [row.version, row.total]));
+		this.modelVersionsCache = { key, expiresAt: now + RANGE_AGG_CACHE_MS, value };
+		return value;
 	}
 
 	async latestDiscoverySamples(limit = 20) {
