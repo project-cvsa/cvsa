@@ -603,12 +603,13 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		const currentMinuteStart = Math.floor(at / MINUTE_MS) * MINUTE_MS;
 		if (captured.length > 0) {
 			const startedAt = performance.now();
+			let nextCoveredTo = this.coveredTo;
 			const inputs: SaveStatsMinuteInput[] = captured.map((entry) => {
 				const coveredTo = Math.max(
-					this.coveredTo,
+					nextCoveredTo,
 					Math.min(entry.time + MINUTE_MS, currentMinuteStart)
 				);
-				this.coveredTo = Math.max(this.coveredTo, coveredTo);
+				nextCoveredTo = Math.max(nextCoveredTo, coveredTo);
 				return {
 					sourceId: this.instanceId,
 					bucketTime: toInstant(new Date(entry.time)),
@@ -618,7 +619,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 						startedAt: toInstant(new Date(this.startedAt)),
 						exitedAt: null,
 						lastPersistedAt: toInstant(new Date(at)),
-						coveredTo: toInstant(new Date(this.coveredTo)),
+						coveredTo: toInstant(new Date(nextCoveredTo)),
 						formatVersion: CRAWLER_STATS_FORMAT_VERSION,
 					},
 				};
@@ -637,6 +638,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 				this.counters.lastSuccessAt = at;
 				this.counters.lastError = null;
 				written = captured.length;
+				this.coveredTo = nextCoveredTo;
 				for (const entry of captured) {
 					if ((this.generations.get(entry.time) ?? 0) === entry.generation) {
 						this.dirty.delete(entry.time);

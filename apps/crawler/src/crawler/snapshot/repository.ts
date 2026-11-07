@@ -108,10 +108,18 @@ export class SnapshotRepository implements ISnapshotRepository {
 			const sevenDaysAgoIso = new Date(
 				at.epochMilliseconds - 7 * 24 * 60 * 60 * 1000
 			).toISOString();
-			const aidsCsv = [...new Set(aids)].map(String).join(",");
-			const cutoffsCsv = MILESTONE_HISTORY_WINDOWS_MS.map((windowMs) =>
-				new Date(at.epochMilliseconds - windowMs).toISOString()
-			).join(",");
+			const uniqueAids = [...new Set(aids)];
+			const aidsArray = sql.join(
+				uniqueAids.map((id) => sql`${id}::bigint`),
+				sql`, `
+			);
+			const cutoffsArray = sql.join(
+				MILESTONE_HISTORY_WINDOWS_MS.map(
+					(windowMs) =>
+						sql`${new Date(at.epochMilliseconds - windowMs).toISOString()}::timestamptz`
+				),
+				sql`, `
+			);
 
 			const rows = (await db.execute(sql`
 				SELECT DISTINCT ON (s.aid, s.captured_at)
@@ -124,8 +132,8 @@ export class SnapshotRepository implements ISnapshotRepository {
 					s.shares,
 					s.danmakus,
 					s.replies
-				FROM unnest(string_to_array(${aidsCsv}, ',')::bigint[]) AS a(aid)
-				CROSS JOIN unnest(string_to_array(${cutoffsCsv}, ',')::timestamptz[]) AS w(cutoff)
+				FROM unnest(ARRAY[${aidsArray}]) AS a(aid)
+				CROSS JOIN unnest(ARRAY[${cutoffsArray}]) AS w(cutoff)
 				CROSS JOIN LATERAL (
 					SELECT
 						vs.aid,

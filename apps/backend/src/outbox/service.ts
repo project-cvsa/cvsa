@@ -59,7 +59,9 @@ export class OutboxService {
 						new Date(Date.now() + 3600_000)
 					);
 				} else {
-					await this.repository.recordFailure(id, errorMessage, nextRetries);
+					const backoffMs = Math.min(60_000, 1000 * 2 ** nextRetries);
+					const nextRetryAt = new Date(Date.now() + backoffMs);
+					await this.repository.recordFailure(id, errorMessage, nextRetries, nextRetryAt);
 					throw error;
 				}
 			}

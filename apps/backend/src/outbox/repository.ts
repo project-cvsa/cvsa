@@ -32,7 +32,6 @@ export class OutboxRepository implements IOutboxRepository {
 
 	async findPending(query: PendingOutboxQueryDto): Promise<OutboxEntryDto[]> {
 		const now = Temporal.Now.instant();
-		const staleThreshold = now.subtract({ minutes: 5 });
 		const rows = await this.db
 			.select()
 			.from(outbox)
@@ -43,7 +42,7 @@ export class OutboxRepository implements IOutboxRepository {
 						or(isNull(outbox.nextRetryAt), lte(outbox.nextRetryAt, now))
 					),
 					and(eq(outbox.status, "FAILED"), lte(outbox.nextRetryAt, now)),
-					and(eq(outbox.status, "PROCESSING"), lte(outbox.createdAt, staleThreshold))
+					and(eq(outbox.status, "PROCESSING"), lte(outbox.nextRetryAt, now))
 				)
 			)
 			.orderBy(asc(outbox.createdAt))
@@ -53,9 +52,13 @@ export class OutboxRepository implements IOutboxRepository {
 
 	async markProcessing(id: number, tx?: TxClient): Promise<OutboxEntryDto> {
 		const client = tx ?? this.db;
+		const leaseUntil = Temporal.Now.instant().add({ minutes: 5 });
 		const [row] = await client
 			.update(outbox)
-			.set({ status: "PROCESSING" })
+			.set({
+				status: "PROCESSING",
+				nextRetryAt: leaseUntil,
+			})
 			.where(eq(outbox.id, id))
 			.returning();
 		if (!row) {

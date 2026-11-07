@@ -569,3 +569,169 @@ test("SnapshotRepository.getSchedulingHistories fetches multi-window history for
 		await snapshotDb.client.delete(videoSnapshot).where(inArray(videoSnapshot.aid, [a1, a2]));
 	}
 });
+
+test("TrackingRepository.updateSchedules bulk updates multiple schedules atomically", async () => {
+	const a1 = aid(970);
+	const a2 = aid(971);
+	const lease1 = instant(60_000);
+	const lease2 = instant(60_000);
+
+	await tracking.upsertTracking({
+		aid: a1,
+		nextSnapshotAt: instant(-60_000),
+		leaseUntil: lease1,
+	});
+	await tracking.upsertTracking({
+		aid: a2,
+		nextSnapshotAt: instant(-60_000),
+		leaseUntil: lease2,
+	});
+
+	await tracking.updateSchedules([
+		{
+			aid: a1,
+			update: {
+				state: "regular",
+				nextSnapshotAt: instant(120_000),
+				leaseUntil: null,
+				lastViews: 5000,
+			},
+			expectedLeaseUntil: lease1,
+		},
+		{
+			aid: a2,
+			update: {
+				state: "archive",
+				nextSnapshotAt: instant(240_000),
+				leaseUntil: null,
+				lastViews: 1000,
+			},
+			expectedLeaseUntil: lease2,
+		},
+	]);
+
+	const row1 = await tracking.getTracking(a1);
+	const row2 = await tracking.getTracking(a2);
+
+	expect(row1?.state).toBe("regular");
+	expect(row1?.leaseUntil).toBeNull();
+	expect(row1?.lastViews).toBe(5000);
+
+	expect(row2?.state).toBe("archive");
+	expect(row2?.leaseUntil).toBeNull();
+	expect(row2?.lastViews).toBe(1000);
+});
+
+test("TrackingRepository.listDueMetadata queries rows with elapsed nextMetadataAt", async () => {
+	const due = aid(972);
+	const future = aid(973);
+
+	await tracking.upsertTracking({
+		aid: due,
+		nextSnapshotAt: instant(0),
+		nextMetadataAt: instant(-10_000),
+	});
+	await tracking.upsertTracking({
+		aid: future,
+		nextSnapshotAt: instant(0),
+		nextMetadataAt: instant(600_000),
+	});
+
+	const dueList = await tracking.listDueMetadata(50, instant(0));
+	const dueAids = dueList.map((r) => r.aid);
+
+	expect(dueAids).toContain(due);
+	expect(dueAids).not.toContain(future);
+});
+
+test("atomic upsert handles high concurrency on same aid without unique constraint errors", async () => {
+	const concurrentAid = aid(974);
+
+	// Concurrent upsertTracking calls
+	const trackingPromises = Array.from({ length: 8 }, (_, i) =>
+		tracking.upsertTracking({
+			aid: concurrentAid,
+			nextSnapshotAt: instant(i * 1000),
+			priority: 2,
+			lastViews: 100 + i,
+		})
+	);
+	const results = await Promise.all(trackingPromises);
+	expect(results).toHaveLength(8);
+
+	// Concurrent upsertSample calls
+	const samplePromises = Array.from({ length: 8 }, (_, i) =>
+		discovery.upsertSample({
+			aid: concurrentAid,
+			bvid: `BV${concurrentAid}`,
+			title: `Concurrent Title ${i}`,
+			decision: "model_accepted",
+			modelVersion: "akari-3.17",
+			probabilities: [0.1, 0.9],
+			songProbability: 0.9,
+		})
+	);
+	const sampleResults = await Promise.all(samplePromises);
+	expect(sampleResults).toHaveLength(8);
+});
+
+test("CrawlerStatsRepository.saveMinutes persists batches and deduplicates hour pending", async () => {
+	const { CrawlerStatsRepository } = await import("../src/crawler/stats/rollup");
+	const { crawlerStatsMinute, crawlerStatsInstance, crawlerStatsHourPending } = await import(
+		"@cvsa/snapshot-db"
+	);
+
+	const statsRepo = new CrawlerStatsRepository(snapshotDb.client);
+	const sourceId = `test-instance-${Date.now()}`;
+	const baseHourMs = Math.floor(Date.now() / 3_600_000) * 3_600_000;
+	const minute1 = toInstant(new Date(baseHourMs + 60_000));
+	const { emptyMinute } = await import("../src/crawler/stats/types");
+	const minute2 = toInstant(new Date(baseHourMs + 120_000));
+
+	try {
+		await statsRepo.saveMinutes([
+			{
+				sourceId,
+				bucketTime: minute1,
+				metrics: emptyMinute(baseHourMs + 60_000, baseHourMs + 120_000),
+				instance: {
+					instanceId: sourceId,
+					startedAt: toInstant(new Date(baseHourMs)),
+					exitedAt: null,
+					lastPersistedAt: minute1,
+					coveredTo: minute1,
+					formatVersion: 2,
+				},
+			},
+			{
+				sourceId,
+				bucketTime: minute2,
+				metrics: emptyMinute(baseHourMs + 120_000, baseHourMs + 180_000),
+				instance: {
+					instanceId: sourceId,
+					startedAt: toInstant(new Date(baseHourMs)),
+					exitedAt: null,
+					lastPersistedAt: minute2,
+					coveredTo: minute2,
+					formatVersion: 2,
+				},
+			},
+		]);
+
+		const minutes = await statsRepo.listMinutes(
+			minute1,
+			toInstant(new Date(baseHourMs + 180_000))
+		);
+		expect(minutes.filter((m) => m.sourceId === sourceId)).toHaveLength(2);
+	} finally {
+		await snapshotDb.client
+			.delete(crawlerStatsMinute)
+			.where(eq(crawlerStatsMinute.sourceId, sourceId));
+		await snapshotDb.client
+			.delete(crawlerStatsInstance)
+			.where(eq(crawlerStatsInstance.instanceId, sourceId));
+		await snapshotDb.client
+			.delete(crawlerStatsHourPending)
+			.where(eq(crawlerStatsHourPending.sourceId, sourceId));
+	}
+});
