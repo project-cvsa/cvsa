@@ -11,3 +11,4 @@ export * from "./tags";
 export * from "./worker";
 export * from "./scheduler";
 export * from "./discoveryService";
+export * from "./metadata";

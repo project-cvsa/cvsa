@@ -134,9 +134,10 @@ export class MilestoneService {
 			await this.repository.finishRecovery(job.recoveryId);
 			return { done: true, data: job };
 		}
+		const fromTime = job.afterTime ?? "2009-01-01T00:00:00Z";
 		const samples = await this.repository.trace(
 			aid,
-			"1970-01-01T00:00:00Z",
+			fromTime,
 			job.through,
 			job.batchSize,
 			job.afterTime
@@ -216,12 +217,18 @@ export class MilestoneService {
 		);
 	}
 	async analyzeWindows(input: CacheWindowAnalysisRequest): Promise<CacheWindowAnalysisResult> {
-		const traces = await Promise.all(
-			input.aids.map(async (aid) => ({
-				aid,
-				samples: await this.loadTrace(aid, input.from, input.to),
-			}))
-		);
+		const concurrency = 2;
+		const traces: Array<{ aid: string; samples: MilestoneSample[] }> = [];
+		for (let i = 0; i < input.aids.length; i += concurrency) {
+			const batch = input.aids.slice(i, i + concurrency);
+			const batchResults = await Promise.all(
+				batch.map(async (aid) => ({
+					aid,
+					samples: await this.loadTrace(aid, input.from, input.to),
+				}))
+			);
+			traces.push(...batchResults);
+		}
 		return analyzeCacheWindows(input, traces);
 	}
 }

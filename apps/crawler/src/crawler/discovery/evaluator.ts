@@ -15,7 +15,7 @@ import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
 import type { VideoClassifierClient } from "./classifier";
 import { toDiscoveryDecision, type DiscoveryFilterService, type FilterDecision } from "./filter";
 import type { IDiscoveryRepository } from "./repository.interface";
-import { fromDetailTags } from "./tags";
+import { toMetadataInput } from "./metadata";
 import type {
 	CandidateSource,
 	DiscoveryContext,
@@ -128,7 +128,6 @@ export class DiscoveryCandidateEvaluator {
 			}
 
 			const view = details.View;
-			const card = details.Card;
 			const tags = details.Tags ?? [];
 			const tagNames = tags.map((tag) => tag.tag_name);
 
@@ -147,44 +146,13 @@ export class DiscoveryCandidateEvaluator {
 				this.stats.recordDeferral({ reason: "model_unavailable" });
 			const now = toInstant(new Date());
 			const pubdate = view.pubdate ? toInstant(new Date(view.pubdate * 1_000)) : null;
-			const ctime = view.ctime ? toInstant(new Date(view.ctime * 1_000)) : null;
 			const discoveryContext: DiscoveryContext = {
 				origin,
 				decision: toDiscoveryDecision(decision),
 				...(input.job ? { job: input.job } : {}),
 			};
 
-			const metadata: UpsertMetadataInput = {
-				aid,
-				bvid: view.bvid,
-				cid: view.cid ? BigInt(view.cid) : null,
-				videos: view.videos ?? 1,
-				tid: view.tid ?? null,
-				tidV2: view.tid_v2 ?? null,
-				tname: view.tname ?? null,
-				tnameV2: view.tname_v2 ?? null,
-				copyright: view.copyright ?? null,
-				pic: view.pic ?? null,
-				title: view.title,
-				pubdate,
-				ctime,
-				description: view.desc ?? null,
-				descV2: view.desc_v2 ?? null,
-				state: view.state ?? 0,
-				duration: view.duration ?? 0,
-				Dynamic: view.dynamic ?? null,
-				dimension: view.dimension ?? null,
-				mid: view.owner?.mid ? BigInt(view.owner.mid) : null,
-				ownerName: view.owner?.name ?? card?.card?.name ?? null,
-				ownerFace: view.owner?.face ?? card?.card?.face ?? null,
-				pages: view.pages ?? null,
-				staff: view.staff ?? null,
-				rights: view.rights ?? null,
-				honorReply: view.honor_reply ?? null,
-				// Structured tags keep `tag_id` / `tag_type` / `music_id`; the filter
-				// only needs the names, and `tagNames` is derived from the same list.
-				tags: fromDetailTags(tags),
-				videoStatus: "normal",
+			const metadata: UpsertMetadataInput = toMetadataInput(aid, details, {
 				filterDecision:
 					decision.reason === "model_unavailable"
 						? "pending"
@@ -195,8 +163,7 @@ export class DiscoveryCandidateEvaluator {
 				modelVersion: decision.model?.modelVersion ?? null,
 				discoverySource: origin.channel,
 				discoveryContext,
-				capturedAt: now,
-			};
+			});
 
 			if (decision.action === "accept") {
 				await this.discoveryRepo.upsertMetadata(metadata);

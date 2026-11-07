@@ -64,6 +64,7 @@ const DB_RETENTION_MS = 8 * 24 * HOUR_MS;
 
 export interface StatsStore {
 	saveMinute(input: SaveStatsMinuteInput): Promise<void>;
+	saveMinutes?(inputs: SaveStatsMinuteInput[]): Promise<void>;
 	listMinutes(
 		from: ReturnType<typeof toInstant>,
 		to: ReturnType<typeof toInstant>
@@ -600,14 +601,15 @@ export class CrawlerStatsCollector implements StatsRecorder {
 		let written = 0;
 		let firstError: unknown;
 		const currentMinuteStart = Math.floor(at / MINUTE_MS) * MINUTE_MS;
-		for (const entry of captured) {
+		if (captured.length > 0) {
 			const startedAt = performance.now();
-			const coveredTo = Math.max(
-				this.coveredTo,
-				Math.min(entry.time + MINUTE_MS, currentMinuteStart)
-			);
-			try {
-				await this.store.saveMinute({
+			const inputs: SaveStatsMinuteInput[] = captured.map((entry) => {
+				const coveredTo = Math.max(
+					this.coveredTo,
+					Math.min(entry.time + MINUTE_MS, currentMinuteStart)
+				);
+				this.coveredTo = Math.max(this.coveredTo, coveredTo);
+				return {
 					sourceId: this.instanceId,
 					bucketTime: toInstant(new Date(entry.time)),
 					metrics: entry.metrics,
@@ -616,20 +618,32 @@ export class CrawlerStatsCollector implements StatsRecorder {
 						startedAt: toInstant(new Date(this.startedAt)),
 						exitedAt: null,
 						lastPersistedAt: toInstant(new Date(at)),
-						coveredTo: toInstant(new Date(coveredTo)),
+						coveredTo: toInstant(new Date(this.coveredTo)),
 						formatVersion: CRAWLER_STATS_FORMAT_VERSION,
 					},
-				});
+				};
+			});
+
+			try {
+				if (this.store.saveMinutes) {
+					await this.store.saveMinutes(inputs);
+				} else {
+					for (const input of inputs) {
+						await this.store.saveMinute(input);
+					}
+				}
 				this.writeLatency.accept(performance.now() - startedAt);
-				this.counters.successes++;
+				this.counters.successes += captured.length;
 				this.counters.lastSuccessAt = at;
 				this.counters.lastError = null;
-				written++;
-				this.coveredTo = coveredTo;
-				if ((this.generations.get(entry.time) ?? 0) === entry.generation)
-					this.dirty.delete(entry.time);
+				written = captured.length;
+				for (const entry of captured) {
+					if ((this.generations.get(entry.time) ?? 0) === entry.generation) {
+						this.dirty.delete(entry.time);
+					}
+				}
 			} catch (error) {
-				this.counters.failures++;
+				this.counters.failures += captured.length;
 				this.counters.lastError = error instanceof Error ? error.message : String(error);
 				firstError ??= error;
 			}

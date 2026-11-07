@@ -32,13 +32,18 @@ export class OutboxRepository implements IOutboxRepository {
 
 	async findPending(query: PendingOutboxQueryDto): Promise<OutboxEntryDto[]> {
 		const now = Temporal.Now.instant();
+		const staleThreshold = now.subtract({ minutes: 5 });
 		const rows = await this.db
 			.select()
 			.from(outbox)
 			.where(
-				and(
-					eq(outbox.status, "PENDING"),
-					or(isNull(outbox.nextRetryAt), lte(outbox.nextRetryAt, now))
+				or(
+					and(
+						eq(outbox.status, "PENDING"),
+						or(isNull(outbox.nextRetryAt), lte(outbox.nextRetryAt, now))
+					),
+					and(eq(outbox.status, "FAILED"), lte(outbox.nextRetryAt, now)),
+					and(eq(outbox.status, "PROCESSING"), lte(outbox.createdAt, staleThreshold))
 				)
 			)
 			.orderBy(asc(outbox.createdAt))
@@ -66,6 +71,30 @@ export class OutboxRepository implements IOutboxRepository {
 			.set({
 				status: "PROCESSED",
 				processedAt: Temporal.Now.instant(),
+			})
+			.where(eq(outbox.id, id))
+			.returning();
+		if (!row) {
+			throw new OutboxNotFoundError(id);
+		}
+		return serializeResult(row);
+	}
+
+	async recordFailure(
+		id: number,
+		lastError: string,
+		retryCount: number,
+		nextRetryAt?: Date,
+		tx?: TxClient
+	): Promise<OutboxEntryDto> {
+		const client = tx ?? this.db;
+		const [row] = await client
+			.update(outbox)
+			.set({
+				status: "PENDING",
+				lastError,
+				retryCount,
+				...(nextRetryAt ? { nextRetryAt: toInstant(nextRetryAt) } : {}),
 			})
 			.where(eq(outbox.id, id))
 			.returning();

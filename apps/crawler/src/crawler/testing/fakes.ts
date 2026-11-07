@@ -464,6 +464,28 @@ export class InMemoryTrackingRepository implements ITrackingRepository {
 		});
 	}
 
+	async updateSchedules(
+		updates: Array<{
+			aid: bigint;
+			update: UpdateScheduleInput;
+			expectedLeaseUntil?: Temporal.Instant;
+		}>
+	): Promise<void> {
+		for (const { aid, update, expectedLeaseUntil } of updates) {
+			await this.updateSchedule(aid, update, expectedLeaseUntil);
+		}
+	}
+
+	async listDueMetadata(limit: number, now: Temporal.Instant): Promise<VideoTracking[]> {
+		return [...this.trackings.values()]
+			.filter(
+				(row) =>
+					row.nextMetadataAt &&
+					row.nextMetadataAt.epochMilliseconds <= now.epochMilliseconds
+			)
+			.slice(0, limit);
+	}
+
 	async releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void> {
 		for (const aid of aids) {
 			const existing = this.trackings.get(aid);
@@ -859,6 +881,12 @@ export class InMemoryStatsStore implements StatsStore {
 	readonly states: StatsStateRow[] = [];
 	readonly availability = new Map<string, Temporal.Instant>();
 	saveError?: Error;
+
+	async saveMinutes(inputs: SaveStatsMinuteInput[]): Promise<void> {
+		for (const input of inputs) {
+			await this.saveMinute(input);
+		}
+	}
 
 	async saveMinute(input: SaveStatsMinuteInput): Promise<void> {
 		if (this.saveError) throw this.saveError;

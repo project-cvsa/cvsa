@@ -18,13 +18,14 @@ import {
 	sql,
 	type SQL,
 } from "drizzle-orm";
-import { activeTaskResource } from "../shared/taskContext";
+import { activeDatabase } from "../shared/databaseContext";
 import type {
 	BilibiliVideoMetadata,
 	BilibiliVideoMetadataHistory,
 	BilibiliVideoRelation,
 	DatabaseClient,
 	DiscoverySample,
+	TxClient,
 } from "@cvsa/snapshot-db";
 import {
 	bilibiliVideoMetadata,
@@ -190,7 +191,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		change: "inserted" | "changed" | "unchanged";
 	}> {
 		return this.trace("discovery.upsertMetadata", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const [existing] = await db
 				.select()
 				.from(bilibiliVideoMetadata)
@@ -312,9 +313,12 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					discoveryContext: data.discoveryContext ? toJson(data.discoveryContext) : null,
 					...(data.capturedAt ? { capturedAt: data.capturedAt } : {}),
 				})
+				.onConflictDoNothing()
 				.returning();
 
-			if (!created) throw new Error(`Failed to insert metadata for aid=${data.aid}`);
+			if (!created) {
+				return this.upsertMetadataWithResult(data);
+			}
 			await this.appendMetadataHistory(created, "created", {});
 			return { row: created, change: "inserted" };
 		});
@@ -336,7 +340,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				if (!unique.has(item.aid)) unique.set(item.aid, item);
 			}
 
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const existingRows = await db
 				.select({ aid: AID })
 				.from(bilibiliVideoMetadata)
@@ -393,13 +397,13 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async deleteMetadata(aid: bigint): Promise<void> {
 		await this.trace("discovery.deleteMetadata", async () => {
-			await activeTaskResource(this.db).delete(bilibiliVideoMetadata).where(eq(AID, aid));
+			await activeDatabase(this.db).delete(bilibiliVideoMetadata).where(eq(AID, aid));
 		});
 	}
 
 	async getMetadata(aid: bigint): Promise<BilibiliVideoMetadata | null> {
 		return this.trace("discovery.getMetadata", async () => {
-			const [row] = await activeTaskResource(this.db)
+			const [row] = await activeDatabase(this.db)
 				.select()
 				.from(bilibiliVideoMetadata)
 				.where(eq(AID, aid))
@@ -411,17 +415,14 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	async getMetadatas(aids: bigint[]): Promise<BilibiliVideoMetadata[]> {
 		if (aids.length === 0) return [];
 		return this.trace("discovery.getMetadatas", () =>
-			activeTaskResource(this.db)
-				.select()
-				.from(bilibiliVideoMetadata)
-				.where(inArray(AID, aids))
+			activeDatabase(this.db).select().from(bilibiliVideoMetadata).where(inArray(AID, aids))
 		);
 	}
 
 	async getMetadataSummaries(aids: bigint[]): Promise<VideoMetadataSummary[]> {
 		if (aids.length === 0) return [];
 		return this.trace("discovery.getMetadataSummaries", () =>
-			activeTaskResource(this.db)
+			activeDatabase(this.db)
 				.select({
 					aid: bilibiliVideoMetadata.aid,
 					bvid: bilibiliVideoMetadata.bvid,
@@ -441,7 +442,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async getMetadataHistory(aid: bigint, limit = 100): Promise<BilibiliVideoMetadataHistory[]> {
 		return this.trace("discovery.getMetadataHistory", () =>
-			activeTaskResource(this.db)
+			activeDatabase(this.db)
 				.select()
 				.from(bilibiliVideoMetadataHistory)
 				.where(eq(bilibiliVideoMetadataHistory.aid, aid))
@@ -455,7 +456,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		options: { limit: number; offset: number }
 	): Promise<{ items: MetadataHistoryListItem[]; total: number }> {
 		return this.trace("discovery.listMetadataHistory", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const limit = Math.min(Math.max(options.limit, 1), 500);
 			const offset = Math.max(options.offset, 0);
 			const [[totals], items] = await Promise.all([
@@ -487,7 +488,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	async saveRelations(relations: RelationEdge[]): Promise<void> {
 		if (relations.length === 0) return;
 		await this.trace("discovery.saveRelations", async () => {
-			await activeTaskResource(this.db)
+			await activeDatabase(this.db)
 				.insert(bilibiliVideoRelation)
 				.values(
 					relations.map((rel) => ({
@@ -509,7 +510,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async getRelationsBySource(sourceAid: bigint): Promise<BilibiliVideoRelation[]> {
 		return this.trace("discovery.getRelationsBySource", () =>
-			activeTaskResource(this.db)
+			activeDatabase(this.db)
 				.select()
 				.from(bilibiliVideoRelation)
 				.where(eq(bilibiliVideoRelation.sourceAid, sourceAid))
@@ -519,7 +520,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async getIncomingRelations(targetAid: bigint, limit = 50): Promise<BilibiliVideoRelation[]> {
 		return this.trace("discovery.getIncomingRelations", () =>
-			activeTaskResource(this.db)
+			activeDatabase(this.db)
 				.select()
 				.from(bilibiliVideoRelation)
 				.where(eq(bilibiliVideoRelation.targetAid, targetAid))
@@ -538,7 +539,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				new Date(options.now.epochMilliseconds - options.cooldownMinutes * 60_000)
 			);
 			const limit = Math.min(Math.max(options.limit, 1), 100);
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 
 			const recentSources = await db
 				.select({ sourceAid: bilibiliVideoRelation.sourceAid })
@@ -570,36 +571,21 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async upsertSample(sample: UpsertDiscoverySampleInput): Promise<DiscoverySample> {
 		return this.trace("discovery.upsertSample", async () => {
-			const db = activeTaskResource(this.db);
-			const [existing] = await db
-				.select()
-				.from(discoverySample)
-				.where(eq(discoverySample.aid, sample.aid))
-				.limit(1);
+			const db = activeDatabase(this.db);
+			const updateSet: Record<string, unknown> = {
+				bvid: sample.bvid,
+				title: sample.title,
+				decision: sample.decision,
+				modelVersion: sample.modelVersion,
+				probabilities: toJson(sample.probabilities),
+				songProbability: sample.songProbability,
+			};
+			if (sample.description !== undefined) updateSet.description = sample.description;
+			if (sample.tags !== undefined) updateSet.tags = toJson(sample.tags);
+			if (sample.humanLabel !== undefined) updateSet.humanLabel = sample.humanLabel;
+			if (sample.labeledAt !== undefined) updateSet.labeledAt = sample.labeledAt;
 
-			if (existing) {
-				const [updated] = await db
-					.update(discoverySample)
-					.set({
-						bvid: sample.bvid,
-						title: sample.title,
-						description: sample.description ?? existing.description,
-						...(sample.tags !== undefined ? { tags: toJson(sample.tags) } : {}),
-						decision: sample.decision,
-						modelVersion: sample.modelVersion,
-						probabilities: toJson(sample.probabilities),
-						songProbability: sample.songProbability,
-						...(sample.humanLabel !== undefined
-							? { humanLabel: sample.humanLabel }
-							: {}),
-						...(sample.labeledAt !== undefined ? { labeledAt: sample.labeledAt } : {}),
-					})
-					.where(eq(discoverySample.aid, sample.aid))
-					.returning();
-				return updated ?? existing;
-			}
-
-			const [created] = await db
+			const [row] = await db
 				.insert(discoverySample)
 				.values({
 					aid: sample.aid,
@@ -615,16 +601,23 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					labeledAt: sample.labeledAt ?? null,
 					...(sample.createdAt ? { createdAt: sample.createdAt } : {}),
 				})
+				.onConflictDoUpdate({
+					target: discoverySample.aid,
+					set: updateSet,
+				})
 				.returning();
-			if (!created)
-				throw new Error(`Failed to insert discovery sample for aid=${sample.aid}`);
-			return created;
+
+			if (!row)
+				throw new Error(
+					`Failed to insert or update discovery sample for aid=${sample.aid}`
+				);
+			return row;
 		});
 	}
 
 	/** WHERE clause shared by {@link listSamples} and {@link countSamples}. */
 	private sampleWhere(
-		db: DatabaseClient,
+		db: DatabaseClient | TxClient,
 		options: ListDiscoverySamplesOptions = {}
 	): SQL | undefined {
 		const search = options.search?.trim();
@@ -668,7 +661,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async listSamples(options: ListDiscoverySamplesOptions = {}): Promise<DiscoverySample[]> {
 		return this.trace("discovery.listSamples", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const where = this.sampleWhere(db, options);
 			const ascending = options.sortOrder === "asc";
 			const direction = ascending ? asc : desc;
@@ -691,7 +684,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async countSamples(options: ListDiscoverySamplesOptions = {}): Promise<number> {
 		return this.trace("discovery.countSamples", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const where = this.sampleWhere(db, options);
 			const [totals] = await db.select({ total: count() }).from(discoverySample).where(where);
 			return totals?.total ?? 0;
@@ -700,7 +693,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async getSample(aid: bigint): Promise<DiscoverySample | null> {
 		return this.trace("discovery.getSample", async () => {
-			const [row] = await activeTaskResource(this.db)
+			const [row] = await activeDatabase(this.db)
 				.select()
 				.from(discoverySample)
 				.where(eq(discoverySample.aid, aid))
@@ -711,7 +704,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null> {
 		return this.trace("discovery.labelSample", async () => {
-			const [row] = await activeTaskResource(this.db)
+			const [row] = await activeDatabase(this.db)
 				.update(discoverySample)
 				.set({ humanLabel, labeledAt: toInstant(new Date()) })
 				.where(eq(discoverySample.aid, aid))
@@ -722,7 +715,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 
 	async getRuntimeConfig(key: string): Promise<{ revision: number; config: unknown } | null> {
 		return this.trace("discovery.getRuntimeConfig", async () => {
-			const [row] = await activeTaskResource(this.db)
+			const [row] = await activeDatabase(this.db)
 				.select()
 				.from(crawlerRuntimeConfig)
 				.where(eq(crawlerRuntimeConfig.key, key))
@@ -738,7 +731,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		expectedRevision?: number
 	): Promise<{ revision: number; config: unknown }> {
 		return this.trace("discovery.saveRuntimeConfig", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const [existing] = await db
 				.select()
 				.from(crawlerRuntimeConfig)
@@ -772,8 +765,11 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 					revision: 1,
 					config: toJson(config),
 				})
+				.onConflictDoNothing()
 				.returning();
-			if (!created) throw new Error(`Failed to create runtime config for key=${key}`);
+			if (!created) {
+				return this.saveRuntimeConfig(key, config, expectedRevision);
+			}
 			return { revision: created.revision, config: created.config };
 		});
 	}
@@ -784,7 +780,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		changedFields: MetadataFieldDiff
 	): Promise<void> {
 		await traceTask("discovery.appendMetadataHistory", async () => {
-			await activeTaskResource(this.db)
+			await activeDatabase(this.db)
 				.insert(bilibiliVideoMetadataHistory)
 				.values({
 					aid: row.aid,
@@ -801,7 +797,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 	): Promise<void> {
 		if (windows.length === 0) return;
 		return this.trace("discovery.markSearchWindowsExplored", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			await db.insert(discoverySearchWindow).values(windows).onConflictDoNothing();
 		});
 	}
@@ -812,7 +808,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		toWindow: number
 	): Promise<Set<number>> {
 		return this.trace("discovery.getExploredSearchWindows", async () => {
-			const db = activeTaskResource(this.db);
+			const db = activeDatabase(this.db);
 			const rows = await db
 				.select({ windowStart: discoverySearchWindow.windowStart })
 				.from(discoverySearchWindow)

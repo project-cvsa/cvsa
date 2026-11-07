@@ -103,6 +103,14 @@ export interface ITrackingRepository {
 		update: UpdateScheduleInput,
 		expectedLeaseUntil?: Temporal.Instant
 	): Promise<void>;
+	updateSchedules(
+		updates: Array<{
+			aid: bigint;
+			update: UpdateScheduleInput;
+			expectedLeaseUntil?: Temporal.Instant;
+		}>
+	): Promise<void>;
+	listDueMetadata(limit: number, now: Temporal.Instant): Promise<VideoTracking[]>;
 	/** Release the lease on videos without rescheduling them. */
 	releaseLeases(aids: bigint[], expectedLeaseUntil?: Temporal.Instant): Promise<void>;
 	postponeSchedule(aids: bigint[], nextSnapshotAt: Temporal.Instant): Promise<void>;

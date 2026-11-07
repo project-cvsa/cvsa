@@ -45,8 +45,7 @@ import {
 } from "./crawler";
 import { crawlerEnv } from "@cvsa/env";
 import { createCrawlerObservability } from "./observability";
-import { and, asc, isNotNull, lte } from "drizzle-orm";
-import { createSnapshotDb, type VideoTracking, videoTracking } from "@cvsa/snapshot-db";
+import { createSnapshotDb } from "@cvsa/snapshot-db";
 import type { NetworkRateLimiter } from "@cvsa/network-scheduler";
 import { MetadataRefreshScheduler } from "./controlPlane/metadataRefresh";
 
@@ -232,17 +231,7 @@ export const adapterProbeService = new AdapterProbeService(
  * stays current without an extra Redis queue.
  */
 export const metadataRefreshScheduler = new MetadataRefreshScheduler({
-	async listDueMetadata(now, limit) {
-		const rows: VideoTracking[] = await crawlerSnapshotDb.client
-			.select()
-			.from(videoTracking)
-			.where(
-				and(isNotNull(videoTracking.nextMetadataAt), lte(videoTracking.nextMetadataAt, now))
-			)
-			.orderBy(asc(videoTracking.nextMetadataAt))
-			.limit(limit);
-		return rows;
-	},
+	listDueMetadata: (now, limit) => trackingRepository.listDueMetadata(limit, now),
 	trackingRepository,
 	discoveryRepository,
 	bilibiliClient,
@@ -309,50 +298,15 @@ statsOverviewDeps.heartbeat = (instanceId) => statsHeartbeatStore.read(instanceI
 statsOverviewDeps.strategies = async () => {
 	const document = await networkRuntimeConfigService.get();
 	const config = document?.config;
-	const hasHealth = config?.health !== undefined;
-	const hasAdaptive = config?.adaptive !== undefined;
-	const hasPolicies = Object.keys(config?.requestTypePolicies ?? {}).length > 0;
 	const hasRateLimits = (config?.adapters ?? []).some(
 		(adapter) =>
 			adapter.requestsPerSecond !== undefined || (adapter.rateLimits?.length ?? 0) > 0
 	);
 	return [
 		{
-			key: "health",
-			support: hasHealth ? "configured_not_wired" : "not_wired",
-			configured: hasHealth,
-			healthFactor: null,
-			adaptiveFactor: null,
-			reservedShare: null,
-		},
-		{
-			key: "adaptive",
-			support: hasAdaptive ? "configured_not_wired" : "not_wired",
-			configured: hasAdaptive,
-			healthFactor: null,
-			adaptiveFactor: null,
-			reservedShare: null,
-		},
-		{
-			key: "requestTypePolicies",
-			support: hasPolicies ? "configured_not_wired" : "not_wired",
-			configured: hasPolicies,
-			healthFactor: null,
-			adaptiveFactor: null,
-			reservedShare: null,
-		},
-		{
 			key: "rateLimits",
 			support: "active",
 			configured: hasRateLimits,
-			healthFactor: null,
-			adaptiveFactor: null,
-			reservedShare: null,
-		},
-		{
-			key: "cooldown",
-			support: "not_wired",
-			configured: false,
 			healthFactor: null,
 			adaptiveFactor: null,
 			reservedShare: null,

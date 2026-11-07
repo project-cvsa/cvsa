@@ -131,50 +131,84 @@ function mergeContiguousRanges(ranges: Array<[number, number]>): Array<[number, 
 export class CrawlerStatsRepository {
 	constructor(private readonly db: DatabaseClient) {}
 
-	async saveMinute(input: SaveStatsMinuteInput): Promise<void> {
-		const metrics = input.metrics;
+	async saveMinutes(inputs: SaveStatsMinuteInput[]): Promise<void> {
+		if (inputs.length === 0) return;
 		await this.db.transaction(async (tx) => {
-			await tx
-				.insert(crawlerStatsMinute)
-				.values({ sourceId: input.sourceId, bucketTime: input.bucketTime, metrics })
-				.onConflictDoUpdate({
-					target: [crawlerStatsMinute.bucketTime, crawlerStatsMinute.sourceId],
-					set: { metrics },
-				});
-			const hour =
-				input.bucketTime.epochMilliseconds - (input.bucketTime.epochMilliseconds % HOUR_MS);
-			if (input.instance) {
-				const instance = input.instance;
+			for (const input of inputs) {
+				const metrics = input.metrics;
+				await tx
+					.insert(crawlerStatsMinute)
+					.values({ sourceId: input.sourceId, bucketTime: input.bucketTime, metrics })
+					.onConflictDoUpdate({
+						target: [crawlerStatsMinute.bucketTime, crawlerStatsMinute.sourceId],
+						set: { metrics },
+					});
+			}
+
+			const latestInstance = inputs[inputs.length - 1]?.instance;
+			if (latestInstance) {
 				await tx
 					.insert(crawlerStatsInstance)
-					.values(instance)
+					.values(latestInstance)
 					.onConflictDoUpdate({
 						target: crawlerStatsInstance.instanceId,
 						set: {
-							startedAt: instance.startedAt,
-							exitedAt: instance.exitedAt,
-							lastPersistedAt: instance.lastPersistedAt,
-							coveredTo: instance.coveredTo,
-							formatVersion: instance.formatVersion,
+							startedAt: latestInstance.startedAt,
+							exitedAt: latestInstance.exitedAt,
+							lastPersistedAt: latestInstance.lastPersistedAt,
+							coveredTo: latestInstance.coveredTo,
+							formatVersion: latestInstance.formatVersion,
 						},
 					});
 			}
-			await tx
-				.insert(crawlerStatsHourPending)
-				.values({
-					hourTime: toInstant(new Date(hour)),
-					sourceId: input.sourceId,
-					generation: 1,
-					updatedAt: input.bucketTime,
-				})
-				.onConflictDoUpdate({
-					target: [crawlerStatsHourPending.hourTime, crawlerStatsHourPending.sourceId],
-					set: {
-						generation: sql`${crawlerStatsHourPending.generation} + 1`,
+
+			const hourBuckets = new Map<
+				string,
+				{ hourTime: Temporal.Instant; sourceId: string; updatedAt: Temporal.Instant }
+			>();
+			for (const input of inputs) {
+				const hourMs =
+					input.bucketTime.epochMilliseconds -
+					(input.bucketTime.epochMilliseconds % HOUR_MS);
+				const key = `${input.sourceId}:${hourMs}`;
+				const existing = hourBuckets.get(key);
+				if (
+					!existing ||
+					input.bucketTime.epochMilliseconds > existing.updatedAt.epochMilliseconds
+				) {
+					hourBuckets.set(key, {
+						hourTime: toInstant(new Date(hourMs)),
+						sourceId: input.sourceId,
 						updatedAt: input.bucketTime,
-					},
-				});
+					});
+				}
+			}
+
+			for (const pending of hourBuckets.values()) {
+				await tx
+					.insert(crawlerStatsHourPending)
+					.values({
+						hourTime: pending.hourTime,
+						sourceId: pending.sourceId,
+						generation: 1,
+						updatedAt: pending.updatedAt,
+					})
+					.onConflictDoUpdate({
+						target: [
+							crawlerStatsHourPending.hourTime,
+							crawlerStatsHourPending.sourceId,
+						],
+						set: {
+							generation: sql`${crawlerStatsHourPending.generation} + 1`,
+							updatedAt: pending.updatedAt,
+						},
+					});
+			}
 		});
+	}
+
+	async saveMinute(input: SaveStatsMinuteInput): Promise<void> {
+		return this.saveMinutes([input]);
 	}
 
 	async listMinutes(from: Temporal.Instant, to: Temporal.Instant): Promise<StatsMinuteRow[]> {

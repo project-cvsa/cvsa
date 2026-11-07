@@ -1,4 +1,4 @@
-import { count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, sql } from "drizzle-orm";
 import { activeDatabase } from "../shared/databaseContext";
 import type {
 	DatabaseClient,
@@ -6,7 +6,7 @@ import type {
 	VideoSnapshot,
 	Temporal,
 } from "@cvsa/snapshot-db";
-import { latestVideoSnapshot, videoSnapshot, toInstant } from "@cvsa/snapshot-db";
+import { latestVideoSnapshot, videoSnapshot, videoTracking, toInstant } from "@cvsa/snapshot-db";
 import { MILESTONE_HISTORY_WINDOWS_MS } from "../tracking/scheduler";
 import { createDatabaseTracer } from "../stats/databaseMetrics";
 import type { StatsRecorder } from "../stats/types";
@@ -172,17 +172,38 @@ export class SnapshotRepository implements ISnapshotRepository {
 	): Promise<{ items: VideoSnapshot[]; total: number }> {
 		return this.trace("snapshot.listSnapshots", async () => {
 			const db = activeDatabase(this.db);
-			const [[{ total }], items] = await Promise.all([
-				db.select({ total: count() }).from(videoSnapshot).where(eq(videoSnapshot.aid, aid)),
-				db
-					.select()
-					.from(videoSnapshot)
-					.where(eq(videoSnapshot.aid, aid))
-					.orderBy(desc(videoSnapshot.capturedAt))
-					.limit(options.limit)
-					.offset(options.offset),
-			]);
-			return { items, total };
+			const items = await db
+				.select()
+				.from(videoSnapshot)
+				.where(eq(videoSnapshot.aid, aid))
+				.orderBy(desc(videoSnapshot.capturedAt))
+				.limit(options.limit + 1)
+				.offset(options.offset);
+
+			const hasMore = items.length > options.limit;
+			const pageItems = hasMore ? items.slice(0, options.limit) : items;
+
+			if (!hasMore && options.offset === 0) {
+				return { items: pageItems, total: pageItems.length };
+			}
+
+			const [tracking] = await db
+				.select({ firstCapturedAt: videoTracking.firstCapturedAt })
+				.from(videoTracking)
+				.where(eq(videoTracking.aid, aid))
+				.limit(1);
+
+			const conditions = [eq(videoSnapshot.aid, aid)];
+			if (tracking?.firstCapturedAt) {
+				conditions.push(gte(videoSnapshot.capturedAt, tracking.firstCapturedAt));
+			}
+
+			const [{ total }] = await db
+				.select({ total: count() })
+				.from(videoSnapshot)
+				.where(and(...conditions));
+
+			return { items: pageItems, total };
 		});
 	}
 }

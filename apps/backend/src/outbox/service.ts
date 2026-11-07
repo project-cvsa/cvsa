@@ -51,13 +51,15 @@ export class OutboxService {
 			} catch (error) {
 				const errorMessage = error instanceof Error ? error.message : String(error);
 				appLogger.warn(`Outbox entry ${id} processing failed: ${errorMessage}`);
-				if (entry.retryCount >= MAX_RETRIES - 1) {
+				const nextRetries = (entry.retryCount ?? 0) + 1;
+				if (nextRetries >= MAX_RETRIES) {
 					await this.repository.markFailed(
 						id,
 						errorMessage,
 						new Date(Date.now() + 3600_000)
 					);
 				} else {
+					await this.repository.recordFailure(id, errorMessage, nextRetries);
 					throw error;
 				}
 			}
@@ -76,7 +78,7 @@ export class OutboxService {
 		const entries = await this.repository.findPending(query);
 		for (const entry of entries) {
 			await this.queue.add(`outbox-recover-${entry.id}`, entry, {
-				jobId: `outbox-recover-${entry.id}`,
+				jobId: `outbox-recover-${entry.id}-${Date.now()}`,
 				attempts: MAX_RETRIES,
 				backoff: { type: "exponential", delay: 1000 },
 			});

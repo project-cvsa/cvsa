@@ -7,7 +7,7 @@ import type { BilibiliClient } from "../bilibili";
 import { classifyBilibiliError, isTerminalVideoFailure } from "../bilibili/errors";
 import { withBilibiliPurpose } from "../bilibili/requestContext";
 import { createNoopStatsRecorder, type StatsRecorder } from "../stats/types";
-import type { ITrackingRepository } from "../tracking/repository.interface";
+import type { ITrackingRepository, UpdateScheduleInput } from "../tracking/repository.interface";
 import {
 	computeNextMetadataAt,
 	evaluateNextSchedule,
@@ -70,18 +70,18 @@ export class SnapshotService {
 				Math.min(...rows.map((row) => trackingRetryMs(row.state, this.policy)));
 			const effectiveDelay = rows.length === 0 ? 0 : delayMs;
 			const renewed = new Date(Date.now() + effectiveDelay + 5 * 60000);
-			for (const row of rows)
-				await this.trackingRepo.updateSchedule(
-					row.aid,
-					{
-						leaseUntil: toInstant(renewed),
-						eligibleAt: toInstant(new Date(Date.now() + effectiveDelay)),
-						...(reason === "local_capacity"
-							? {}
-							: { consecutiveFails: row.consecutiveFails + 1, lastError: reason }),
-					},
-					expected
-				);
+			const updates = rows.map((row) => ({
+				aid: row.aid,
+				update: {
+					leaseUntil: toInstant(renewed),
+					eligibleAt: toInstant(new Date(Date.now() + effectiveDelay)),
+					...(reason === "local_capacity"
+						? {}
+						: { consecutiveFails: row.consecutiveFails + 1, lastError: reason }),
+				},
+				expectedLeaseUntil: expected,
+			}));
+			await this.trackingRepo.updateSchedules(updates);
 			return {
 				aids: rows.map((row) => row.aid.toString()),
 				leaseUntil: renewed.toISOString(),
@@ -170,6 +170,12 @@ export class SnapshotService {
 						? await this.snapshotRepo.getSchedulingHistories(activeAids, capturedAt)
 						: undefined;
 
+				const scheduleUpdates: Array<{
+					aid: bigint;
+					update: UpdateScheduleInput;
+					expectedLeaseUntil?: ReturnType<typeof toInstant>;
+				}> = [];
+
 				// Process received stats and update tracking
 				for (const stat of receivedStats) {
 					const aid = BigInt(stat.aid);
@@ -243,9 +249,9 @@ export class SnapshotService {
 						recentSnapshots,
 					});
 
-					await this.trackingRepo.updateSchedule(
+					scheduleUpdates.push({
 						aid,
-						{
+						update: {
 							state: next.nextState,
 							nextSnapshotAt: toInstant(next.nextSnapshotAt),
 							lastViews: stat.views,
@@ -267,9 +273,11 @@ export class SnapshotService {
 								tracking?.nextMetadataAt ??
 								toInstant(computeNextMetadataAt(next.nextState, response.time)),
 						},
-						expectedLeaseUntil
-					);
+						expectedLeaseUntil,
+					});
 				}
+
+				await this.trackingRepo.updateSchedules(scheduleUpdates);
 
 				// Handle videos missing from Bilibili's response (e.g. deleted or private)
 				const missingAids = uniqueBigIntAids.filter((aid) => !receivedAidSet.has(aid));

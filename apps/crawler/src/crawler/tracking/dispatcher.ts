@@ -96,7 +96,7 @@ export class TrackingDispatcher {
 				let capacity = this.queueCap - inFlight;
 				if (capacity <= 0) {
 					const [urgent] = await this.trackingRepo.findDueVideos(1, toInstant(now));
-					if (urgent) {
+					if (urgent && urgent.priority < 2) {
 						const waiting = await this.queue.getJobs(
 							["waiting", "prioritized", "delayed"],
 							this.queueCap
