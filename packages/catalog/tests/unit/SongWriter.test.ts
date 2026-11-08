@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { createUserPrincipal } from "@cvsa/authentication";
+import { AppError } from "@cvsa/contracts";
 import {
 	type DatabaseClient,
 	type Song,
@@ -12,29 +13,29 @@ import type { ICatalogCache } from "../../src/cache";
 import { SongWriter } from "../../src/song/SongWriter";
 
 describe("SongWriter", () => {
-	it("updates song in transaction, writes history and outbox, and invalidates cache", async () => {
-		const existingSong: Song = {
-			id: 10,
-			name: "Original Name",
-			type: "ORIGINAL",
-			originalSongId: null,
-			language: "zh",
-			localizedNames: null,
-			duration: 180,
-			description: "Desc",
-			localizedDescriptions: null,
-			bilibiliAid: null,
-			bilibiliBvid: null,
-			vocadbId: null,
-			vcpediaId: null,
-			moegirlId: null,
-			coverUrl: null,
-			publishedAt: null,
-			createdAt: toInstant(new Date()),
-			updatedAt: toInstant(new Date()),
-			deletedAt: null,
-		};
+	const existingSong: Song = {
+		id: 10,
+		name: "Original Name",
+		type: "ORIGINAL",
+		originalSongId: null,
+		language: "zh",
+		localizedNames: null,
+		duration: 180,
+		description: "Desc",
+		localizedDescriptions: null,
+		bilibiliAid: null,
+		bilibiliBvid: null,
+		vocadbId: null,
+		vcpediaId: null,
+		moegirlId: null,
+		coverUrl: null,
+		publishedAt: null,
+		createdAt: toInstant(new Date()),
+		updatedAt: toInstant(new Date()),
+		deletedAt: null,
+	};
 
+	function createMockEnv() {
 		let historyCreated: unknown = null;
 		let outboxCreated: unknown = null;
 		let invalidatedKey = "";
@@ -79,6 +80,16 @@ describe("SongWriter", () => {
 		};
 
 		const writer = new SongWriter(mockDb as unknown as DatabaseClient, mockCache);
+		return {
+			writer,
+			getHistoryCreated: () => historyCreated,
+			getOutboxCreated: () => outboxCreated,
+			getInvalidatedKey: () => invalidatedKey,
+		};
+	}
+
+	it("updates song in transaction, writes history and outbox, and invalidates cache", async () => {
+		const { writer, getHistoryCreated, getOutboxCreated, getInvalidatedKey } = createMockEnv();
 		const actor = createUserPrincipal({
 			userId: "user-editor-1",
 			roles: ["editor"],
@@ -89,18 +100,73 @@ describe("SongWriter", () => {
 		});
 
 		expect(result.name).toBe("Updated Name");
-		expect(historyCreated).toMatchObject({
+		expect(getHistoryCreated()).toMatchObject({
 			userId: "user-editor-1",
 			table: "song",
 			objectId: 10,
 			type: "UPDATE",
 		});
-		expect(outboxCreated).toMatchObject({
+		expect(getOutboxCreated()).toMatchObject({
 			aggregateType: "song",
 			aggregateId: 10,
 			eventType: "song.updated",
 			status: "PENDING",
 		});
-		expect(invalidatedKey).toBe("catalog:song:10:details");
+		expect(getInvalidatedKey()).toBe("catalog:song:10:details");
+	});
+
+	it("prevents standard editor from modifying restricted field publishedAt", async () => {
+		const { writer } = createMockEnv();
+		const actor = createUserPrincipal({
+			userId: "user-editor-2",
+			roles: ["editor"],
+		});
+
+		let caughtError: AppError | null = null;
+		try {
+			await writer.update(actor, 10, {
+				publishedAt: new Date().toISOString(),
+			});
+		} catch (err) {
+			caughtError = err as AppError;
+		}
+
+		expect(caughtError).toBeInstanceOf(AppError);
+		expect(caughtError?.statusCode).toBe(403);
+		expect(caughtError?.code).toBe("FORBIDDEN");
+		expect(caughtError?.meta?.field).toBe("publishedAt");
+	});
+
+	it("allows privileged editor to modify restricted field publishedAt", async () => {
+		const { writer } = createMockEnv();
+		const privilegedActor = createUserPrincipal({
+			userId: "user-editor-priv",
+			roles: ["editor"],
+			permissions: ["catalog:privileged_fields"],
+		});
+
+		const result = await writer.update(privilegedActor, 10, {
+			name: "Updated Name Privileged",
+			publishedAt: new Date().toISOString(),
+		});
+
+		expect(result.name).toBe("Updated Name Privileged");
+		expect(result.publishedAt).toBeDefined();
+	});
+
+	it("allows admin to modify any field including publishedAt and type", async () => {
+		const { writer } = createMockEnv();
+		const admin = createUserPrincipal({
+			userId: "user-admin",
+			roles: ["admin"],
+		});
+
+		const result = await writer.update(admin, 10, {
+			type: "COVER",
+			publishedAt: new Date().toISOString(),
+		});
+
+		expect(result.type).toBe("COVER");
+		expect(result.publishedAt).toBeDefined();
 	});
 });

@@ -1,4 +1,5 @@
 export * from "./principal";
+export * from "./ability";
 export * from "./cookies";
 export * from "./password";
 export * from "./randomId";

@@ -1,29 +1,32 @@
 import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 
+export function canCreateSinger(actor: Principal): boolean {
+	return actor.ability.can("create", "Singer");
+}
+
 export function assertCanCreateSinger(actor: Principal): void {
-	if (actor.roles.includes("admin") || actor.roles.includes("editor")) {
-		return;
+	if (!canCreateSinger(actor)) {
+		throw new AppError("error.forbidden", "FORBIDDEN", 403);
 	}
-	if (actor.type === "service" || actor.type === "user") {
-		return;
-	}
-	throw new AppError("error.forbidden", "FORBIDDEN", 403);
+}
+
+export function canUpdateSinger(actor: Principal): boolean {
+	return actor.ability.can("update", "Singer");
 }
 
 export function assertCanUpdateSinger(actor: Principal): void {
-	if (actor.roles.includes("admin") || actor.roles.includes("editor")) {
-		return;
+	if (!canUpdateSinger(actor)) {
+		throw new AppError("error.forbidden", "FORBIDDEN", 403);
 	}
-	if (actor.type === "service" || actor.type === "user") {
-		return;
-	}
-	throw new AppError("error.forbidden", "FORBIDDEN", 403);
+}
+
+export function canDeleteSinger(actor: Principal): boolean {
+	return actor.ability.can("delete", "Singer");
 }
 
 export function assertCanDeleteSinger(actor: Principal): void {
-	if (actor.roles.includes("admin")) {
-		return;
+	if (!canDeleteSinger(actor)) {
+		throw new AppError("error.forbidden", "FORBIDDEN", 403);
 	}
-	throw new AppError("error.forbidden", "FORBIDDEN", 403);
 }
