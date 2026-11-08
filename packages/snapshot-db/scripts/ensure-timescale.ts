@@ -81,7 +81,7 @@ interface HypertableState {
 	compression_policy: boolean;
 }
 
-const sql = new SQL({ max: 1, url: crawlerEnv.SNAPSHOT_DATABASE_URL });
+const sql = new SQL({ max: 1, url: crawlerEnv.SNAPSHOT_DATABASE_URL, idleTimeout: 0 });
 
 try {
 	const [table] = await sql<{ name: string | null }[]>`

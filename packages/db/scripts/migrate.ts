@@ -11,7 +11,10 @@ import { createDatabaseClient } from "../src/client";
  * purpose: databases provisioned by the previous (Prisma) toolchain already
  * contain every table and adopt the Drizzle history instead of being recreated.
  */
-const client = createDatabaseClient({ connectionString: loadDatabaseUrl() });
+const client = createDatabaseClient({
+	connectionString: loadDatabaseUrl(),
+	idleTimeout: 0,
+});
 
 const migrationsFolder =
 	process.env.MIGRATIONS_FOLDER ??
