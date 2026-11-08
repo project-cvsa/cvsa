@@ -6,8 +6,8 @@
 # Development (backing services only):
 #   docker compose up -d db snapshot-db redis redis-cache meili
 #
-# All variables and ports are configurable via `.env` with sensible defaults.
-# Every service automatically loads `.env` if present.
+# Variables and ports can be customized in `.env` (copied from `.env.example`).
+# Docker Compose automatically loads `.env` from the project root.
 
 services:
   web:
@@ -21,27 +21,24 @@ services:
     container_name: cvsa-web
     restart: unless-stopped
     ports:
-      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-10199}:${WEB_PORT:-10199}"
-    env_file:
-      - path: .env
-        required: false
+      - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-10199}:10199"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
-      PORT: ${WEB_PORT:-10199}
-      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
+      PORT: 10199
+      DATABASE_URL: ${DATABASE_URL:-postgres://cvsa:password@db:5432/cvsa}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
       PUBLIC_API_URL: ${PUBLIC_API_URL:-}
-      INTERNAL_API_URL: ${INTERNAL_API_URL:-http://backend:${BACKEND_PORT:-16412}}
+      INTERNAL_API_URL: http://backend:16412
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "curl -fsS -H 'Host: zh.projectcvsa.com' http://127.0.0.1:${WEB_PORT:-10199}/ || exit 1",
+          "curl -fsS -H 'Host: zh.projectcvsa.com' http://127.0.0.1:10199/ || exit 1",
         ]
       interval: 3s
       timeout: 5s
@@ -67,23 +64,20 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     ports:
-      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-16412}:${BACKEND_PORT:-16412}"
-    env_file:
-      - path: .env
-        required: false
+      - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-16412}:16412"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
-      PORT: ${BACKEND_PORT:-16412}
-      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
+      PORT: 16412
+      DATABASE_URL: ${DATABASE_URL:-postgres://cvsa:password@db:5432/cvsa}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
-      MEILI_API_URL: ${MEILI_API_URL:-http://meili:7700}
+      MEILI_API_URL: http://meili:7700
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-cvsa_meili_master_key_16bytes}
-      EMBEDDING_API_URL: ${EMBEDDING_API_URL:-http://embedding:${EMBEDDING_PORT:-14900}}
+      EMBEDDING_API_URL: http://embedding:14900
       CONTROL_API_HOST: crawler
-      CONTROL_API_PORT: ${CRAWLER_PORT:-16413}
-      CONTROL_API_URL: ${CONTROL_API_URL:-http://crawler:${CRAWLER_PORT:-16413}/v2}
+      CONTROL_API_PORT: 16413
+      CONTROL_API_URL: http://crawler:16413/v2
       CONTROL_API_TOKEN: ${CONTROL_API_TOKEN:-}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-}
@@ -114,20 +108,17 @@ services:
     restart: unless-stopped
     stop_grace_period: 30s
     ports:
-      - "${CRAWLER_BIND_IP:-127.0.0.1}:${CRAWLER_PORT:-16413}:${CRAWLER_PORT:-16413}"
-    env_file:
-      - path: .env
-        required: false
+      - "${CRAWLER_BIND_IP:-127.0.0.1}:${CRAWLER_PORT:-16413}:16413"
     environment:
       NODE_ENV: production
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
-      SNAPSHOT_DATABASE_URL: ${SNAPSHOT_DATABASE_URL:-postgres://${SNAPSHOT_DB_USER:-cvsa}:${SNAPSHOT_DB_PASSWORD:-password}@snapshot-db:5432/${SNAPSHOT_DB_NAME:-cvsa_snapshot}}
+      SNAPSHOT_DATABASE_URL: ${SNAPSHOT_DATABASE_URL:-postgres://cvsa:password@snapshot-db:5432/cvsa_snapshot}
       CONTROL_API_HOST: 0.0.0.0
-      CONTROL_API_PORT: ${CRAWLER_PORT:-16413}
+      CONTROL_API_PORT: 16413
       CONTROL_API_TOKEN: ${CONTROL_API_TOKEN:-}
-      CRAWLER_MODEL_DIR: ${CRAWLER_MODEL_DIR:-/app/model}
-      HF_HOME: ${HF_HOME:-/app/model/.cache/huggingface}
+      CRAWLER_MODEL_DIR: /app/model
+      HF_HOME: /app/model/.cache/huggingface
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-cvsa-crawler}
     volumes:
@@ -153,15 +144,12 @@ services:
     container_name: cvsa-embedding
     restart: unless-stopped
     ports:
-      - "${EMBEDDING_BIND_IP:-127.0.0.1}:${EMBEDDING_PORT:-14900}:${EMBEDDING_PORT:-14900}"
-    env_file:
-      - path: .env
-        required: false
+      - "${EMBEDDING_BIND_IP:-127.0.0.1}:${EMBEDDING_PORT:-14900}:14900"
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
-      PORT: ${EMBEDDING_PORT:-14900}
-      HF_HOME: ${HF_HOME:-/app/model/.cache/huggingface}
+      PORT: 14900
+      HF_HOME: /app/model/.cache/huggingface
     volumes:
       - ${MODEL_DIR:-./model}:/app/model
     deploy:
@@ -175,9 +163,6 @@ services:
     restart: always
     ports:
       - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
-    env_file:
-      - path: .env
-        required: false
     environment:
       PGDATA: /var/lib/postgresql/18/docker
       POSTGRES_USER: ${POSTGRES_USER:-cvsa}
@@ -185,30 +170,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cvsa}
     volumes:
       - data:/var/lib/postgresql
+      - ./docker/config/postgres.conf:/etc/postgresql/custom.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/custom.conf"]
     deploy:
       resources:
         limits:
           memory: ${DB_MEMORY_LIMIT:-2G}
-    command:
-      - postgres
-      - -c
-      - shared_preload_libraries=${DB_SHARED_PRELOAD_LIBRARIES:-pg_stat_statements}
-      - -c
-      - pg_stat_statements.track=all
-      - -c
-      - random_page_cost=1.1
-      - -c
-      - effective_io_concurrency=200
-      - -c
-      - checkpoint_completion_target=0.9
-      - -c
-      - shared_buffers=${DB_SHARED_BUFFERS:-512MB}
-      - -c
-      - effective_cache_size=${DB_EFFECTIVE_CACHE_SIZE:-1536MB}
-      - -c
-      - work_mem=${DB_WORK_MEM:-16MB}
-      - -c
-      - maintenance_work_mem=${DB_MAINTENANCE_WORK_MEM:-128MB}
     healthcheck:
       test:
         [
@@ -226,45 +193,18 @@ services:
     restart: always
     ports:
       - "${SNAPSHOT_DB_BIND_IP:-127.0.0.1}:${SNAPSHOT_DB_PORT:-5433}:5432"
-    env_file:
-      - path: .env
-        required: false
     environment:
       POSTGRES_DB: ${SNAPSHOT_DB_NAME:-cvsa_snapshot}
       POSTGRES_USER: ${SNAPSHOT_DB_USER:-cvsa}
       POSTGRES_PASSWORD: ${SNAPSHOT_DB_PASSWORD:-password}
     volumes:
       - snapshot_data:/var/lib/postgresql/data
+      - ./docker/config/timescale.conf:/etc/postgresql/custom.conf:ro
+    command: ["postgres", "-c", "config_file=/etc/postgresql/custom.conf"]
     deploy:
       resources:
         limits:
           memory: ${SNAPSHOT_DB_MEMORY_LIMIT:-4G}
-    command:
-      - postgres
-      - -c
-      - shared_preload_libraries=${SNAPSHOT_DB_SHARED_PRELOAD_LIBRARIES:-timescaledb,pg_stat_statements}
-      - -c
-      - pg_stat_statements.track=all
-      - -c
-      - random_page_cost=1.1
-      - -c
-      - effective_io_concurrency=200
-      - -c
-      - checkpoint_completion_target=0.9
-      - -c
-      - autovacuum_vacuum_scale_factor=0.05
-      - -c
-      - shared_buffers=${SNAPSHOT_DB_SHARED_BUFFERS:-1GB}
-      - -c
-      - effective_cache_size=${SNAPSHOT_DB_EFFECTIVE_CACHE_SIZE:-3GB}
-      - -c
-      - work_mem=${SNAPSHOT_DB_WORK_MEM:-16MB}
-      - -c
-      - maintenance_work_mem=${SNAPSHOT_DB_MAINTENANCE_WORK_MEM:-256MB}
-      - -c
-      - max_worker_processes=${SNAPSHOT_DB_MAX_WORKERS:-16}
-      - -c
-      - max_parallel_workers=${SNAPSHOT_DB_PARALLEL_WORKERS:-8}
     healthcheck:
       test:
         [
@@ -282,9 +222,6 @@ services:
     restart: always
     ports:
       - "${MEILI_BIND_IP:-127.0.0.1}:${MEILI_PORT:-7700}:7700"
-    env_file:
-      - path: .env
-        required: false
     environment:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-cvsa_meili_master_key_16bytes}
       MEILI_ENV: ${MEILI_ENV:-development}
@@ -363,4 +300,3 @@ networks:
       config:
         - subnet: 172.18.0.0/16
         - subnet: fd00:c75a::/64
-
