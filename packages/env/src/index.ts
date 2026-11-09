@@ -85,6 +85,8 @@ export const crawlerEnv = createEnv({
 		 * The tokenizer is fetched from HuggingFace, not from this directory.
 		 */
 		CRAWLER_MODEL_DIR: z.string().min(1).optional(),
+		SIGNOZ_API_URL: z.url().optional(),
+		SIGNOZ_API_KEY: z.string().optional(),
 	},
 	runtimeEnv: runtimeEnvironment,
 	emptyStringAsUndefined: true,

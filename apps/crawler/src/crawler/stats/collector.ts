@@ -2,7 +2,6 @@ import { appLogger } from "@cvsa/logger";
 import { z } from "zod";
 import {
 	CRAWLER_LATENCY_BOUNDS_MS,
-	CRAWLER_RATE_METRICS,
 	CRAWLER_STATS_FORMAT_VERSION,
 	CRAWLER_STATS_PERSIST_INTERVAL_MS,
 	CRAWLER_STATS_RESOURCE_INTERVAL_MS,
@@ -1205,15 +1204,7 @@ export class CrawlerStatsCollector implements StatsRecorder {
 			}
 			const coverage = total === 0 ? "none" : missing === 0 ? "complete" : "partial";
 			const metrics = derivedChartMetrics(merged);
-			const gated =
-				coverage === "complete"
-					? metrics
-					: {
-							...metrics,
-							...Object.fromEntries(
-								CRAWLER_RATE_METRICS.map((metric) => [metric.key, null])
-							),
-						};
+			const gated = metrics;
 			const pointStates = statesByStep.get(start) ?? new Map<string, StatsStateRow>();
 			const gauges = this.gauges(pointStates);
 			points.push({

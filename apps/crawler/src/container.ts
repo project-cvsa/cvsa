@@ -6,6 +6,7 @@ import { MilestoneService } from "./crawler/milestone/service";
 import { createMilestoneMaintenance } from "./crawler/milestone/worker";
 import { AdapterProbeService } from "./crawler/network/adapterProbeService";
 import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
+import { SigNozMetricsClient } from "./crawler/stats/signozClient";
 import { CrawlerStatsStateRepository } from "./crawler/stats/stateRepository";
 import { createRedisHeartbeatStore } from "./crawler/stats/heartbeat";
 import { crawlerExportObservation } from "./crawler/stats/exportState";
@@ -330,11 +331,16 @@ export const discoveryWorker = createDiscoveryWorker(
 	statsCollector,
 	() => networkRuntime.getExecutionConfig().discoveryRetry
 );
+export const sigNozMetricsClient = new SigNozMetricsClient({
+	endpoint: crawlerEnv.SIGNOZ_API_URL,
+	apiKey: crawlerEnv.SIGNOZ_API_KEY,
+});
 export const crawlerAdminStatsService = new CrawlerAdminStatsService(
 	{ tracking: snapshotQueue, discovery: discoveryQueue },
 	statsCollector,
 	statsOverviewDeps,
-	statsStateRepository
+	statsStateRepository,
+	sigNozMetricsClient
 );
 export const discoveryAdminService = new DiscoveryAdminService(
 	discoveryQueue,

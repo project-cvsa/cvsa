@@ -145,6 +145,9 @@ export function summarizeLatency(
 	const result: Record<string, ReturnType<typeof summarizeSketch>> = {};
 	for (const [key, distribution] of Object.entries(minute.distributions)) {
 		if (distribution.count === 0) continue;
+		// Top-level operations follow `${operation}:${outcome}` with exactly one colon.
+		// Sub-scoped keys (e.g. `databaseOperation:module.op:outcome`) are scoped for durationMs prefix maps.
+		if ((key.match(/:/g) || []).length !== 1) continue;
 		result[key] = summarizeDistribution(distribution, quantiles);
 	}
 	return result;

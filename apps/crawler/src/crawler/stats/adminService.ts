@@ -42,6 +42,7 @@ import type {
 } from "./types";
 import type { CrawlerStatsStateRepository } from "./stateRepository";
 import { readQueues } from "./queueState";
+import type { SigNozMetricsClient } from "./signozClient";
 
 function jobItem(
 	job: import("../shared/types").CrawlerQueueJobSnapshot,
@@ -165,7 +166,8 @@ export class CrawlerAdminStatsService {
 		private readonly queues: Record<CrawlerQueueName, CrawlerQueue<unknown>>,
 		private readonly collector: CrawlerStatsCollector,
 		private readonly deps: StatsOverviewDeps = {},
-		private readonly stateRepository?: CrawlerStatsStateRepository
+		private readonly stateRepository?: CrawlerStatsStateRepository,
+		public readonly signozClient?: SigNozMetricsClient
 	) {}
 
 	async overview(query: CrawlerStatsQuery): Promise<CrawlerOverviewStats> {
@@ -233,6 +235,17 @@ export class CrawlerAdminStatsService {
 			.sort((a, b) => b - a)[0];
 		const ratios = computeRatios(report.minutes);
 		const latency = summarizeLatency(report.minutes);
+		let series = report.series;
+		if (this.signozClient?.isConfigured) {
+			const signozSeries = await this.signozClient.queryCrawlerSeries(
+				report.from,
+				report.to,
+				(report.to - report.from) / 60_000
+			);
+			if (signozSeries && signozSeries.length > 0) {
+				series = signozSeries;
+			}
+		}
 		return {
 			version: CRAWLER_STATS_FORMAT_VERSION,
 			window,
@@ -317,7 +330,7 @@ export class CrawlerAdminStatsService {
 					"redisOperation"
 				),
 			},
-			series: report.series,
+			series,
 			legacy: report.legacy
 				? {
 						window,

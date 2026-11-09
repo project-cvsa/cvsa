@@ -194,15 +194,21 @@ export function LatencyTable(props: {
 	const rows = () =>
 		Object.entries(props.latency)
 			.map(([key, summary]) => {
-				const separator = key.indexOf(":");
+				const parts = key.split(":");
 				return {
 					key,
-					operation: key.slice(0, separator),
-					outcome: key.slice(separator + 1),
+					operation: parts[0] ?? key,
+					outcome: parts[1] ?? "success",
 					summary,
 				};
 			})
-			.filter((row) => row.summary.count > 0);
+			.filter(
+				(row) =>
+					row.summary.count > 0 &&
+					!row.outcome.includes(":") &&
+					row.operation !== "databaseOperation" &&
+					row.operation !== "redisOperation"
+			);
 	const quantileColumns = (): TableColumn<Row>[] =>
 		props.quantiles.map((quantile) => ({
 			id: `p${quantile}`,
@@ -215,13 +221,21 @@ export function LatencyTable(props: {
 			id: "operation",
 			header: t("metrics.operation"),
 			class: "text-primary",
-			cell: (row) => t(`metrics.operation.${row.operation}`),
+			cell: (row) => {
+				const translated = t(`metrics.operation.${row.operation}`);
+				return translated === `metrics.operation.${row.operation}`
+					? row.operation
+					: translated;
+			},
 		},
 		{
 			id: "outcome",
 			header: t("metrics.result"),
 			class: "text-secondary",
-			cell: (row) => t(`metrics.outcome.${row.outcome}`),
+			cell: (row) => {
+				const translated = t(`metrics.outcome.${row.outcome}`);
+				return translated === `metrics.outcome.${row.outcome}` ? row.outcome : translated;
+			},
 		},
 		{
 			id: "count",
