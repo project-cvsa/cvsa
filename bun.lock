@@ -200,6 +200,7 @@
         "@cvsa/logger": "workspace:*",
         "drizzle-orm": "1.0.0-rc.5",
         "nanoid": "^5.1.7",
+        "temporal-polyfill": "^1.0.6",
         "zod": "^4.0.0",
       },
       "devDependencies": {

@@ -8,6 +8,9 @@ export interface RegisterFormProps {
 	emailLabel: string;
 	passwordLabel: string;
 	passwordHelperText: string;
+	inviteCodeLabel?: string;
+	inviteCodePlaceholder?: string;
+	initialInviteCode?: string;
 	submitLabel: string;
 	genericError: string;
 	networkError: string;
@@ -19,6 +22,7 @@ export default function RegisterForm(props: RegisterFormProps) {
 	const [usernameError, setUsernameError] = createSignal<string>();
 	const [emailError, setEmailError] = createSignal<string>();
 	const [passwordError, setPasswordError] = createSignal<string>();
+	const [inviteCodeError, setInviteCodeError] = createSignal<string>();
 	const [formError, setFormError] = createSignal<string>();
 	const [submitting, setSubmitting] = createSignal(false);
 
@@ -30,10 +34,12 @@ export default function RegisterForm(props: RegisterFormProps) {
 		const username = String(data.get("username") ?? "").trim();
 		const email = String(data.get("email") ?? "").trim();
 		const password = String(data.get("password") ?? "");
+		const inviteCode = String(data.get("inviteCode") ?? "").trim();
 
 		setUsernameError(undefined);
 		setEmailError(undefined);
 		setPasswordError(undefined);
+		setInviteCodeError(undefined);
 		setFormError(undefined);
 		setSubmitting(true);
 
@@ -41,6 +47,7 @@ export default function RegisterForm(props: RegisterFormProps) {
 			username,
 			password,
 			...(email ? { email } : {}),
+			...(inviteCode ? { inviteCode } : {}),
 		});
 
 		if (result.ok) {
@@ -60,6 +67,13 @@ export default function RegisterForm(props: RegisterFormProps) {
 				setEmailError(result.error.message);
 			} else if (result.error.code === "VALIDATION_ERROR") {
 				setPasswordError(result.error.message);
+			} else if (
+				result.error.code === "INVITE_CODE_REQUIRED" ||
+				result.error.code === "INVALID_INVITE_CODE" ||
+				result.error.code === "INVITE_CODE_EXPIRED" ||
+				result.error.code === "INVITE_CODE_EXHAUSTED"
+			) {
+				setInviteCodeError(result.error.message);
 			} else {
 				setFormError(result.error.message);
 			}
@@ -93,6 +107,14 @@ export default function RegisterForm(props: RegisterFormProps) {
 				autocomplete="new-password"
 				helperText={props.passwordHelperText}
 				errorText={passwordError()}
+			/>
+			<TextField
+				label={props.inviteCodeLabel ?? "Invite Code"}
+				name="inviteCode"
+				value={props.initialInviteCode ?? ""}
+				placeholder={props.inviteCodePlaceholder}
+				autocomplete="off"
+				errorText={inviteCodeError()}
 			/>
 			<Button type="submit" class="mt-2 h-12 w-full" disabled={submitting()}>
 				{props.submitLabel}

@@ -6,3 +6,4 @@ export * from "./randomId";
 export * from "./token";
 export * from "./session";
 export * from "./user";
+export * from "./invitation/service";

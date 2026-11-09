@@ -31,6 +31,8 @@
 	"auth.field.email.optional": "邮箱",
 	"auth.field.password": "密码",
 	"auth.field.password.min": "密码至少需要 8 个字符",
+	"auth.field.inviteCode": "邀请码",
+	"auth.field.inviteCode.placeholder": "请输入邀请码（测试期间必填）",
 	"auth.action.login": "登录",
 	"auth.action.register": "注册",
 	"auth.action.logout": "登出",

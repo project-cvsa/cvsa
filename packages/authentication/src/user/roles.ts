@@ -37,3 +37,26 @@ export async function ensureOwnerRole(): Promise<Role> {
 	if (!existing) throw new Error("Failed to ensure the OWNER role");
 	return existing;
 }
+
+export async function ensureEditorRole(): Promise<Role> {
+	const [created] = await db
+		.insert(role)
+		.values({
+			name: "editor",
+			localizedNames: { zh: "编辑者", en: "Editor" },
+		})
+		.onConflictDoNothing({ target: role.name })
+		.returning();
+	if (created) {
+		return created;
+	}
+
+	const [existing] = await db.select().from(role).where(eq(role.name, "editor")).limit(1);
+	if (!existing) throw new Error("Failed to ensure the editor role");
+	return existing;
+}
+
+export async function getRoleByName(name: string): Promise<Role | null> {
+	const [row] = await db.select().from(role).where(eq(role.name, name)).limit(1);
+	return row ?? null;
+}

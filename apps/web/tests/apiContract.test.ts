@@ -87,10 +87,15 @@ const EXPECTED_ERROR_CODES = [
 	"CRAWLER_UNAVAILABLE",
 	"CRAWLER_REQUEST_FAILED",
 	"CRAWLER_RATE_LIMITED",
+	"INVITE_CODE_REQUIRED",
+	"INVALID_INVITE_CODE",
+	"INVITE_CODE_EXPIRED",
+	"INVITE_CODE_EXHAUSTED",
+	"ROLE_NOT_FOUND",
 	"NETWORK_ERROR",
 ] as const satisfies readonly ApiErrorCode[];
 
-type AuthField = "identifier" | "username" | "email" | "password" | "form";
+type AuthField = "identifier" | "username" | "email" | "password" | "inviteCode" | "form";
 
 /** Form field an auth error belongs to; the switch is exhaustive by design. */
 function errorField(code: ApiErrorCode): AuthField {
@@ -105,6 +110,12 @@ function errorField(code: ApiErrorCode): AuthField {
 			return "email";
 		case "VALIDATION_ERROR":
 			return "password";
+		case "INVITE_CODE_REQUIRED":
+		case "INVALID_INVITE_CODE":
+		case "INVITE_CODE_EXPIRED":
+		case "INVITE_CODE_EXHAUSTED":
+			return "inviteCode";
+		case "ROLE_NOT_FOUND":
 		case "NOT_FOUND":
 		case "ENTITY_CONFLICT":
 		case "AUTH_ERROR":
