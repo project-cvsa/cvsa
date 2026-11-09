@@ -28,13 +28,15 @@ export async function callCrawlerApi<T>(
 	path: string,
 	method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
 	body?: unknown,
-	query?: CrawlerQuery
+	query?: CrawlerQuery,
+	customHeaders?: Record<string, string>
 ): Promise<T> {
 	const headers: Record<string, string> = {
 		"content-type": "application/json",
 		...(crawlerEnv.CONTROL_API_TOKEN
 			? { authorization: `Bearer ${crawlerEnv.CONTROL_API_TOKEN}` }
 			: {}),
+		...customHeaders,
 	};
 
 	try {

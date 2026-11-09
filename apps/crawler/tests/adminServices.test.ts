@@ -235,6 +235,64 @@ describe("crawler admin services", () => {
 		expect(await tracking.getTracking(1n)).toBeNull();
 		await expect(service.label(999n, 1)).rejects.toMatchObject({ statusCode: 404 });
 	});
+	test("supports multi-user annotation history and explicit curation decisions", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await repository.upsertSample({
+			aid: 42n,
+			bvid: "BV42",
+			title: "vocaloid candidate",
+			decision: "model_rejected",
+			modelVersion: "test",
+			probabilities: [],
+			songProbability: 0.35,
+		});
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		// Multiple users annotate
+		const a1 = await service.annotate(42n, "user_alice", {
+			decision: "accepted",
+			tags: ["vocaloid", "hatsune_miku"],
+			notes: "Original song by Mitchie M",
+		});
+		expect(a1.userId).toBe("user_alice");
+		expect(a1.decision).toBe("accepted");
+		expect(a1.tags).toEqual(["vocaloid", "hatsune_miku"]);
+
+		const a2 = await service.annotate(42n, "user_bob", {
+			decision: "accepted",
+			tags: ["vocaloid"],
+		});
+		expect(a2.userId).toBe("user_bob");
+
+		const history = await service.listAnnotations(42n);
+		expect(history.length).toBe(2);
+		expect(history[0]?.userId).toBe("user_bob");
+		expect(history[1]?.userId).toBe("user_alice");
+
+		// Curator issues final verdict
+		const curation = await service.curate(
+			42n,
+			"lead_curator",
+			"accepted",
+			"Consensus verified"
+		);
+		expect(curation.status).toBe("accepted");
+		expect(curation.curatedBy).toBe("lead_curator");
+		expect(await tracking.getTracking(42n)).toMatchObject({ state: "new" });
+
+		// Verify listing reflects curation and annotation counts
+		const list = await service.listSamples({ limit: 10, offset: 0 });
+		const item = list.items.find((i) => i.aid === "42");
+		expect(item?.curationStatus).toBe("accepted");
+		expect(item?.curatedBy).toBe("lead_curator");
+		expect(item?.annotationsCount).toBe(2);
+	});
 	test("untrack labels the sample as human rejected before deleting tracking", async () => {
 		const repository = new InMemoryDiscoveryRepository();
 		const tracking = new InMemoryTrackingRepository();

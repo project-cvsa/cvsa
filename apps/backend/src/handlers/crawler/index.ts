@@ -47,11 +47,15 @@ import {
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
 	ReplaceNetworkRuntimeConfigRequestSchema,
+	SubmitAnnotationRequestSchema,
+	SubmitCurationRequestSchema,
 	TestNetworkAdapterResponseSchema,
 	TrackingVideoListQuerySchema,
 	TrackingAidParamsSchema,
 	TrackingVideoListResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
+	VideoAnnotationDtoSchema,
+	VideoCurationDtoSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
 	VideoSnapshotListQuerySchema,
@@ -78,6 +82,8 @@ import {
 	type RegisterTrackingVideosResponse,
 	type TestNetworkAdapterResponse,
 	type TrackingVideoListResponse,
+	type VideoAnnotationDto,
+	type VideoCurationDto,
 	type VideoMetadataHistoryListResponse,
 	type VideoSnapshotListResponse,
 	type VideoTrackingDto,
@@ -566,17 +572,69 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/discovery/samples/:aid/label",
-		async ({ params, body }): Promise<DiscoverySampleItem> => {
+		async ({ params, body, user }): Promise<DiscoverySampleItem> => {
 			return callCrawlerApi<DiscoverySampleItem>(
 				`/discovery/samples/${params.aid}/label`,
 				"POST",
-				body
+				body,
+				undefined,
+				{ "x-user-id": user.id }
 			);
 		},
 		{
 			body: LabelDiscoverySampleRequestSchema,
 			response: {
 				200: DiscoverySampleItemSchema,
+			},
+		}
+	)
+	.get(
+		"/discovery/samples/:aid/annotations",
+		async ({ params }): Promise<VideoAnnotationDto[]> => {
+			return callCrawlerApi<VideoAnnotationDto[]>(
+				`/discovery/samples/${params.aid}/annotations`,
+				"GET"
+			);
+		},
+		{
+			response: {
+				200: VideoAnnotationDtoSchema.array(),
+			},
+		}
+	)
+	.post(
+		"/discovery/samples/:aid/annotations",
+		async ({ params, body, user }): Promise<VideoAnnotationDto> => {
+			return callCrawlerApi<VideoAnnotationDto>(
+				`/discovery/samples/${params.aid}/annotations`,
+				"POST",
+				body,
+				undefined,
+				{ "x-user-id": user.id }
+			);
+		},
+		{
+			body: SubmitAnnotationRequestSchema,
+			response: {
+				200: VideoAnnotationDtoSchema,
+			},
+		}
+	)
+	.post(
+		"/discovery/samples/:aid/curate",
+		async ({ params, body, user }): Promise<VideoCurationDto> => {
+			return callCrawlerApi<VideoCurationDto>(
+				`/discovery/samples/${params.aid}/curate`,
+				"POST",
+				body,
+				undefined,
+				{ "x-user-id": user.id }
+			);
+		},
+		{
+			body: SubmitCurationRequestSchema,
+			response: {
+				200: VideoCurationDtoSchema,
 			},
 		}
 	);

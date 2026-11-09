@@ -18,7 +18,11 @@ import {
 	LabelDiscoverySampleRequestSchema,
 	ProcessRecommendationsResponseSchema,
 	RecommendationGraphResponseSchema,
+	SubmitAnnotationRequestSchema,
+	SubmitCurationRequestSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
+	VideoAnnotationDtoSchema,
+	VideoCurationDtoSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
 	type BilibiliVideoMetadataDto,
@@ -501,16 +505,86 @@ export const discoveryRoutes = new Elysia()
 	})
 	.post(
 		"/samples/:aid/label",
-		async ({ params, body, status }) => {
+		async ({ params, body, headers, status }) => {
 			if (!/^\d+$/.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			return discoveryAdminService.label(BigInt(params.aid), body.humanLabel);
+			const humanLabel =
+				body.humanLabel !== undefined
+					? body.humanLabel
+					: body.decision === "accepted"
+						? 1
+						: 0;
+			const userId = headers["x-user-id"] || "admin";
+			return discoveryAdminService.label(BigInt(params.aid), humanLabel, {
+				userId,
+				tags: body.tags,
+				notes: body.notes,
+			});
 		},
 		{
 			body: LabelDiscoverySampleRequestSchema,
 			response: {
 				200: DiscoverySampleItemSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/samples/:aid/annotations",
+		async ({ params, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			return discoveryAdminService.listAnnotations(BigInt(params.aid));
+		},
+		{
+			response: {
+				200: VideoAnnotationDtoSchema.array(),
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/samples/:aid/annotations",
+		async ({ params, body, headers, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			const userId = headers["x-user-id"] || "admin";
+			return discoveryAdminService.annotate(BigInt(params.aid), userId, body);
+		},
+		{
+			body: SubmitAnnotationRequestSchema,
+			response: {
+				200: VideoAnnotationDtoSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/samples/:aid/curate",
+		async ({ params, body, headers, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			const userId = headers["x-user-id"] || "admin";
+			return discoveryAdminService.curate(
+				BigInt(params.aid),
+				userId,
+				body.status,
+				body.reason
+			);
+		},
+		{
+			body: SubmitCurationRequestSchema,
+			response: {
+				200: VideoCurationDtoSchema,
 				401: ErrorResponseSchema,
 				404: ErrorResponseSchema,
 				422: ErrorResponseSchema,

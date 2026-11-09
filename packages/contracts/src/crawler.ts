@@ -675,7 +675,7 @@ export const QueueSnapshotQuerySchema = z.object({
 
 // Discovery samples (classifier training data)
 
-/** A stored discovery decision together with its optional human label. */
+/** A stored discovery decision together with its optional human label and curation status. */
 export const DiscoverySampleItemSchema = z.object({
 	aid: z.string(),
 	bvid: z.string(),
@@ -692,6 +692,42 @@ export const DiscoverySampleItemSchema = z.object({
 	humanLabel: z.number().int().nullable(),
 	labeledAt: z.string().nullable(),
 	capturedAt: z.string(),
+	curationStatus: z.enum(["accepted", "rejected", "pending"]).nullable().optional(),
+	curatedBy: z.string().nullable().optional(),
+	curatedAt: z.string().nullable().optional(),
+	annotationsCount: z.number().int().optional(),
+});
+
+export const VideoAnnotationDtoSchema = z.object({
+	id: z.string(),
+	aid: z.string(),
+	bvid: z.string(),
+	userId: z.string(),
+	decision: z.enum(["accepted", "rejected", "uncertain"]),
+	tags: z.array(z.string()).nullable().optional(),
+	notes: z.string().nullable().optional(),
+	createdAt: z.string(),
+});
+
+export const VideoCurationDtoSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	status: z.enum(["accepted", "rejected", "pending"]),
+	curatedBy: z.string(),
+	reason: z.string().nullable().optional(),
+	curatedAt: z.string(),
+	updatedAt: z.string(),
+});
+
+export const SubmitAnnotationRequestSchema = z.object({
+	decision: z.enum(["accepted", "rejected", "uncertain"]),
+	tags: z.array(z.string()).optional(),
+	notes: z.string().max(1000).optional(),
+});
+
+export const SubmitCurationRequestSchema = z.object({
+	status: z.enum(["accepted", "rejected", "pending"]),
+	reason: z.string().max(1000).optional(),
 });
 
 /** Boolean query params arrive as strings, so accept both encodings. */
@@ -718,7 +754,10 @@ export const DiscoverySampleListResponseSchema = z.object({
 });
 
 export const LabelDiscoverySampleRequestSchema = z.object({
-	humanLabel: z.union([z.literal(0), z.literal(1)]),
+	humanLabel: z.union([z.literal(0), z.literal(1)]).optional(),
+	decision: z.enum(["accepted", "rejected", "uncertain"]).optional(),
+	tags: z.array(z.string()).optional(),
+	notes: z.string().optional(),
 });
 
 // Tracking videos list
@@ -854,6 +893,10 @@ export type VideoSnapshotListQuery = z.infer<typeof VideoSnapshotListQuerySchema
 export type VideoSnapshotListResponse = z.infer<typeof VideoSnapshotListResponseSchema>;
 export type QueueSnapshotQuery = z.infer<typeof QueueSnapshotQuerySchema>;
 export type DiscoverySampleItem = z.infer<typeof DiscoverySampleItemSchema>;
+export type VideoAnnotationDto = z.infer<typeof VideoAnnotationDtoSchema>;
+export type VideoCurationDto = z.infer<typeof VideoCurationDtoSchema>;
+export type SubmitAnnotationRequest = z.infer<typeof SubmitAnnotationRequestSchema>;
+export type SubmitCurationRequest = z.infer<typeof SubmitCurationRequestSchema>;
 export type DiscoverySampleListQuery = z.infer<typeof DiscoverySampleListQuerySchema>;
 export type DiscoverySampleListResponse = z.infer<typeof DiscoverySampleListResponseSchema>;
 export type LabelDiscoverySampleRequest = z.infer<typeof LabelDiscoverySampleRequestSchema>;

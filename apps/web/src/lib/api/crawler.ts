@@ -38,10 +38,14 @@ import type {
 	RegisterTrackingVideosRequest,
 	RegisterTrackingVideosResponse,
 	ReplaceNetworkRuntimeConfigRequest,
+	SubmitAnnotationRequest,
+	SubmitCurationRequest,
 	TestNetworkAdapterResponse,
 	TrackingVideoListQuery,
 	TrackingVideoListResponse,
 	UpdateDiscoveryFilterConfigRequest,
+	VideoAnnotationDto,
+	VideoCurationDto,
 	VideoMetadataHistoryListQuery,
 	VideoMetadataHistoryListResponse,
 	VideoSnapshotListQuery,
@@ -301,11 +305,40 @@ async function listDiscoverySamples(
 
 async function labelDiscoverySample(
 	aid: string,
-	humanLabel: 0 | 1
+	humanLabel?: 0 | 1,
+	options?: {
+		decision?: "accepted" | "rejected" | "uncertain";
+		tags?: string[];
+		notes?: string;
+	}
 ): Promise<ApiResult<DiscoverySampleItem | null>> {
 	const eden = getEdenClient();
-	const body: LabelDiscoverySampleRequest = { humanLabel };
+	const body: LabelDiscoverySampleRequest = {
+		...(humanLabel !== undefined ? { humanLabel } : {}),
+		...options,
+	};
 	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).label.post(body));
+}
+
+async function listSampleAnnotations(aid: string): Promise<ApiResult<VideoAnnotationDto[] | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).annotations.get());
+}
+
+async function submitSampleAnnotation(
+	aid: string,
+	body: SubmitAnnotationRequest
+): Promise<ApiResult<VideoAnnotationDto | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).annotations.post(body));
+}
+
+async function curateSample(
+	aid: string,
+	body: SubmitCurationRequest
+): Promise<ApiResult<VideoCurationDto | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).curate.post(body));
 }
 
 async function testNetworkAdapter(
@@ -376,4 +409,7 @@ export const crawlerApi = {
 	getMetadataHistory,
 	listDiscoverySamples,
 	labelDiscoverySample,
+	listSampleAnnotations,
+	submitSampleAnnotation,
+	curateSample,
 };

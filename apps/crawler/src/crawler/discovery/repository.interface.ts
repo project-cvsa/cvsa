@@ -3,6 +3,8 @@ import type {
 	BilibiliVideoMetadataHistory,
 	BilibiliVideoRelation,
 	DiscoverySample,
+	VideoAnnotation,
+	VideoCuration,
 	Temporal,
 } from "@cvsa/snapshot-db";
 import type {
@@ -64,6 +66,25 @@ export interface IDiscoveryRepository {
 	countSamples(options?: ListDiscoverySamplesOptions): Promise<number>;
 	getSample(aid: bigint): Promise<DiscoverySample | null>;
 	labelSample(aid: bigint, humanLabel: number): Promise<DiscoverySample | null>;
+	addAnnotation(input: {
+		aid: bigint;
+		bvid: string;
+		userId: string;
+		decision: string;
+		tags?: string[] | null;
+		notes?: string | null;
+	}): Promise<VideoAnnotation>;
+	listAnnotations(aid: bigint): Promise<VideoAnnotation[]>;
+	upsertCuration(input: {
+		aid: bigint;
+		bvid: string;
+		status: string;
+		curatedBy: string;
+		reason?: string | null;
+	}): Promise<VideoCuration>;
+	getCuration(aid: bigint): Promise<VideoCuration | null>;
+	getCurations(aids: bigint[]): Promise<Map<bigint, VideoCuration>>;
+	getAnnotationCounts(aids: bigint[]): Promise<Map<bigint, number>>;
 	getRuntimeConfig(key: string): Promise<{ revision: number; config: unknown } | null>;
 	saveRuntimeConfig(
 		key: string,

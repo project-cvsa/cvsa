@@ -1,5 +1,6 @@
-import type { DiscoverySampleItem } from "@cvsa/contracts";
-import type { DiscoverySample } from "@cvsa/snapshot-db";
+import type { DiscoverySampleItem, VideoAnnotationDto, VideoCurationDto } from "@cvsa/contracts";
+import type { DiscoverySample, VideoAnnotation, VideoCuration } from "@cvsa/snapshot-db";
+
 function toRecord(value: unknown): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
 	return Object.fromEntries(Object.entries(value));
@@ -31,7 +32,12 @@ function toNumberRecord(value: unknown): Record<string, number> {
 	);
 }
 
-export function toSampleItem(row: DiscoverySample, pic?: string | null): DiscoverySampleItem {
+export function toSampleItem(
+	row: DiscoverySample,
+	pic?: string | null,
+	curation?: VideoCuration | null,
+	annotationsCount?: number
+): DiscoverySampleItem {
 	return {
 		aid: row.aid.toString(),
 		bvid: row.bvid,
@@ -46,5 +52,34 @@ export function toSampleItem(row: DiscoverySample, pic?: string | null): Discove
 		humanLabel: row.humanLabel,
 		labeledAt: row.labeledAt ? row.labeledAt.toString() : null,
 		capturedAt: row.createdAt.toString(),
+		curationStatus: (curation?.status as "accepted" | "rejected" | "pending") ?? null,
+		curatedBy: curation?.curatedBy ?? null,
+		curatedAt: curation?.curatedAt ? curation.curatedAt.toString() : null,
+		annotationsCount: annotationsCount ?? 0,
+	};
+}
+
+export function toAnnotationItem(row: VideoAnnotation): VideoAnnotationDto {
+	return {
+		id: row.id.toString(),
+		aid: row.aid.toString(),
+		bvid: row.bvid,
+		userId: row.userId,
+		decision: row.decision as "accepted" | "rejected" | "uncertain",
+		tags: toStringArray(row.tags),
+		notes: row.notes,
+		createdAt: row.createdAt.toString(),
+	};
+}
+
+export function toCurationItem(row: VideoCuration): VideoCurationDto {
+	return {
+		aid: row.aid.toString(),
+		bvid: row.bvid,
+		status: row.status as "accepted" | "rejected" | "pending",
+		curatedBy: row.curatedBy,
+		reason: row.reason,
+		curatedAt: row.curatedAt.toString(),
+		updatedAt: row.updatedAt.toString(),
 	};
 }

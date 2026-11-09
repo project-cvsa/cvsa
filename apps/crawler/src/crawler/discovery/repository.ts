@@ -26,6 +26,8 @@ import type {
 	DatabaseClient,
 	DiscoverySample,
 	TxClient,
+	VideoAnnotation,
+	VideoCuration,
 } from "@cvsa/snapshot-db";
 import {
 	bilibiliVideoMetadata,
@@ -36,6 +38,8 @@ import {
 	discoverySearchWindow,
 	toInstant,
 	toJson,
+	videoAnnotation,
+	videoCuration,
 	videoTracking,
 } from "@cvsa/snapshot-db";
 import { DiscoveryContextSchema } from "@cvsa/contracts";
@@ -710,6 +714,111 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				.where(eq(discoverySample.aid, aid))
 				.returning();
 			return row ?? null;
+		});
+	}
+
+	async addAnnotation(input: {
+		aid: bigint;
+		bvid: string;
+		userId: string;
+		decision: string;
+		tags?: string[] | null;
+		notes?: string | null;
+	}): Promise<VideoAnnotation> {
+		return this.trace("discovery.addAnnotation", async () => {
+			const [row] = await activeDatabase(this.db)
+				.insert(videoAnnotation)
+				.values({
+					aid: input.aid,
+					bvid: input.bvid,
+					userId: input.userId,
+					decision: input.decision,
+					tags: input.tags ?? null,
+					notes: input.notes ?? null,
+					createdAt: toInstant(new Date()),
+				})
+				.returning();
+			if (!row) throw new Error("Failed to insert video annotation");
+			return row;
+		});
+	}
+
+	async listAnnotations(aid: bigint): Promise<VideoAnnotation[]> {
+		return this.trace("discovery.listAnnotations", async () => {
+			return activeDatabase(this.db)
+				.select()
+				.from(videoAnnotation)
+				.where(eq(videoAnnotation.aid, aid))
+				.orderBy(desc(videoAnnotation.createdAt));
+		});
+	}
+
+	async upsertCuration(input: {
+		aid: bigint;
+		bvid: string;
+		status: string;
+		curatedBy: string;
+		reason?: string | null;
+	}): Promise<VideoCuration> {
+		return this.trace("discovery.upsertCuration", async () => {
+			const now = toInstant(new Date());
+			const [row] = await activeDatabase(this.db)
+				.insert(videoCuration)
+				.values({
+					aid: input.aid,
+					bvid: input.bvid,
+					status: input.status,
+					curatedBy: input.curatedBy,
+					reason: input.reason ?? null,
+					curatedAt: now,
+					updatedAt: now,
+				})
+				.onConflictDoUpdate({
+					target: videoCuration.aid,
+					set: {
+						status: input.status,
+						curatedBy: input.curatedBy,
+						reason: input.reason ?? null,
+						updatedAt: now,
+					},
+				})
+				.returning();
+			if (!row) throw new Error("Failed to upsert video curation");
+			return row;
+		});
+	}
+
+	async getCuration(aid: bigint): Promise<VideoCuration | null> {
+		return this.trace("discovery.getCuration", async () => {
+			const [row] = await activeDatabase(this.db)
+				.select()
+				.from(videoCuration)
+				.where(eq(videoCuration.aid, aid))
+				.limit(1);
+			return row ?? null;
+		});
+	}
+
+	async getCurations(aids: bigint[]): Promise<Map<bigint, VideoCuration>> {
+		return this.trace("discovery.getCurations", async () => {
+			if (aids.length === 0) return new Map();
+			const rows = await activeDatabase(this.db)
+				.select()
+				.from(videoCuration)
+				.where(inArray(videoCuration.aid, aids));
+			return new Map(rows.map((row) => [row.aid, row]));
+		});
+	}
+
+	async getAnnotationCounts(aids: bigint[]): Promise<Map<bigint, number>> {
+		return this.trace("discovery.getAnnotationCounts", async () => {
+			if (aids.length === 0) return new Map();
+			const rows = await activeDatabase(this.db)
+				.select({ aid: videoAnnotation.aid, count: count() })
+				.from(videoAnnotation)
+				.where(inArray(videoAnnotation.aid, aids))
+				.groupBy(videoAnnotation.aid);
+			return new Map(rows.map((row) => [row.aid, Number(row.count)]));
 		});
 	}
 
