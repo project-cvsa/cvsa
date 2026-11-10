@@ -6,11 +6,16 @@ const runtimeEnvironment = {
 	...(typeof import.meta !== "undefined" && import.meta.env ? import.meta.env : {}),
 };
 
+const DATABASE_URL_DEFAULT =
+	process.env.NODE_ENV === "test"
+		? "postgres://cvsa:password@localhost:5432/cvsa_test"
+		: "postgres://cvsa:password@localhost:5432/cvsa";
+
 export const env = createEnv({
 	server: {
 		HOST: z.string().optional(),
 		PORT: z.coerce.number().int().min(1).max(65_535).optional().default(16_412),
-		DATABASE_URL: z.url().optional(),
+		DATABASE_URL: z.url().default(DATABASE_URL_DEFAULT),
 		NODE_ENV: z.enum(["development", "test", "production"]).optional(),
 		MEILI_MASTER_KEY: z.string().optional().default(""),
 		MEILI_API_URL: z.url().optional().default("http://127.0.0.1:7700"),

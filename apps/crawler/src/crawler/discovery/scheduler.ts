@@ -15,19 +15,42 @@ export const HOT_SAMPLE_INTERVAL_MS = 5 * 60 * 1_000;
 /** Seeded videos per hot-sample round. */
 export const DEFAULT_HOT_SAMPLE_LIMIT = 10;
 
+export interface DiscoverySchedulerFlags {
+	isRelatedDiscoveryEnabled?: () => boolean;
+	isSearchRoverEnabled?: () => boolean;
+	isHotSamplingEnabled?: () => boolean;
+}
+
 export class DiscoveryScheduler {
+	private readonly isRelatedDiscoveryEnabled: () => boolean;
+	private readonly isSearchRoverEnabled: () => boolean;
+	private readonly isHotSamplingEnabled: () => boolean;
+
 	constructor(
 		private readonly discoveryQueue: CrawlerQueue<DiscoveryJobData>,
-		private readonly relatedDiscoveryEnabled = RELATED_DISCOVERY_ENABLED
-	) {}
+		relatedDiscoveryEnabled: boolean | DiscoverySchedulerFlags = RELATED_DISCOVERY_ENABLED
+	) {
+		if (typeof relatedDiscoveryEnabled === "boolean") {
+			this.isRelatedDiscoveryEnabled = () => relatedDiscoveryEnabled;
+			this.isSearchRoverEnabled = () => true;
+			this.isHotSamplingEnabled = () => true;
+		} else {
+			this.isRelatedDiscoveryEnabled =
+				relatedDiscoveryEnabled.isRelatedDiscoveryEnabled ??
+				(() => RELATED_DISCOVERY_ENABLED);
+			this.isSearchRoverEnabled =
+				relatedDiscoveryEnabled.isSearchRoverEnabled ?? (() => true);
+			this.isHotSamplingEnabled =
+				relatedDiscoveryEnabled.isHotSamplingEnabled ?? (() => true);
+		}
+	}
 
 	/**
 	 * Register the repeatable discovery jobs.
 	 *
-	 * Two loops run side by side: the keyword search sweep discovers fresh
-	 * uploads, and hot sampling expands the recommendation graph around the
-	 * fastest-moving videos already in tracking. Hot sampling is skipped while
-	 * related discovery is paused.
+	 * All three repeatable loops are always registered so toggling a feature
+	 * flag on at runtime takes effect without restarting the scheduler; each
+	 * job handler checks the live flag before doing work.
 	 */
 	async startScheduledSweeps(
 		intervalMs = DEFAULT_SEARCH_SWEEP_INTERVAL_MS,
@@ -39,7 +62,9 @@ export class DiscoveryScheduler {
 			intervalMs,
 			hotSampleIntervalMs,
 			deepSweepIntervalMs,
-			relatedDiscoveryEnabled: this.relatedDiscoveryEnabled,
+			relatedDiscoveryEnabled: this.isRelatedDiscoveryEnabled(),
+			searchRoverEnabled: this.isSearchRoverEnabled(),
+			hotSamplingEnabled: this.isHotSamplingEnabled(),
 		});
 
 		await this.discoveryQueue.add(
@@ -66,8 +91,6 @@ export class DiscoveryScheduler {
 			}
 		);
 
-		if (!this.relatedDiscoveryEnabled) return;
-
 		await this.discoveryQueue.add(
 			"repeatable-hot-sample",
 			{ type: "hot-sample", limit: DEFAULT_HOT_SAMPLE_LIMIT },
@@ -82,6 +105,12 @@ export class DiscoveryScheduler {
 	}
 
 	async triggerSearchSweep(config?: Partial<SearchRoverConfig>): Promise<void> {
+		if (!this.isSearchRoverEnabled()) {
+			appLogger.debug("Search rover is paused; ignoring search sweep trigger", {
+				component: "discovery-scheduler",
+			});
+			return;
+		}
 		const isDeep = config?.mode === "deep";
 		await this.discoveryQueue.add(
 			`sweep-manual-${Date.now()}`,
@@ -99,8 +128,8 @@ export class DiscoveryScheduler {
 		limit = DEFAULT_HOT_SAMPLE_LIMIT,
 		timeWindowDays?: number
 	): Promise<void> {
-		if (!this.relatedDiscoveryEnabled) {
-			appLogger.debug("Related discovery is paused; ignoring hot sample trigger", {
+		if (!this.isHotSamplingEnabled() || !this.isRelatedDiscoveryEnabled()) {
+			appLogger.debug("Hot sampling is paused; ignoring hot sample trigger", {
 				component: "discovery-scheduler",
 			});
 			return;
@@ -131,7 +160,7 @@ export class DiscoveryScheduler {
 	}
 
 	async triggerActiveDiscovery(aid: bigint | string): Promise<void> {
-		if (!this.relatedDiscoveryEnabled) {
+		if (!this.isRelatedDiscoveryEnabled()) {
 			appLogger.debug("Related discovery is paused; ignoring active discovery trigger", {
 				component: "discovery-scheduler",
 				aid: aid.toString(),

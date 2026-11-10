@@ -28,6 +28,8 @@ export interface MetadataRefreshSchedulerOptions {
 	intervalMs?: number;
 	/** Maximum refreshes per tick, so a backlog cannot monopolise the API budget. */
 	batchSize?: number;
+	/** Live feature flag controlling automatic periodic metadata refreshes. */
+	isAutoRefreshEnabled?: () => boolean;
 }
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1_000;
@@ -77,6 +79,7 @@ export class MetadataRefreshScheduler {
 	}
 	private readonly intervalMs: number;
 	private readonly batchSize: number;
+	private readonly isAutoRefreshEnabled: () => boolean;
 
 	constructor(
 		private readonly deps: MetadataRefreshSchedulerDeps,
@@ -84,11 +87,18 @@ export class MetadataRefreshScheduler {
 	) {
 		this.intervalMs = options.intervalMs ?? DEFAULT_INTERVAL_MS;
 		this.batchSize = Math.max(1, options.batchSize ?? DEFAULT_BATCH_SIZE);
+		this.isAutoRefreshEnabled = options.isAutoRefreshEnabled ?? (() => true);
 	}
 
 	start(intervalMs = this.intervalMs): void {
 		if (this.timer) return;
 		this.timer = setInterval(() => {
+			if (!this.isAutoRefreshEnabled()) {
+				appLogger.debug("Auto metadata refresh is paused; skipping tick", {
+					component: "metadata-refresh",
+				});
+				return;
+			}
 			void this.refreshDue().catch((error) => {
 				appLogger.warn("Periodic metadata refresh failed", {
 					component: "metadata-refresh",

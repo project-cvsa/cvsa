@@ -8,8 +8,12 @@ type Props = {
 	config: CrawlerExecutionConfig | undefined;
 	onChange: (config: CrawlerExecutionConfig) => void;
 };
+type NumericExecutionField = {
+	[K in keyof CrawlerExecutionConfig]: CrawlerExecutionConfig[K] extends number ? K : never;
+}[keyof CrawlerExecutionConfig];
+
 const FIELDS: Array<{
-	key: Exclude<keyof CrawlerExecutionConfig, "tracking" | "discoveryRetry">;
+	key: NumericExecutionField;
 	min: number;
 	max: number;
 }> = [

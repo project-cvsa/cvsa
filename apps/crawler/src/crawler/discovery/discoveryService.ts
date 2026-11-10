@@ -64,6 +64,7 @@ export class DiscoveryService {
 	readonly searchRover: SearchRover;
 	readonly evaluator: DiscoveryCandidateEvaluator;
 	readonly filterService: DiscoveryFilterService;
+	private readonly isRelatedDiscoveryEnabled: () => boolean;
 
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
@@ -72,8 +73,12 @@ export class DiscoveryService {
 		filterService?: DiscoveryFilterService,
 		classifier?: VideoClassifierClient,
 		stats: StatsRecorder = createNoopStatsRecorder(),
-		private readonly relatedDiscoveryEnabled = RELATED_DISCOVERY_ENABLED
+		relatedDiscoveryEnabled: boolean | (() => boolean) = RELATED_DISCOVERY_ENABLED
 	) {
+		this.isRelatedDiscoveryEnabled =
+			typeof relatedDiscoveryEnabled === "function"
+				? relatedDiscoveryEnabled
+				: () => relatedDiscoveryEnabled;
 		const effectiveFilter = filterService ?? new DiscoveryFilterService();
 		this.filterService = effectiveFilter;
 		this.relationExtractor = new RelationExtractor(discoveryRepo);
@@ -94,7 +99,7 @@ export class DiscoveryService {
 		sourceAid: bigint,
 		relatedVideos?: BilibiliRelatedVideo[]
 	): Promise<ProcessRecommendationsResult> {
-		if (!this.relatedDiscoveryEnabled) {
+		if (!this.isRelatedDiscoveryEnabled()) {
 			appLogger.debug("Related discovery is paused; skipping recommendation processing", {
 				component: "discovery-service",
 				sourceAid: sourceAid.toString(),

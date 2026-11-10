@@ -1,5 +1,5 @@
+import { env } from "@cvsa/env";
 import { ensureDatabase } from "@cvsa/env/database";
-import { loadDatabaseUrl } from "../src/databaseUrl";
 
 /**
  * `drizzle-kit push` validates the connection before it applies the schema and
@@ -8,7 +8,7 @@ import { loadDatabaseUrl } from "../src/databaseUrl";
  * `test:setup` / `test:reset` self-healing on a fresh docker volume and in CI.
  */
 const result = await ensureDatabase({
-	connection: loadDatabaseUrl(),
+	connection: env.DATABASE_URL,
 	extensions: ["pg_stat_statements"],
 });
 

@@ -508,6 +508,10 @@ export const CrawlerExecutionConfigSchema = z.object({
 	queueCap: z.number().int().min(1).max(10000).default(200),
 	inferenceTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
 	mqOperationTimeoutMs: z.number().int().min(1000).max(30000).default(3000),
+	relatedDiscoveryEnabled: z.boolean().default(false),
+	searchRoverEnabled: z.boolean().default(true),
+	hotSamplingEnabled: z.boolean().default(true),
+	autoMetadataRefreshEnabled: z.boolean().default(true),
 });
 export type CrawlerExecutionConfig = z.infer<typeof CrawlerExecutionConfigSchema>;
 

@@ -10,8 +10,8 @@
 		"migrate:deploy": "bun scripts/migrate.ts",
 		"push": "bunx --bun drizzle-kit push --force",
 		"studio": "bunx --bun drizzle-kit studio",
-		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx drizzle-kit push --force",
-		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx drizzle-kit push --force"
+		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bun run push",
+		"test:reset": "bun run test:setup"
 	},
 	"devDependencies": {
 		"@cvsa/typescript-config": "workspace:*",
