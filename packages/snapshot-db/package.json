@@ -10,6 +10,7 @@
 		"migrate:generate": "bunx drizzle-kit generate",
 		"migrate:deploy": "bun scripts/migrate.ts && bun scripts/ensure-timescale.ts",
 		"db:update": "bun scripts/test-setup.ts && bunx drizzle-kit push --force && bun scripts/ensure-timescale.ts",
+		"push": "bunx --bun drizzle-kit push --force",
 		"test": "bun test --concurrent",
 		"test:setup": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx drizzle-kit push --force && NODE_ENV=test bun scripts/ensure-timescale.ts",
 		"test:reset": "NODE_ENV=test bun scripts/test-setup.ts && NODE_ENV=test bunx drizzle-kit push --force && NODE_ENV=test bun scripts/ensure-timescale.ts"

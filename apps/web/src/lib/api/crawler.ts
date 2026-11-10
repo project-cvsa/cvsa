@@ -28,9 +28,12 @@ import type {
 	DiscoveryQueuedResponse,
 	TriggerHotSampleRequest,
 	CrawlerQueueName,
+	DatasetExportQuery,
 	IngestVideoRequest,
 	IngestVideoResponse,
 	LabelDiscoverySampleRequest,
+	MetadataBackfillRequest,
+	MetadataBackfillResponse,
 	NetworkRuntimeConfigDocument,
 	ProcessRecommendationsResponse,
 	PromoteTrackingVideoRequest,
@@ -341,6 +344,23 @@ async function curateSample(
 	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).curate.post(body));
 }
 
+async function backfillMetadata(
+	body?: MetadataBackfillRequest
+): Promise<ApiResult<MetadataBackfillResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples.metadata.backfill.post(body));
+}
+
+function getDatasetExportUrl(query?: DatasetExportQuery): string {
+	const params = new URLSearchParams();
+	if (query?.format) params.set("format", query.format);
+	if (query?.status) params.set("status", query.status);
+	if (query?.minProbability !== undefined)
+		params.set("minProbability", String(query.minProbability));
+	const qs = params.toString();
+	return `/v2/admin/crawler/discovery/samples/dataset/export${qs ? `?${qs}` : ""}`;
+}
+
 async function testNetworkAdapter(
 	id: string
 ): Promise<ApiResult<TestNetworkAdapterResponse | null>> {
@@ -412,4 +432,6 @@ export const crawlerApi = {
 	listSampleAnnotations,
 	submitSampleAnnotation,
 	curateSample,
+	backfillMetadata,
+	getDatasetExportUrl,
 };

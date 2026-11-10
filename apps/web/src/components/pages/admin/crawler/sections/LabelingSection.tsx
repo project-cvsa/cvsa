@@ -22,6 +22,8 @@ import ImmersiveLabeler from "../discovery/ImmersiveLabeler";
 import LabelingStats from "../LabelingStats";
 import Maximize2 from "lucide-solid/icons/maximize-2";
 import List from "lucide-solid/icons/list";
+import Download from "lucide-solid/icons/download";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
 
 export default function LabelingSection(props: { active: boolean }) {
 	const t = getComponentT("crawler:discovery");
@@ -41,7 +43,39 @@ export default function LabelingSection(props: { active: boolean }) {
 	const [focused, setFocused] = createSignal(0);
 	const [viewMode, setViewMode] = createSignal<"list" | "immersive">("list");
 	const [pendingAids, setPendingAids] = createSignal<Set<string>>(new Set());
+	const [backfilling, setBackfilling] = createSignal(false);
 	const requests = createRequestSequence();
+
+	const handleExport = () => {
+		const url = api.crawler.getDatasetExportUrl({ format: "jsonl", status: "all" });
+		window.open(url, "_blank");
+	};
+
+	const handleBackfill = async () => {
+		if (backfilling()) return;
+		setBackfilling(true);
+		try {
+			const res = await api.crawler.backfillMetadata({ limit: 100 });
+			if (res.ok && res.data) {
+				toast.success(
+					t("discoveryUi.backfillSuccess", {
+						scanned: res.data.processed,
+						updated: res.data.succeeded,
+						failed: res.data.failed,
+					})
+				);
+				void loadSamples();
+			} else {
+				toast.error(
+					res.ok
+						? t("discoveryUi.backfillFailed")
+						: res.error.message || t("discoveryUi.backfillFailed")
+				);
+			}
+		} finally {
+			setBackfilling(false);
+		}
+	};
 
 	const loadSamples = async () => {
 		const request = requests.start();
@@ -204,6 +238,29 @@ export default function LabelingSection(props: { active: boolean }) {
 				}
 				actions={
 					<div class="flex items-center gap-2">
+						<Button
+							size="sm"
+							variant="outlined"
+							onClick={handleBackfill}
+							disabled={backfilling()}
+							aria-label={t("discoveryUi.backfill")}
+						>
+							<RefreshCw
+								class={`w-3.5 h-3.5 mr-1 ${backfilling() ? "animate-spin" : ""}`}
+							/>
+							{backfilling()
+								? t("discoveryUi.backfilling")
+								: t("discoveryUi.backfill")}
+						</Button>
+						<Button
+							size="sm"
+							variant="outlined"
+							onClick={handleExport}
+							aria-label={t("discoveryUi.exportDataset")}
+						>
+							<Download class="w-3.5 h-3.5 mr-1" />
+							{t("discoveryUi.exportDataset")}
+						</Button>
 						<Button
 							size="sm"
 							variant={viewMode() === "immersive" ? "filled" : "outlined"}

@@ -37,9 +37,12 @@ import {
 	type DiscoveryQueuedResponse,
 	CrawlerQueueJobParamsSchema,
 	CrawlerJobActionResponseSchema,
+	DatasetExportQuerySchema,
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
 	LabelDiscoverySampleRequestSchema,
+	MetadataBackfillRequestSchema,
+	MetadataBackfillResponseSchema,
 	NetworkRuntimeConfigDocumentSchema,
 	ProcessRecommendationsResponseSchema,
 	PromoteTrackingVideoRequestSchema,
@@ -76,6 +79,7 @@ import {
 	type DiscoverySampleListResponse,
 	type DiscoveryStatusDto,
 	type IngestVideoResponse,
+	type MetadataBackfillResponse,
 	type NetworkRuntimeConfigDocument,
 	type ProcessRecommendationsResponse,
 	type RecommendationGraphResponse,
@@ -89,7 +93,7 @@ import {
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
 import { adminAuthMiddleware } from "@/middlewares";
-import { callCrawlerApi } from "./client";
+import { callCrawlerApi, callCrawlerRaw, type CrawlerQuery } from "./client";
 
 export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	.use(adminAuthMiddleware)
@@ -636,5 +640,38 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			response: {
 				200: VideoCurationDtoSchema,
 			},
+		}
+	)
+	.post(
+		"/discovery/samples/metadata/backfill",
+		async ({ body }): Promise<MetadataBackfillResponse> => {
+			return callCrawlerApi<MetadataBackfillResponse>(
+				"/discovery/samples/metadata/backfill",
+				"POST",
+				body
+			);
+		},
+		{
+			body: MetadataBackfillRequestSchema.optional(),
+			response: {
+				200: MetadataBackfillResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/discovery/samples/dataset/export",
+		async ({ query, set }) => {
+			const upstream = await callCrawlerRaw(
+				"/discovery/samples/dataset/export",
+				query as unknown as CrawlerQuery
+			);
+			const contentType = upstream.headers.get("content-type");
+			if (contentType) set.headers["content-type"] = contentType;
+			const disposition = upstream.headers.get("content-disposition");
+			if (disposition) set.headers["content-disposition"] = disposition;
+			return upstream.text();
+		},
+		{
+			query: DatasetExportQuerySchema,
 		}
 	);

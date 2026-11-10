@@ -455,6 +455,55 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 		);
 	}
 
+	async listIncompleteMetadataAids(limit = 50): Promise<bigint[]> {
+		return this.trace("discovery.listIncompleteMetadataAids", async () => {
+			const safeLimit = Math.min(Math.max(limit, 1), 200);
+			const db = activeDatabase(this.db);
+
+			// 1. Check tracked videos with missing or incomplete metadata
+			const trackingRows = await db
+				.select({ aid: videoTracking.aid })
+				.from(videoTracking)
+				.leftJoin(bilibiliVideoMetadata, eq(videoTracking.aid, bilibiliVideoMetadata.aid))
+				.where(
+					or(
+						isNull(bilibiliVideoMetadata.aid),
+						isNull(bilibiliVideoMetadata.cid),
+						eq(bilibiliVideoMetadata.duration, 0)
+					)
+				)
+				.limit(safeLimit);
+
+			const aids = new Set(trackingRows.map((r) => r.aid));
+			if (aids.size >= safeLimit) {
+				return Array.from(aids);
+			}
+
+			// 2. Also check accepted curation videos with missing metadata
+			const curationRows = await db
+				.select({ aid: videoCuration.aid })
+				.from(videoCuration)
+				.leftJoin(bilibiliVideoMetadata, eq(videoCuration.aid, bilibiliVideoMetadata.aid))
+				.where(
+					and(
+						eq(videoCuration.status, "accepted"),
+						or(
+							isNull(bilibiliVideoMetadata.aid),
+							isNull(bilibiliVideoMetadata.cid),
+							eq(bilibiliVideoMetadata.duration, 0)
+						)
+					)
+				)
+				.limit(safeLimit - aids.size);
+
+			for (const r of curationRows) {
+				aids.add(r.aid);
+			}
+
+			return Array.from(aids);
+		});
+	}
+
 	async listMetadataHistory(
 		aid: bigint,
 		options: { limit: number; offset: number }

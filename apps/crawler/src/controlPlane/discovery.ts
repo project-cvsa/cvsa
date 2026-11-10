@@ -20,6 +20,9 @@ import {
 	RecommendationGraphResponseSchema,
 	SubmitAnnotationRequestSchema,
 	SubmitCurationRequestSchema,
+	MetadataBackfillRequestSchema,
+	MetadataBackfillResponseSchema,
+	DatasetExportQuerySchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
 	VideoAnnotationDtoSchema,
 	VideoCurationDtoSchema,
@@ -588,6 +591,43 @@ export const discoveryRoutes = new Elysia()
 				401: ErrorResponseSchema,
 				404: ErrorResponseSchema,
 				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/samples/metadata/backfill",
+		async ({ body }) => {
+			const aids = body?.aids?.map((a) => BigInt(a));
+			return discoveryAdminService.backfillMetadata({
+				aids,
+				limit: body?.limit,
+			});
+		},
+		{
+			body: MetadataBackfillRequestSchema.optional(),
+			response: {
+				200: MetadataBackfillResponseSchema,
+				401: ErrorResponseSchema,
+				503: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/samples/dataset/export",
+		async ({ query, set }) => {
+			const result = await discoveryAdminService.exportDataset({
+				format: query.format,
+				minProbability: query.minProbability,
+				status: query.status,
+			});
+			set.headers["content-type"] = result.mimeType;
+			set.headers["content-disposition"] = `attachment; filename="${result.filename}"`;
+			return result.formatted;
+		},
+		{
+			query: DatasetExportQuerySchema,
+			response: {
+				401: ErrorResponseSchema,
 			},
 		}
 	);

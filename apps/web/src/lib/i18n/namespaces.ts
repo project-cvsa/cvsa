@@ -9,3 +9,5 @@ export const crawlerNamespaces = [
 ];
 
 export const crawlerVideoNamespaces = ["crawler", "crawler:video", "crawler:discovery"];
+
+export const invitationNamespaces = ["invitations"];

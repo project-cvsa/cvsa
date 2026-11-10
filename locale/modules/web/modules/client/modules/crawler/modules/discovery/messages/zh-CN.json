@@ -194,5 +194,11 @@
 	"discoveryUi.accepted": "已采纳",
 	"discoveryUi.rejected": "已淘汰",
 	"discoveryUi.pending": "待裁决",
-	"discoveryUi.viewBilibili": "前往 B 站观看"
+	"discoveryUi.viewBilibili": "前往 B 站观看",
+	"discoveryUi.exportDataset": "导出训练集",
+	"discoveryUi.exporting": "导出中…",
+	"discoveryUi.backfill": "补齐元数据",
+	"discoveryUi.backfilling": "补齐中…",
+	"discoveryUi.backfillSuccess": "元数据补齐完成：扫描 {$scanned}，更新 {$updated}，失败 {$failed}",
+	"discoveryUi.backfillFailed": "元数据补齐失败"
 }

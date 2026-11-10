@@ -687,6 +687,17 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		return this.history.filter((row) => row.aid === aid).slice(0, limit);
 	}
 
+	async listIncompleteMetadataAids(limit = 50): Promise<bigint[]> {
+		const result: bigint[] = [];
+		for (const [aid, meta] of this.metadatas.entries()) {
+			if (!meta.cid || !meta.duration) {
+				result.push(aid);
+				if (result.length >= limit) break;
+			}
+		}
+		return result;
+	}
+
 	async listMetadataHistory(aid: bigint, options: { limit: number; offset: number }) {
 		const matching = this.history
 			.filter((row) => row.aid === aid)

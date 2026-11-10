@@ -341,6 +341,103 @@ describe("crawler admin services", () => {
 
 		expect(await tracking.getTracking(3n)).not.toBeNull();
 	});
+	test("backfillMetadata fetches video details from Bilibili and refreshes tracking", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		const fakeBilibiliClient = {
+			getVideoDetails: async (aid: bigint) => ({
+				View: {
+					aid: Number(aid),
+					bvid: `BV${aid}`,
+					title: `Title ${aid}`,
+					desc: `Desc ${aid}`,
+					pic: `http://pic/${aid}`,
+					cid: 99999,
+					duration: 180,
+					pubdate: 1700000000,
+					owner: { mid: 10, name: "P Name" },
+					stat: { view: 5000 },
+				},
+				Tags: [{ tag_id: 1, tag_name: "vocaloid" }],
+			}),
+		};
+
+		// Seed a tracked video with incomplete metadata
+		await tracking.upsertTracking({
+			aid: 100n,
+			state: "regular",
+			nextSnapshotAt: toInstant(new Date()),
+		});
+		await repository.upsertMetadata({
+			aid: 100n,
+			bvid: "BV100",
+			title: "Incomplete",
+			duration: 0,
+			videoStatus: "normal",
+			filterDecision: "model_accepted",
+		});
+
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking,
+			fakeBilibiliClient as unknown as ConstructorParameters<typeof DiscoveryAdminService>[4]
+		);
+
+		const result = await service.backfillMetadata({ aids: [100n] });
+		expect(result.requested).toBe(1);
+		expect(result.succeeded).toBe(1);
+		expect(result.failed).toBe(0);
+
+		const updated = await repository.getMetadata(100n);
+		expect(updated?.cid).toBe(99999n);
+		expect(updated?.duration).toBe(180);
+	});
+	test("exportDataset formats curated and human-labeled samples into training dataset", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+
+		await repository.upsertSample({
+			aid: 10n,
+			bvid: "BV10",
+			title: "Sample 10 Positive",
+			decision: "model_accepted",
+			modelVersion: "v1",
+			probabilities: [],
+			songProbability: 0.95,
+		});
+		await repository.labelSample(10n, 1);
+
+		await repository.upsertSample({
+			aid: 20n,
+			bvid: "BV20",
+			title: "Sample 20 Negative",
+			decision: "model_rejected",
+			modelVersion: "v1",
+			probabilities: [],
+			songProbability: 0.05,
+		});
+		await repository.labelSample(20n, 0);
+
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		const jsonlResult = await service.exportDataset({ format: "jsonl" });
+		expect(jsonlResult.items).toHaveLength(2);
+		expect(jsonlResult.mimeType).toBe("application/x-ndjson");
+		expect(jsonlResult.formatted).toContain('"label":1');
+		expect(jsonlResult.formatted).toContain('"label":0');
+
+		const jsonResult = await service.exportDataset({ format: "json", status: "accepted" });
+		expect(jsonResult.items).toHaveLength(1);
+		expect(jsonResult.items[0]?.label).toBe(1);
+		expect(jsonResult.mimeType).toBe("application/json");
+	});
 	test("custom ranges use the same minute rates and keep transport and business results separate", async () => {
 		let now = Date.UTC(2026, 0, 1);
 		const collector = new CrawlerStatsCollector({

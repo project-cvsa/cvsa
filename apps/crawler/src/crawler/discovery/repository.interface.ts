@@ -52,6 +52,7 @@ export interface IDiscoveryRepository {
 	getMetadatas(aids: bigint[]): Promise<BilibiliVideoMetadata[]>;
 	getMetadataSummaries(aids: bigint[]): Promise<VideoMetadataSummary[]>;
 	getMetadataHistory(aid: bigint, limit?: number): Promise<BilibiliVideoMetadataHistory[]>;
+	listIncompleteMetadataAids(limit?: number): Promise<bigint[]>;
 	listMetadataHistory(
 		aid: bigint,
 		options: { limit: number; offset: number }

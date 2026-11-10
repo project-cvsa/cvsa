@@ -159,5 +159,6 @@
 	"common.rowsPerPage": "{$count} 条/页",
 	"audit.waitingChildren": "等待子任务",
 	"audit.paused": "已暂停",
-	"audit.legend": "分位数"
+	"audit.legend": "分位数",
+	"dashboard.invitations": "邀请码管理"
 }

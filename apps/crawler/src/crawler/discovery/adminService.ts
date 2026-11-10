@@ -2,9 +2,11 @@ import {
 	AppError,
 	DiscoveryJobProgressSchema,
 	DiscoveryTaskDescriptionSchema,
+	type DatasetExportItem,
 	type DiscoveryStatusDto,
 	type DiscoverySampleListQuery,
 	type DiscoverySampleListResponse,
+	type MetadataBackfillResponse,
 	type VideoAnnotationDto,
 	type VideoCurationDto,
 } from "@cvsa/contracts";
@@ -12,8 +14,11 @@ import { toInstant } from "@cvsa/snapshot-db";
 import type { ITrackingRepository } from "../tracking/repository.interface";
 import type { CrawlerQueue, CrawlerQueueJobSnapshot } from "../shared/types";
 import type { CrawlerStatsCollector } from "../stats/collector";
+import type { BilibiliClient } from "../bilibili/client";
+import { withBilibiliPurpose } from "../bilibili/requestContext";
 import type { IDiscoveryRepository } from "./repository.interface";
 import type { DiscoveryJobData } from "./worker";
+import { toMetadataInput } from "./metadata";
 import { toAnnotationItem, toCurationItem, toSampleItem } from "./sampleDto";
 
 function isSubtask(job: CrawlerQueueJobSnapshot): boolean {
@@ -50,7 +55,8 @@ export class DiscoveryAdminService {
 		private readonly queue: CrawlerQueue<DiscoveryJobData>,
 		private readonly repository: IDiscoveryRepository,
 		private readonly stats: CrawlerStatsCollector,
-		private readonly tracking: ITrackingRepository
+		private readonly tracking: ITrackingRepository,
+		private readonly bilibiliClient?: BilibiliClient
 	) {}
 
 	async getStatus(): Promise<DiscoveryStatusDto> {
@@ -224,6 +230,157 @@ export class DiscoveryAdminService {
 				)
 			),
 			total,
+		};
+	}
+
+	/**
+	 * Backfill rich video details for tracked videos or accepted discovery samples
+	 * that are missing complete metadata (cid, duration, tags, description, etc.).
+	 */
+	async backfillMetadata(options?: {
+		aids?: bigint[];
+		limit?: number;
+	}): Promise<MetadataBackfillResponse> {
+		if (!this.bilibiliClient) {
+			throw new AppError(
+				"Bilibili client is not configured for backfill",
+				"UPSTREAM_ERROR",
+				503
+			);
+		}
+		const client = this.bilibiliClient;
+
+		let targetAids: bigint[] = options?.aids ?? [];
+		if (targetAids.length === 0) {
+			targetAids = await this.repository.listIncompleteMetadataAids(options?.limit ?? 25);
+		}
+
+		let succeeded = 0;
+		let failed = 0;
+		const results: Array<{ aid: string; success: boolean; error?: string }> = [];
+
+		for (const aid of targetAids) {
+			try {
+				const details = await withBilibiliPurpose("tracking", () =>
+					client.getVideoDetails(aid)
+				);
+				await this.repository.upsertMetadata(toMetadataInput(aid, details));
+
+				// If tracked, refresh nextMetadataAt
+				const tracking = await this.tracking.getTracking(aid);
+				if (tracking) {
+					await this.tracking.updateSchedule(aid, {
+						nextMetadataAt: toInstant(new Date(Date.now() + 7 * 86_400_000)),
+						lastError: null,
+					});
+				}
+
+				succeeded++;
+				results.push({ aid: aid.toString(), success: true });
+			} catch (error) {
+				failed++;
+				const message = error instanceof Error ? error.message : String(error);
+				results.push({ aid: aid.toString(), success: false, error: message });
+			}
+		}
+
+		return {
+			requested: targetAids.length,
+			processed: succeeded + failed,
+			succeeded,
+			failed,
+			results,
+		};
+	}
+
+	/**
+	 * Export curated and labeled discovery samples as a machine-learning training dataset.
+	 */
+	async exportDataset(options?: {
+		format?: "jsonl" | "json";
+		minProbability?: number;
+		status?: "all" | "accepted" | "rejected";
+	}): Promise<{
+		items: DatasetExportItem[];
+		formatted: string;
+		mimeType: string;
+		filename: string;
+	}> {
+		const format = options?.format ?? "jsonl";
+		const statusFilter = options?.status ?? "all";
+		const minProb = options?.minProbability ?? 0;
+
+		const samples = await this.repository.listSamples({ limit: 5000 });
+		const aids = samples.map((s) => s.aid);
+		const [curationMap, metadatas] = await Promise.all([
+			this.repository.getCurations(aids),
+			this.repository.getMetadatas(aids),
+		]);
+
+		const metadataMap = new Map(metadatas.map((m) => [m.aid, m]));
+
+		const exportItems: DatasetExportItem[] = [];
+
+		for (const sample of samples) {
+			const curation = curationMap.get(sample.aid);
+			const meta = metadataMap.get(sample.aid);
+
+			let label: 0 | 1 | null = null;
+			if (curation?.status === "accepted" || sample.humanLabel === 1) {
+				label = 1;
+			} else if (curation?.status === "rejected" || sample.humanLabel === 0) {
+				label = 0;
+			}
+
+			if (label === null) continue;
+			if (statusFilter === "accepted" && label !== 1) continue;
+			if (statusFilter === "rejected" && label !== 0) continue;
+			if (sample.songProbability < minProb) continue;
+
+			const annotations = await this.repository.listAnnotations(sample.aid);
+			const toStrArray = (val: unknown): string[] =>
+				Array.isArray(val) ? val.filter((i): i is string => typeof i === "string") : [];
+			const sampleTags = toStrArray(sample.tags);
+			const metaTags = toStrArray(meta?.tags);
+
+			exportItems.push({
+				aid: sample.aid.toString(),
+				bvid: sample.bvid,
+				title: sample.title,
+				description: sample.description ?? meta?.description ?? null,
+				tags: sampleTags.length > 0 ? sampleTags : metaTags,
+				duration: meta?.duration ?? 0,
+				ownerName: meta?.ownerName ?? null,
+				pubdate: meta?.pubdate ? meta.pubdate.toString() : null,
+				label,
+				curationStatus: (curation?.status as "accepted" | "pending" | "rejected") ?? null,
+				decisionReason: sample.decision,
+				songProbability: sample.songProbability,
+				annotations: annotations.map((a) => ({
+					userId: a.userId,
+					decision: a.decision,
+					tags: a.tags ?? undefined,
+					notes: a.notes ?? undefined,
+				})),
+			});
+		}
+
+		const timestamp = new Date().toISOString().slice(0, 10);
+		if (format === "json") {
+			return {
+				items: exportItems,
+				formatted: JSON.stringify(exportItems, null, 2),
+				mimeType: "application/json",
+				filename: `cvsa-classifier-dataset-${timestamp}.json`,
+			};
+		}
+
+		const jsonl = exportItems.map((item) => JSON.stringify(item)).join("\n");
+		return {
+			items: exportItems,
+			formatted: jsonl,
+			mimeType: "application/x-ndjson",
+			filename: `cvsa-classifier-dataset-${timestamp}.jsonl`,
 		};
 	}
 }

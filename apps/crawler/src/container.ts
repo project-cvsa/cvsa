@@ -346,7 +346,8 @@ export const discoveryAdminService = new DiscoveryAdminService(
 	discoveryQueue,
 	discoveryRepository,
 	statsCollector,
-	trackingRepository
+	trackingRepository,
+	bilibiliClient
 );
 export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue);
 export const discoveryService = new DiscoveryService(

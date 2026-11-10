@@ -159,5 +159,6 @@
 	"common.rowsPerPage": "{$count} / page",
 	"audit.waitingChildren": "Waiting for subtasks",
 	"audit.paused": "Paused",
-	"audit.legend": "Percentiles"
+	"audit.legend": "Percentiles",
+	"dashboard.invitations": "Invitation Codes"
 }

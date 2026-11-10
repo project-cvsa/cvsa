@@ -194,5 +194,11 @@
 	"discoveryUi.accepted": "Accepted",
 	"discoveryUi.rejected": "Rejected",
 	"discoveryUi.pending": "Pending",
-	"discoveryUi.viewBilibili": "Open on Bilibili"
+	"discoveryUi.viewBilibili": "Open on Bilibili",
+	"discoveryUi.exportDataset": "Export Dataset",
+	"discoveryUi.exporting": "Exporting…",
+	"discoveryUi.backfill": "Backfill Metadata",
+	"discoveryUi.backfilling": "Backfilling…",
+	"discoveryUi.backfillSuccess": "Metadata backfilled: scanned {$scanned}, updated {$updated}, failed {$failed}",
+	"discoveryUi.backfillFailed": "Failed to backfill metadata"
 }
