@@ -23,81 +23,89 @@ export class UserService {
 		data: SignupRequestDto,
 		options?: { ipAddress?: string | null; userAgent?: string | null }
 	): Promise<{ user: User; token: string }> {
-		const [existingUser] = await db.select().from(user).limit(1);
+		const hashedPassword = await hashPassword(data.password);
 
-		let roleId: number | null = null;
-		let validatedInvitation: (InvitationCode & { role: Role }) | null = null;
+		const created = await db.transaction(async (tx) => {
+			let roleId: number | null = null;
+			let validatedInvitation: (InvitationCode & { role: Role }) | null = null;
 
-		if (data.inviteCode) {
-			validatedInvitation = await invitationService.validate(data.inviteCode);
-			roleId = validatedInvitation.roleId;
-		} else if (existingUser === undefined) {
-			const ownerRole = await ensureOwnerRole();
-			roleId = ownerRole.id;
-		} else if (process.env.NODE_ENV === "test") {
-			// In tests, if no inviteCode provided, allow test setups to pass with OWNER role
-			const ownerRole = await ensureOwnerRole();
-			roleId = ownerRole.id;
-		} else {
-			throw new AppError("error.signup.invite_required", "INVITE_CODE_REQUIRED", 400, {
-				message: "Registration is invite-only. A valid invitation code is required.",
-			});
-		}
+			if (data.inviteCode) {
+				validatedInvitation = await invitationService.validate(data.inviteCode, tx);
+				roleId = validatedInvitation.roleId;
+			} else {
+				const [existingUser] = await tx.select().from(user).limit(1);
+				if (existingUser === undefined || process.env.NODE_ENV === "test") {
+					const ownerRole = await ensureOwnerRole(tx);
+					roleId = ownerRole.id;
+				} else {
+					throw new AppError(
+						"error.signup.invite_required",
+						"INVITE_CODE_REQUIRED",
+						400,
+						{
+							message:
+								"Registration is invite-only. A valid invitation code is required.",
+						}
+					);
+				}
+			}
 
-		const [sameUsername] = await db
-			.select()
-			.from(user)
-			.where(eq(user.username, data.username))
-			.limit(1);
-		if (sameUsername) {
-			throw new AppError("error.username-taken", "USERNAME_IS_ALREADY_TAKEN", 409);
-		}
-
-		if (data.email) {
-			const [sameEmail] = await db
+			const [sameUsername] = await tx
 				.select()
 				.from(user)
-				.where(eq(user.email, data.email))
+				.where(eq(user.username, data.username))
 				.limit(1);
-			if (sameEmail) {
-				throw new AppError(
-					"error.email-taken",
-					"USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
-					409
-				);
+			if (sameUsername) {
+				throw new AppError("error.username-taken", "USERNAME_IS_ALREADY_TAKEN", 409);
 			}
-		}
 
-		const userId = getRandomId(7);
-		const [created] = await db
-			.insert(user)
-			.values({
-				id: userId,
-				username: data.username,
-				displayUsername: data.username,
-				name: data.displayName || data.username,
-				email: data.email ?? null,
-				emailVerified: false,
-				reputation: 0,
-				roleId,
-			})
-			.returning();
-		if (!created) throw new Error("Failed to create user");
+			if (data.email) {
+				const [sameEmail] = await tx
+					.select()
+					.from(user)
+					.where(eq(user.email, data.email))
+					.limit(1);
+				if (sameEmail) {
+					throw new AppError(
+						"error.email-taken",
+						"USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+						409
+					);
+				}
+			}
 
-		if (validatedInvitation) {
-			await invitationService.recordRedemption(validatedInvitation.id, created.id);
-		}
+			const userId = getRandomId(7);
+			const [inserted] = await tx
+				.insert(user)
+				.values({
+					id: userId,
+					username: data.username,
+					displayUsername: data.username,
+					name: data.displayName || data.username,
+					email: data.email ?? null,
+					emailVerified: false,
+					reputation: 0,
+					roleId,
+				})
+				.returning();
+			if (!inserted) throw new Error("Failed to create user");
 
-		const hashedPassword = await hashPassword(data.password);
-		await db.insert(account).values({
-			id: getRandomId(12),
-			accountId: userId,
-			providerId: "credential",
-			userId,
-			password: hashedPassword,
+			if (validatedInvitation) {
+				await invitationService.recordRedemption(validatedInvitation.id, inserted.id, tx);
+			}
+
+			await tx.insert(account).values({
+				id: getRandomId(12),
+				accountId: userId,
+				providerId: "credential",
+				userId,
+				password: hashedPassword,
+			});
+
+			return inserted;
 		});
 
-		const session = await createSession(userId, options);
+		const session = await createSession(created.id, options);
 
 		return {
 			user: created,
@@ -146,15 +154,6 @@ export class UserService {
 
 	async logout(token: string): Promise<void> {
 		await deleteSessionByToken(token);
-	}
-
-	async assertCanRegister(_inviteCode?: string | null): Promise<void> {
-		const [existingUser] = await db.select().from(user).limit(1);
-		if (existingUser !== undefined && process.env.NODE_ENV !== "test") {
-			throw new AppError("error.signup.invite_required", "FORBIDDEN", 403, {
-				message: "Registration is invite-only and currently closed.",
-			});
-		}
 	}
 
 	async ensureOwnerRole() {

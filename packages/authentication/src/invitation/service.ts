@@ -1,17 +1,19 @@
 import {
+	type DatabaseClient,
 	type InvitationCode,
 	type Role,
+	type TxClient,
 	db,
 	invitationCode,
 	invitationRedemption,
 	role,
 	user,
 } from "@cvsa/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, lte, or, sql } from "drizzle-orm";
 import { AppError } from "@cvsa/contracts";
 import { Temporal } from "temporal-polyfill";
 import { getRandomId } from "../randomId";
-import { ensureEditorRole, getRoleByName } from "../user/roles";
+import { ensureAdminRole, ensureEditorRole, getRoleByName } from "../user/roles";
 
 export interface CreateInvitationOptions {
 	code?: string;
@@ -44,6 +46,8 @@ export class InvitationService {
 
 		if (targetRoleName === "editor") {
 			targetRole = await ensureEditorRole();
+		} else if (targetRoleName === "admin") {
+			targetRole = await ensureAdminRole();
 		} else {
 			targetRole = await getRoleByName(targetRoleName);
 		}
@@ -95,7 +99,10 @@ export class InvitationService {
 	/**
 	 * Validate that an invitation code exists, is not expired, and has remaining uses.
 	 */
-	async validate(rawCode: string): Promise<InvitationCode & { role: Role }> {
+	async validate(
+		rawCode: string,
+		executor: DatabaseClient | TxClient = db
+	): Promise<InvitationCode & { role: Role }> {
 		const code = rawCode.trim().toUpperCase();
 		if (!code) {
 			throw new AppError("error.signup.invite_required", "INVITE_CODE_REQUIRED", 400, {
@@ -103,7 +110,7 @@ export class InvitationService {
 			});
 		}
 
-		const [row] = await db
+		const [row] = await executor
 			.select({
 				invitation: invitationCode,
 				role,
@@ -141,22 +148,53 @@ export class InvitationService {
 		};
 	}
 
+	private async applyRedemption(
+		executor: DatabaseClient | TxClient,
+		codeId: number,
+		userId: string
+	): Promise<void> {
+		const [updated] = await executor
+			.update(invitationCode)
+			.set({
+				usedCount: sql`${invitationCode.usedCount} + 1`,
+			})
+			.where(
+				and(
+					eq(invitationCode.id, codeId),
+					or(
+						lte(invitationCode.maxUses, 0),
+						lt(invitationCode.usedCount, invitationCode.maxUses)
+					)
+				)
+			)
+			.returning();
+
+		if (!updated) {
+			throw new AppError("error.signup.invite_exhausted", "INVITE_CODE_EXHAUSTED", 400, {
+				message: "Invitation code has reached its maximum usage limit.",
+			});
+		}
+
+		await executor.insert(invitationRedemption).values({
+			invitationCodeId: codeId,
+			userId,
+		});
+	}
+
 	/**
 	 * Mark code as used by a registered user.
 	 */
-	async recordRedemption(codeId: number, userId: string): Promise<void> {
+	async recordRedemption(
+		codeId: number,
+		userId: string,
+		executor?: DatabaseClient | TxClient
+	): Promise<void> {
+		if (executor) {
+			await this.applyRedemption(executor, codeId, userId);
+			return;
+		}
 		await db.transaction(async (tx) => {
-			await tx
-				.update(invitationCode)
-				.set({
-					usedCount: sql`${invitationCode.usedCount} + 1`,
-				})
-				.where(eq(invitationCode.id, codeId));
-
-			await tx.insert(invitationRedemption).values({
-				invitationCodeId: codeId,
-				userId,
-			});
+			await this.applyRedemption(tx, codeId, userId);
 		});
 	}
 

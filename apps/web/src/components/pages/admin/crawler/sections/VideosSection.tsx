@@ -87,15 +87,21 @@ function VideoIdentity(props: { item: TrackingVideo }) {
 	);
 }
 
+function readInitialSearch(): string {
+	if (typeof window === "undefined") return "";
+	return new URLSearchParams(window.location.search).get("search")?.trim() ?? "";
+}
+
 export default function VideosSection() {
 	const t = getComponentT("crawler:video");
+	const initialSearch = readInitialSearch();
 
 	const [stateFilter, setStateFilter] = createSignal<StateFilter>("all");
 	const [statusFilter, setStatusFilter] = createSignal<StatusFilter>("all");
 	const [sortBy, setSortBy] = createSignal<TrackingVideoSortField>("updatedAt");
 	const [sortOrder, setSortOrder] = createSignal<"asc" | "desc">("desc");
-	const [searchInput, setSearchInput] = createSignal("");
-	const [appliedSearch, setAppliedSearch] = createSignal("");
+	const [searchInput, setSearchInput] = createSignal(initialSearch);
+	const [appliedSearch, setAppliedSearch] = createSignal(initialSearch);
 	const [page, setPage] = createSignal(0);
 	const [pageSize, setPageSize] = createSignal(PAGE_SIZE);
 	const [list, setList] = createSignal<TrackingVideoListResponse | null>(null);

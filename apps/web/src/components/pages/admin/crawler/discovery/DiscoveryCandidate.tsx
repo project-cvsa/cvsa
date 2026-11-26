@@ -125,7 +125,14 @@ export default function DiscoveryCandidate(props: DiscoveryCandidateProps) {
 				>
 					{props.item.title}
 				</a>
-				<div class="shrink-0">{decision()}</div>
+				<div class="flex flex-wrap items-center gap-1.5 shrink-0">
+					{decision()}
+					<Show when={props.item.curationStatus === "pending"}>
+						<Badge variant="warning" size="sm">
+							{t("discoveryUi.pending")}
+						</Badge>
+					</Show>
+				</div>
 			</div>
 
 			{/* Col 4: Confidence Score & Visual Meter */}

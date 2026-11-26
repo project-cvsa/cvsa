@@ -374,7 +374,8 @@ export const discoveryService = new DiscoveryService(
 	discoveryFilterService,
 	videoClassifierClient,
 	statsCollector,
-	isRelatedDiscoveryEnabled
+	isRelatedDiscoveryEnabled,
+	() => networkRuntime.getExecutionConfig().searchRoverEnabled
 );
 export const snapshotService = new SnapshotService(
 	bilibiliClient,

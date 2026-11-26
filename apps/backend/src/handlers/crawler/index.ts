@@ -92,70 +92,11 @@ import {
 	type VideoSnapshotListResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
-import { adminAuthMiddleware } from "@/middlewares";
+import { adminAuthMiddleware, crawlerAdminAuthMiddleware } from "@/middlewares";
 import { callCrawlerApi, callCrawlerRaw, type CrawlerQuery } from "./client";
 
-export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
+const crawlerEditorRoutes = new Elysia()
 	.use(adminAuthMiddleware)
-	.get(
-		"/milestones/videos/:aid",
-		({ params }) =>
-			callCrawlerApi<z.infer<typeof MilestoneListResponseSchema>>(
-				`/milestones/videos/${params.aid}`
-			),
-		{ params: MilestoneAidParamsSchema, response: { 200: MilestoneListResponseSchema } }
-	)
-	.get(
-		"/milestones/recoveries/:id",
-		({ params }) =>
-			callCrawlerApi<z.infer<typeof MilestoneRecoveryStatusSchema>>(
-				`/milestones/recoveries/${encodeURIComponent(params.id)}`
-			),
-		{ params: MilestoneRecoveryParamsSchema, response: { 200: MilestoneRecoveryStatusSchema } }
-	)
-	.post(
-		"/milestones/records",
-		({ body }) =>
-			callCrawlerApi<z.infer<typeof MilestoneImportResponseSchema>>(
-				"/milestones/records",
-				"POST",
-				body
-			),
-		{ body: MilestoneImportRequestSchema, response: { 200: MilestoneImportResponseSchema } }
-	)
-	.post(
-		"/milestones/recoveries",
-		({ body }) =>
-			callCrawlerApi<z.infer<typeof MilestoneQueuedResponseSchema>>(
-				"/milestones/recoveries",
-				"POST",
-				body
-			),
-		{ body: MilestoneRecoveryRequestSchema, response: { 200: MilestoneQueuedResponseSchema } }
-	)
-	.post(
-		"/milestones/backtests",
-		({ body }) =>
-			callCrawlerApi<z.infer<typeof MilestoneBacktestResultSchema>>(
-				"/milestones/backtests",
-				"POST",
-				body
-			),
-		{ body: MilestoneBacktestRequestSchema, response: { 200: MilestoneBacktestResultSchema } }
-	)
-	.post(
-		"/milestones/cache-window-analyses",
-		({ body }) =>
-			callCrawlerApi<z.infer<typeof CacheWindowAnalysisResultSchema>>(
-				"/milestones/cache-window-analyses",
-				"POST",
-				body
-			),
-		{
-			body: CacheWindowAnalysisRequestSchema,
-			response: { 200: CacheWindowAnalysisResultSchema },
-		}
-	)
 	.get(
 		"/status",
 		async (): Promise<CrawlerStatusDto> => {
@@ -205,36 +146,6 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			},
 		}
 	)
-	.post(
-		"/jobs/:queue/:id/retries",
-		async ({ params }): Promise<{ ok: true }> => {
-			return callCrawlerApi<{ ok: true }>(
-				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}/retries`,
-				"POST"
-			);
-		},
-		{
-			params: CrawlerQueueJobParamsSchema,
-			response: {
-				200: CrawlerJobActionResponseSchema,
-			},
-		}
-	)
-	.delete(
-		"/jobs/:queue/:id",
-		async ({ params }): Promise<{ ok: true }> => {
-			return callCrawlerApi<{ ok: true }>(
-				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}`,
-				"DELETE"
-			);
-		},
-		{
-			params: CrawlerQueueJobParamsSchema,
-			response: {
-				200: CrawlerJobActionResponseSchema,
-			},
-		}
-	)
 	.get(
 		"/classifier",
 		async (): Promise<ClassifierHealthDto> => {
@@ -268,108 +179,6 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			},
 		}
 	)
-	.put(
-		"/config/network",
-		async ({ body }): Promise<NetworkRuntimeConfigDocument> => {
-			return callCrawlerApi<NetworkRuntimeConfigDocument>(
-				"/network-runtime/config",
-				"PUT",
-				body
-			);
-		},
-		{
-			body: ReplaceNetworkRuntimeConfigRequestSchema,
-			response: {
-				200: NetworkRuntimeConfigDocumentSchema,
-			},
-		}
-	)
-	.post(
-		"/network/adapters/:id/test",
-		async ({ params }): Promise<TestNetworkAdapterResponse> => {
-			return callCrawlerApi<TestNetworkAdapterResponse>(
-				`/network-runtime/adapters/${params.id}/test`,
-				"POST"
-			);
-		},
-		{
-			response: {
-				200: TestNetworkAdapterResponseSchema,
-			},
-		}
-	)
-	.put(
-		"/config/discovery",
-		async ({ body }): Promise<DiscoveryFilterConfigDto> => {
-			return callCrawlerApi<DiscoveryFilterConfigDto>("/discovery/config", "PUT", body);
-		},
-		{
-			body: UpdateDiscoveryFilterConfigRequestSchema,
-			response: {
-				200: DiscoveryFilterConfigDtoSchema,
-			},
-		}
-	)
-	.post(
-		"/sweep",
-		async ({ body }): Promise<DiscoveryQueuedResponse> => {
-			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/sweep", "POST", body);
-		},
-		{
-			body: DiscoverySweepRequestSchema,
-			response: {
-				200: DiscoveryQueuedResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/hot-sample",
-		async ({ body }): Promise<DiscoveryQueuedResponse> => {
-			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/hot-sample", "POST", body);
-		},
-		{
-			body: TriggerHotSampleRequestSchema.optional(),
-			response: {
-				200: DiscoveryQueuedResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/detail/:aid",
-		async ({ params }): Promise<ActionQueuedResponse> => {
-			return callCrawlerApi<ActionQueuedResponse>(`/discovery/detail/${params.aid}`, "POST");
-		},
-		{
-			response: {
-				200: ActionQueuedResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/active/:aid",
-		async ({ params }): Promise<ActionQueuedResponse> => {
-			return callCrawlerApi<ActionQueuedResponse>(`/discovery/active/${params.aid}`, "POST");
-		},
-		{
-			response: {
-				200: ActionQueuedResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/recommendations/:aid",
-		async ({ params }): Promise<ProcessRecommendationsResponse> => {
-			return callCrawlerApi<ProcessRecommendationsResponse>(
-				`/discovery/recommendations/${params.aid}`,
-				"POST"
-			);
-		},
-		{
-			response: {
-				200: ProcessRecommendationsResponseSchema,
-			},
-		}
-	)
 	.get(
 		"/tracking/videos",
 		async ({ query }): Promise<TrackingVideoListResponse> => {
@@ -398,59 +207,6 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			},
 		}
 	)
-	.delete(
-		"/tracking/:aid",
-		async ({ params }): Promise<DeleteTrackingVideoResponse> => {
-			return callCrawlerApi<DeleteTrackingVideoResponse>(
-				`/tracking/videos/${params.aid}`,
-				"DELETE"
-			);
-		},
-		{
-			response: {
-				200: DeleteTrackingVideoResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/tracking/ingest",
-		async ({ body }): Promise<IngestVideoResponse> => {
-			return callCrawlerApi<IngestVideoResponse>("/tracking/ingest", "POST", body);
-		},
-		{
-			body: IngestVideoRequestSchema,
-			response: {
-				200: IngestVideoResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/tracking/videos",
-		async ({ body }): Promise<RegisterTrackingVideosResponse> => {
-			return callCrawlerApi<RegisterTrackingVideosResponse>("/tracking/videos", "POST", body);
-		},
-		{
-			body: RegisterTrackingVideosRequestSchema,
-			response: {
-				200: RegisterTrackingVideosResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/tracking/videos/:aid/snapshots",
-		({ params, query }): Promise<ActionQueuedResponse> =>
-			callCrawlerApi<ActionQueuedResponse>(
-				`/tracking/videos/${params.aid}/snapshots`,
-				"POST",
-				undefined,
-				query
-			),
-		{
-			params: TrackingAidParamsSchema,
-			query: QueueSnapshotQuerySchema,
-			response: { 200: ActionQueuedResponseSchema },
-		}
-	)
 	.get(
 		"/tracking/videos/:aid/snapshots",
 		async ({ params, query }): Promise<VideoSnapshotListResponse> => {
@@ -466,22 +222,6 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			query: VideoSnapshotListQuerySchema,
 			response: {
 				200: VideoSnapshotListResponseSchema,
-			},
-		}
-	)
-	.post(
-		"/tracking/videos/:aid/promote",
-		async ({ params, body }): Promise<VideoTrackingDto> => {
-			return callCrawlerApi<VideoTrackingDto>(
-				`/tracking/videos/${params.aid}/promote`,
-				"POST",
-				body
-			);
-		},
-		{
-			body: PromoteTrackingVideoRequestSchema,
-			response: {
-				200: VideoTrackingDtoSchema,
 			},
 		}
 	)
@@ -508,15 +248,6 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 				200: RecommendationGraphResponseSchema,
 			},
 		}
-	)
-	.post(
-		"/metadata/:aid/refreshes",
-		({ params }): Promise<ActionQueuedResponse> =>
-			callCrawlerApi<ActionQueuedResponse>(
-				`/discovery/metadata/${params.aid}/refresh`,
-				"POST"
-			),
-		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
 	)
 	.get(
 		"/metadata/:aid/history",
@@ -675,3 +406,279 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			query: DatasetExportQuerySchema,
 		}
 	);
+
+const crawlerOperatorRoutes = new Elysia()
+	.use(crawlerAdminAuthMiddleware)
+	.get(
+		"/milestones/videos/:aid",
+		({ params }) =>
+			callCrawlerApi<z.infer<typeof MilestoneListResponseSchema>>(
+				`/milestones/videos/${params.aid}`
+			),
+		{ params: MilestoneAidParamsSchema, response: { 200: MilestoneListResponseSchema } }
+	)
+	.get(
+		"/milestones/recoveries/:id",
+		({ params }) =>
+			callCrawlerApi<z.infer<typeof MilestoneRecoveryStatusSchema>>(
+				`/milestones/recoveries/${encodeURIComponent(params.id)}`
+			),
+		{ params: MilestoneRecoveryParamsSchema, response: { 200: MilestoneRecoveryStatusSchema } }
+	)
+	.post(
+		"/milestones/records",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof MilestoneImportResponseSchema>>(
+				"/milestones/records",
+				"POST",
+				body
+			),
+		{ body: MilestoneImportRequestSchema, response: { 200: MilestoneImportResponseSchema } }
+	)
+	.post(
+		"/milestones/recoveries",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof MilestoneQueuedResponseSchema>>(
+				"/milestones/recoveries",
+				"POST",
+				body
+			),
+		{ body: MilestoneRecoveryRequestSchema, response: { 200: MilestoneQueuedResponseSchema } }
+	)
+	.post(
+		"/milestones/backtests",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof MilestoneBacktestResultSchema>>(
+				"/milestones/backtests",
+				"POST",
+				body
+			),
+		{ body: MilestoneBacktestRequestSchema, response: { 200: MilestoneBacktestResultSchema } }
+	)
+	.post(
+		"/milestones/cache-window-analyses",
+		({ body }) =>
+			callCrawlerApi<z.infer<typeof CacheWindowAnalysisResultSchema>>(
+				"/milestones/cache-window-analyses",
+				"POST",
+				body
+			),
+		{
+			body: CacheWindowAnalysisRequestSchema,
+			response: { 200: CacheWindowAnalysisResultSchema },
+		}
+	)
+	.post(
+		"/jobs/:queue/:id/retries",
+		async ({ params }): Promise<{ ok: true }> => {
+			return callCrawlerApi<{ ok: true }>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}/retries`,
+				"POST"
+			);
+		},
+		{
+			params: CrawlerQueueJobParamsSchema,
+			response: {
+				200: CrawlerJobActionResponseSchema,
+			},
+		}
+	)
+	.delete(
+		"/jobs/:queue/:id",
+		async ({ params }): Promise<{ ok: true }> => {
+			return callCrawlerApi<{ ok: true }>(
+				`/stats/jobs/${params.queue}/${encodeURIComponent(params.id)}`,
+				"DELETE"
+			);
+		},
+		{
+			params: CrawlerQueueJobParamsSchema,
+			response: {
+				200: CrawlerJobActionResponseSchema,
+			},
+		}
+	)
+	.put(
+		"/config/network",
+		async ({ body }): Promise<NetworkRuntimeConfigDocument> => {
+			return callCrawlerApi<NetworkRuntimeConfigDocument>(
+				"/network-runtime/config",
+				"PUT",
+				body
+			);
+		},
+		{
+			body: ReplaceNetworkRuntimeConfigRequestSchema,
+			response: {
+				200: NetworkRuntimeConfigDocumentSchema,
+			},
+		}
+	)
+	.post(
+		"/network/adapters/:id/test",
+		async ({ params }): Promise<TestNetworkAdapterResponse> => {
+			return callCrawlerApi<TestNetworkAdapterResponse>(
+				`/network-runtime/adapters/${params.id}/test`,
+				"POST"
+			);
+		},
+		{
+			response: {
+				200: TestNetworkAdapterResponseSchema,
+			},
+		}
+	)
+	.put(
+		"/config/discovery",
+		async ({ body }): Promise<DiscoveryFilterConfigDto> => {
+			return callCrawlerApi<DiscoveryFilterConfigDto>("/discovery/config", "PUT", body);
+		},
+		{
+			body: UpdateDiscoveryFilterConfigRequestSchema,
+			response: {
+				200: DiscoveryFilterConfigDtoSchema,
+			},
+		}
+	)
+	.post(
+		"/sweep",
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/sweep", "POST", body);
+		},
+		{
+			body: DiscoverySweepRequestSchema,
+			response: {
+				200: DiscoveryQueuedResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/hot-sample",
+		async ({ body }): Promise<DiscoveryQueuedResponse> => {
+			return callCrawlerApi<DiscoveryQueuedResponse>("/discovery/hot-sample", "POST", body);
+		},
+		{
+			body: TriggerHotSampleRequestSchema.optional(),
+			response: {
+				200: DiscoveryQueuedResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/detail/:aid",
+		async ({ params }): Promise<ActionQueuedResponse> => {
+			return callCrawlerApi<ActionQueuedResponse>(`/discovery/detail/${params.aid}`, "POST");
+		},
+		{
+			response: {
+				200: ActionQueuedResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/active/:aid",
+		async ({ params }): Promise<ActionQueuedResponse> => {
+			return callCrawlerApi<ActionQueuedResponse>(`/discovery/active/${params.aid}`, "POST");
+		},
+		{
+			response: {
+				200: ActionQueuedResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/recommendations/:aid",
+		async ({ params }): Promise<ProcessRecommendationsResponse> => {
+			return callCrawlerApi<ProcessRecommendationsResponse>(
+				`/discovery/recommendations/${params.aid}`,
+				"POST"
+			);
+		},
+		{
+			response: {
+				200: ProcessRecommendationsResponseSchema,
+			},
+		}
+	)
+	.delete(
+		"/tracking/:aid",
+		async ({ params }): Promise<DeleteTrackingVideoResponse> => {
+			return callCrawlerApi<DeleteTrackingVideoResponse>(
+				`/tracking/videos/${params.aid}`,
+				"DELETE"
+			);
+		},
+		{
+			response: {
+				200: DeleteTrackingVideoResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/tracking/ingest",
+		async ({ body }): Promise<IngestVideoResponse> => {
+			return callCrawlerApi<IngestVideoResponse>("/tracking/ingest", "POST", body);
+		},
+		{
+			body: IngestVideoRequestSchema,
+			response: {
+				200: IngestVideoResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/tracking/videos",
+		async ({ body }): Promise<RegisterTrackingVideosResponse> => {
+			return callCrawlerApi<RegisterTrackingVideosResponse>("/tracking/videos", "POST", body);
+		},
+		{
+			body: RegisterTrackingVideosRequestSchema,
+			response: {
+				200: RegisterTrackingVideosResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/tracking/videos/:aid/snapshots",
+		({ params, query }): Promise<ActionQueuedResponse> =>
+			callCrawlerApi<ActionQueuedResponse>(
+				`/tracking/videos/${params.aid}/snapshots`,
+				"POST",
+				undefined,
+				query
+			),
+		{
+			params: TrackingAidParamsSchema,
+			query: QueueSnapshotQuerySchema,
+			response: { 200: ActionQueuedResponseSchema },
+		}
+	)
+	.post(
+		"/tracking/videos/:aid/promote",
+		async ({ params, body }): Promise<VideoTrackingDto> => {
+			return callCrawlerApi<VideoTrackingDto>(
+				`/tracking/videos/${params.aid}/promote`,
+				"POST",
+				body
+			);
+		},
+		{
+			body: PromoteTrackingVideoRequestSchema,
+			response: {
+				200: VideoTrackingDtoSchema,
+			},
+		}
+	)
+	.post(
+		"/metadata/:aid/refreshes",
+		({ params }): Promise<ActionQueuedResponse> =>
+			callCrawlerApi<ActionQueuedResponse>(
+				`/discovery/metadata/${params.aid}/refresh`,
+				"POST"
+			),
+		{ params: TrackingAidParamsSchema, response: { 200: ActionQueuedResponseSchema } }
+	);
+
+export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
+	.use(crawlerEditorRoutes)
+	.use(crawlerOperatorRoutes);

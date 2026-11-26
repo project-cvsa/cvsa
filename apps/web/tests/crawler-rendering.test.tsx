@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { renderToString } from "solid-js/web";
 import type { JSX } from "solid-js";
 import type { DiscoveryActivity } from "@cvsa/contracts";
@@ -6,13 +6,18 @@ import { CRAWLER_STATS_OPERATIONS, CRAWLER_STATS_OUTCOMES } from "@cvsa/contract
 import { FaneeProvider } from "@fanee/solid";
 import { FaneeRuntime } from "@fanee/core";
 import { i18nServer } from "@lib/i18n/server";
+import CrawlerDashboard from "../src/components/pages/admin/CrawlerDashboard";
 import { DiscoveryStatsTable } from "../src/components/pages/admin/crawler/DiscoveryStats";
 import DiscoveryActivityView from "../src/components/pages/admin/crawler/discovery/DiscoveryActivity";
+import DiscoveryCandidate from "../src/components/pages/admin/crawler/discovery/DiscoveryCandidate";
+import ImmersiveLabeler from "../src/components/pages/admin/crawler/discovery/ImmersiveLabeler";
 import { LatencyTable } from "../src/components/pages/admin/crawler/statsView";
 import ThroughputChart, { TrendPlot } from "../src/components/pages/admin/crawler/ThroughputChart";
 import OverviewSection, {
 	OverviewSummary,
 } from "../src/components/pages/admin/crawler/sections/OverviewSection";
+import LabelingSection from "../src/components/pages/admin/crawler/sections/LabelingSection";
+import VideosSection from "../src/components/pages/admin/crawler/sections/VideosSection";
 import CrawlerExecutionPolicy from "../src/components/pages/admin/crawler/settings/CrawlerExecutionPolicy";
 import { CrawlerExecutionConfigSchema } from "@cvsa/contracts";
 import { QueueJobsTable } from "../src/components/pages/admin/crawler/sections/TasksSection";
@@ -200,7 +205,7 @@ describe("crawler console translations", () => {
 		expect(html).toContain("1.1M</text>");
 		expect(html).not.toContain("NaN");
 	});
-	test("renders worker and tracking controls together without the network timeout", async () => {
+	test("renders worker, request timeout, discovery flags, and tracking controls together", async () => {
 		const html = await render("en-US", () => (
 			<CrawlerExecutionPolicy
 				config={CrawlerExecutionConfigSchema.parse({})}
@@ -210,12 +215,124 @@ describe("crawler console translations", () => {
 		for (const label of [
 			"Snapshot workers",
 			"Discovery workers",
+			"Request timeout (s)",
+			"Scheduled keyword search rover",
+			"Related video expansion",
+			"Hot video sampling",
+			"Automatic metadata refresh",
 			"Lateness alert (s)",
 			"Retry delay (s)",
 		])
 			expect(html).toContain(label);
-		expect(html).not.toContain("HTTP timeout");
 		expect(html).not.toContain("scheduling.");
+		expect(html).not.toContain("network.execution.");
+	});
+	test("hides the invitations link on CrawlerDashboard for editors and shows it for admins", async () => {
+		const editorHtml = await render("en-US", () => <CrawlerDashboard userRole="editor" />);
+		expect(editorHtml).not.toContain("/admin/invitations");
+
+		const adminHtml = await render("en-US", () => <CrawlerDashboard userRole="admin" />);
+		expect(adminHtml).toContain("/admin/invitations");
+
+		const ownerHtml = await render("en-US", () => <CrawlerDashboard userRole="OWNER" />);
+		expect(ownerHtml).toContain("/admin/invitations");
+	});
+	test("renders localized description heading, preset tags, and pending state in ImmersiveLabeler", async () => {
+		const sample = {
+			aid: "1001",
+			bvid: "BV1xx411c7mD",
+			title: "Sample Song Title",
+			description: "Vocaloid original description text",
+			tags: ["VOCALOID"],
+			decision: "model_accepted",
+			modelVersion: "akari-v1",
+			pic: null,
+			probabilities: { song: 0.92 },
+			songProbability: 0.92,
+			humanLabel: null,
+			labeledAt: null,
+			capturedAt: "2026-11-26T00:00:00.000Z",
+			curationStatus: "pending" as const,
+		};
+
+		const enHtml = await render("en-US", () => (
+			<ImmersiveLabeler
+				item={sample}
+				index={0}
+				total={1}
+				busy={false}
+				onClose={() => {}}
+				onNext={() => {}}
+				onPrev={() => {}}
+				onLabel={async () => {}}
+			/>
+		));
+		expect(enHtml).toContain(">Description</span>");
+		expect(enHtml).not.toContain(">Title</span>");
+		expect(enHtml).toContain(">Original</button>");
+		expect(enHtml).toContain(">Cover</button>");
+		expect(enHtml).toContain(">Pending<");
+
+		const zhHtml = await render("zh-CN", () => (
+			<ImmersiveLabeler
+				item={sample}
+				index={0}
+				total={1}
+				busy={false}
+				onClose={() => {}}
+				onNext={() => {}}
+				onPrev={() => {}}
+				onLabel={async () => {}}
+			/>
+		));
+		expect(zhHtml).toContain(">简介</span>");
+		expect(zhHtml).not.toContain(">视频标题</span>");
+		expect(zhHtml).toContain(">原创曲</button>");
+		expect(zhHtml).toContain(">待裁决<");
+	});
+	test("renders dataset export format and status controls in LabelingSection and pending badge in DiscoveryCandidate", async () => {
+		const labelingHtml = await render("en-US", () => <LabelingSection active={false} />);
+		expect(labelingHtml).toContain('aria-label="Export format"');
+		expect(labelingHtml).toContain('aria-label="Export status"');
+		expect(labelingHtml).toContain("JSONL");
+
+		const candidateHtml = await render("en-US", () => (
+			<DiscoveryCandidate
+				item={{
+					aid: "1002",
+					bvid: "BV1yy411c7mD",
+					title: "Uncertain Candidate",
+					description: "",
+					tags: [],
+					decision: "model_rejected_sampled",
+					modelVersion: "akari-v1",
+					pic: null,
+					probabilities: { song: 0.45 },
+					songProbability: 0.45,
+					humanLabel: null,
+					labeledAt: null,
+					capturedAt: "2026-11-26T00:00:00.000Z",
+					curationStatus: "pending",
+				}}
+				index={0}
+				focused={false}
+				busy={false}
+				onFocus={() => {}}
+				onLabel={() => {}}
+			/>
+		));
+		expect(candidateHtml).toContain(">Pending<");
+		expect(candidateHtml).not.toContain("bg-error border-error");
+		expect(candidateHtml).not.toContain("bg-primary border-primary");
+	});
+	test("prefills VideosSection search input from ?search= query parameter", async () => {
+		vi.stubGlobal("window", { location: { search: "?section=videos&search=123456" } });
+		try {
+			const html = await render("en-US", () => <VideosSection />);
+			expect(html).toContain('value="123456"');
+		} finally {
+			vi.unstubAllGlobals();
+		}
 	});
 	test.each(["en-US", "zh-CN"])(
 		"renders every measured operation and outcome in %s",

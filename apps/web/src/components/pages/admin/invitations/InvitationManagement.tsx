@@ -123,7 +123,7 @@ export default function InvitationManagement() {
 
 	const copyRegistrationLink = (code: string) => {
 		const origin = typeof window !== "undefined" ? window.location.origin : "";
-		const url = `${origin}/register?invitationCode=${encodeURIComponent(code)}`;
+		const url = `${origin}/register?invite=${encodeURIComponent(code)}`;
 		void copyToClipboard(url, `link-${code}`);
 	};
 

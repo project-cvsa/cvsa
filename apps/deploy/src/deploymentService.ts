@@ -19,6 +19,59 @@ const ComposeOverrideSchema = z
 
 export type ComposeOverride = z.infer<typeof ComposeOverrideSchema>;
 
+export class CommandError extends Error {
+	constructor(
+		message: string,
+		readonly exitCode: number
+	) {
+		super(message);
+		this.name = "CommandError";
+	}
+}
+
+function formatCommandOutput(stdout: string, stderr: string, redact?: string): string {
+	const raw = [stderr.trim(), stdout.trim()].filter(Boolean).join("\n");
+	const sanitized = redact ? raw.replaceAll(redact, "***") : raw;
+	const maxLength = 4000;
+	return sanitized.length > maxLength ? `...${sanitized.slice(-maxLength)}` : sanitized;
+}
+
+export async function dockerLogin(
+	registry: string,
+	username: string,
+	token: string,
+	dockerBin = "docker"
+): Promise<void> {
+	const proc = Bun.spawn([dockerBin, "login", registry, "-u", username, "--password-stdin"], {
+		stdin: new TextEncoder().encode(`${token}\n`),
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const timer = setTimeout(() => {
+		try {
+			proc.kill();
+		} catch {
+			// ignored
+		}
+	}, 30_000);
+	try {
+		const [stdout, stderr, exitCode] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+			proc.exited,
+		]);
+		if (exitCode !== 0) {
+			const details = formatCommandOutput(stdout, stderr, token);
+			throw new CommandError(
+				`docker login ${registry} failed (exit ${exitCode})${details ? `: ${details}` : ""}`,
+				exitCode
+			);
+		}
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
 export function imageRegistry() {
 	return process.env.IMAGE_REGISTRY ?? "ghcr.io/project-cvsa";
 }
@@ -30,7 +83,9 @@ export class DeploymentService {
 		private root: string,
 		private run?: (files: string[], args: string[]) => Promise<void>,
 		private cleanup: (services: readonly string[]) => Promise<void> = (services) =>
-			removeStaleImages(services, imageRegistry())
+			removeStaleImages(services, imageRegistry()),
+		private login?: (registry: string, username: string, token: string) => Promise<void>,
+		private dockerBin = "docker"
 	) {}
 	async initialize() {
 		const file = Bun.file(resolve(this.root, ".deploy.state.json"));
@@ -62,6 +117,7 @@ export class DeploymentService {
 			startedAt: new Date().toISOString(),
 			finishedAt: null,
 			error: null,
+			exitCode: null,
 		};
 		void this.execute(request)
 			.catch((error) => console.error(error))
@@ -82,10 +138,41 @@ export class DeploymentService {
 	private async compose(files: string[], args: string[]) {
 		if (this.run) return this.run(files, args);
 		const proc = Bun.spawn(
-			["docker", "compose", ...files.flatMap((file) => ["-f", file]), ...args],
-			{ cwd: this.root, stdout: "inherit", stderr: "inherit" }
+			[this.dockerBin, "compose", ...files.flatMap((file) => ["-f", file]), ...args],
+			{ cwd: this.root, stdout: "pipe", stderr: "pipe" }
 		);
-		if ((await proc.exited) !== 0) throw new Error(`docker compose ${args[0]} failed`);
+		const [stdout, stderr, exitCode] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+			proc.exited,
+		]);
+		if (stdout.trim()) console.log(stdout.trimEnd());
+		if (stderr.trim()) console.error(stderr.trimEnd());
+		if (exitCode !== 0) {
+			const details = formatCommandOutput(stdout, stderr);
+			throw new CommandError(
+				`docker compose ${args[0]} failed (exit ${exitCode})${details ? `: ${details}` : ""}`,
+				exitCode
+			);
+		}
+	}
+	private async loginIfConfigured() {
+		const username = process.env.GHCR_USERNAME?.trim();
+		const token = process.env.GHCR_PULL_TOKEN?.trim();
+		if (!username || !token) {
+			if (username || token) {
+				console.warn(
+					"Skipping GHCR login: both GHCR_USERNAME and GHCR_PULL_TOKEN must be set"
+				);
+			}
+			return;
+		}
+		if (this.login) {
+			await this.login("ghcr.io", username, token);
+			return;
+		}
+		if (this.run) return;
+		await dockerLogin("ghcr.io", username, token, this.dockerBin);
 	}
 	private async syncRepo() {
 		try {
@@ -129,6 +216,7 @@ export class DeploymentService {
 			await this.atomic(candidate, next, "json");
 			const files = [base, candidate];
 			await this.compose(files, ["config", "--quiet"]);
+			await this.loginIfConfigured();
 			await this.compose(files, ["pull", ...request.services]);
 			await this.compose(files, [
 				"up",
@@ -148,12 +236,16 @@ export class DeploymentService {
 					`Stale image cleanup failed: ${error instanceof Error ? error.message : String(error)}`
 				);
 			}
-			if (this.state) this.state.status = "success";
+			if (this.state) {
+				this.state.status = "success";
+				this.state.exitCode = 0;
+			}
 		} catch (error) {
 			if (this.state) {
 				this.state.status = "failed";
 				this.state.finishedAt = new Date().toISOString();
 				this.state.error = error instanceof Error ? error.message : String(error);
+				this.state.exitCode = error instanceof CommandError ? error.exitCode : 1;
 			}
 		} finally {
 			if (this.state) this.state.finishedAt = new Date().toISOString();

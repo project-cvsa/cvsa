@@ -19,15 +19,15 @@ import Clock from "lucide-solid/icons/clock";
 import UserIcon from "lucide-solid/icons/user";
 
 const PRESET_TAGS = [
-	"VOCALOID",
-	"Synthesizer V",
-	"UTAU",
-	"CeVIO",
-	"原创曲",
-	"翻唱",
-	"PV/MMD",
-	"非音乐/杂谈",
-	"BGM/伴奏",
+	{ value: "VOCALOID", labelKey: null },
+	{ value: "Synthesizer V", labelKey: null },
+	{ value: "UTAU", labelKey: null },
+	{ value: "CeVIO", labelKey: null },
+	{ value: "原创曲", labelKey: "discoveryUi.presetTag.original" },
+	{ value: "翻唱", labelKey: "discoveryUi.presetTag.cover" },
+	{ value: "PV/MMD", labelKey: null },
+	{ value: "非音乐/杂谈", labelKey: "discoveryUi.presetTag.nonMusic" },
+	{ value: "BGM/伴奏", labelKey: "discoveryUi.presetTag.bgm" },
 ] as const;
 
 export interface ImmersiveLabelerProps {
@@ -51,11 +51,38 @@ export interface ImmersiveLabelerProps {
 
 export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 	const t = getComponentT("crawler:discovery");
+	const videoT = getComponentT("crawler:video");
 
 	const [notes, setNotes] = createSignal("");
 	const [selectedTags, setSelectedTags] = createSignal<string[]>([]);
 	const [annotations, setAnnotations] = createSignal<VideoAnnotationDto[]>([]);
 	const [loadingAnnotations, setLoadingAnnotations] = createSignal(false);
+
+	const formatPresetTag = (value: string) => {
+		switch (value) {
+			case "原创曲":
+				return t("discoveryUi.presetTag.original");
+			case "翻唱":
+				return t("discoveryUi.presetTag.cover");
+			case "非音乐/杂谈":
+				return t("discoveryUi.presetTag.nonMusic");
+			case "BGM/伴奏":
+				return t("discoveryUi.presetTag.bgm");
+			default:
+				return value;
+		}
+	};
+
+	const formatDecision = (decision: VideoAnnotationDto["decision"]) => {
+		switch (decision) {
+			case "accepted":
+				return t("discoveryUi.accepted");
+			case "rejected":
+				return t("discoveryUi.rejected");
+			case "uncertain":
+				return t("discoveryUi.uncertain");
+		}
+	};
 
 	const loadAnnotations = async (aid: string) => {
 		setLoadingAnnotations(true);
@@ -315,7 +342,7 @@ export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 					<Show when={props.item.description}>
 						<div class="flex flex-col gap-1.5">
 							<span class="ts-caption font-semibold text-secondary">
-								{t("discovery.samples.col.title")}
+								{videoT("videoDetail.description")}
 							</span>
 							<div class="p-3 rounded-md bg-surface-container-low border border-border/40 ts-body-sm text-secondary whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">
 								{props.item.description}
@@ -372,11 +399,18 @@ export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 							</Button>
 						</div>
 						<Button
-							variant="outlined"
+							variant={
+								props.item.curationStatus === "pending" ? "filled" : "outlined"
+							}
 							size="sm"
 							disabled={props.busy}
 							onClick={() => handleAction("uncertain")}
-							class="flex items-center justify-center gap-1.5 text-secondary"
+							class={cn(
+								"flex items-center justify-center gap-1.5",
+								props.item.curationStatus === "pending"
+									? "bg-warning border-transparent text-display-inverted hover:bg-warning/90"
+									: "text-secondary"
+							)}
 						>
 							<HelpCircle class="w-3.5 h-3.5" />
 							<span>{t("discoveryUi.markUncertainAction")} [U]</span>
@@ -394,11 +428,13 @@ export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 						<div class="flex flex-wrap gap-1.5">
 							<For each={PRESET_TAGS}>
 								{(tag) => {
-									const active = () => selectedTags().includes(tag);
+									const active = () => selectedTags().includes(tag.value);
+									const label = () =>
+										tag.labelKey ? formatPresetTag(tag.value) : tag.value;
 									return (
 										<button
 											type="button"
-											onClick={() => toggleTag(tag)}
+											onClick={() => toggleTag(tag.value)}
 											class={cn(
 												"px-2.5 py-1 rounded-full text-caption font-medium border transition-colors cursor-pointer",
 												active()
@@ -406,7 +442,7 @@ export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 													: "bg-surface-container-low text-secondary border-border hover:border-secondary hover:text-primary"
 											)}
 										>
-											{tag}
+											{label()}
 										</button>
 									);
 								}}
@@ -467,7 +503,7 @@ export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 																: "warning"
 													}
 												>
-													{ann.decision}
+													{formatDecision(ann.decision)}
 												</Badge>
 											</div>
 											<Show when={ann.tags && ann.tags.length > 0}>
@@ -475,7 +511,7 @@ export default function ImmersiveLabeler(props: ImmersiveLabelerProps) {
 													<For each={ann.tags}>
 														{(tag) => (
 															<span class="px-1.5 py-0.2 rounded bg-surface text-tertiary ts-caption border border-border/40">
-																{tag}
+																{formatPresetTag(tag)}
 															</span>
 														)}
 													</For>

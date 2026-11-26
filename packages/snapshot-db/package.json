@@ -7,7 +7,7 @@
 	"scripts": {
 		"lint": "bunx --bun biome lint",
 		"typecheck": "bunx --bun tsc --noEmit",
-		"migrate:generate": "bunx drizzle-kit generate",
+		"migrate:generate": "bunx --bun drizzle-kit generate",
 		"migrate:deploy": "bun scripts/migrate.ts && bun scripts/ensure-timescale.ts",
 		"db:update": "bun scripts/test-setup.ts && bun run push && bun scripts/ensure-timescale.ts",
 		"push": "bunx --bun drizzle-kit push --force",
