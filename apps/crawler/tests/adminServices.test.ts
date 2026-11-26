@@ -235,6 +235,64 @@ describe("crawler admin services", () => {
 		expect(await tracking.getTracking(1n)).toBeNull();
 		await expect(service.label(999n, 1)).rejects.toMatchObject({ statusCode: 404 });
 	});
+	test("supports multi-user annotation history and explicit curation decisions", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await repository.upsertSample({
+			aid: 42n,
+			bvid: "BV42",
+			title: "vocaloid candidate",
+			decision: "model_rejected",
+			modelVersion: "test",
+			probabilities: [],
+			songProbability: 0.35,
+		});
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		// Multiple users annotate
+		const a1 = await service.annotate(42n, "user_alice", {
+			decision: "accepted",
+			tags: ["vocaloid", "hatsune_miku"],
+			notes: "Original song by Mitchie M",
+		});
+		expect(a1.userId).toBe("user_alice");
+		expect(a1.decision).toBe("accepted");
+		expect(a1.tags).toEqual(["vocaloid", "hatsune_miku"]);
+
+		const a2 = await service.annotate(42n, "user_bob", {
+			decision: "accepted",
+			tags: ["vocaloid"],
+		});
+		expect(a2.userId).toBe("user_bob");
+
+		const history = await service.listAnnotations(42n);
+		expect(history.length).toBe(2);
+		expect(history[0]?.userId).toBe("user_bob");
+		expect(history[1]?.userId).toBe("user_alice");
+
+		// Curator issues final verdict
+		const curation = await service.curate(
+			42n,
+			"lead_curator",
+			"accepted",
+			"Consensus verified"
+		);
+		expect(curation.status).toBe("accepted");
+		expect(curation.curatedBy).toBe("lead_curator");
+		expect(await tracking.getTracking(42n)).toMatchObject({ state: "new" });
+
+		// Verify listing reflects curation and annotation counts
+		const list = await service.listSamples({ limit: 10, offset: 0 });
+		const item = list.items.find((i) => i.aid === "42");
+		expect(item?.curationStatus).toBe("accepted");
+		expect(item?.curatedBy).toBe("lead_curator");
+		expect(item?.annotationsCount).toBe(2);
+	});
 	test("untrack labels the sample as human rejected before deleting tracking", async () => {
 		const repository = new InMemoryDiscoveryRepository();
 		const tracking = new InMemoryTrackingRepository();
@@ -282,6 +340,103 @@ describe("crawler admin services", () => {
 		await expect(service.untrack(3n)).rejects.toMatchObject({ statusCode: 404 });
 
 		expect(await tracking.getTracking(3n)).not.toBeNull();
+	});
+	test("backfillMetadata fetches video details from Bilibili and refreshes tracking", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		const fakeBilibiliClient = {
+			getVideoDetails: async (aid: bigint) => ({
+				View: {
+					aid: Number(aid),
+					bvid: `BV${aid}`,
+					title: `Title ${aid}`,
+					desc: `Desc ${aid}`,
+					pic: `http://pic/${aid}`,
+					cid: 99999,
+					duration: 180,
+					pubdate: 1700000000,
+					owner: { mid: 10, name: "P Name" },
+					stat: { view: 5000 },
+				},
+				Tags: [{ tag_id: 1, tag_name: "vocaloid" }],
+			}),
+		};
+
+		// Seed a tracked video with incomplete metadata
+		await tracking.upsertTracking({
+			aid: 100n,
+			state: "regular",
+			nextSnapshotAt: toInstant(new Date()),
+		});
+		await repository.upsertMetadata({
+			aid: 100n,
+			bvid: "BV100",
+			title: "Incomplete",
+			duration: 0,
+			videoStatus: "normal",
+			filterDecision: "model_accepted",
+		});
+
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking,
+			fakeBilibiliClient as unknown as ConstructorParameters<typeof DiscoveryAdminService>[4]
+		);
+
+		const result = await service.backfillMetadata({ aids: [100n] });
+		expect(result.requested).toBe(1);
+		expect(result.succeeded).toBe(1);
+		expect(result.failed).toBe(0);
+
+		const updated = await repository.getMetadata(100n);
+		expect(updated?.cid).toBe(99999n);
+		expect(updated?.duration).toBe(180);
+	});
+	test("exportDataset formats curated and human-labeled samples into training dataset", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+
+		await repository.upsertSample({
+			aid: 10n,
+			bvid: "BV10",
+			title: "Sample 10 Positive",
+			decision: "model_accepted",
+			modelVersion: "v1",
+			probabilities: [],
+			songProbability: 0.95,
+		});
+		await repository.labelSample(10n, 1);
+
+		await repository.upsertSample({
+			aid: 20n,
+			bvid: "BV20",
+			title: "Sample 20 Negative",
+			decision: "model_rejected",
+			modelVersion: "v1",
+			probabilities: [],
+			songProbability: 0.05,
+		});
+		await repository.labelSample(20n, 0);
+
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		const jsonlResult = await service.exportDataset({ format: "jsonl" });
+		expect(jsonlResult.items).toHaveLength(2);
+		expect(jsonlResult.mimeType).toBe("application/x-ndjson");
+		expect(jsonlResult.formatted).toContain('"label":1');
+		expect(jsonlResult.formatted).toContain('"label":0');
+
+		const jsonResult = await service.exportDataset({ format: "json", status: "accepted" });
+		expect(jsonResult.items).toHaveLength(1);
+		expect(jsonResult.items[0]?.label).toBe(1);
+		expect(jsonResult.mimeType).toBe("application/json");
 	});
 	test("custom ranges use the same minute rates and keep transport and business results separate", async () => {
 		let now = Date.UTC(2026, 0, 1);

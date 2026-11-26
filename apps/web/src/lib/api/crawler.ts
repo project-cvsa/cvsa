@@ -28,9 +28,12 @@ import type {
 	DiscoveryQueuedResponse,
 	TriggerHotSampleRequest,
 	CrawlerQueueName,
+	DatasetExportQuery,
 	IngestVideoRequest,
 	IngestVideoResponse,
 	LabelDiscoverySampleRequest,
+	MetadataBackfillRequest,
+	MetadataBackfillResponse,
 	NetworkRuntimeConfigDocument,
 	ProcessRecommendationsResponse,
 	PromoteTrackingVideoRequest,
@@ -38,10 +41,14 @@ import type {
 	RegisterTrackingVideosRequest,
 	RegisterTrackingVideosResponse,
 	ReplaceNetworkRuntimeConfigRequest,
+	SubmitAnnotationRequest,
+	SubmitCurationRequest,
 	TestNetworkAdapterResponse,
 	TrackingVideoListQuery,
 	TrackingVideoListResponse,
 	UpdateDiscoveryFilterConfigRequest,
+	VideoAnnotationDto,
+	VideoCurationDto,
 	VideoMetadataHistoryListQuery,
 	VideoMetadataHistoryListResponse,
 	VideoSnapshotListQuery,
@@ -301,11 +308,57 @@ async function listDiscoverySamples(
 
 async function labelDiscoverySample(
 	aid: string,
-	humanLabel: 0 | 1
+	humanLabel?: 0 | 1,
+	options?: {
+		decision?: "accepted" | "rejected" | "uncertain";
+		tags?: string[];
+		notes?: string;
+	}
 ): Promise<ApiResult<DiscoverySampleItem | null>> {
 	const eden = getEdenClient();
-	const body: LabelDiscoverySampleRequest = { humanLabel };
+	const body: LabelDiscoverySampleRequest = {
+		...(humanLabel !== undefined ? { humanLabel } : {}),
+		...options,
+	};
 	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).label.post(body));
+}
+
+async function listSampleAnnotations(aid: string): Promise<ApiResult<VideoAnnotationDto[] | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).annotations.get());
+}
+
+async function submitSampleAnnotation(
+	aid: string,
+	body: SubmitAnnotationRequest
+): Promise<ApiResult<VideoAnnotationDto | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).annotations.post(body));
+}
+
+async function curateSample(
+	aid: string,
+	body: SubmitCurationRequest
+): Promise<ApiResult<VideoCurationDto | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples({ aid }).curate.post(body));
+}
+
+async function backfillMetadata(
+	body?: MetadataBackfillRequest
+): Promise<ApiResult<MetadataBackfillResponse | null>> {
+	const eden = getEdenClient();
+	return settle(await eden.v2.admin.crawler.discovery.samples.metadata.backfill.post(body));
+}
+
+function getDatasetExportUrl(query?: DatasetExportQuery): string {
+	const params = new URLSearchParams();
+	if (query?.format) params.set("format", query.format);
+	if (query?.status) params.set("status", query.status);
+	if (query?.minProbability !== undefined)
+		params.set("minProbability", String(query.minProbability));
+	const qs = params.toString();
+	return `/v2/admin/crawler/discovery/samples/dataset/export${qs ? `?${qs}` : ""}`;
 }
 
 async function testNetworkAdapter(
@@ -376,4 +429,9 @@ export const crawlerApi = {
 	getMetadataHistory,
 	listDiscoverySamples,
 	labelDiscoverySample,
+	listSampleAnnotations,
+	submitSampleAnnotation,
+	curateSample,
+	backfillMetadata,
+	getDatasetExportUrl,
 };

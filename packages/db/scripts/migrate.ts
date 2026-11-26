@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
-import { loadDatabaseUrl } from "../src/databaseUrl";
+import { resolve } from "node:path";
+import { env } from "@cvsa/env";
 import { migrate } from "drizzle-orm/bun-sql/migrator";
 import { createDatabaseClient } from "../src/client";
 
@@ -12,15 +13,16 @@ import { createDatabaseClient } from "../src/client";
  * contain every table and adopt the Drizzle history instead of being recreated.
  */
 const client = createDatabaseClient({
-	connectionString: loadDatabaseUrl(),
+	connectionString: env.DATABASE_URL,
 	idleTimeout: 0,
 });
 
+const bundledMigrations = resolve(import.meta.dirname, "drizzle");
 const migrationsFolder =
 	process.env.MIGRATIONS_FOLDER ??
-	(existsSync(new URL("./drizzle", import.meta.url).pathname)
-		? new URL("./drizzle", import.meta.url).pathname
-		: new URL("../drizzle", import.meta.url).pathname);
+	(existsSync(bundledMigrations)
+		? bundledMigrations
+		: resolve(import.meta.dirname, "../drizzle"));
 
 try {
 	await migrate(client, { migrationsFolder });

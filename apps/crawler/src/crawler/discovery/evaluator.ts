@@ -58,7 +58,10 @@ export type CandidateEvaluation =
 			metadata: UpsertMetadataInput;
 	  }
 	| { status: "rejected"; decision: FilterDecision; details: VideoDetailsData }
-	| { status: "skipped"; reason: "already_tracked" | "human_rejected" }
+	| {
+			status: "skipped";
+			reason: "already_tracked" | "human_rejected" | "already_rejected";
+	  }
 	| {
 			status: "failed";
 			reason: "fetch_failed" | "video_unavailable";
@@ -108,6 +111,18 @@ export class DiscoveryCandidateEvaluator {
 			if (labeled?.humanLabel === 0) {
 				this.finishCandidate(channel, "skipped");
 				return { status: "skipped", reason: "human_rejected" };
+			}
+
+			const curation = await this.discoveryRepo.getCuration(aid);
+			if (curation?.status === "rejected" && !input.force) {
+				this.finishCandidate(channel, "skipped");
+				return { status: "skipped", reason: "human_rejected" };
+			}
+
+			const existingMetadata = await this.discoveryRepo.getMetadata(aid);
+			if (existingMetadata?.filterDecision === "rejected" && !input.force) {
+				this.finishCandidate(channel, "skipped");
+				return { status: "skipped", reason: "already_rejected" };
 			}
 
 			const existingTracking = await this.trackingRepo.getTracking(aid);
@@ -211,8 +226,10 @@ export class DiscoveryCandidateEvaluator {
 				return { status: "accepted", decision, details, metadata };
 			}
 
-			// Clean up any residual metadata row for rejected candidate to prevent table bloat
-			await this.discoveryRepo.deleteMetadata(aid);
+			// Retain metadata for rejected candidate with filterDecision='rejected'
+			// so that training samples, audit trails, and repeated discovery sweeps
+			// do not lose information or redundantly call upstream APIs.
+			await this.discoveryRepo.upsertMetadata(metadata);
 
 			if (decision.sampled) {
 				await this.discoveryRepo.upsertSample({

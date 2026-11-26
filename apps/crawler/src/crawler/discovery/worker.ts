@@ -53,11 +53,20 @@ export function createDiscoveryQueue(mq: CrawlerMq): CrawlerQueue<DiscoveryJobDa
 
 const DEFAULT_HOT_SAMPLE_LIMIT = 10;
 
+export interface DiscoveryPipelineFlags {
+	isRelatedDiscoveryEnabled?: () => boolean;
+	isSearchRoverEnabled?: () => boolean;
+	isHotSamplingEnabled?: () => boolean;
+}
+
 export class DiscoveryPipelineProcessor {
 	readonly filterService: DiscoveryFilterService;
 	readonly relationExtractor: RelationExtractor;
 	readonly searchRover: SearchRover;
 	readonly evaluator: DiscoveryCandidateEvaluator;
+	private readonly isRelatedDiscoveryEnabled: () => boolean;
+	private readonly isSearchRoverEnabled: () => boolean;
+	private readonly isHotSamplingEnabled: () => boolean;
 
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
@@ -67,8 +76,21 @@ export class DiscoveryPipelineProcessor {
 		filterService?: DiscoveryFilterService,
 		classifier?: VideoClassifierClient,
 		stats: StatsRecorder = createNoopStatsRecorder(),
-		private readonly relatedDiscoveryEnabled = RELATED_DISCOVERY_ENABLED
+		relatedDiscoveryEnabled: boolean | DiscoveryPipelineFlags = RELATED_DISCOVERY_ENABLED
 	) {
+		if (typeof relatedDiscoveryEnabled === "boolean") {
+			this.isRelatedDiscoveryEnabled = () => relatedDiscoveryEnabled;
+			this.isSearchRoverEnabled = () => true;
+			this.isHotSamplingEnabled = () => true;
+		} else {
+			this.isRelatedDiscoveryEnabled =
+				relatedDiscoveryEnabled.isRelatedDiscoveryEnabled ??
+				(() => RELATED_DISCOVERY_ENABLED);
+			this.isSearchRoverEnabled =
+				relatedDiscoveryEnabled.isSearchRoverEnabled ?? (() => true);
+			this.isHotSamplingEnabled =
+				relatedDiscoveryEnabled.isHotSamplingEnabled ?? (() => true);
+		}
 		this.filterService = filterService ?? new DiscoveryFilterService();
 		this.relationExtractor = new RelationExtractor(discoveryRepo);
 		this.searchRover = new SearchRover(bilibiliClient, discoveryRepo);
@@ -149,6 +171,12 @@ export class DiscoveryPipelineProcessor {
 		checkpoint?: (offset: number, key?: string) => Promise<void>,
 		completedQueries: string[] = []
 	): Promise<void> {
+		if (!this.isSearchRoverEnabled()) {
+			appLogger.debug("Search rover is paused; skipping search sweep", {
+				component: "discovery-worker",
+			});
+			return;
+		}
 		const keywords =
 			config?.keywords ?? this.filterService.getConfig().searchKeywords ?? DEFAULT_KEYWORDS;
 		await this.searchRover.runSearchSweep(
@@ -196,8 +224,8 @@ export class DiscoveryPipelineProcessor {
 		timeWindowDays?: number,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
-		if (!this.relatedDiscoveryEnabled) {
-			appLogger.debug("Related discovery is paused; skipping hot sample", {
+		if (!this.isHotSamplingEnabled() || !this.isRelatedDiscoveryEnabled()) {
+			appLogger.debug("Hot sampling is paused; skipping hot sample", {
 				component: "discovery-worker",
 			});
 			return;
@@ -276,7 +304,7 @@ export class DiscoveryPipelineProcessor {
 			});
 
 			if (evaluation.status !== "accepted") return;
-			if (!this.relatedDiscoveryEnabled) return;
+			if (!this.isRelatedDiscoveryEnabled()) return;
 
 			// Rejected/non-relevant videos are not traversed: following their
 			// recommendations is how the crawl drifts out of the target domain.
@@ -298,7 +326,7 @@ export class DiscoveryPipelineProcessor {
 		aidStr: string,
 		report?: (progress: DiscoveryJobProgress) => Promise<void>
 	): Promise<void> {
-		if (!this.relatedDiscoveryEnabled) {
+		if (!this.isRelatedDiscoveryEnabled()) {
 			appLogger.debug("Related discovery is paused; skipping active discovery", {
 				component: "discovery-worker",
 				aid: aidStr,

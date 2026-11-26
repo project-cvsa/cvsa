@@ -24,17 +24,58 @@ function buildQueryString(query?: CrawlerQuery): string {
 	return serialized ? `?${serialized}` : "";
 }
 
+export async function callCrawlerRaw(
+	path: string,
+	query?: CrawlerQuery,
+	customHeaders?: Record<string, string>
+): Promise<Response> {
+	const headers: Record<string, string> = {
+		...(crawlerEnv.CONTROL_API_TOKEN
+			? { authorization: `Bearer ${crawlerEnv.CONTROL_API_TOKEN}` }
+			: {}),
+		...customHeaders,
+	};
+
+	try {
+		const res = await fetch(`${CRAWLER_BASE_URL}${path}${buildQueryString(query)}`, {
+			method: "GET",
+			headers,
+		});
+
+		if (!res.ok) {
+			const errText = await res.text();
+			if (res.status === 404) throw new AppError("error.not-found", "NOT_FOUND", 404);
+			const unavailable = res.status >= 500 || res.status === 401 || res.status === 403;
+			throw new AppError(
+				unavailable ? "error.crawler.unavailable" : "error.crawler.request-failed",
+				unavailable ? "CRAWLER_UNAVAILABLE" : "CRAWLER_REQUEST_FAILED",
+				unavailable ? 502 : res.status,
+				{ upstreamStatus: res.status, upstreamResponse: errText }
+			);
+		}
+
+		return res;
+	} catch (error) {
+		if (AppError.isAppError(error)) throw error;
+		throw new AppError("error.crawler.unavailable", "CRAWLER_UNAVAILABLE", 502, {
+			cause: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
+
 export async function callCrawlerApi<T>(
 	path: string,
 	method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
 	body?: unknown,
-	query?: CrawlerQuery
+	query?: CrawlerQuery,
+	customHeaders?: Record<string, string>
 ): Promise<T> {
 	const headers: Record<string, string> = {
 		"content-type": "application/json",
 		...(crawlerEnv.CONTROL_API_TOKEN
 			? { authorization: `Bearer ${crawlerEnv.CONTROL_API_TOKEN}` }
 			: {}),
+		...customHeaders,
 	};
 
 	try {

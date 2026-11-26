@@ -1,19 +1,22 @@
-import { type User, account, db, user } from "@cvsa/db";
+import { type InvitationCode, type Role, type User, account, db, user } from "@cvsa/db";
 import { and, eq } from "drizzle-orm";
 import { AppError } from "@cvsa/contracts";
 import { getRandomId } from "../randomId";
 import { hashPassword, verifyPassword } from "../password";
 import { createSession, deleteSessionByToken } from "../session";
 import { ensureOwnerRole } from "./roles";
+import { invitationService } from "../invitation/service";
 import type { LoginRequestDto, SignupRequestDto } from "./dto";
 
 export class UserService {
 	/**
 	 * Register a new user:
 	 * - If no users exist in the system, automatically creates/assigns the OWNER role.
-	 * - If users already exist, registration requires an invite code (placeholder: throws 403 in non-test).
+	 * - If users already exist, registration requires a valid invite code.
+	 * - Validates invite code expiration and remaining usage limits.
 	 * - Checks for duplicate username and email (throws 409 CONFLICT).
 	 * - Hashes password using native Argon2id and creates Account record.
+	 * - Redeems invite code and binds assigned role (e.g. editor).
 	 * - Creates a new database session and returns user and token.
 	 */
 	async signUp(
@@ -22,9 +25,22 @@ export class UserService {
 	): Promise<{ user: User; token: string }> {
 		const [existingUser] = await db.select().from(user).limit(1);
 
-		if (existingUser !== undefined && process.env.NODE_ENV !== "test") {
-			throw new AppError("error.signup.invite_required", "FORBIDDEN", 403, {
-				message: "Registration is invite-only and currently closed.",
+		let roleId: number | null = null;
+		let validatedInvitation: (InvitationCode & { role: Role }) | null = null;
+
+		if (data.inviteCode) {
+			validatedInvitation = await invitationService.validate(data.inviteCode);
+			roleId = validatedInvitation.roleId;
+		} else if (existingUser === undefined) {
+			const ownerRole = await ensureOwnerRole();
+			roleId = ownerRole.id;
+		} else if (process.env.NODE_ENV === "test") {
+			// In tests, if no inviteCode provided, allow test setups to pass with OWNER role
+			const ownerRole = await ensureOwnerRole();
+			roleId = ownerRole.id;
+		} else {
+			throw new AppError("error.signup.invite_required", "INVITE_CODE_REQUIRED", 400, {
+				message: "Registration is invite-only. A valid invitation code is required.",
 			});
 		}
 
@@ -52,12 +68,6 @@ export class UserService {
 			}
 		}
 
-		let roleId: number | null = null;
-		if (existingUser === undefined || process.env.NODE_ENV === "test") {
-			const ownerRole = await ensureOwnerRole();
-			roleId = ownerRole.id;
-		}
-
 		const userId = getRandomId(7);
 		const [created] = await db
 			.insert(user)
@@ -73,6 +83,10 @@ export class UserService {
 			})
 			.returning();
 		if (!created) throw new Error("Failed to create user");
+
+		if (validatedInvitation) {
+			await invitationService.recordRedemption(validatedInvitation.id, created.id);
+		}
 
 		const hashedPassword = await hashPassword(data.password);
 		await db.insert(account).values({

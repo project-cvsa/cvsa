@@ -31,6 +31,8 @@
 	"auth.field.email.optional": "Email",
 	"auth.field.password": "Password",
 	"auth.field.password.min": "Password must be at least 8 characters",
+	"auth.field.inviteCode": "Invitation Code",
+	"auth.field.inviteCode.placeholder": "Enter invitation code (required during beta)",
 	"auth.action.login": "Sign in",
 	"auth.action.register": "Sign up",
 	"auth.action.logout": "Sign out",

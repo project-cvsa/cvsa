@@ -508,6 +508,10 @@ export const CrawlerExecutionConfigSchema = z.object({
 	queueCap: z.number().int().min(1).max(10000).default(200),
 	inferenceTimeoutMs: z.number().int().min(1000).max(120000).default(30000),
 	mqOperationTimeoutMs: z.number().int().min(1000).max(30000).default(3000),
+	relatedDiscoveryEnabled: z.boolean().default(false),
+	searchRoverEnabled: z.boolean().default(true),
+	hotSamplingEnabled: z.boolean().default(true),
+	autoMetadataRefreshEnabled: z.boolean().default(true),
 });
 export type CrawlerExecutionConfig = z.infer<typeof CrawlerExecutionConfigSchema>;
 
@@ -675,7 +679,7 @@ export const QueueSnapshotQuerySchema = z.object({
 
 // Discovery samples (classifier training data)
 
-/** A stored discovery decision together with its optional human label. */
+/** A stored discovery decision together with its optional human label and curation status. */
 export const DiscoverySampleItemSchema = z.object({
 	aid: z.string(),
 	bvid: z.string(),
@@ -692,6 +696,90 @@ export const DiscoverySampleItemSchema = z.object({
 	humanLabel: z.number().int().nullable(),
 	labeledAt: z.string().nullable(),
 	capturedAt: z.string(),
+	curationStatus: z.enum(["accepted", "rejected", "pending"]).nullable().optional(),
+	curatedBy: z.string().nullable().optional(),
+	curatedAt: z.string().nullable().optional(),
+	annotationsCount: z.number().int().optional(),
+});
+
+export const VideoAnnotationDtoSchema = z.object({
+	id: z.string(),
+	aid: z.string(),
+	bvid: z.string(),
+	userId: z.string(),
+	decision: z.enum(["accepted", "rejected", "uncertain"]),
+	tags: z.array(z.string()).nullable().optional(),
+	notes: z.string().nullable().optional(),
+	createdAt: z.string(),
+});
+
+export const VideoCurationDtoSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	status: z.enum(["accepted", "rejected", "pending"]),
+	curatedBy: z.string(),
+	reason: z.string().nullable().optional(),
+	curatedAt: z.string(),
+	updatedAt: z.string(),
+});
+
+export const SubmitAnnotationRequestSchema = z.object({
+	decision: z.enum(["accepted", "rejected", "uncertain"]),
+	tags: z.array(z.string()).optional(),
+	notes: z.string().max(1000).optional(),
+});
+
+export const SubmitCurationRequestSchema = z.object({
+	status: z.enum(["accepted", "rejected", "pending"]),
+	reason: z.string().max(1000).optional(),
+});
+
+export const MetadataBackfillRequestSchema = z.object({
+	aids: z.array(z.string()).optional(),
+	limit: z.number().int().min(1).max(200).optional(),
+});
+
+export const MetadataBackfillResultItemSchema = z.object({
+	aid: z.string(),
+	success: z.boolean(),
+	error: z.string().optional(),
+});
+
+export const MetadataBackfillResponseSchema = z.object({
+	requested: z.number().int(),
+	processed: z.number().int(),
+	succeeded: z.number().int(),
+	failed: z.number().int(),
+	results: z.array(MetadataBackfillResultItemSchema),
+});
+
+export const DatasetExportQuerySchema = z.object({
+	format: z.enum(["jsonl", "json"]).default("jsonl"),
+	minProbability: z.coerce.number().min(0).max(1).optional(),
+	status: z.enum(["all", "accepted", "rejected"]).default("all"),
+});
+
+export const DatasetExportItemSchema = z.object({
+	aid: z.string(),
+	bvid: z.string(),
+	title: z.string(),
+	description: z.string().nullable(),
+	tags: z.array(z.string()),
+	duration: z.number(),
+	ownerName: z.string().nullable(),
+	pubdate: z.string().nullable(),
+	label: z.union([z.literal(0), z.literal(1)]),
+	curationStatus: z.enum(["accepted", "rejected", "pending"]).nullable(),
+	decisionReason: z.string().nullable(),
+	songProbability: z.number(),
+	annotations: z.array(
+		z.object({
+			userId: z.string(),
+			decision: z.string(),
+			tags: z.array(z.string()).optional(),
+			notes: z.string().optional(),
+		})
+	),
 });
 
 /** Boolean query params arrive as strings, so accept both encodings. */
@@ -718,7 +806,10 @@ export const DiscoverySampleListResponseSchema = z.object({
 });
 
 export const LabelDiscoverySampleRequestSchema = z.object({
-	humanLabel: z.union([z.literal(0), z.literal(1)]),
+	humanLabel: z.union([z.literal(0), z.literal(1)]).optional(),
+	decision: z.enum(["accepted", "rejected", "uncertain"]).optional(),
+	tags: z.array(z.string()).optional(),
+	notes: z.string().optional(),
 });
 
 // Tracking videos list
@@ -854,6 +945,14 @@ export type VideoSnapshotListQuery = z.infer<typeof VideoSnapshotListQuerySchema
 export type VideoSnapshotListResponse = z.infer<typeof VideoSnapshotListResponseSchema>;
 export type QueueSnapshotQuery = z.infer<typeof QueueSnapshotQuerySchema>;
 export type DiscoverySampleItem = z.infer<typeof DiscoverySampleItemSchema>;
+export type VideoAnnotationDto = z.infer<typeof VideoAnnotationDtoSchema>;
+export type VideoCurationDto = z.infer<typeof VideoCurationDtoSchema>;
+export type SubmitAnnotationRequest = z.infer<typeof SubmitAnnotationRequestSchema>;
+export type SubmitCurationRequest = z.infer<typeof SubmitCurationRequestSchema>;
+export type MetadataBackfillRequest = z.infer<typeof MetadataBackfillRequestSchema>;
+export type MetadataBackfillResponse = z.infer<typeof MetadataBackfillResponseSchema>;
+export type DatasetExportQuery = z.infer<typeof DatasetExportQuerySchema>;
+export type DatasetExportItem = z.infer<typeof DatasetExportItemSchema>;
 export type DiscoverySampleListQuery = z.infer<typeof DiscoverySampleListQuerySchema>;
 export type DiscoverySampleListResponse = z.infer<typeof DiscoverySampleListResponseSchema>;
 export type LabelDiscoverySampleRequest = z.infer<typeof LabelDiscoverySampleRequestSchema>;

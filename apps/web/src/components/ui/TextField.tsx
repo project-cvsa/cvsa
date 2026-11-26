@@ -60,10 +60,6 @@ export default function TextField(props: TextFieldProps) {
 		"aria-describedby",
 	]);
 
-	if (import.meta.env.DEV && local.label && local.placeholder) {
-		console.error("[TextField] label 与 placeholder 互斥，同时传入时 placeholder 会被忽略。");
-	}
-
 	const uid = createUniqueId();
 	const inputId = () => local.id ?? uid;
 	const errorId = () => `${inputId()}-error`;

@@ -6,9 +6,11 @@ import {
 	assertCanCreateSong,
 	assertCanDeleteSong,
 	assertCanUpdateSong,
+	assertCanUpdateSongFields,
 	canCreateSong,
 	canDeleteSong,
 	canUpdateSong,
+	canUpdateSongField,
 } from "../../src/song/songPolicy";
 
 describe("songPolicy", () => {
@@ -48,7 +50,7 @@ describe("songPolicy", () => {
 		expect(() => assertCanDeleteSong(admin, mockSong)).not.toThrow();
 	});
 
-	it("allows regular user to update but prevents delete", () => {
+	it("allows regular user to update standard fields but prevents delete", () => {
 		const regularUser = createUserPrincipal({
 			userId: "user-2",
 			roles: [],
@@ -60,5 +62,51 @@ describe("songPolicy", () => {
 
 		expect(() => assertCanUpdateSong(regularUser, mockSong)).not.toThrow();
 		expect(() => assertCanDeleteSong(regularUser, mockSong)).toThrow(AppError);
+	});
+
+	it("validates field-level permissions for update", () => {
+		const editor = createUserPrincipal({
+			userId: "editor-1",
+			roles: ["editor"],
+		});
+
+		expect(canUpdateSongField(editor, "name", mockSong)).toBe(true);
+		expect(canUpdateSongField(editor, "description", mockSong)).toBe(true);
+		expect(canUpdateSongField(editor, "coverUrl", mockSong)).toBe(true);
+		expect(canUpdateSongField(editor, "publishedAt", mockSong)).toBe(false);
+		expect(canUpdateSongField(editor, "type", mockSong)).toBe(false);
+
+		// updating standard fields succeeds
+		expect(() => {
+			assertCanUpdateSongFields(editor, mockSong, {
+				name: "New Name",
+				description: "New Description",
+			});
+		}).not.toThrow();
+
+		// updating restricted publishedAt throws FORBIDDEN
+		expect(() => {
+			assertCanUpdateSongFields(editor, mockSong, {
+				publishedAt: new Date().toISOString(),
+			});
+		}).toThrow(AppError);
+	});
+
+	it("allows privileged editor to update publishedAt and type", () => {
+		const privilegedEditor = createUserPrincipal({
+			userId: "editor-priv",
+			roles: ["editor"],
+			permissions: ["catalog:privileged_fields"],
+		});
+
+		expect(canUpdateSongField(privilegedEditor, "publishedAt", mockSong)).toBe(true);
+		expect(canUpdateSongField(privilegedEditor, "type", mockSong)).toBe(true);
+
+		expect(() => {
+			assertCanUpdateSongFields(privilegedEditor, mockSong, {
+				publishedAt: new Date().toISOString(),
+				type: "REMIX",
+			});
+		}).not.toThrow();
 	});
 });

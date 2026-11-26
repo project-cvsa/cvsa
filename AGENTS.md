@@ -59,9 +59,15 @@ We write tests to guard externally visible behavior and provide a safety net for
 1. Treat all questions, architecture discussions, root cause investigations, and reviews as read-only, after investigating the root cause, suggest a implementation plan and execute it only after user's approval.
 2. Grounded and verified: Never assume architecture, dependencies, or data flows without checking the code or searching the web first. Verify numbers and metrics with actual runs internally rather than estimating, and present only the clean, final findings without dumping raw inspection logs.
 3. Drive to completion: When explicitly instructed to implement, complete all planned steps and run verification (`bun run ci && bun run typecheck && bun run test`) before handing control back. Do not stop halfway through an agreed task just to report partial progress.
-4. Natural language and documentation boundaries: Unless explicitly requested by the user, do not edit documentation files, READMEs, or add verbose explanatory comments. If code changes make existing documentation or README sections obsolete, explicitly note this in your response (e.g., `[Notice] README section X is now obsolete due to Y`) instead of modifying it unilaterally.
-5. Concrete constraint reporting: If a genuine technical limitation exists, state it in one concrete factual sentence (e.g., `batch query is limited to 500 IDs due to parameter limits`), never as an abstract legal disclaimer.
-6. The user's local databases, containers, and related artifacts are for development and testing purposes only. Unless explicitly stated otherwise, always assume reports of failures, degradation, or other issues refer to the production environment. Never use local environments or data as evidence or authoritative data sources.
+4. Keep documentation current ([Docs as Knowledgebase](apps/docs/content/internal/developers/docs-knowledgebase.md)): When work changes external behavior, interfaces, commands, directory layout, or uncovers durable constraints or disproven assumptions, update affected pages under `apps/docs/content/internal/` in place instead of leaving decisions in chat threads.
+   - **Autonomous updates**: Confirmed implementation facts, updated paths or CLI commands, current module status, and objective findings.
+   - **Requires user confirmation**: Altering settled architecture principles, product direction, technical specifications, roadmaps, or creating/deprecating decision records.
+   - **Strict `reviewed` rule**: Never add `reviewed: true`; whenever editing an existing page marked `reviewed: true`, remove `reviewed: true` from its frontmatter.
+   - Do not add verbose explanatory comments in code or edit `README.md` unprompted; note obsolete README sections in your response if needed.
+5. Human-in-the-loop GUI collaboration ([GUI Collaboration](apps/docs/content/internal/developers/ui-collaboration.md)): Coding agents own UI implementation, state/API wiring, unit/contract tests, and static checks; human reviewers own visual inspection, layout, spacing, and interactive feel. Do not start local dev servers or launch browsers to self-approve UI unless explicitly requested by the user.
+6. Respect the current working tree and stay within scope: Treat the user's latest code changes as authoritative and never restore code to an earlier state. Implement only what was requested; extend existing surfaces and interaction patterns before adding new ones, and clarify ambiguous scope before adding new UI, endpoints, or abstractions.
+7. Concrete constraint reporting: If a genuine technical limitation exists, state it in one concrete factual sentence (e.g., `batch query is limited to 500 IDs due to parameter limits`), never as an abstract legal disclaimer.
+8. The user's local databases, containers, and related artifacts are for development and testing purposes only. Unless explicitly stated otherwise, always assume reports of failures, degradation, or other issues refer to the production environment. Never use local environments or data as evidence or authoritative data sources.
 
 ## 4. Core Architecture
 
@@ -174,7 +180,8 @@ bun run test:coverage  # Run all tests with coverage
 3. Commit Message Format (Conventional Commits):
    `<type>(optional scope): <description>`
    Types allowed: `feat`, `fix`, `update`, `docs`, `style`, `refactor`, `perf`, `test`, `ci`, `chore`, `revert`.
-4. PR Requirements: The PR title must follow the conventional commit format (e.g. `fix(deploy): unify deployment configuration`). The PR description must contain `## Changes` and `## Related` sections. Maintainers squash & merge.
+   Keep the subject line at or under 72 characters with a single or minimal scope (avoid comma-separated scope lists and laundry-list descriptions).
+4. PR Requirements: The PR title must follow the conventional commit format, stay at or under 72 characters, and summarize the main change concisely (e.g. `fix(deploy): unify deployment configuration`). The PR description must contain `## Changes` and `## Related` sections. Maintainers squash & merge.
 
 ## 9. Quality Check
 

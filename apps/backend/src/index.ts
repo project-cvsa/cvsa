@@ -10,6 +10,7 @@ import {
 	artistRoleHandler,
 	singerHandler,
 	crawlerAdminHandler,
+	invitationAdminHandler,
 } from "@handlers/index";
 import { errorHandler } from "./errorHandler";
 import { openapi } from "@elysiajs/openapi";
@@ -151,7 +152,8 @@ export const app = new Elysia({
 	.use(artistRoleHandler)
 	.use(singerHandler)
 	.use(devHandler)
-	.use(crawlerAdminHandler);
+	.use(crawlerAdminHandler)
+	.use(invitationAdminHandler);
 
 if (process.env.NODE_ENV !== "test") {
 	app.listen({ hostname: host, port });

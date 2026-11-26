@@ -1,3 +1,5 @@
+import { type AppAbility, defineAbilityFor, hasPermissionInList } from "./ability";
+
 export type PrincipalType = "user" | "service";
 
 export interface Principal {
@@ -6,6 +8,8 @@ export interface Principal {
 	readonly auditUserId: string;
 	readonly roles: readonly string[];
 	readonly permissions: readonly string[];
+	readonly ability: AppAbility;
+	hasPermission(action: string): boolean;
 }
 
 export interface CreateUserPrincipalOptions {
@@ -21,12 +25,24 @@ export function createUserPrincipal(options: CreateUserPrincipalOptions): Princi
 		if (!roles.includes("editor")) roles.push("editor");
 		if (!roles.includes("OWNER")) roles.push("OWNER");
 	}
+	const permissions = options.permissions ?? [];
+	const ability = defineAbilityFor({
+		type: "user",
+		roles,
+		permissions,
+	});
+
 	return {
 		id: options.userId,
 		type: "user",
 		auditUserId: options.userId,
 		roles,
-		permissions: options.permissions ?? [],
+		permissions,
+		ability,
+		hasPermission: (action: string) =>
+			roles.includes("admin") ||
+			roles.includes("OWNER") ||
+			hasPermissionInList(permissions, action),
 	};
 }
 
@@ -38,12 +54,25 @@ export interface CreateServicePrincipalOptions {
 }
 
 export function createServicePrincipal(options: CreateServicePrincipalOptions): Principal {
+	const roles = options.roles ?? [];
+	const permissions = options.permissions ?? [];
+	const ability = defineAbilityFor({
+		type: "service",
+		roles,
+		permissions,
+	});
+
 	return {
 		id: options.serviceId,
 		type: "service",
 		auditUserId: options.auditUserId,
-		roles: options.roles ?? [],
-		permissions: options.permissions ?? [],
+		roles,
+		permissions,
+		ability,
+		hasPermission: (action: string) =>
+			roles.includes("admin") ||
+			roles.includes("OWNER") ||
+			hasPermissionInList(permissions, action),
 	};
 }
 

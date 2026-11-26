@@ -10,6 +10,9 @@ const t = i18nServer.getT({ locale: language, namespace: "server" });
 if (Astro.locals.user) {
 	return Astro.redirect("/");
 }
+
+const inviteParam =
+	Astro.url.searchParams.get("invite") ?? Astro.url.searchParams.get("code") ?? "";
 ---
 
 <Layout title={t("auth.register.title")}>
@@ -23,6 +26,9 @@ if (Astro.locals.user) {
 				emailLabel={t("auth.field.email.optional")}
 				passwordLabel={t("auth.field.password")}
 				passwordHelperText={t("auth.field.password.min")}
+				inviteCodeLabel={t("auth.field.inviteCode")}
+				inviteCodePlaceholder={t("auth.field.inviteCode.placeholder")}
+				initialInviteCode={inviteParam}
 				submitLabel={t("auth.action.register")}
 				genericError={t("auth.error.generic")}
 				networkError={t("auth.error.network")}

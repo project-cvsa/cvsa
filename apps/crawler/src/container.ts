@@ -6,6 +6,7 @@ import { MilestoneService } from "./crawler/milestone/service";
 import { createMilestoneMaintenance } from "./crawler/milestone/worker";
 import { AdapterProbeService } from "./crawler/network/adapterProbeService";
 import { CrawlerAdminStatsService } from "./crawler/stats/adminService";
+import { SigNozMetricsClient } from "./crawler/stats/signozClient";
 import { CrawlerStatsStateRepository } from "./crawler/stats/stateRepository";
 import { createRedisHeartbeatStore } from "./crawler/stats/heartbeat";
 import { crawlerExportObservation } from "./crawler/stats/exportState";
@@ -230,13 +231,18 @@ export const adapterProbeService = new AdapterProbeService(
  * this scheduler is what actually performs it, one row at a time, so metadata
  * stays current without an extra Redis queue.
  */
-export const metadataRefreshScheduler = new MetadataRefreshScheduler({
-	listDueMetadata: (now, limit) => trackingRepository.listDueMetadata(limit, now),
-	trackingRepository,
-	discoveryRepository,
-	bilibiliClient,
-	stats: statsCollector,
-});
+export const metadataRefreshScheduler = new MetadataRefreshScheduler(
+	{
+		listDueMetadata: (now, limit) => trackingRepository.listDueMetadata(limit, now),
+		trackingRepository,
+		discoveryRepository,
+		bilibiliClient,
+		stats: statsCollector,
+	},
+	{
+		isAutoRefreshEnabled: () => networkRuntime.getExecutionConfig().autoMetadataRefreshEnabled,
+	}
+);
 
 export const discoveryFilterService = new DiscoveryFilterService(
 	{},
@@ -314,6 +320,9 @@ statsOverviewDeps.strategies = async () => {
 	];
 };
 
+export const isRelatedDiscoveryEnabled = (): boolean =>
+	networkRuntime.getExecutionConfig().relatedDiscoveryEnabled;
+
 export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 	bilibiliClient,
 	discoveryRepository,
@@ -321,7 +330,12 @@ export const discoveryPipelineProcessor = new DiscoveryPipelineProcessor(
 	discoveryQueue,
 	discoveryFilterService,
 	videoClassifierClient,
-	statsCollector
+	statsCollector,
+	{
+		isRelatedDiscoveryEnabled,
+		isSearchRoverEnabled: () => networkRuntime.getExecutionConfig().searchRoverEnabled,
+		isHotSamplingEnabled: () => networkRuntime.getExecutionConfig().hotSamplingEnabled,
+	}
 );
 export const discoveryWorker = createDiscoveryWorker(
 	crawlerMq,
@@ -330,26 +344,37 @@ export const discoveryWorker = createDiscoveryWorker(
 	statsCollector,
 	() => networkRuntime.getExecutionConfig().discoveryRetry
 );
+export const sigNozMetricsClient = new SigNozMetricsClient({
+	endpoint: crawlerEnv.SIGNOZ_API_URL,
+	apiKey: crawlerEnv.SIGNOZ_API_KEY,
+});
 export const crawlerAdminStatsService = new CrawlerAdminStatsService(
 	{ tracking: snapshotQueue, discovery: discoveryQueue },
 	statsCollector,
 	statsOverviewDeps,
-	statsStateRepository
+	statsStateRepository,
+	sigNozMetricsClient
 );
 export const discoveryAdminService = new DiscoveryAdminService(
 	discoveryQueue,
 	discoveryRepository,
 	statsCollector,
-	trackingRepository
+	trackingRepository,
+	bilibiliClient
 );
-export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue);
+export const discoveryScheduler = new DiscoveryScheduler(discoveryQueue, {
+	isRelatedDiscoveryEnabled,
+	isSearchRoverEnabled: () => networkRuntime.getExecutionConfig().searchRoverEnabled,
+	isHotSamplingEnabled: () => networkRuntime.getExecutionConfig().hotSamplingEnabled,
+});
 export const discoveryService = new DiscoveryService(
 	bilibiliClient,
 	discoveryRepository,
 	trackingRepository,
 	discoveryFilterService,
 	videoClassifierClient,
-	statsCollector
+	statsCollector,
+	isRelatedDiscoveryEnabled
 );
 export const snapshotService = new SnapshotService(
 	bilibiliClient,

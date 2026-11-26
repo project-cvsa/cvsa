@@ -8,6 +8,7 @@ import { getComponentT } from "@lib/i18n/isomorphic";
 import type { CrawlerStatusDto } from "@cvsa/contracts";
 import RefreshCw from "lucide-solid/icons/refresh-cw";
 import Plus from "lucide-solid/icons/plus";
+import Ticket from "lucide-solid/icons/ticket";
 import ManualIngestModal from "./crawler/ManualIngestModal";
 import LabelingSection from "./crawler/sections/LabelingSection";
 import { CrawlerRefreshProvider, type CrawlerSection } from "./crawler/refresh";
@@ -115,6 +116,18 @@ export default function CrawlerDashboard() {
 				</div>
 
 				<div class="flex items-center gap-3">
+					<a href="/admin/invitations">
+						<Button
+							variant="outlined"
+							size="sm"
+							class="gap-1.5"
+							aria-label={t("dashboard.invitations")}
+						>
+							<Ticket class="w-3.5 h-3.5" />
+							<span>{t("dashboard.invitations")}</span>
+						</Button>
+					</a>
+
 					<Button
 						variant="filled"
 						size="sm"

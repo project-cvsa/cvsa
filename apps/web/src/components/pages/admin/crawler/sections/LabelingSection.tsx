@@ -18,7 +18,12 @@ import {
 } from "../discoveryFilters";
 import Pagination, { CompactPager } from "../TablePagination";
 import DiscoveryCandidate from "../discovery/DiscoveryCandidate";
+import ImmersiveLabeler from "../discovery/ImmersiveLabeler";
 import LabelingStats from "../LabelingStats";
+import Maximize2 from "lucide-solid/icons/maximize-2";
+import List from "lucide-solid/icons/list";
+import Download from "lucide-solid/icons/download";
+import RefreshCw from "lucide-solid/icons/refresh-cw";
 
 export default function LabelingSection(props: { active: boolean }) {
 	const t = getComponentT("crawler:discovery");
@@ -36,8 +41,41 @@ export default function LabelingSection(props: { active: boolean }) {
 	const [page, setPage] = createSignal(0);
 	const [pageSize, setPageSize] = createSignal(15);
 	const [focused, setFocused] = createSignal(0);
+	const [viewMode, setViewMode] = createSignal<"list" | "immersive">("list");
 	const [pendingAids, setPendingAids] = createSignal<Set<string>>(new Set());
+	const [backfilling, setBackfilling] = createSignal(false);
 	const requests = createRequestSequence();
+
+	const handleExport = () => {
+		const url = api.crawler.getDatasetExportUrl({ format: "jsonl", status: "all" });
+		window.open(url, "_blank");
+	};
+
+	const handleBackfill = async () => {
+		if (backfilling()) return;
+		setBackfilling(true);
+		try {
+			const res = await api.crawler.backfillMetadata({ limit: 100 });
+			if (res.ok && res.data) {
+				toast.success(
+					t("discoveryUi.backfillSuccess", {
+						scanned: res.data.processed,
+						updated: res.data.succeeded,
+						failed: res.data.failed,
+					})
+				);
+				void loadSamples();
+			} else {
+				toast.error(
+					res.ok
+						? t("discoveryUi.backfillFailed")
+						: res.error.message || t("discoveryUi.backfillFailed")
+				);
+			}
+		} finally {
+			setBackfilling(false);
+		}
+	};
 
 	const loadSamples = async () => {
 		const request = requests.start();
@@ -91,7 +129,15 @@ export default function LabelingSection(props: { active: boolean }) {
 		void loadSamples();
 	};
 
-	const label = async (aid: string, isSong: boolean) => {
+	const label = async (
+		aid: string,
+		isSong: boolean,
+		options?: {
+			decision?: "accepted" | "rejected" | "uncertain";
+			tags?: string[];
+			notes?: string;
+		}
+	) => {
 		if (pendingAids().has(aid)) return;
 
 		const prevSamples = samples();
@@ -101,7 +147,16 @@ export default function LabelingSection(props: { active: boolean }) {
 			return {
 				...prev,
 				items: prev.items.map((item) =>
-					item.aid === aid ? { ...item, humanLabel: targetLabel } : item
+					item.aid === aid
+						? {
+								...item,
+								humanLabel: targetLabel,
+								curationStatus:
+									options?.decision === "uncertain"
+										? "pending"
+										: (options?.decision ?? (isSong ? "accepted" : "rejected")),
+							}
+						: item
 				),
 			};
 		});
@@ -113,7 +168,7 @@ export default function LabelingSection(props: { active: boolean }) {
 		}
 
 		setPendingAids((prev) => new Set([...prev, aid]));
-		const result = await api.crawler.labelDiscoverySample(aid, targetLabel);
+		const result = await api.crawler.labelDiscoverySample(aid, targetLabel, options);
 		setPendingAids((prev) => {
 			const next = new Set(prev);
 			next.delete(aid);
@@ -182,217 +237,323 @@ export default function LabelingSection(props: { active: boolean }) {
 					</>
 				}
 				actions={
-					<CompactPager
-						page={page()}
-						total={samples()?.total ?? 0}
-						pageSize={pageSize()}
-						busy={loading()}
-						onPageChange={(next) => {
-							setPage(next);
-							void loadSamples();
-						}}
-					/>
+					<div class="flex items-center gap-2">
+						<Button
+							size="sm"
+							variant="outlined"
+							onClick={handleBackfill}
+							disabled={backfilling()}
+							aria-label={t("discoveryUi.backfill")}
+						>
+							<RefreshCw
+								class={`w-3.5 h-3.5 mr-1 ${backfilling() ? "animate-spin" : ""}`}
+							/>
+							{backfilling()
+								? t("discoveryUi.backfilling")
+								: t("discoveryUi.backfill")}
+						</Button>
+						<Button
+							size="sm"
+							variant="outlined"
+							onClick={handleExport}
+							aria-label={t("discoveryUi.exportDataset")}
+						>
+							<Download class="w-3.5 h-3.5 mr-1" />
+							{t("discoveryUi.exportDataset")}
+						</Button>
+						<Button
+							size="sm"
+							variant={viewMode() === "immersive" ? "filled" : "outlined"}
+							onClick={() =>
+								setViewMode((m) => (m === "immersive" ? "list" : "immersive"))
+							}
+							aria-label={
+								viewMode() === "immersive"
+									? t("discoveryUi.listMode")
+									: t("discoveryUi.immersive")
+							}
+						>
+							<Show
+								when={viewMode() === "immersive"}
+								fallback={
+									<>
+										<Maximize2 class="w-3.5 h-3.5 mr-1" />
+										{t("discoveryUi.immersive")}
+									</>
+								}
+							>
+								<List class="w-3.5 h-3.5 mr-1" />
+								{t("discoveryUi.listMode")}
+							</Show>
+						</Button>
+						<CompactPager
+							page={page()}
+							total={samples()?.total ?? 0}
+							pageSize={pageSize()}
+							busy={loading()}
+							onPageChange={(next) => {
+								setPage(next);
+								void loadSamples();
+							}}
+						/>
+					</div>
 				}
 			/>
 
 			<LabelingStats />
 
-			<section class="flex flex-col gap-3" aria-label={t("discoveryUi.review")}>
-				<form
-					class="flex flex-col gap-3 w-full"
-					onSubmit={(event) => {
-						event.preventDefault();
-						setAppliedSearch(search());
-						filterChanged();
-					}}
-				>
-					{/* Search bar row */}
-					<div class="flex items-center gap-2 w-full">
-						<div class="flex-1 min-w-0">
-							<TextField
-								size="sm"
-								class="w-full"
-								aria-label={t("audit.search")}
-								placeholder={t("audit.search")}
-								value={search()}
-								onInput={(event) => setSearch(event.currentTarget.value)}
-							/>
-						</div>
-						<Button size="sm" variant="filled" type="submit" class="shrink-0 px-4">
-							{t("common.search")}
-						</Button>
-					</div>
-
-					{/* Filters and sorting row */}
-					<div class="flex flex-wrap items-center justify-between gap-3 w-full">
-						<div class="flex flex-wrap items-center gap-2">
-							<div class="w-40">
-								<Select
-									size="sm"
-									aria-label={t("audit.decision")}
-									options={options(
-										[
-											"all",
-											"whitelist",
-											"model_accepted",
-											"model_rejected_sampled",
-										],
-										"audit.decisions"
-									)}
-									value={decision()}
-									onValueChange={(value) => {
-										if (
-											value === "all" ||
-											value === "whitelist" ||
-											value === "model_accepted" ||
-											value === "model_rejected_sampled"
-										) {
-											setDecision(value);
-											filterChanged();
-										}
-									}}
-								/>
-							</div>
-							<div class="w-32">
-								<Select
-									size="sm"
-									aria-label={t("audit.label")}
-									options={options(
-										["all", "unlabeled", "labeled"],
-										"audit.labels"
-									)}
-									value={labeled()}
-									onValueChange={(value) => {
-										if (
-											value === "all" ||
-											value === "unlabeled" ||
-											value === "labeled"
-										) {
-											setLabeled(value);
-											filterChanged();
-										}
-									}}
-								/>
-							</div>
-							<div class="w-32">
-								<Select
-									size="sm"
-									aria-label={t("audit.source")}
-									options={options(
-										["all", "search", "related", "manual", "hot_sample"],
-										"audit.sources"
-									)}
-									value={source() ?? "all"}
-									onValueChange={(value) => {
-										if (
-											value === "search" ||
-											value === "related" ||
-											value === "manual" ||
-											value === "hot_sample" ||
-											value === "all"
-										) {
-											setSource(value === "all" ? undefined : value);
-											filterChanged();
-										}
-									}}
-								/>
-							</div>
-							<div class="w-40">
-								<Select
-									size="sm"
-									aria-label={t("discoveryUi.confidence")}
-									options={options(
-										["all", "high", "borderline", "low"],
-										"audit.confidence"
-									)}
-									value={confidence()}
-									onValueChange={(value) => {
-										setConfidence(value ?? "all");
-										filterChanged();
-									}}
-								/>
-							</div>
-						</div>
-
-						{/* Explicit sorting area */}
-						<div class="flex items-center gap-2 shrink-0">
-							<div class="w-44">
-								<Select
-									size="sm"
-									aria-label={t("audit.sort")}
-									options={options(
-										[
-											"capturedAt_desc",
-											"capturedAt_asc",
-											"confidence_desc",
-											"confidence_asc",
-											"aid_desc",
-										],
-										"audit.sorts"
-									)}
-									value={sort()}
-									onValueChange={(value) => {
-										setSort(value ?? "capturedAt_desc");
-										filterChanged();
-									}}
-								/>
-							</div>
-						</div>
-					</div>
-				</form>
-
-				<Show when={error()}>
-					{(message) => (
-						<p role="alert" class="text-error text-label tracking-label">
-							{message()}
-						</p>
-					)}
-				</Show>
-
-				<div
-					class="cvsa-scroll overflow-x-auto border border-border bg-surface"
-					aria-busy={loading()}
-				>
-					<div class="min-w-[1000px]">
-						<For
-							each={samples()?.items}
-							fallback={
-								<p class="p-8 text-center text-tertiary text-label tracking-label">
-									{loading() ? t("common.loading") : t("discoveryUi.noSamples")}
-								</p>
-							}
+			<Show
+				when={viewMode() === "immersive" && samples()?.items[focused()]}
+				fallback={
+					<section class="flex flex-col gap-3" aria-label={t("discoveryUi.review")}>
+						<form
+							class="flex flex-col gap-3 w-full"
+							onSubmit={(event) => {
+								event.preventDefault();
+								setAppliedSearch(search());
+								filterChanged();
+							}}
 						>
-							{(item, index) => (
-								<DiscoveryCandidate
-									item={item}
-									index={index()}
-									focused={focused() === index()}
-									busy={pendingAids().has(item.aid)}
-									onFocus={() => setFocused(index())}
-									onLabel={(isSong) => void label(item.aid, isSong)}
-								/>
-							)}
-						</For>
-					</div>
-				</div>
+							{/* Search bar row */}
+							<div class="flex items-center gap-2 w-full">
+								<div class="flex-1 min-w-0">
+									<TextField
+										size="sm"
+										class="w-full"
+										aria-label={t("audit.search")}
+										placeholder={t("audit.search")}
+										value={search()}
+										onInput={(event) => setSearch(event.currentTarget.value)}
+									/>
+								</div>
+								<Button
+									size="sm"
+									variant="filled"
+									type="submit"
+									class="shrink-0 px-4"
+								>
+									{t("common.search")}
+								</Button>
+							</div>
 
-				<Pagination
-					page={page()}
-					total={samples()?.total ?? 0}
-					pageSize={pageSize()}
-					pageSizeOptions={[10, 15, 25, 50, 100]}
-					busy={loading()}
-					onPageChange={(next) => {
-						setPage(next);
-						void loadSamples();
-					}}
-					onPageSizeChange={(nextSize) => {
-						setPageSize(nextSize);
-						setPage(0);
-						void loadSamples();
-					}}
-				/>
-			</section>
+							{/* Filters and sorting row */}
+							<div class="flex flex-wrap items-center justify-between gap-3 w-full">
+								<div class="flex flex-wrap items-center gap-2">
+									<div class="w-40">
+										<Select
+											size="sm"
+											aria-label={t("audit.decision")}
+											options={options(
+												[
+													"all",
+													"whitelist",
+													"model_accepted",
+													"model_rejected_sampled",
+												],
+												"audit.decisions"
+											)}
+											value={decision()}
+											onValueChange={(value) => {
+												if (
+													value === "all" ||
+													value === "whitelist" ||
+													value === "model_accepted" ||
+													value === "model_rejected_sampled"
+												) {
+													setDecision(value);
+													filterChanged();
+												}
+											}}
+										/>
+									</div>
+									<div class="w-32">
+										<Select
+											size="sm"
+											aria-label={t("audit.label")}
+											options={options(
+												["all", "unlabeled", "labeled"],
+												"audit.labels"
+											)}
+											value={labeled()}
+											onValueChange={(value) => {
+												if (
+													value === "all" ||
+													value === "unlabeled" ||
+													value === "labeled"
+												) {
+													setLabeled(value);
+													filterChanged();
+												}
+											}}
+										/>
+									</div>
+									<div class="w-32">
+										<Select
+											size="sm"
+											aria-label={t("audit.source")}
+											options={options(
+												[
+													"all",
+													"search",
+													"related",
+													"manual",
+													"hot_sample",
+												],
+												"audit.sources"
+											)}
+											value={source() ?? "all"}
+											onValueChange={(value) => {
+												if (
+													value === "search" ||
+													value === "related" ||
+													value === "manual" ||
+													value === "hot_sample" ||
+													value === "all"
+												) {
+													setSource(value === "all" ? undefined : value);
+													filterChanged();
+												}
+											}}
+										/>
+									</div>
+									<div class="w-40">
+										<Select
+											size="sm"
+											aria-label={t("discoveryUi.confidence")}
+											options={options(
+												["all", "high", "borderline", "low"],
+												"audit.confidence"
+											)}
+											value={confidence()}
+											onValueChange={(value) => {
+												setConfidence(value ?? "all");
+												filterChanged();
+											}}
+										/>
+									</div>
+								</div>
+
+								{/* Explicit sorting area */}
+								<div class="flex items-center gap-2 shrink-0">
+									<div class="w-44">
+										<Select
+											size="sm"
+											aria-label={t("audit.sort")}
+											options={options(
+												[
+													"capturedAt_desc",
+													"capturedAt_asc",
+													"confidence_desc",
+													"confidence_asc",
+													"aid_desc",
+												],
+												"audit.sorts"
+											)}
+											value={sort()}
+											onValueChange={(value) => {
+												setSort(value ?? "capturedAt_desc");
+												filterChanged();
+											}}
+										/>
+									</div>
+								</div>
+							</div>
+						</form>
+
+						<Show when={error()}>
+							{(message) => (
+								<p role="alert" class="text-error text-label tracking-label">
+									{message()}
+								</p>
+							)}
+						</Show>
+
+						<div
+							class="cvsa-scroll overflow-x-auto border border-border bg-surface"
+							aria-busy={loading()}
+						>
+							<div class="min-w-[1000px]">
+								<For
+									each={samples()?.items}
+									fallback={
+										<p class="p-8 text-center text-tertiary text-label tracking-label">
+											{loading()
+												? t("common.loading")
+												: t("discoveryUi.noSamples")}
+										</p>
+									}
+								>
+									{(item, index) => (
+										<DiscoveryCandidate
+											item={item}
+											index={index()}
+											focused={focused() === index()}
+											busy={pendingAids().has(item.aid)}
+											onFocus={() => setFocused(index())}
+											onLabel={(isSong) => void label(item.aid, isSong)}
+										/>
+									)}
+								</For>
+							</div>
+						</div>
+
+						<Pagination
+							page={page()}
+							total={samples()?.total ?? 0}
+							pageSize={pageSize()}
+							pageSizeOptions={[10, 15, 25, 50, 100]}
+							busy={loading()}
+							onPageChange={(next) => {
+								setPage(next);
+								void loadSamples();
+							}}
+							onPageSizeChange={(nextSize) => {
+								setPageSize(nextSize);
+								setPage(0);
+								void loadSamples();
+							}}
+						/>
+					</section>
+				}
+			>
+				{(() => {
+					const item = samples()?.items[focused()];
+					if (!item) return null;
+					return (
+						<ImmersiveLabeler
+							item={item}
+							index={page() * pageSize() + focused()}
+							total={samples()?.total ?? 0}
+							busy={pendingAids().has(item.aid)}
+							onClose={() => setViewMode("list")}
+							onNext={() => {
+								const nextIndex = focused() + 1;
+								if (nextIndex < (samples()?.items.length ?? 0)) {
+									setFocused(nextIndex);
+								} else if (
+									page() <
+									Math.ceil((samples()?.total ?? 0) / pageSize()) - 1
+								) {
+									setPage(page() + 1);
+									setFocused(0);
+									void loadSamples();
+								}
+							}}
+							onPrev={() => {
+								const prevIndex = focused() - 1;
+								if (prevIndex >= 0) {
+									setFocused(prevIndex);
+								} else if (page() > 0) {
+									setPage(page() - 1);
+									setFocused(pageSize() - 1);
+									void loadSamples();
+								}
+							}}
+							onLabel={(aid, isSong, opts) => label(aid, isSong, opts)}
+						/>
+					);
+				})()}
+			</Show>
 		</div>
 	);
 }

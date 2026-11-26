@@ -10,7 +10,7 @@ export const adminAuthMiddleware = new Elysia({ name: "adminAuthMiddleware" }).d
 			throw new AppError("error.unauthorized", "UNAUTHORIZED", 401);
 		}
 		const { session, user, roleName } = authContext;
-		if (roleName !== "OWNER" && roleName !== "admin") {
+		if (roleName !== "OWNER" && roleName !== "admin" && roleName !== "editor") {
 			throw new AppError("error.forbidden", "FORBIDDEN", 403);
 		}
 		return {

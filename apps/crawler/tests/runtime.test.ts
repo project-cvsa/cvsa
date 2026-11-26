@@ -115,4 +115,46 @@ describe("crawler runtime", () => {
 		await Promise.all([refresh, closed]);
 		expect(finished).toEqual(["refreshed", "closed"]);
 	});
+
+	test("respects live isAutoRefreshEnabled flag on periodic ticks while keeping manual refreshDue working", async () => {
+		let listCalls = 0;
+		let autoEnabled = false;
+		const scheduler = new MetadataRefreshScheduler(
+			{
+				async listDueMetadata() {
+					listCalls++;
+					return [];
+				},
+				trackingRepository: { async updateSchedule() {} },
+				discoveryRepository: {
+					async upsertMetadataWithResult() {
+						throw new Error("No metadata expected");
+					},
+				},
+				bilibiliClient: {
+					async getVideoDetails() {
+						throw new Error("No details expected");
+					},
+				},
+			},
+			{
+				intervalMs: 15,
+				isAutoRefreshEnabled: () => autoEnabled,
+			}
+		);
+
+		// Manual refreshDue works even when auto refresh is disabled
+		await scheduler.refreshDue();
+		expect(listCalls).toBe(1);
+
+		scheduler.start(15);
+		await Bun.sleep(40);
+		// Periodic ticks were skipped while autoEnabled = false
+		expect(listCalls).toBe(1);
+
+		autoEnabled = true;
+		await Bun.sleep(40);
+		await scheduler.close();
+		expect(listCalls).toBeGreaterThan(1);
+	});
 });

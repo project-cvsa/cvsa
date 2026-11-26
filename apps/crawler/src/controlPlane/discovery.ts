@@ -18,7 +18,14 @@ import {
 	LabelDiscoverySampleRequestSchema,
 	ProcessRecommendationsResponseSchema,
 	RecommendationGraphResponseSchema,
+	SubmitAnnotationRequestSchema,
+	SubmitCurationRequestSchema,
+	MetadataBackfillRequestSchema,
+	MetadataBackfillResponseSchema,
+	DatasetExportQuerySchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
+	VideoAnnotationDtoSchema,
+	VideoCurationDtoSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
 	type BilibiliVideoMetadataDto,
@@ -28,7 +35,7 @@ import {
 } from "@cvsa/contracts";
 import { toInstant } from "@cvsa/snapshot-db";
 import type { BilibiliVideoMetadata, BilibiliVideoRelation } from "@cvsa/snapshot-db";
-import { DEFAULT_HOT_SAMPLE_LIMIT, RELATED_DISCOVERY_ENABLED } from "../crawler";
+import { DEFAULT_HOT_SAMPLE_LIMIT } from "../crawler";
 import {
 	bilibiliClient,
 	discoveryFilterService,
@@ -36,6 +43,7 @@ import {
 	discoveryRepository,
 	discoveryScheduler,
 	discoveryService,
+	isRelatedDiscoveryEnabled,
 	metadataRefreshScheduler,
 	trackingRepository,
 	videoClassifierClient,
@@ -428,7 +436,7 @@ export const discoveryRoutes = new Elysia()
 			let relations = await discoveryRepository.getRelationsBySource(seedAid);
 
 			// If no relations recorded yet, fetch live from Bilibili and persist!
-			if (RELATED_DISCOVERY_ENABLED && relations.length === 0) {
+			if (isRelatedDiscoveryEnabled() && relations.length === 0) {
 				try {
 					const relatedVideos = await bilibiliClient.getRelatedVideos(seedAid);
 					if (relatedVideos.length > 0) {
@@ -501,11 +509,22 @@ export const discoveryRoutes = new Elysia()
 	})
 	.post(
 		"/samples/:aid/label",
-		async ({ params, body, status }) => {
+		async ({ params, body, headers, status }) => {
 			if (!/^\d+$/.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			return discoveryAdminService.label(BigInt(params.aid), body.humanLabel);
+			const humanLabel =
+				body.humanLabel !== undefined
+					? body.humanLabel
+					: body.decision === "accepted"
+						? 1
+						: 0;
+			const userId = headers["x-user-id"] || "admin";
+			return discoveryAdminService.label(BigInt(params.aid), humanLabel, {
+				userId,
+				tags: body.tags,
+				notes: body.notes,
+			});
 		},
 		{
 			body: LabelDiscoverySampleRequestSchema,
@@ -514,6 +533,102 @@ export const discoveryRoutes = new Elysia()
 				401: ErrorResponseSchema,
 				404: ErrorResponseSchema,
 				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/samples/:aid/annotations",
+		async ({ params, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			return discoveryAdminService.listAnnotations(BigInt(params.aid));
+		},
+		{
+			response: {
+				200: VideoAnnotationDtoSchema.array(),
+				401: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/samples/:aid/annotations",
+		async ({ params, body, headers, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			const userId = headers["x-user-id"] || "admin";
+			return discoveryAdminService.annotate(BigInt(params.aid), userId, body);
+		},
+		{
+			body: SubmitAnnotationRequestSchema,
+			response: {
+				200: VideoAnnotationDtoSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/samples/:aid/curate",
+		async ({ params, body, headers, status }) => {
+			if (!/^\d+$/.test(params.aid)) {
+				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
+			}
+			const userId = headers["x-user-id"] || "admin";
+			return discoveryAdminService.curate(
+				BigInt(params.aid),
+				userId,
+				body.status,
+				body.reason
+			);
+		},
+		{
+			body: SubmitCurationRequestSchema,
+			response: {
+				200: VideoCurationDtoSchema,
+				401: ErrorResponseSchema,
+				404: ErrorResponseSchema,
+				422: ErrorResponseSchema,
+			},
+		}
+	)
+	.post(
+		"/samples/metadata/backfill",
+		async ({ body }) => {
+			const aids = body?.aids?.map((a) => BigInt(a));
+			return discoveryAdminService.backfillMetadata({
+				aids,
+				limit: body?.limit,
+			});
+		},
+		{
+			body: MetadataBackfillRequestSchema.optional(),
+			response: {
+				200: MetadataBackfillResponseSchema,
+				401: ErrorResponseSchema,
+				503: ErrorResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/samples/dataset/export",
+		async ({ query, set }) => {
+			const result = await discoveryAdminService.exportDataset({
+				format: query.format,
+				minProbability: query.minProbability,
+				status: query.status,
+			});
+			set.headers["content-type"] = result.mimeType;
+			set.headers["content-disposition"] = `attachment; filename="${result.filename}"`;
+			return result.formatted;
+		},
+		{
+			query: DatasetExportQuerySchema,
+			response: {
+				401: ErrorResponseSchema,
 			},
 		}
 	);

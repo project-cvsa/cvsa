@@ -37,9 +37,12 @@ import {
 	type DiscoveryQueuedResponse,
 	CrawlerQueueJobParamsSchema,
 	CrawlerJobActionResponseSchema,
+	DatasetExportQuerySchema,
 	IngestVideoRequestSchema,
 	IngestVideoResponseSchema,
 	LabelDiscoverySampleRequestSchema,
+	MetadataBackfillRequestSchema,
+	MetadataBackfillResponseSchema,
 	NetworkRuntimeConfigDocumentSchema,
 	ProcessRecommendationsResponseSchema,
 	PromoteTrackingVideoRequestSchema,
@@ -47,11 +50,15 @@ import {
 	RegisterTrackingVideosRequestSchema,
 	RegisterTrackingVideosResponseSchema,
 	ReplaceNetworkRuntimeConfigRequestSchema,
+	SubmitAnnotationRequestSchema,
+	SubmitCurationRequestSchema,
 	TestNetworkAdapterResponseSchema,
 	TrackingVideoListQuerySchema,
 	TrackingAidParamsSchema,
 	TrackingVideoListResponseSchema,
 	UpdateDiscoveryFilterConfigRequestSchema,
+	VideoAnnotationDtoSchema,
+	VideoCurationDtoSchema,
 	VideoMetadataHistoryListQuerySchema,
 	VideoMetadataHistoryListResponseSchema,
 	VideoSnapshotListQuerySchema,
@@ -72,18 +79,21 @@ import {
 	type DiscoverySampleListResponse,
 	type DiscoveryStatusDto,
 	type IngestVideoResponse,
+	type MetadataBackfillResponse,
 	type NetworkRuntimeConfigDocument,
 	type ProcessRecommendationsResponse,
 	type RecommendationGraphResponse,
 	type RegisterTrackingVideosResponse,
 	type TestNetworkAdapterResponse,
 	type TrackingVideoListResponse,
+	type VideoAnnotationDto,
+	type VideoCurationDto,
 	type VideoMetadataHistoryListResponse,
 	type VideoSnapshotListResponse,
 	type VideoTrackingDto,
 } from "@cvsa/contracts";
 import { adminAuthMiddleware } from "@/middlewares";
-import { callCrawlerApi } from "./client";
+import { callCrawlerApi, callCrawlerRaw, type CrawlerQuery } from "./client";
 
 export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	.use(adminAuthMiddleware)
@@ -566,11 +576,13 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 	)
 	.post(
 		"/discovery/samples/:aid/label",
-		async ({ params, body }): Promise<DiscoverySampleItem> => {
+		async ({ params, body, user }): Promise<DiscoverySampleItem> => {
 			return callCrawlerApi<DiscoverySampleItem>(
 				`/discovery/samples/${params.aid}/label`,
 				"POST",
-				body
+				body,
+				undefined,
+				{ "x-user-id": user.id }
 			);
 		},
 		{
@@ -578,5 +590,88 @@ export const crawlerAdminHandler = new Elysia({ prefix: "/admin/crawler" })
 			response: {
 				200: DiscoverySampleItemSchema,
 			},
+		}
+	)
+	.get(
+		"/discovery/samples/:aid/annotations",
+		async ({ params }): Promise<VideoAnnotationDto[]> => {
+			return callCrawlerApi<VideoAnnotationDto[]>(
+				`/discovery/samples/${params.aid}/annotations`,
+				"GET"
+			);
+		},
+		{
+			response: {
+				200: VideoAnnotationDtoSchema.array(),
+			},
+		}
+	)
+	.post(
+		"/discovery/samples/:aid/annotations",
+		async ({ params, body, user }): Promise<VideoAnnotationDto> => {
+			return callCrawlerApi<VideoAnnotationDto>(
+				`/discovery/samples/${params.aid}/annotations`,
+				"POST",
+				body,
+				undefined,
+				{ "x-user-id": user.id }
+			);
+		},
+		{
+			body: SubmitAnnotationRequestSchema,
+			response: {
+				200: VideoAnnotationDtoSchema,
+			},
+		}
+	)
+	.post(
+		"/discovery/samples/:aid/curate",
+		async ({ params, body, user }): Promise<VideoCurationDto> => {
+			return callCrawlerApi<VideoCurationDto>(
+				`/discovery/samples/${params.aid}/curate`,
+				"POST",
+				body,
+				undefined,
+				{ "x-user-id": user.id }
+			);
+		},
+		{
+			body: SubmitCurationRequestSchema,
+			response: {
+				200: VideoCurationDtoSchema,
+			},
+		}
+	)
+	.post(
+		"/discovery/samples/metadata/backfill",
+		async ({ body }): Promise<MetadataBackfillResponse> => {
+			return callCrawlerApi<MetadataBackfillResponse>(
+				"/discovery/samples/metadata/backfill",
+				"POST",
+				body
+			);
+		},
+		{
+			body: MetadataBackfillRequestSchema.optional(),
+			response: {
+				200: MetadataBackfillResponseSchema,
+			},
+		}
+	)
+	.get(
+		"/discovery/samples/dataset/export",
+		async ({ query, set }) => {
+			const upstream = await callCrawlerRaw(
+				"/discovery/samples/dataset/export",
+				query as unknown as CrawlerQuery
+			);
+			const contentType = upstream.headers.get("content-type");
+			if (contentType) set.headers["content-type"] = contentType;
+			const disposition = upstream.headers.get("content-disposition");
+			if (disposition) set.headers["content-disposition"] = disposition;
+			return upstream.text();
+		},
+		{
+			query: DatasetExportQuerySchema,
 		}
 	);

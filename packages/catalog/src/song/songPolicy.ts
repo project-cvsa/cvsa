@@ -1,15 +1,10 @@
-import type { Principal } from "@cvsa/authentication";
+import { type Principal, assertCanUpdateFields, subject } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { Song } from "@cvsa/db";
+import type { UpdateSongInput } from "./songTypes";
 
 export function canCreateSong(actor: Principal): boolean {
-	if (actor.roles.includes("admin") || actor.roles.includes("editor")) {
-		return true;
-	}
-	if (actor.permissions.includes("catalog:song:create")) {
-		return true;
-	}
-	return actor.type === "user" || actor.type === "service";
+	return actor.ability.can("create", "Song");
 }
 
 export function assertCanCreateSong(actor: Principal): void {
@@ -18,17 +13,10 @@ export function assertCanCreateSong(actor: Principal): void {
 	}
 }
 
-export function canUpdateSong(actor: Principal, _song: Song): boolean {
-	if (actor.roles.includes("admin") || actor.roles.includes("editor")) {
-		return true;
-	}
-	if (
-		actor.permissions.includes("catalog:song:edit") ||
-		actor.permissions.includes("catalog:edit")
-	) {
-		return true;
-	}
-	return actor.type === "user" || actor.type === "service";
+export function canUpdateSong(actor: Principal, song?: Song): boolean {
+	return song
+		? actor.ability.can("update", subject("Song", song))
+		: actor.ability.can("update", "Song");
 }
 
 export function assertCanUpdateSong(actor: Principal, song: Song): void {
@@ -37,11 +25,10 @@ export function assertCanUpdateSong(actor: Principal, song: Song): void {
 	}
 }
 
-export function canDeleteSong(actor: Principal, _song: Song): boolean {
-	if (actor.roles.includes("admin")) {
-		return true;
-	}
-	return actor.permissions.includes("catalog:song:delete");
+export function canDeleteSong(actor: Principal, song?: Song): boolean {
+	return song
+		? actor.ability.can("delete", subject("Song", song))
+		: actor.ability.can("delete", "Song");
 }
 
 export function assertCanDeleteSong(actor: Principal, song: Song): void {
@@ -50,8 +37,8 @@ export function assertCanDeleteSong(actor: Principal, song: Song): void {
 	}
 }
 
-export function canManageLyrics(actor: Principal, _song: Song): boolean {
-	return canUpdateSong(actor, _song);
+export function canManageLyrics(actor: Principal, song?: Song): boolean {
+	return canUpdateSong(actor, song);
 }
 
 export function assertCanManageLyrics(actor: Principal, song: Song): void {
@@ -60,12 +47,26 @@ export function assertCanManageLyrics(actor: Principal, song: Song): void {
 	}
 }
 
-export function canManageExternalLinks(actor: Principal, _song: Song): boolean {
-	return canUpdateSong(actor, _song);
+export function canManageExternalLinks(actor: Principal, song?: Song): boolean {
+	return canUpdateSong(actor, song);
 }
 
 export function assertCanManageExternalLinks(actor: Principal, song: Song): void {
 	if (!canManageExternalLinks(actor, song)) {
 		throw new AppError("error.forbidden", "FORBIDDEN", 403);
 	}
+}
+
+export function canUpdateSongField(actor: Principal, field: string, song?: Song): boolean {
+	return song
+		? actor.ability.can("update", subject("Song", song), field)
+		: actor.ability.can("update", "Song", field);
+}
+
+export function assertCanUpdateSongFields(
+	actor: Principal,
+	existing: Song,
+	input: UpdateSongInput
+): void {
+	assertCanUpdateFields(actor.ability, "Song", input, existing);
 }

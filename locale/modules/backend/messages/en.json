@@ -5,6 +5,7 @@
 	"error.crawler.conflict": "The request conflicts with the current crawler state. Refresh and try again.",
 	"error.unauthorized": "Unauthorized",
 	"error.forbidden": "You do not have permission to access this resource.",
+	"error.forbidden.restricted_field": "You do not have permission to modify restricted fields.",
 	"error.song.notfound": "This song does not exist.",
 	"error.lyric.notfound": "This lyric does not exist.",
 	"error.not-found": "The requested resource was not found.",

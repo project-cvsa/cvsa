@@ -159,6 +159,59 @@ export const verification = auth.table(
 	(table) => [index("verification_identifier_idx_79a0dbb3").on(table.identifier)]
 );
 
+export const invitationCode = auth.table(
+	"invitation_code",
+	{
+		id: id(),
+		code: text("code").notNull(),
+		roleId: integer("role_id").notNull(),
+		maxUses: integer("max_uses").notNull().default(1),
+		usedCount: integer("used_count").notNull().default(0),
+		createdBy: text("created_by"),
+		expiresAt: temporalInstant("expires_at"),
+		createdAt: createdAt(),
+		updatedAt: updatedAt(),
+	},
+	(table) => [
+		unique("invitation_code_code_key").on(table.code),
+		index("invitation_code_code_idx").on(table.code),
+		foreignKey({
+			name: "invitation_code_role_id_fkey",
+			columns: [table.roleId],
+			foreignColumns: [role.id],
+		}),
+		foreignKey({
+			name: "invitation_code_created_by_fkey",
+			columns: [table.createdBy],
+			foreignColumns: [user.id],
+		}),
+	]
+);
+
+export const invitationRedemption = auth.table(
+	"invitation_redemption",
+	{
+		id: id(),
+		invitationCodeId: integer("invitation_code_id").notNull(),
+		userId: text("user_id").notNull(),
+		redeemedAt: temporalInstant("redeemed_at").notNull().default(sql`now()`),
+	},
+	(table) => [
+		index("invitation_redemption_code_id_idx").on(table.invitationCodeId),
+		index("invitation_redemption_user_id_idx").on(table.userId),
+		foreignKey({
+			name: "invitation_redemption_code_id_fkey",
+			columns: [table.invitationCodeId],
+			foreignColumns: [invitationCode.id],
+		}).onDelete("cascade"),
+		foreignKey({
+			name: "invitation_redemption_user_id_fkey",
+			columns: [table.userId],
+			foreignColumns: [user.id],
+		}).onDelete("cascade"),
+	]
+);
+
 export type Role = typeof role.$inferSelect;
 export type RoleInsert = typeof role.$inferInsert;
 export type Permission = typeof permission.$inferSelect;
@@ -173,3 +226,7 @@ export type Session = typeof session.$inferSelect;
 export type SessionInsert = typeof session.$inferInsert;
 export type Verification = typeof verification.$inferSelect;
 export type VerificationInsert = typeof verification.$inferInsert;
+export type InvitationCode = typeof invitationCode.$inferSelect;
+export type InvitationCodeInsert = typeof invitationCode.$inferInsert;
+export type InvitationRedemption = typeof invitationRedemption.$inferSelect;
+export type InvitationRedemptionInsert = typeof invitationRedemption.$inferInsert;

@@ -15,7 +15,12 @@ import type { Principal } from "@cvsa/authentication";
 import { AppError } from "@cvsa/contracts";
 import type { ICatalogCache } from "../cache";
 import { recordOutboxEvent } from "../outbox";
-import { assertCanCreateSong, assertCanDeleteSong, assertCanUpdateSong } from "./songPolicy";
+import {
+	assertCanCreateSong,
+	assertCanDeleteSong,
+	assertCanUpdateSong,
+	assertCanUpdateSongFields,
+} from "./songPolicy";
 import type { CreateSongInput, SongId, UpdateSongInput } from "./songTypes";
 
 export class SongWriter {
@@ -134,6 +139,7 @@ export class SongWriter {
 		}
 
 		assertCanUpdateSong(actor, existing);
+		assertCanUpdateSongFields(actor, existing, input);
 
 		const { publishedAt, ...restUpdateData } = input;
 		const updateData = {

@@ -1,5 +1,5 @@
+import { env } from "@cvsa/env";
 import { defineConfig } from "drizzle-kit";
-import { loadDatabaseUrl } from "./src/databaseUrl";
 
 /**
  * Schema source of truth for the catalog database.
@@ -13,7 +13,7 @@ export default defineConfig({
 	schema: "./src/schema/index.ts",
 	out: "./drizzle",
 	dbCredentials: {
-		url: loadDatabaseUrl(),
+		url: env.DATABASE_URL,
 	},
 	schemaFilter: ["core", "meta", "platform", "auth"],
 	verbose: true,

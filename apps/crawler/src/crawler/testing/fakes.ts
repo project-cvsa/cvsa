@@ -15,6 +15,8 @@ import type {
 	BilibiliVideoRelation,
 	DiscoverySample,
 	Temporal,
+	VideoAnnotation,
+	VideoCuration,
 	VideoTracking,
 } from "@cvsa/snapshot-db";
 import { DiscoveryContextSchema } from "@cvsa/contracts";
@@ -552,6 +554,9 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 	readonly history: BilibiliVideoMetadataHistory[] = [];
 	readonly relations: BilibiliVideoRelation[] = [];
 	readonly samples = new Map<bigint, DiscoverySample>();
+	readonly annotations = new Map<bigint, VideoAnnotation[]>();
+	readonly curations = new Map<bigint, VideoCuration>();
+	private nextAnnotationId = 1n;
 	readonly runtimeConfigs = new Map<string, { revision: number; config: unknown }>();
 	/** Aids returned by {@link listHotSampleCandidates}. */
 	hotSampleAids: bigint[] = [];
@@ -682,6 +687,17 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		return this.history.filter((row) => row.aid === aid).slice(0, limit);
 	}
 
+	async listIncompleteMetadataAids(limit = 50): Promise<bigint[]> {
+		const result: bigint[] = [];
+		for (const [aid, meta] of this.metadatas.entries()) {
+			if (!meta.cid || !meta.duration) {
+				result.push(aid);
+				if (result.length >= limit) break;
+			}
+		}
+		return result;
+	}
+
 	async listMetadataHistory(aid: bigint, options: { limit: number; offset: number }) {
 		const matching = this.history
 			.filter((row) => row.aid === aid)
@@ -804,6 +820,77 @@ export class InMemoryDiscoveryRepository implements IDiscoveryRepository {
 		const row: DiscoverySample = { ...existing, humanLabel, labeledAt: toInstant(new Date()) };
 		this.samples.set(aid, row);
 		return row;
+	}
+
+	async addAnnotation(input: {
+		aid: bigint;
+		bvid: string;
+		userId: string;
+		decision: string;
+		tags?: string[] | null;
+		notes?: string | null;
+	}): Promise<VideoAnnotation> {
+		const row: VideoAnnotation = {
+			id: this.nextAnnotationId++,
+			aid: input.aid,
+			bvid: input.bvid,
+			userId: input.userId,
+			decision: input.decision,
+			tags: input.tags ?? null,
+			notes: input.notes ?? null,
+			createdAt: toInstant(new Date()),
+		};
+		const list = this.annotations.get(input.aid) ?? [];
+		list.unshift(row);
+		this.annotations.set(input.aid, list);
+		return row;
+	}
+
+	async listAnnotations(aid: bigint): Promise<VideoAnnotation[]> {
+		return this.annotations.get(aid) ?? [];
+	}
+
+	async upsertCuration(input: {
+		aid: bigint;
+		bvid: string;
+		status: string;
+		curatedBy: string;
+		reason?: string | null;
+	}): Promise<VideoCuration> {
+		const now = toInstant(new Date());
+		const row: VideoCuration = {
+			aid: input.aid,
+			bvid: input.bvid,
+			status: input.status,
+			curatedBy: input.curatedBy,
+			reason: input.reason ?? null,
+			curatedAt: this.curations.get(input.aid)?.curatedAt ?? now,
+			updatedAt: now,
+		};
+		this.curations.set(input.aid, row);
+		return row;
+	}
+
+	async getCuration(aid: bigint): Promise<VideoCuration | null> {
+		return this.curations.get(aid) ?? null;
+	}
+
+	async getCurations(aids: bigint[]): Promise<Map<bigint, VideoCuration>> {
+		const map = new Map<bigint, VideoCuration>();
+		for (const aid of aids) {
+			const item = this.curations.get(aid);
+			if (item) map.set(aid, item);
+		}
+		return map;
+	}
+
+	async getAnnotationCounts(aids: bigint[]): Promise<Map<bigint, number>> {
+		const map = new Map<bigint, number>();
+		for (const aid of aids) {
+			const count = this.annotations.get(aid)?.length ?? 0;
+			map.set(aid, count);
+		}
+		return map;
 	}
 
 	async getRuntimeConfig(key: string): Promise<{ revision: number; config: unknown } | null> {

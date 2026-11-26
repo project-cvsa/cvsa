@@ -9,12 +9,14 @@
  */
 import { authApi } from "./auth";
 import { crawlerApi } from "./crawler";
+import { invitationApi } from "./invitation";
 import { songApi } from "./song";
 
 /** Module tree components call: `api.auth.login(...)`, `api.song.update(...)`, `api.crawler.getStatus()`. */
 export const api = {
 	auth: authApi,
 	crawler: crawlerApi,
+	invitation: invitationApi,
 	song: songApi,
 };
 

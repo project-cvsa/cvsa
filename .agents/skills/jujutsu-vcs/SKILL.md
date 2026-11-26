@@ -1,7 +1,6 @@
 ---
 name: jujutsu-vcs
 description: The guide of using Jujutsu instead of Git for version control. Always activate FIRST on any git/VCS operations (commit, status, branch, push, etc.). DO NOT IGNORE.
-allowed-tools: Bash(jj *)
 ---
 
 This skill helps you work with Jujutsu, a Git-compatible VCS featuring a simpler workflow, a more user-friendly CLI, and a lower risk of data loss.
@@ -79,13 +78,13 @@ These syntax are available both in revsets and filesets.
 This cheatsheet is enough for common operations, organized by function.
 JJ's help doc is comprehensive and easy to understand. Whenever you stuck at somewhere, you can always run `jj help` or pass the `--help` flag to any command to get help on how to use jj.
 
-> **Note**: Always use `--git` or `-s` with diff/show commands to prevent GUI clients from hanging.
+> **Note**: Use `--no-pager` CLI flag to prevent terminal hanging.
 
 ```bash
 # Basic Operations
-jj status # Show status of working copy, including files changed
-jj log --limit n # Show recent n commits
-jj log --revisions @ --no-graph --template "description" # See description of working copy
+jj --no-pager status # Show status of working copy, including files changed
+jj --no-pager log --limit n # Show recent n commits
+jj --no-pager log --revisions @ --no-graph --template "description" # See description of working copy
 
 # Diff (always use --git or -s to prevent GUI hang)
 # We exclude lock files using filesets syntax
@@ -95,8 +94,8 @@ jj diff --git [paths] # Show diff for specific paths
 jj diff --git --from x --to y '~*.lock' # Show diff from x to y
 jj diff -s # Show only whether modified, added, or deleted
 
-# Show commit info (use --summary to prevent GUI hang)
-jj show --summary x # Show summary of commit x
+# Show commit info
+jj show --no-pager x # Show summary of commit x
 
 # Creating & Modifying Commits
 jj new # Create new change on top of current one
@@ -182,10 +181,38 @@ After
 |  commit message for x
 ```
 
-## Additional Notes
+### Keeping timestamp when rebasing
 
-**IMPORTANT**: Read this section to prevent users from been fired!
+As mentioned in [#1387](https://github.com/jj-vcs/jj/discussions/1387), `jj` updates the **committer timestamp** (`committer.timestamp()`, which `jj log` displays by default) to the current time whenever a commit is rebased or rewritten. You can override the timestamp used by any mutating `jj` command via the `JJ_TIMESTAMP` environment variable (in strict RFC 3339 format, e.g., `2026-11-12T12:38:35+08:00`), and modify author metadata with `jj metaedit`:
+
+```bash
+# Preserve or set a specific committer timestamp during rebase
+JJ_TIMESTAMP=2026-11-12T12:38:35+08:00 jj rebase -r x -o y
+
+# Set both committer and author timestamps on revision x
+JJ_TIMESTAMP=2026-11-12T12:38:35+08:00 jj metaedit --author-timestamp 2026-11-12T12:38:35+08:00 -r x
+
+# Update only the committer timestamp on revision x without changing other metadata
+JJ_TIMESTAMP=2026-11-12T12:38:35+08:00 jj metaedit --force-rewrite -r x
+```
+
+**Important caveat for commit stacks**: Rewriting or rebasing an ancestor commit automatically rebases all of its descendants and applies the active `JJ_TIMESTAMP` to them as well. To preserve individual timestamps when rebasing a stack of commits (`x::y`):
+
+1. Inspect the original timestamps from oldest ancestor to newest descendant (`--reversed`). If you already ran the rebase, read them from the pre-rebase operation in `jj op log` using `--at-op=<op_id>`:
+   ```bash
+   jj log --reversed --no-graph -r 'x::y' \
+     -T 'change_id.shortest(8) ++ " " ++ committer.timestamp().format("%+") ++ "\n"'
+   ```
+2. Run the rebase (e.g., `jj rebase -s x -o main`).
+3. Replay the saved timestamps in topological order (from oldest ancestor `x` to newest descendant `y`), so that each child's timestamp is restored after its parent is rewritten:
+   ```bash
+   JJ_TIMESTAMP=<ts> jj metaedit --force-rewrite -r <change_id>
+   ```
+
+## Additional Notes (IMPORTANT)
 
 Although you can use `jj edit` to modify any commit, jj will prevent you from editing an immutable commit. Commits that have already been pushed to remote are usually immutable.
 `jj git push` will automatically use force push, so the only way to prevent remote history from being overwritten is to avoid modifying immutable commits.
 You can pass `--ignore-immutable` when jj hints you `Error: Commit x is immutable` to force-modify a commit, but you should only do this when the user explicitly tells you that you may do so. DO NOT pass `--ignore-immutable` without user’s approval. It’s as dangerous as Git force push.
+
+If you occured rejection when executing `jj` commands because you're in a sandbox environment, and relavant directory is read-only, please consider requesting for corresponding permission if applicable.

@@ -25,6 +25,9 @@ export function requireAdmin(
 	if (!user) {
 		return context.redirect(loginRedirectTarget(context.url.pathname, context.url.search), 302);
 	}
+	if (user.roleName === "editor" && /^\/admin\/crawler(\/.*)?$/.test(context.url.pathname)) {
+		return null;
+	}
 	if (user.roleName !== "OWNER" && user.roleName !== "admin") {
 		return context.redirect("/403", 302);
 	}

@@ -945,7 +945,8 @@ describe("DiscoveryPipelineProcessor", () => {
 		});
 
 		expect(await tracking.getTracking(700_001n)).toBeNull();
-		expect(repo.metadatas.size).toBe(0);
+		expect(repo.metadatas.size).toBe(1);
+		expect(repo.metadatas.get(700_001n)?.filterDecision).toBe("rejected");
 
 		const samples = await repo.listSamples();
 		expect(samples).toHaveLength(1);
@@ -1077,6 +1078,187 @@ describe("DiscoveryScheduler", () => {
 		expect(mq.state.queuedJobs.map((job) => job.name)).toEqual([
 			"repeatable-search-sweep",
 			"repeatable-deep-sweep",
+			"repeatable-hot-sample",
 		]);
+	});
+
+	test("responds to dynamic flag toggles without recreating scheduler", async () => {
+		const mq = createFakeMq();
+		const queue = mq.createQueue<DiscoveryJobData>("crawler-discovery");
+		let relatedEnabled = false;
+		let searchEnabled = false;
+		let hotEnabled = false;
+		const scheduler = new DiscoveryScheduler(queue, {
+			isRelatedDiscoveryEnabled: () => relatedEnabled,
+			isSearchRoverEnabled: () => searchEnabled,
+			isHotSamplingEnabled: () => hotEnabled,
+		});
+
+		await scheduler.triggerSearchSweep({ keywords: ["洛天依"] });
+		await scheduler.triggerHotSample(3);
+		await scheduler.triggerActiveDiscovery(777_777n);
+		expect(mq.state.queuedJobs).toHaveLength(0);
+
+		searchEnabled = true;
+		await scheduler.triggerSearchSweep({ keywords: ["洛天依"] });
+		expect(mq.state.queuedJobs).toHaveLength(1);
+		expect(mq.state.queuedJobs[0]?.data).toMatchObject({ type: "search-sweep" });
+
+		hotEnabled = true;
+		// Still gated by relatedEnabled=false
+		await scheduler.triggerHotSample(3);
+		expect(mq.state.queuedJobs).toHaveLength(1);
+
+		relatedEnabled = true;
+		await scheduler.triggerHotSample(3);
+		await scheduler.triggerActiveDiscovery(777_777n);
+		expect(mq.state.queuedJobs).toHaveLength(3);
+		expect(mq.state.queuedJobs[1]?.data).toMatchObject({ type: "hot-sample" });
+		expect(mq.state.queuedJobs[2]?.data).toMatchObject({ type: "active-discovery" });
+	});
+});
+
+describe("dynamic discovery feature flags", () => {
+	test("DiscoveryService toggles processVideoRecommendations dynamically", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		const client = createDetailClient(new Map([[400_002, { title: "【洛天依原创】新曲" }]]));
+		let relatedEnabled = false;
+		const service = new DiscoveryService(
+			client,
+			repo,
+			tracking,
+			new DiscoveryFilterService(),
+			undefined,
+			undefined,
+			() => relatedEnabled
+		);
+
+		const related = [
+			{
+				aid: 400_002,
+				bvid: "BV1400002",
+				title: "【洛天依原创】新曲",
+				pic: "",
+				owner: { mid: 2, name: "B", face: "" },
+				stat: {
+					aid: 400_002,
+					view: 200,
+					danmaku: 0,
+					reply: 0,
+					favorite: 0,
+					coin: 0,
+					share: 0,
+					now_rank: 0,
+					his_rank: 0,
+					like: 0,
+				},
+			},
+		];
+
+		const skipped = await service.processVideoRecommendations(999_999n, related);
+		expect(skipped).toEqual({ sourceAid: 999_999n, relationsCount: 0, newTracked: 0 });
+
+		relatedEnabled = true;
+		const processed = await service.processVideoRecommendations(999_999n, related);
+		expect(processed).toEqual({ sourceAid: 999_999n, relationsCount: 1, newTracked: 1 });
+	});
+
+	test("DiscoveryPipelineProcessor toggles search, hot sample, related expansion, and active discovery dynamically", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		repo.hotSampleAids = [800_001n];
+		const tracking = new InMemoryTrackingRepository();
+		const mq = createFakeMq();
+		const queue = mq.createQueue<DiscoveryJobData>("crawler-discovery");
+
+		const client = createDetailClient(
+			new Map([
+				[
+					500_001,
+					{
+						title: "【初音未来原创】世界第一公主殿下",
+						related: [
+							{
+								aid: 500_002,
+								bvid: "BV1500002",
+								title: "【初音未来原创】深海少女",
+								pic: "",
+								owner: { mid: 999, name: "yuuyu", face: "" },
+								stat: {
+									aid: 500_002,
+									view: 5_000_000,
+									danmaku: 0,
+									reply: 0,
+									favorite: 0,
+									coin: 0,
+									share: 0,
+									now_rank: 0,
+									his_rank: 0,
+									like: 0,
+								},
+								pubdate: 1_610_000_000,
+								duration: 210,
+							},
+						],
+					},
+				],
+			]),
+			{
+				searchResult: [searchVideo(500_010, "【洛天依原创】search")],
+			}
+		);
+
+		let relatedEnabled = false;
+		let searchEnabled = false;
+		let hotEnabled = false;
+
+		const processor = new DiscoveryPipelineProcessor(
+			client,
+			repo,
+			tracking,
+			queue,
+			undefined,
+			undefined,
+			undefined,
+			{
+				isRelatedDiscoveryEnabled: () => relatedEnabled,
+				isSearchRoverEnabled: () => searchEnabled,
+				isHotSamplingEnabled: () => hotEnabled,
+			}
+		);
+
+		// Search sweep skipped when searchEnabled = false
+		await processor.processJob({
+			type: "search-sweep",
+			config: { keywords: ["洛天依原创"], orders: ["pubdate"], pagesPerQuery: 1 },
+		});
+		expect(mq.state.queuedJobs).toHaveLength(0);
+
+		// Search sweep runs when toggled to true
+		searchEnabled = true;
+		await processor.processJob({
+			type: "search-sweep",
+			config: { keywords: ["洛天依原创"], orders: ["pubdate"], pagesPerQuery: 1 },
+		});
+		expect(mq.state.queuedJobs.map((j) => j.name)).toEqual(["detail-500010"]);
+
+		// Hot sample skipped when hotEnabled = true but relatedEnabled = false
+		hotEnabled = true;
+		await processor.processJob({ type: "hot-sample", limit: 5 });
+		expect(mq.state.queuedJobs).toHaveLength(1);
+
+		// Detail fetch accepts video without expanding related while relatedEnabled = false
+		await processor.processJob({
+			type: "fetch-video-details",
+			aid: "500001",
+			source: "search",
+		});
+		expect(await tracking.getTracking(500_001n)).not.toBeNull();
+		expect(mq.state.queuedJobs).toHaveLength(1);
+
+		// Toggle relatedEnabled = true -> hot sample and active discovery now enqueue
+		relatedEnabled = true;
+		await processor.processJob({ type: "hot-sample", limit: 5 });
+		expect(mq.state.queuedJobs.map((j) => j.name)).toEqual(["detail-500010", "active-800001"]);
 	});
 });

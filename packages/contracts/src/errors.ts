@@ -46,6 +46,11 @@ export const ErrorCodeEnum = z.enum([
 	"CRAWLER_UNAVAILABLE",
 	"CRAWLER_REQUEST_FAILED",
 	"CRAWLER_RATE_LIMITED",
+	"INVITE_CODE_REQUIRED",
+	"INVALID_INVITE_CODE",
+	"INVITE_CODE_EXPIRED",
+	"INVITE_CODE_EXHAUSTED",
+	"ROLE_NOT_FOUND",
 ]);
 
 export type ErrorCode = z.infer<typeof ErrorCodeEnum>;
