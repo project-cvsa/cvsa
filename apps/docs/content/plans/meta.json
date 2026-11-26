@@ -1,0 +1,6 @@
+{
+	"title": "进度与路线图",
+	"description": "CVSA 核心子系统的当前落地状态与下一阶段演进计划",
+	"root": true,
+	"pages": ["index", "project-status", "crawler-and-discovery-roadmap", "auth-and-web-roadmap"]
+}

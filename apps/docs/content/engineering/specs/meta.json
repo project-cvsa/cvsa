@@ -1,0 +1,4 @@
+{
+	"title": "系统规约",
+	"pages": ["index", "api-and-contracts", "crawler-and-curation", "auth-and-permissions"]
+}

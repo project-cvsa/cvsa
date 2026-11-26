@@ -1,0 +1,15 @@
+{
+	"title": "工程与协作",
+	"description": "CVSA 开源工程知识库：仓库结构、开发指南、工程规范、系统规约与协作文档",
+	"root": true,
+	"pages": [
+		"index",
+		"repository",
+		"guide",
+		"architecture",
+		"how-we-docs",
+		"practices",
+		"specs",
+		"legacy"
+	]
+}
