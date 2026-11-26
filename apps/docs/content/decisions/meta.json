@@ -1,0 +1,14 @@
+{
+	"title": "架构决策",
+	"description": "CVSA 跨模块边界、数据模型与运行时约束的架构决策记录",
+	"root": true,
+	"pages": [
+		"index",
+		"0001-dual-database-postgres-and-timescaledb",
+		"0002-layered-architecture-contracts-and-eden",
+		"0003-auth-casl-and-invitation-onboarding",
+		"0004-compile-time-i18n-with-fanee",
+		"0005-dual-layer-annotation-curation",
+		"0006-runtime-discovery-feature-flags"
+	]
+}

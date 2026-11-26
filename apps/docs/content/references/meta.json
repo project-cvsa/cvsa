@@ -1,0 +1,13 @@
+{
+	"title": "外部参考",
+	"description": "外部平台接口约束、数据库引擎特性、可观测性链路、搜索与向量模型以及部署构建参考",
+	"root": true,
+	"pages": [
+		"index",
+		"bilibili-api",
+		"timescaledb-and-drizzle",
+		"observability-and-signoz",
+		"search-and-embedding",
+		"ci-cd-and-deployment"
+	]
+}

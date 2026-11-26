@@ -1,0 +1,6 @@
+{
+	"title": "想法与备忘",
+	"description": "尚未定型的早期技术构想、启发式规则草稿与待讨论备忘",
+	"root": true,
+	"pages": ["index", "multi-stage-discovery-heuristics", "public-contribution-review-queue"]
+}
