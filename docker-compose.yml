@@ -22,11 +22,14 @@ services:
     restart: unless-stopped
     ports:
       - "${WEB_BIND_IP:-127.0.0.1}:${WEB_PORT:-10199}:10199"
+    env_file:
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 10199
-      DATABASE_URL: ${DATABASE_URL:-postgres://cvsa:password@db:5432/cvsa}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
@@ -65,11 +68,14 @@ services:
     stop_grace_period: 30s
     ports:
       - "${BACKEND_BIND_IP:-127.0.0.1}:${BACKEND_PORT:-16412}:16412"
+    env_file:
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 16412
-      DATABASE_URL: ${DATABASE_URL:-postgres://cvsa:password@db:5432/cvsa}
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-cvsa}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-cvsa}}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
       MEILI_API_URL: http://meili:7700
@@ -109,11 +115,14 @@ services:
     stop_grace_period: 30s
     ports:
       - "${CRAWLER_BIND_IP:-127.0.0.1}:${CRAWLER_PORT:-16413}:16413"
+    env_file:
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_CACHE_URL: ${REDIS_CACHE_URL:-redis://redis-cache:6379}
-      SNAPSHOT_DATABASE_URL: ${SNAPSHOT_DATABASE_URL:-postgres://cvsa:password@snapshot-db:5432/cvsa_snapshot}
+      SNAPSHOT_DATABASE_URL: ${SNAPSHOT_DATABASE_URL:-postgres://${SNAPSHOT_DB_USER:-cvsa}:${SNAPSHOT_DB_PASSWORD:-password}@snapshot-db:5432/${SNAPSHOT_DB_NAME:-cvsa_snapshot}}
       CONTROL_API_HOST: 0.0.0.0
       CONTROL_API_PORT: 16413
       CONTROL_API_TOKEN: ${CONTROL_API_TOKEN:-}
@@ -145,6 +154,9 @@ services:
     restart: unless-stopped
     ports:
       - "${EMBEDDING_BIND_IP:-127.0.0.1}:${EMBEDDING_PORT:-14900}:14900"
+    env_file:
+      - path: .env
+        required: false
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0

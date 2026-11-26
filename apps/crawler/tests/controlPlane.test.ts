@@ -462,6 +462,15 @@ describe("crawler control plane", () => {
 		expect(labeled.status).toBe(200);
 		expect(labeled.data?.humanLabel).toBe(1);
 		expect(labeled.data?.labeledAt).not.toBeNull();
+
+		const uncertain = await api.v2.discovery
+			.samples({ aid: SAMPLE_AID.toString() })
+			.label.post({ humanLabel: 0, decision: "uncertain", notes: "recheck" }, authorized);
+
+		expect(uncertain.status).toBe(200);
+		expect(uncertain.data?.curationStatus).toBe("pending");
+		expect(uncertain.data?.humanLabel).toBe(1);
+		expect(uncertain.data?.annotationsCount).toBeGreaterThanOrEqual(2);
 	});
 	test.serial(
 		"session, recovery and adaptive policies persist through the API and reach runtime status",

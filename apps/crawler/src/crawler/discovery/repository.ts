@@ -730,7 +730,7 @@ export class DiscoveryRepository implements IDiscoveryRepository {
 				.from(discoverySample)
 				.where(where)
 				.orderBy(...order)
-				.limit(Math.min(Math.max(options.limit ?? 50, 1), 200))
+				.limit(Math.max(options.limit ?? 50, 1))
 				.offset(options.offset ?? 0);
 		});
 	}

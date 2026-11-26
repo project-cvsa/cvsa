@@ -223,6 +223,19 @@ describe("requireAdmin()", () => {
 		const res = requireAdmin(ctx, adminUser);
 		expect(res).toBeNull();
 	});
+
+	test("allows editor on crawler video detail routes but blocks invitations", () => {
+		const editorUser: CurrentUserInfoDto = {
+			...mappedUser,
+			roleName: "editor",
+		};
+		expect(requireAdmin(mockContext("/admin/crawler/video/123"), editorUser)).toBeNull();
+
+		const invitationsCtx = mockContext("/admin/invitations");
+		const res = requireAdmin(invitationsCtx, editorUser);
+		expect(res?.status).toBe(302);
+		expect(invitationsCtx.redirect).toHaveBeenCalledWith("/403", 302);
+	});
 });
 
 describe("loginRedirectTarget()", () => {

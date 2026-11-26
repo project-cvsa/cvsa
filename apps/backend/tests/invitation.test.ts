@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { treaty } from "@elysiajs/eden";
 import { app } from "@/index";
-import { db, user as userTable } from "@cvsa/db";
+import { db, role, user as userTable } from "@cvsa/db";
+import { eq } from "drizzle-orm";
 import { createSession, ensureEditorRole, ensureOwnerRole } from "@cvsa/authentication";
 
 const api = treaty(app);
@@ -205,5 +206,77 @@ describe("Invitation Code & Registration Flow", () => {
 		expect(signup.error?.value).toMatchObject({
 			code: "INVALID_INVITE_CODE",
 		});
+	});
+
+	test("owner can create an admin invitation code even when admin role was not pre-seeded", async () => {
+		const { token: ownerToken } = await setupOwnerUser();
+		const code = `TEST-ADMIN-${rand().toUpperCase()}`;
+
+		const createRes = await api.v2.admin.invitations.post(
+			{
+				code,
+				roleName: "admin",
+				maxUses: 1,
+			},
+			{
+				headers: { authorization: `Bearer ${ownerToken}` },
+			}
+		);
+
+		expect(createRes.status).toBe(200);
+		expect(createRes.data?.data.roleName).toBe("admin");
+
+		const [adminRole] = await db.select().from(role).where(eq(role.name, "admin")).limit(1);
+		expect(adminRole?.name).toBe("admin");
+
+		const username = `invited_admin_${rand()}`;
+		const signupRes = await api.v2.user.post({
+			username,
+			password: "password123",
+			inviteCode: code,
+		});
+		expect(signupRes.status).toBe(200);
+
+		const meRes = await api.v2.me.get({
+			headers: { authorization: `Bearer ${signupRes.data?.data.token}` },
+		});
+		expect(meRes.status).toBe(200);
+		expect(meRes.data?.roleName).toBe("admin");
+	});
+
+	test("concurrent registrations with a single-use invite code allow only one winner", async () => {
+		const { token: ownerToken } = await setupOwnerUser();
+		const code = `TEST-RACE-${rand().toUpperCase()}`;
+
+		await api.v2.admin.invitations.post(
+			{
+				code,
+				roleName: "editor",
+				maxUses: 1,
+			},
+			{
+				headers: { authorization: `Bearer ${ownerToken}` },
+			}
+		);
+
+		const results = await Promise.all(
+			Array.from({ length: 4 }, (_, index) =>
+				api.v2.user.post({
+					username: `race_user_${index}_${rand()}`,
+					password: "password123",
+					inviteCode: code,
+				})
+			)
+		);
+
+		const successes = results.filter((res) => res.status === 200);
+		const exhausted = results.filter(
+			(res) =>
+				res.status === 400 &&
+				(res.error?.value as { code?: string } | undefined)?.code ===
+					"INVITE_CODE_EXHAUSTED"
+		);
+		expect(successes).toHaveLength(1);
+		expect(exhausted).toHaveLength(3);
 	});
 });

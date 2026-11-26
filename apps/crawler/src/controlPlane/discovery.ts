@@ -513,15 +513,24 @@ export const discoveryRoutes = new Elysia()
 			if (!/^\d+$/.test(params.aid)) {
 				return status(422, { code: "VALIDATION_ERROR", message: "Invalid aid" });
 			}
-			const humanLabel =
-				body.humanLabel !== undefined
-					? body.humanLabel
-					: body.decision === "accepted"
-						? 1
-						: 0;
+			const decision =
+				body.decision ??
+				(body.humanLabel === 1
+					? "accepted"
+					: body.humanLabel === 0
+						? "rejected"
+						: undefined);
+			if (!decision) {
+				return status(422, {
+					code: "VALIDATION_ERROR",
+					message: "Either decision or humanLabel is required",
+				});
+			}
+			const humanLabel = decision === "accepted" ? 1 : decision === "rejected" ? 0 : null;
 			const userId = headers["x-user-id"] || "admin";
 			return discoveryAdminService.label(BigInt(params.aid), humanLabel, {
 				userId,
+				decision,
 				tags: body.tags,
 				notes: body.notes,
 			});

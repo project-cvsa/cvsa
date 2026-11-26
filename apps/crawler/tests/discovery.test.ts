@@ -649,6 +649,35 @@ describe("DiscoveryService", () => {
 		expect(await tracking.getTracking(500_002n)).toBeNull();
 	});
 
+	test("skips search sweep when searchRoverEnabled is false", async () => {
+		const repo = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		let searchCalls = 0;
+		const client = createDetailClient(new Map(), {
+			searchResult: [searchVideo(500_010, "【洛天依原创】测试")],
+		});
+		const originalSearch = client.searchVideos.bind(client);
+		client.searchVideos = async (...args) => {
+			searchCalls++;
+			return originalSearch(...args);
+		};
+
+		const service = new DiscoveryService(
+			client,
+			repo,
+			tracking,
+			new DiscoveryFilterService(),
+			undefined,
+			undefined,
+			true,
+			() => false
+		);
+		const result = await service.runSearchSweep({ keywords: ["洛天依原创"], pagesPerQuery: 1 });
+
+		expect(result).toEqual({ totalDiscovered: 0, newTracked: 0 });
+		expect(searchCalls).toBe(0);
+	});
+
 	test("marks deleted videos in metadata and archives their tracking row", async () => {
 		const repo = new InMemoryDiscoveryRepository();
 		const tracking = new InMemoryTrackingRepository();

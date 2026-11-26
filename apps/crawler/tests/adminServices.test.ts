@@ -235,6 +235,58 @@ describe("crawler admin services", () => {
 		expect(await tracking.getTracking(1n)).toBeNull();
 		await expect(service.label(999n, 1)).rejects.toMatchObject({ statusCode: 404 });
 	});
+	test("uncertain label records uncertain annotation, keeps curation pending, preserves tracking, and populates pic and annotationsCount", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+		await repository.upsertMetadata({
+			aid: 11n,
+			bvid: "BV11",
+			title: "ambiguous candidate",
+			pic: "https://i0.hdslb.com/bfs/archive/sample.jpg",
+		});
+		await repository.upsertSample({
+			aid: 11n,
+			bvid: "BV11",
+			title: "ambiguous candidate",
+			decision: "model_accepted",
+			modelVersion: "test",
+			probabilities: [0.4, 0.6],
+			songProbability: 0.6,
+		});
+		await tracking.upsertTracking({
+			aid: 11n,
+			state: "new",
+			nextSnapshotAt: toInstant(new Date()),
+		});
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		const result = await service.label(11n, 0, {
+			userId: "editor-1",
+			decision: "uncertain",
+			tags: ["待复核"],
+			notes: "needs second opinion",
+		});
+
+		expect(result.curationStatus).toBe("pending");
+		expect(result.humanLabel).toBeNull();
+		expect(result.pic).toBe("https://i0.hdslb.com/bfs/archive/sample.jpg");
+		expect(result.annotationsCount).toBe(1);
+		expect(await tracking.getTracking(11n)).not.toBeNull();
+
+		const annotations = await service.listAnnotations(11n);
+		expect(annotations).toHaveLength(1);
+		expect(annotations[0]).toMatchObject({
+			userId: "editor-1",
+			decision: "uncertain",
+			tags: ["待复核"],
+			notes: "needs second opinion",
+		});
+	});
 	test("supports multi-user annotation history and explicit curation decisions", async () => {
 		const repository = new InMemoryDiscoveryRepository();
 		const tracking = new InMemoryTrackingRepository();
@@ -437,6 +489,33 @@ describe("crawler admin services", () => {
 		expect(jsonResult.items).toHaveLength(1);
 		expect(jsonResult.items[0]?.label).toBe(1);
 		expect(jsonResult.mimeType).toBe("application/json");
+	});
+	test("exportDataset exports more than 200 labeled samples across pagination batches", async () => {
+		const repository = new InMemoryDiscoveryRepository();
+		const tracking = new InMemoryTrackingRepository();
+
+		for (let i = 1; i <= 550; i++) {
+			await repository.upsertSample({
+				aid: BigInt(i),
+				bvid: `BV${i}`,
+				title: `Sample ${i}`,
+				decision: "model_accepted",
+				modelVersion: "v1",
+				probabilities: [0.1, 0.9],
+				songProbability: 0.9,
+			});
+			await repository.labelSample(BigInt(i), 1);
+		}
+
+		const service = new DiscoveryAdminService(
+			queueWith([]),
+			repository,
+			new CrawlerStatsCollector(),
+			tracking
+		);
+
+		const result = await service.exportDataset({ format: "jsonl", status: "all" });
+		expect(result.items).toHaveLength(550);
 	});
 	test("custom ranges use the same minute rates and keep transport and business results separate", async () => {
 		let now = Date.UTC(2026, 0, 1);

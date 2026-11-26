@@ -22,8 +22,13 @@ import { createRequestSequence } from "./crawler/videoActions";
 
 type SectionId = CrawlerSection;
 
-export default function CrawlerDashboard() {
+export interface CrawlerDashboardProps {
+	userRole?: string | null;
+}
+
+export default function CrawlerDashboard(props: CrawlerDashboardProps) {
 	const t = getComponentT("crawler");
+	const canManageInvitations = () => props.userRole === "OWNER" || props.userRole === "admin";
 	const [activeSection, setActiveSection] = createSignal<SectionId>("overview");
 	const [visited, setVisited] = createSignal<ReadonlySet<SectionId>>(new Set(["overview"]));
 	const [refreshRevision, setRefreshRevision] = createSignal(0);
@@ -116,17 +121,19 @@ export default function CrawlerDashboard() {
 				</div>
 
 				<div class="flex items-center gap-3">
-					<a href="/admin/invitations">
-						<Button
-							variant="outlined"
-							size="sm"
-							class="gap-1.5"
-							aria-label={t("dashboard.invitations")}
-						>
-							<Ticket class="w-3.5 h-3.5" />
-							<span>{t("dashboard.invitations")}</span>
-						</Button>
-					</a>
+					<Show when={canManageInvitations()}>
+						<a href="/admin/invitations">
+							<Button
+								variant="outlined"
+								size="sm"
+								class="gap-1.5"
+								aria-label={t("dashboard.invitations")}
+							>
+								<Ticket class="w-3.5 h-3.5" />
+								<span>{t("dashboard.invitations")}</span>
+							</Button>
+						</a>
+					</Show>
 
 					<Button
 						variant="filled"

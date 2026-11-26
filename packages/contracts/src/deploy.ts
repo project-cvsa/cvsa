@@ -16,5 +16,6 @@ export const DeployStateSchema = z.object({
 	startedAt: z.string(),
 	finishedAt: z.string().nullable(),
 	error: z.string().nullable(),
+	exitCode: z.number().int().nullable().default(null),
 });
 export type DeployState = z.infer<typeof DeployStateSchema>;

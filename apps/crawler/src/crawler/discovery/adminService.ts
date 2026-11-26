@@ -163,11 +163,16 @@ export class DiscoveryAdminService {
 
 	async label(
 		aid: bigint,
-		humanLabel: 0 | 1,
-		options?: { userId?: string; tags?: string[]; notes?: string }
+		humanLabel: 0 | 1 | null,
+		options?: {
+			userId?: string;
+			decision?: "accepted" | "rejected" | "uncertain";
+			tags?: string[];
+			notes?: string;
+		}
 	) {
 		const userId = options?.userId ?? "admin";
-		const decision = humanLabel === 1 ? "accepted" : "rejected";
+		const decision = options?.decision ?? (humanLabel === 1 ? "accepted" : "rejected");
 
 		// Record annotation
 		const sample = await this.repository.getSample(aid);
@@ -181,18 +186,28 @@ export class DiscoveryAdminService {
 			notes: options?.notes,
 		});
 
-		// Apply curation
-		const curation = await this.curate(aid, userId, decision, options?.notes);
-		const updatedSample = await this.repository.getSample(aid);
-		return toSampleItem(updatedSample ?? sample, null, {
-			aid,
-			bvid: sample.bvid,
-			status: curation.status,
-			curatedBy: curation.curatedBy,
-			reason: curation.reason ?? null,
-			curatedAt: toInstant(new Date(curation.curatedAt)),
-			updatedAt: toInstant(new Date(curation.updatedAt)),
-		});
+		// Apply curation ("uncertain" marks curation pending without labeling rejected or deleting tracking)
+		const curationStatus = decision === "uncertain" ? "pending" : decision;
+		const curation = await this.curate(aid, userId, curationStatus, options?.notes);
+		const [updatedSample, metadata, annotationCounts] = await Promise.all([
+			this.repository.getSample(aid),
+			this.repository.getMetadataSummaries([aid]),
+			this.repository.getAnnotationCounts([aid]),
+		]);
+		return toSampleItem(
+			updatedSample ?? sample,
+			metadata[0]?.pic ?? null,
+			{
+				aid,
+				bvid: sample.bvid,
+				status: curation.status,
+				curatedBy: curation.curatedBy,
+				reason: curation.reason ?? null,
+				curatedAt: toInstant(new Date(curation.curatedAt)),
+				updatedAt: toInstant(new Date(curation.updatedAt)),
+			},
+			annotationCounts.get(aid) ?? 0
+		);
 	}
 
 	/**
@@ -310,7 +325,18 @@ export class DiscoveryAdminService {
 		const statusFilter = options?.status ?? "all";
 		const minProb = options?.minProbability ?? 0;
 
-		const samples = await this.repository.listSamples({ limit: 5000 });
+		const batchSize = 500;
+		const samples = [];
+		for (let offset = 0; ; offset += batchSize) {
+			const page = await this.repository.listSamples({
+				limit: batchSize,
+				offset,
+				sortBy: "aid",
+				sortOrder: "asc",
+			});
+			samples.push(...page);
+			if (page.length < batchSize) break;
+		}
 		const aids = samples.map((s) => s.aid);
 		const [curationMap, metadatas] = await Promise.all([
 			this.repository.getCurations(aids),

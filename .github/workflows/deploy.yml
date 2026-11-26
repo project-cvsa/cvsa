@@ -156,7 +156,8 @@ jobs:
                 echo "Deployment for tag ${IMAGE_TAG} completed successfully in ${ELAPSED}s."
                 exit 0
               elif [ "${DEPLOY_STATUS}" = "failed" ]; then
-                echo "::error::Deployment failed with exit code ${EXIT_CODE}" >&2
+                DEPLOY_ERROR=$(echo "${STATUS_BODY}" | jq -r '.error // empty')
+                echo "::error::Deployment failed with exit code ${EXIT_CODE:-unknown}${DEPLOY_ERROR:+: ${DEPLOY_ERROR}}" >&2
                 echo "${STATUS_BODY}" >&2
                 exit 1
               fi

@@ -61,6 +61,13 @@ const SNAPSHOT_DATABASE_URL_DEFAULT =
 		? "postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot_test"
 		: "postgres://cvsa:password@127.0.0.1:5433/cvsa_snapshot";
 
+const CONTROL_API_TOKEN_DEFAULT =
+	runtimeEnvironment.NODE_ENV === "test"
+		? "test-control-token"
+		: runtimeEnvironment.NODE_ENV === "production"
+			? undefined
+			: "dev-control-token";
+
 /** Configuration used by the crawler process without requiring primary DB settings. */
 export const crawlerEnv = createEnv({
 	server: {
@@ -82,7 +89,8 @@ export const crawlerEnv = createEnv({
 		CONTROL_API_TOKEN: z
 			.string()
 			.min(1)
-			.default(process.env.NODE_ENV === "test" ? "test-control-token" : "dev-control-token"),
+			.optional()
+			.transform((value) => value ?? CONTROL_API_TOKEN_DEFAULT),
 		/**
 		 * Directory holding the in-process ONNX classifier artifacts:
 		 * `<dir>/embedding/model.onnx` and `<dir>/akari/<version>.onnx`.

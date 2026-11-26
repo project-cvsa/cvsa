@@ -44,10 +44,15 @@ export default function LabelingSection(props: { active: boolean }) {
 	const [viewMode, setViewMode] = createSignal<"list" | "immersive">("list");
 	const [pendingAids, setPendingAids] = createSignal<Set<string>>(new Set());
 	const [backfilling, setBackfilling] = createSignal(false);
+	const [exportFormat, setExportFormat] = createSignal<"jsonl" | "json">("jsonl");
+	const [exportStatus, setExportStatus] = createSignal<"all" | "accepted" | "rejected">("all");
 	const requests = createRequestSequence();
 
 	const handleExport = () => {
-		const url = api.crawler.getDatasetExportUrl({ format: "jsonl", status: "all" });
+		const url = api.crawler.getDatasetExportUrl({
+			format: exportFormat(),
+			status: exportStatus(),
+		});
 		window.open(url, "_blank");
 	};
 
@@ -141,7 +146,12 @@ export default function LabelingSection(props: { active: boolean }) {
 		if (pendingAids().has(aid)) return;
 
 		const prevSamples = samples();
-		const targetLabel = isSong ? 1 : 0;
+		const isUncertain = options?.decision === "uncertain";
+		const targetLabel = isUncertain ? undefined : isSong ? 1 : 0;
+		const nextCurationStatus: "accepted" | "rejected" | "pending" =
+			options?.decision === "uncertain"
+				? "pending"
+				: (options?.decision ?? (isSong ? "accepted" : "rejected"));
 		setSamples((prev) => {
 			if (!prev) return prev;
 			return {
@@ -150,11 +160,8 @@ export default function LabelingSection(props: { active: boolean }) {
 					item.aid === aid
 						? {
 								...item,
-								humanLabel: targetLabel,
-								curationStatus:
-									options?.decision === "uncertain"
-										? "pending"
-										: (options?.decision ?? (isSong ? "accepted" : "rejected")),
+								humanLabel: isUncertain ? null : isSong ? 1 : 0,
+								curationStatus: nextCurationStatus,
 							}
 						: item
 				),
@@ -176,6 +183,18 @@ export default function LabelingSection(props: { active: boolean }) {
 		});
 
 		if (result.ok) {
+			if (result.data) {
+				const updated = result.data;
+				setSamples((prev) => {
+					if (!prev) return prev;
+					return {
+						...prev,
+						items: prev.items.map((item) =>
+							item.aid === aid ? { ...item, ...updated } : item
+						),
+					};
+				});
+			}
 			toast.success(t("common.saved"));
 		} else {
 			setSamples(prevSamples);
@@ -185,7 +204,14 @@ export default function LabelingSection(props: { active: boolean }) {
 
 	onMount(() => {
 		const keydown = (event: KeyboardEvent) => {
-			if (!props.active || event.ctrlKey || event.metaKey || event.altKey) return;
+			if (
+				!props.active ||
+				viewMode() === "immersive" ||
+				event.ctrlKey ||
+				event.metaKey ||
+				event.altKey
+			)
+				return;
 			if (
 				event.target instanceof Element &&
 				event.target.closest(
@@ -237,7 +263,7 @@ export default function LabelingSection(props: { active: boolean }) {
 					</>
 				}
 				actions={
-					<div class="flex items-center gap-2">
+					<div class="flex flex-wrap items-center gap-2">
 						<Button
 							size="sm"
 							variant="outlined"
@@ -252,15 +278,60 @@ export default function LabelingSection(props: { active: boolean }) {
 								? t("discoveryUi.backfilling")
 								: t("discoveryUi.backfill")}
 						</Button>
-						<Button
-							size="sm"
-							variant="outlined"
-							onClick={handleExport}
-							aria-label={t("discoveryUi.exportDataset")}
-						>
-							<Download class="w-3.5 h-3.5 mr-1" />
-							{t("discoveryUi.exportDataset")}
-						</Button>
+						<div class="flex items-center gap-1.5">
+							<div class="w-24">
+								<Select
+									size="sm"
+									aria-label={t("discoveryUi.exportFormat")}
+									options={[
+										{
+											value: "jsonl",
+											label: t("discoveryUi.exportFormat.jsonl"),
+										},
+										{
+											value: "json",
+											label: t("discoveryUi.exportFormat.json"),
+										},
+									]}
+									value={exportFormat()}
+									onValueChange={(value) => {
+										if (value === "jsonl" || value === "json") {
+											setExportFormat(value);
+										}
+									}}
+								/>
+							</div>
+							<div class="w-28">
+								<Select
+									size="sm"
+									aria-label={t("discoveryUi.exportStatus")}
+									options={[
+										{ value: "all", label: t("discoveryUi.exportStatus.all") },
+										{ value: "accepted", label: t("discoveryUi.accepted") },
+										{ value: "rejected", label: t("discoveryUi.rejected") },
+									]}
+									value={exportStatus()}
+									onValueChange={(value) => {
+										if (
+											value === "all" ||
+											value === "accepted" ||
+											value === "rejected"
+										) {
+											setExportStatus(value);
+										}
+									}}
+								/>
+							</div>
+							<Button
+								size="sm"
+								variant="outlined"
+								onClick={handleExport}
+								aria-label={t("discoveryUi.exportDataset")}
+							>
+								<Download class="w-3.5 h-3.5 mr-1" />
+								{t("discoveryUi.exportDataset")}
+							</Button>
+						</div>
 						<Button
 							size="sm"
 							variant={viewMode() === "immersive" ? "filled" : "outlined"}

@@ -65,6 +65,7 @@ export class DiscoveryService {
 	readonly evaluator: DiscoveryCandidateEvaluator;
 	readonly filterService: DiscoveryFilterService;
 	private readonly isRelatedDiscoveryEnabled: () => boolean;
+	private readonly isSearchRoverEnabled: () => boolean;
 
 	constructor(
 		private readonly bilibiliClient: BilibiliClient,
@@ -73,12 +74,17 @@ export class DiscoveryService {
 		filterService?: DiscoveryFilterService,
 		classifier?: VideoClassifierClient,
 		stats: StatsRecorder = createNoopStatsRecorder(),
-		relatedDiscoveryEnabled: boolean | (() => boolean) = RELATED_DISCOVERY_ENABLED
+		relatedDiscoveryEnabled: boolean | (() => boolean) = RELATED_DISCOVERY_ENABLED,
+		searchRoverEnabled: boolean | (() => boolean) = true
 	) {
 		this.isRelatedDiscoveryEnabled =
 			typeof relatedDiscoveryEnabled === "function"
 				? relatedDiscoveryEnabled
 				: () => relatedDiscoveryEnabled;
+		this.isSearchRoverEnabled =
+			typeof searchRoverEnabled === "function"
+				? searchRoverEnabled
+				: () => searchRoverEnabled;
 		const effectiveFilter = filterService ?? new DiscoveryFilterService();
 		this.filterService = effectiveFilter;
 		this.relationExtractor = new RelationExtractor(discoveryRepo);
@@ -145,6 +151,13 @@ export class DiscoveryService {
 	}
 
 	async runSearchSweep(config?: Partial<SearchRoverConfig>): Promise<SearchSweepResult> {
+		if (!this.isSearchRoverEnabled()) {
+			appLogger.debug("Search rover is paused; skipping search sweep", {
+				component: "discovery-service",
+			});
+			return { totalDiscovered: 0, newTracked: 0 };
+		}
+
 		return traceTask("discovery.runSearchSweep", async () => {
 			const effectiveKeywords =
 				config?.keywords ?? this.filterService.getConfig().searchKeywords;
